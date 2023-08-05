@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ project.name }} Issue Tracker
+{% endblock %}
+
+{% block head %}
+{{ super() }}
+{% endblock %}
+
+{% block content %}
+<div class="main">
+
+<h1>{{ self.title() }}</h1>
+
+{% set released = project.releases|selectattr("released") %}
+{% set upcoming = project.releases|rejectattr("released") %}
+
+<h2>Upcoming Releases</h2>
+
+{% if upcoming %}
+<table>
+  <tbody>
+    {% for release in upcoming %}
+    {% set relissues = release|issues %}
+    {% set total = relissues|count %}
+    {% set done = relissues|selectattr("closed")|list|count %}
+    {% set open = total - done %}
+    <tr>
+      <td>
+	{{ release|link }}
+      </td>
+      <td>
+	{% if not total %}
+	no issues
+	{% elif not open %}
+	ready for release!
+	{% else %}
+	{% set frac = (total - open) / total|float %}
+	{% set percent = frac * 100.0 %}
+	{{ frac|progressmeter }}
+	{{ "%.0f%%"|format(percent) }} complete
+      </td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>
+	{{ done }} / {{ total }} issues.
+	{{ release|link("See issues") }}
+	{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No upcoming releases.</p>
+{% endif %}
+
+<h2>Past Releases</h2>
+
+{% if released %}
+<table>
+  <tbody>
+    {% for release in released|sort(reverse=True, attribute="name") %}
+    <tr>
+      <td>
+	{{ release|link() }}
+      </td>
+      <td class="littledate">
+	on {{ release.release_time|dateformat }}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No past releases.</p>
+{% endif %}
+
+<h2>Unassigned Issues</h2>
+
+{% set unassigned = issues|rejectattr("release")|list %}
+
+<p>
+{% if unassigned %}
+{% set open = unassigned|rejectattr("closed")|list %}
+<a href="unassigned.html">{{ unassigned|count }} unassigned issues</a>
+({{ open|count }} open).
+{% else %}
+No unassigned issues.
+{% endif %}
+</p>
+
+{% if project.components|count > 1 %}
+<h2>Open Issues by component</h2>
+<table>
+  <tbody>
+    {% for comp in project.components %}
+    {% set open = comp|issues|rejectattr("closed")|list|count %}
+    {% set class = "" if open else "dimmed" %}
+    <tr class="{{ class }}">
+      <td>{{ comp|link }}</td>
+      <td>{{ open }} open issues</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2>Recent Activity</h2>
+
+{% from 'macros.html' import recent_activity %}
+{{ recent_activity(activity) }}
+
+</div>
+{% endblock %}
