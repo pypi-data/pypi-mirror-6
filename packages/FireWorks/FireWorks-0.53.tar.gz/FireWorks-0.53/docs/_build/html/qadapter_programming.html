@@ -1,0 +1,187 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Writing Queue Adapters &mdash; FireWorks 0.53 documentation</title>
+    
+    <link rel="stylesheet" href="_static/nature.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.53',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="FireWorks 0.53 documentation" href="index.html" />
+    <link rel="next" title="Reference material" href="reference.html" />
+    <link rel="prev" title="Using Python to command FireWorks" href="python_tutorial.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="reference.html" title="Reference material"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="python_tutorial.html" title="Using Python to command FireWorks"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">FireWorks 0.53 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="writing-queue-adapters">
+<h1>Writing Queue Adapters<a class="headerlink" href="#writing-queue-adapters" title="Permalink to this headline">¶</a></h1>
+<p>FireWorks is intended to support multiple queueing systems. To support a new queueing system, a few functions need to be defined for that queue manager (e.g., what command is used to submit jobs?). In most cases, new queue managers can be supported with minimal effort.</p>
+<div class="section" id="writing-a-simple-queue-adapter">
+<h2>Writing a simple queue adapter<a class="headerlink" href="#writing-a-simple-queue-adapter" title="Permalink to this headline">¶</a></h2>
+<p>You can write a simple queue adapter with just a few code modifications of an existing queue adapter.</p>
+<div class="section" id="find-a-location">
+<h3>Find a location<a class="headerlink" href="#find-a-location" title="Permalink to this headline">¶</a></h3>
+<p>First, you need to decide on a location for your queue adapter Python code. The built-in queue adapters are located in <tt class="docutils literal"><span class="pre">&lt;INSTALL_DIR&gt;/fireworks/user_objects/queue_adapters</span></tt>. However, you can also place your queue adapter in a different Python package if you set the <tt class="docutils literal"><span class="pre">ADD_USER_PACKAGES</span></tt> option in the <a class="reference internal" href="config_tutorial.html"><em>FW config</em></a>.</p>
+</div>
+<div class="section" id="copy-an-existing-adapter">
+<h3>Copy an existing adapter<a class="headerlink" href="#copy-an-existing-adapter" title="Permalink to this headline">¶</a></h3>
+<ol class="arabic simple">
+<li>Choose a somewhat similar built-in adapter (e.g., <tt class="docutils literal"><span class="pre">pbs_adapter.py</span></tt>) and copy that Python file to a new file, e.g. <tt class="docutils literal"><span class="pre">new_adapter.py</span></tt>.</li>
+<li>Also copy the corresponding template file (e.g., <tt class="docutils literal"><span class="pre">PBS_template.txt</span></tt>) to a new file, e.g. <tt class="docutils literal"><span class="pre">new_template.txt</span></tt>.</li>
+</ol>
+</div>
+<div class="section" id="modify-the-adapter">
+<h3>Modify the adapter<a class="headerlink" href="#modify-the-adapter" title="Permalink to this headline">¶</a></h3>
+<ol class="arabic simple">
+<li>Modify your new template file (the <tt class="docutils literal"><span class="pre">.txt</span></tt> file) to look like a typical queue script for your queue manager. To define variables, use the <tt class="docutils literal"><span class="pre">$${var}</span></tt> notation. Anything that is a variable can be overridden by your <tt class="docutils literal"><span class="pre">my_qadapter.yaml</span></tt> file or by the <tt class="docutils literal"><span class="pre">_queueadapter</span></tt> key within reservation mode. Lines containing undefined variables will be skipped when writing the queue script.</li>
+<li>Next, go to your new Python file (the <tt class="docutils literal"><span class="pre">.py</span></tt> file) and make the following simple variable changes:</li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li>Change the <tt class="docutils literal"><span class="pre">_fw_name</span></tt> to something descriptive for your new adapter. A common format is to put both the queue manager system and a specific machine the queue script was defined for.</li>
+<li>Change the <tt class="docutils literal"><span class="pre">template_file</span></tt> parameter to point to your new template file</li>
+<li>Change the <tt class="docutils literal"><span class="pre">submit_cmd</span></tt> to be the command used to submit jobs, e.g. <tt class="docutils literal"><span class="pre">qsub</span></tt> or <tt class="docutils literal"><span class="pre">squeue</span></tt>.</li>
+<li>Change the <tt class="docutils literal"><span class="pre">q_name</span></tt> to something descriptive of the queue manager, like <tt class="docutils literal"><span class="pre">pbs</span></tt> or <tt class="docutils literal"><span class="pre">slurm</span></tt>. This name is used for the naming of log files and in error message reports.</li>
+<li>(optional) Change the <tt class="docutils literal"><span class="pre">defaults</span></tt> to contain default parameter values for the variables in your template.</li>
+</ul>
+</div></blockquote>
+<ol class="arabic simple" start="3">
+<li>Finally, implement a few methods by modifying the existing ones:</li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li><tt class="docutils literal"><span class="pre">_parse_jobid()</span></tt> should be able to take the standard output string returned when submitting a job and parse a job id (preferably an integer).</li>
+<li><tt class="docutils literal"><span class="pre">_get_status_cmd()</span></tt> should be an array of Strings describing the command for printing the list of jobs for a particular user. e.g. for PBS it involves the <tt class="docutils literal"><span class="pre">qstat</span></tt> command.</li>
+<li><tt class="docutils literal"><span class="pre">_parse_njobs()</span></tt> should take the raw text from the output of executing the status command (e.g. <tt class="docutils literal"><span class="pre">qstat</span></tt>) and figure out then number of jobs currently in the queue for a given user. Often, this involves counting the lines of code returned by the status command.</li>
+</ul>
+</div></blockquote>
+<p>After making these modifications, your new queue adapter should be ready! You can use it by specifying the correct <tt class="docutils literal"><span class="pre">_fw_name</span></tt> in your <tt class="docutils literal"><span class="pre">my_qadapter.yaml</span></tt> file.</p>
+</div>
+</div>
+<div class="section" id="writing-a-complex-queue-adapter">
+<h2>Writing a complex queue adapter<a class="headerlink" href="#writing-a-complex-queue-adapter" title="Permalink to this headline">¶</a></h2>
+<p>FireWorks was structured so that when writing most queue adapters, you don&#8217;t need to spend a lot of time writing boilerplate code (e.g. to execute commands, parse standard out, or log the sequence of commands). Rather, you just switch a couple of variable like <tt class="docutils literal"><span class="pre">submit_cmd</span></tt>. By assuming a few things about your queue manager, FireWorks generally keeps queue adaptor code to something like 10-20 lines.</p>
+<p>However, if your queue is a complex entity than typical queue managers (maybe a web-based submission framework), the boilerplate code may no longer apply. If this is the case, you will need to manually define or more of the following methods:</p>
+<blockquote>
+<div><ul class="simple">
+<li>the <tt class="docutils literal"><span class="pre">the</span> <span class="pre">get_script_str()</span></tt> method</li>
+<li>the <tt class="docutils literal"><span class="pre">submit_to_queue()</span></tt> method</li>
+<li>the <tt class="docutils literal"><span class="pre">get_njobs_in_queue()</span></tt> method</li>
+</ul>
+</div></blockquote>
+<p>In each case, you might look at the <em>QueueAdapterBase</em> class for an example.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Writing Queue Adapters</a><ul>
+<li><a class="reference internal" href="#writing-a-simple-queue-adapter">Writing a simple queue adapter</a><ul>
+<li><a class="reference internal" href="#find-a-location">Find a location</a></li>
+<li><a class="reference internal" href="#copy-an-existing-adapter">Copy an existing adapter</a></li>
+<li><a class="reference internal" href="#modify-the-adapter">Modify the adapter</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#writing-a-complex-queue-adapter">Writing a complex queue adapter</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="python_tutorial.html"
+                        title="previous chapter">Using Python to command FireWorks</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="reference.html"
+                        title="next chapter">Reference material</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/qadapter_programming.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="reference.html" title="Reference material"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="python_tutorial.html" title="Using Python to command FireWorks"
+             >previous</a> |</li>
+        <li><a href="index.html">FireWorks 0.53 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Anubhav Jain.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
