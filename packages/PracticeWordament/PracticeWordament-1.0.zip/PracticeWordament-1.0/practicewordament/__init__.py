@@ -1,0 +1,1 @@
+from practicewordament import main as start
