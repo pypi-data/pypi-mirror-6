@@ -1,0 +1,35 @@
+#!/usr/bin/env python
+from setuptools import setup
+
+from os.path import join, dirname, realpath
+root = lambda path: join(dirname(realpath(__file__)), path)
+
+setup(
+    name='Flask-uWSGI-WebSocket',
+    version='0.1.3',
+    url='https://github.com/zeekay/flask-uwsgi-websocket',
+    license=open(root('LICENSE')).read(),
+    author='Zach Kelling',
+    author_email='zk@monoid.io',
+    description='High-performance WebSockets for your Flask apps powered by uWSGI.',
+    long_description=open(root('README.rst')).read(),
+    py_modules=['flask_uwsgi_websocket'],
+    zip_safe=False,
+    include_package_data=True,
+    package_data={'': ['LICENSE', 'README.rst']},
+    platforms='any',
+    install_requires=[
+        'Flask',
+        'uwsgi',
+    ],
+    classifiers=[
+        'Environment :: Web Environment',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: BSD License',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python',
+        'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
+        'Topic :: Software Development :: Libraries :: Python Modules'
+    ],
+    keywords='uwsgi flask websockets'
+)
