@@ -1,0 +1,92 @@
+#!/usr/bin/env python
+#
+
+"""
+gbrowse: Open files and file/http URLs in browser
+"""
+
+import mimetypes
+import os
+import random
+import sys
+import time
+
+from optparse import OptionParser
+
+import gterm
+
+usage = "usage: %prog [-l] [file|URL] ..."
+parser = OptionParser(usage=usage)
+
+parser.add_option("-l", "--link", action="store_true", dest="link", default=False,
+                  help="Display link only")
+
+parser.add_option("", "--unsafe", action="store_true", dest="unsafe", default=False,
+                  help="Display html files (unsafe)")
+
+(options, args) = parser.parse_args()
+
+if not args:
+    try:
+        content = sys.stdin.read()
+    except (EOFError, KeyboardInterrupt):
+        content = None
+
+    if not content:
+        print >> sys.stderr, "Error in reading from stdin"
+        sys.exit(1)
+
+    url_list = [ (gterm.create_blob(content, content_type="text/html"), "file" if options.link else "") ]
+
+else:
+    url_list = []
+    for arg in args:
+        if arg.startswith("http://") or arg.startswith("https://"):
+            # Display URL
+            url = arg
+            label = arg if options.link else ""
+        else:
+            # Display file
+            if arg.startswith("file://"):
+                filepath, sep, dummy = arg[len("file://"):].partition("?")
+                if filepath.startswith("local/"):
+                    filepath = filepath[len("local"):]
+                elif not filepath.startswith("/"):
+                    print >> sys.stderr, "Nonlocal file %s" % arg
+                    sys.exit(1)
+            else:
+                filepath = arg
+
+            label = os.path.basename(filepath)
+            mime_type = ""
+            htmlfile = False
+            if not options.link:
+                try:
+                    mime_type, encoding = mimetypes.guess_type(filepath)
+                    if mime_type and (mime_type.startswith("text/") or mime_type.startswith("image/") or mime_type.endswith("pdf")):
+                        htmlfile = mime_type.startswith("text/html")
+                        if not htmlfile or options.unsafe:
+                            # Auto open text/image/pdf files
+                            label = ""
+                except Exception:
+                    pass
+
+            direct_display = (not htmlfile or options.unsafe)
+            if gterm.Export_host and direct_display:
+                # Exported environment: create blobs (excluding HTML files, for security reasons)
+                url = gterm.create_blob(from_file=filepath)
+            else:
+                url = gterm.get_file_url(filepath, relative=direct_display, exists=True, plain=True)
+
+            if not url:
+                print >> sys.stderr, "File %s not found" % arg
+                sys.exit(1)
+
+        url_list.append( (url, label) )
+
+for url, label in url_list:
+    if label:
+        html = '<a href="%s" target="_blank">Click to browse/download %s</a><br>\n' % (url, label)
+        gterm.write_html(html)
+    else:
+        gterm.open_url(url)
