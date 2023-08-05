@@ -1,0 +1,20 @@
+from distutils.core import setup
+setup(name='pytemplates',
+    version='0.1.3.2',
+    description='Lightweight Python HTML Template Engine',
+    keywords=['Django', 'HTML', 'Template', 'Templating Python', 'DSL'],
+    author='Zeid Zabaneh',
+    author_email='zeid@ncf.ca',
+    url='http://bitbucket.com/zeid/pytemplates',
+    packages=['pytemplates'],
+    license='GPL',
+    classifiers= [
+        'Development Status :: 3 - Alpha',
+        'Environment :: Plugins',
+        'Environment :: Web Environment',
+        'Framework :: Django',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
+        'Programming Language :: Python',
+    ],
+)
