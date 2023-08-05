@@ -1,0 +1,495 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Dynamic Code Patterns: Extending Your Applications with Plugins &mdash; stevedore 0.12.15.g3e5c24f documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.12.15.g3e5c24f',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="stevedore 0.12.15.g3e5c24f documentation" href="../index.html" />
+    <link rel="next" title="History" href="../history.html" />
+    <link rel="prev" title="Installation" href="../install.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../history.html" title="History"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../install.html" title="Installation"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">stevedore 0.12.15.g3e5c24f documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="dynamic-code-patterns-extending-your-applications-with-plugins">
+<h1>Dynamic Code Patterns: Extending Your Applications with Plugins<a class="headerlink" href="#dynamic-code-patterns-extending-your-applications-with-plugins" title="Permalink to this headline">¶</a></h1>
+<blockquote>
+<div>This essay is based on my PyCon 2013 presentation of the same
+title. The presentation was recorded and the video is <a class="reference external" href="http://pyvideo.org/video/1789/dynamic-code-patterns-extending-your-application">available
+online</a>,
+as are <a class="reference external" href="http://www.slideshare.net/doughellmann/dynamic-codepatterns">the slides</a>.</div></blockquote>
+<p>Over the past few years I have been doing a lot of work on
+applications that make heavy use of Python’s ability to load code
+dynamically at runtime. This essay includes the results of some
+focused research that I did into patterns for using dynamic code, and
+the impact that research had on the design of stevedore and
+ceilometer, an application that uses it</p>
+<p>For my analysis, I counted any application or framework that loads
+code dynamically at runtime to be using plugins. I did not consider
+delayed execution of hard-coded import statements as plugins, but
+restricted the research to true dynamic loading. In most cases, the
+name or location of the code is given through some external mechanism
+like a configuration file.</p>
+<div class="section" id="why-use-plugins">
+<h2>Why Use Plugins?<a class="headerlink" href="#why-use-plugins" title="Permalink to this headline">¶</a></h2>
+<p>Before examining patterns for using plugins, we should talk about why
+to use plugins in an application at all.</p>
+<p>One important benefit is improved design. Keeping a separation between
+core and extension code encourages you to think more about
+abstractions in your design. Building an extensible system can take
+more work than hardwiring everything, but the results tend to be more
+flexible and maintainable over the long term.</p>
+<p>Plugins are a good way to implement device drivers and other versions
+of the <a class="reference external" href="http://en.wikipedia.org/wiki/Strategy_pattern">Strategy pattern</a>. The application can maintain generic core
+logic, and the plugin can handle the details for interfacing with an
+outside system or device.</p>
+<p>Packaging extensions separately reduces dependency bloat and makes
+deployment easier to manage and install. Users who do not need some
+drivers or features can avoid deploying dependencies that are only
+used by those plugins.</p>
+<p>Plugins also provide a convenient way to extend the feature set of an
+application by hooking new code into well-defined extension points.
+And having such an extensible system makes it easier for other
+developers to contribute to your project indirectly by providing
+add-on packages that are released separately.</p>
+</div>
+<div class="section" id="requirements-for-ceilometer">
+<h2>Requirements for Ceilometer<a class="headerlink" href="#requirements-for-ceilometer" title="Permalink to this headline">¶</a></h2>
+<p>I have spent a fair bit of time studying plugin-based architectures
+over the last year while helping to create <a class="reference external" href="https://launchpad.net/ceilometer">ceilometer</a>, the new
+metering component in <a class="reference external" href="http://openstack.org">OpenStack</a>. Ceilometer measures the resources
+being used in a cloud deployment so we can bill the tenants for those
+resources. We collect data like the lifetimes of servers, along with
+bandwidth and storage consumed.</p>
+<p>However, the type and number of things a given cloud deployer will
+want to charge for will vary, so we wanted a flexible system for
+taking those measurements. We need to allow deployers to write their
+own plugins to measure things we haven’t thought of, or that may need
+to be measured in a way that is private to their configuration (a case
+we have at DreamHost).</p>
+<p>We are expecting a lot of developers who don’t interact with us
+directly to be trying to write extensions to ceilometer for use in
+private cloud deployments, so it is also important to clearly document
+how to create new plugins.</p>
+<p>With these things in mind, we designed ceilometer to be flexible in
+several different areas.</p>
+<a class="reference internal image-reference" href="../_images/ceilometer-design.jpg"><img alt="../_images/ceilometer-design.jpg" class="align-center" src="../_images/ceilometer-design.jpg" style="width: 512.0px; height: 384.0px;" /></a>
+<p>OpenStack is a collection of components that cooperate to provide
+<a class="reference external" href="http://en.wikipedia.org/wiki/Cloud_computing">Infrastructure as a Service</a> features.  Each component manages a
+different aspect of the cloud and uses a message bus to communicate
+with the other components.</p>
+<p>All of the components generate notification messages when events
+happen (like instances being created or destroyed). Capturing those
+messages was the first source of data for ceilometer.  The
+notifications contain different metadata depending on the resource
+that triggered the event, so we needed plugins to translate the
+notification messages into a standard format for metering.</p>
+<p>There aren’t events for all of the things we want to measure for
+billing, so we also had to create some agents to poll for data.  For
+example, we want to check periodically to see how much CPU capacity
+each instance has consumed. Some pollsters run on the hypervisor
+server, and others run on a management server where they can
+communicate with the other OpenStack components via their APIs.</p>
+<p>All of the ceilometer services use another message bus to deliver data
+to a collector process which uses a storage driver to write data to a
+database. We support relational and non-relational databases,
+depending on the choice of the deployer.</p>
+<p>This architecture resulted in five sets of plugins for ceilometer.
+OpenStack includes a message bus abstraction layer and a set of
+drivers for using RabbitMQ, Qpid, and ZMQ. Since that was already
+implemented for us, we didn’t have to touch it.</p>
+<p>The other 4 sets we created from scratch:</p>
+<ul class="simple">
+<li>The plugins for processing notification messages</li>
+<li>The pollsters for the compute nodes</li>
+<li>The central pollsters</li>
+<li>And the storage driver</li>
+</ul>
+<p>The resulting designs use patterns found in other applications and
+frameworks that use plugins.</p>
+</div>
+<div class="section" id="other-plugin-based-applications">
+<h2>Other Plugin-based Applications<a class="headerlink" href="#other-plugin-based-applications" title="Permalink to this headline">¶</a></h2>
+<p>During my research, I looked at a few projects that I was already
+familiar with, either as a user or a developer, and some I had not
+used before. There are plenty of other examples, but this list was
+long enough to identify some common patterns and help us with our
+design.</p>
+<p><a class="reference external" href="http://blogofile.com/">Blogofile</a> and <a class="reference external" href="http://sphinx-doc.org/">Sphinx</a> are two apps for working with different forms
+of text for publishing. They use extensions to add new content
+processing features.</p>
+<p><a class="reference external" href="http://mercurial.selenic.com/">Mercurial</a> is a command line app that can be extended with new
+subcommands. <a class="reference external" href="http://cliff.readthedocs.org">Cliff</a> is a library I created for building apps like
+Mercurial.</p>
+<p><a class="reference external" href="http://virtualenvwrapper.readthedocs.org">Virtualenvwrapper</a> is a command line tool that uses hooks in a
+different way, to extend existing commands but not necessarily add new
+ones.</p>
+<p><a class="reference external" href="https://nose.readthedocs.org/">Nose</a> and <a class="reference external" href="http://trac.edgewall.org/">Trac</a> are common developer tools. You’re more likely to have
+used them than written extensions for them, but they do both use
+plugins.</p>
+<p><a class="reference external" href="https://www.djangoproject.com">Django</a>, <a class="reference external" href="http://docs.pylonsproject.org/projects/pyramid/en/latest/">Pyramid</a>, and <a class="reference external" href="http://www.sqlalchemy.org">SQLAlchemy</a> are developer libraries that use
+plugins.</p>
+<p><a class="reference external" href="https://github.com/BrightcoveOS/Diamond">Diamond</a> is a monitoring app with an extensive plugin set, similar to
+the system we were planning to build for OpenStack.</p>
+<p><a class="reference external" href="https://launchpad.net/nova">Nova</a> is the primary component of the OpenStack cloud system. It relies
+on a large number of drivers for managing different aspects of the
+computing environment.</p>
+<p>I looked at all of this code in an effort to derive ideas about the
+&#8220;right way&#8221; to handle plugins for ceilometer. While some of what I
+will say today may sound critical of the choices made by the
+developers of the other code, I do have the benefit of hindsight and a
+different perspective based on looking at the examples all together,
+as well as different requirements for our project.</p>
+</div>
+<div class="section" id="discovery">
+<h2>Discovery<a class="headerlink" href="#discovery" title="Permalink to this headline">¶</a></h2>
+<p>The first thing an application has to do with a plugin is find it.
+The tools I looked at are split between some form of explicit
+definition of plugins and a scanner that looked for the plugins.</p>
+<a class="reference internal image-reference" href="../_images/discovery.jpg"><img alt="../_images/discovery.jpg" class="align-center" src="../_images/discovery.jpg" style="width: 512.0px; height: 384.0px;" /></a>
+<p>Each of those sets is then further divided between what was being
+listed or scanned &#8211; files on the filesystem, or python import
+references (either a module, or something inside of a module).</p>
+<p>The &#8220;Explicit import reference&#8221; category means there is a
+configuration file somewhere and a user lists an importable object in
+that file.</p>
+<p>The &#8220;Scan import reference&#8221; category means a registry of import
+strings is being scanned. All of these examples use setuptools and
+pkg_resources to manage entry points.</p>
+</div>
+<div class="section" id="enabling">
+<h2>Enabling<a class="headerlink" href="#enabling" title="Permalink to this headline">¶</a></h2>
+<p>After the app finds a plugin, the next step is to decide whether to
+load it and use it. Most applications require an explicit step to
+configure extensions.  There are times when this makes
+sense. Developer tools like Django are right to ask the developer to
+list the desired extensions explicitly, since you’re really bringing
+that code in statically.  The extensions to SQLAlchemy are all
+enabled, but only one is really used at a time and that is chosen by
+the database connection string.</p>
+<a class="reference internal image-reference" href="../_images/enabling.jpg"><img alt="../_images/enabling.jpg" class="align-center" src="../_images/enabling.jpg" style="width: 512.0px; height: 384.0px;" /></a>
+<p>However, some of the user applications like Blogofile, Mercurial, and
+Trac ask the user to explicitly enable extensions through a
+configuration step that seems like it could be skipped.  When I
+created virtualenvwrapper and cliff, I decided to use installation as
+a trigger for activation because I wanted to avoid an extra
+opportunity for misconfiguration. In both of those cases, installing
+an extension makes it available, so the user can start taking
+advantage of it immediately.</p>
+<p>That’s also true for Nose extensions, although whether or not they are
+used for a given test suite or test run depends on the options you
+give nose.</p>
+</div>
+<div class="section" id="importing">
+<h2>Importing<a class="headerlink" href="#importing" title="Permalink to this headline">¶</a></h2>
+<p>After the app decides whether to load a plugin, the next step is to
+actually get the code.  All of the examples I looked at used two
+techniques, either calling import explicitly (by using the builtin
+function, the imp module, or some other variation), or using
+pkg_resources.</p>
+<a class="reference internal image-reference" href="../_images/importing.jpg"><img alt="../_images/importing.jpg" class="align-center" src="../_images/importing.jpg" style="width: 512.0px; height: 384.0px;" /></a>
+<p>Nose, SQLAlchemy, and Blogofile all use both techniques.  Nose falls
+back to a custom importer if pkg_resources is not installed.
+SQLAlchemy uses a custom importer for &#8220;extensions&#8221; distributed with
+the core but pkg_resources to find separate packages.  Blogofile uses
+pkg_resources to find plugins, coupled with manual scanning and
+importing of the directories containing those plugins to load their
+parts.</p>
+<p>If I discount the packages I created myself, shown here in italics,
+there seems to be a clear bias towards creating custom wrappers around
+import.  That route seems easy at first, but all of the
+implementations I found exhibited some problems with tricky corner
+cases.</p>
+</div>
+<div class="section" id="application-plugin-integration">
+<h2>Application/Plugin Integration<a class="headerlink" href="#application-plugin-integration" title="Permalink to this headline">¶</a></h2>
+<p>After the code for the extension is imported, the next step is to
+integrate it with the rest of the app.  That is, to configure any
+hooks that need to call into the plugin, pass the plugin any state it
+needs, etc.  I looked at this step along two axes.</p>
+<a class="reference internal image-reference" href="../_images/integration.jpg"><img alt="../_images/integration.jpg" class="align-center" src="../_images/integration.jpg" style="width: 512.0px; height: 384.0px;" /></a>
+<p>First, I considered the granularity of the plugin interface. For
+&#8220;fine&#8221; grained plugins, the extension is treated as a standalone
+object to be called on as needed. In these cases, the code object
+being loaded is usually a function or a class.</p>
+<p>For more &#8220;coarse&#8221; grained cases, a single plugin will include hooks
+that are referenced from multiple places in the application. There may
+be several classes inside the plugin, for example, or templates that
+are accessed directly by the application, not through a plugin API.</p>
+<p>The other axis related to integration looks at how the code provided
+by the plugin is brought into the application. I found two techniques
+for doing that.</p>
+<p>First, the application can instruct the plugin to integrate
+itself. That prompting usually takes the form of a setup() or
+initialization function implemented by the plugin author that calls
+back to an application context object, registering parts of the plugin
+explicitly. That registration could also be handled implicitly using
+an interface library such as the way Trac uses zope.interface.</p>
+<p>Second, the application itself can interrogate or inspect the plugin,
+and make decisions based on the result. This usually means that part
+of the plugin API is responsible for providing metadata about the
+plugin itself, not just taking action.</p>
+</div>
+<div class="section" id="api-enforcement">
+<h2>API Enforcement<a class="headerlink" href="#api-enforcement" title="Permalink to this headline">¶</a></h2>
+<p>One common issue with dynamically loaded code is enforcing the plugin
+API at runtime.  This is always a potential issue in dynamic
+languages, but it comes up frequently with plugins because the code is
+often written by someone other than the core developer for the
+application.  I saw two basic techniques to help developers get their
+plugins right: convention and interfaces.</p>
+<a class="reference internal image-reference" href="../_images/integration.jpg"><img alt="../_images/integration.jpg" class="align-center" src="../_images/integration.jpg" style="width: 512.0px; height: 384.0px;" /></a>
+<p>Many of the applications that used convention also had coarse-grained
+plugin APIs, and so while they may use classes to provide their
+features, the plugin relies on convention for discovering its
+configuration.</p>
+<p>On the right are applications for which the plugin uses a class
+hierarchy. In the case of Nose, using the base class is optional, so
+that’s a quasi-interface. Trac, on the other hand, uses formal
+interfaces through <a class="reference external" href="http://docs.zope.org/zope.interface">zope.interface</a>.</p>
+<p>Diamond enforces a strict subclassing of its Collector base class.</p>
+<p>For cliff I chose to use the <a class="reference external" href="http://docs.python.org/2/library/abc.html">abc</a> module to define an abstract base
+class, but stick with <a class="reference external" href="http://en.wikipedia.org/wiki/Duck_typing">&#8220;duck typing&#8221;</a> in the actual application. The
+developer doesn’t have to inherit from the base class, but doing so
+helps ensure that the implementation is complete.</p>
+</div>
+<div class="section" id="invocation">
+<h2>Invocation<a class="headerlink" href="#invocation" title="Permalink to this headline">¶</a></h2>
+<p>And the final dimension I looked at was how the plugin code was used
+at runtime.  There were three primary patterns here.</p>
+<a class="reference internal image-reference" href="../_images/invocation.jpg"><img alt="../_images/invocation.jpg" class="align-center" src="../_images/invocation.jpg" style="width: 512.0px; height: 384.0px;" /></a>
+<ol class="arabic simple">
+<li>&#8220;Drivers&#8221; are loaded one at a time, and used directly.</li>
+<li>The apps using the &#8220;Dispatcher&#8221; pattern load all of the extensions,
+and then make calls to the appropriate one based on name or some
+other selection criteria when an event happens.</li>
+<li>The apps that use the &#8220;Iterator&#8221; pattern call each extension in turn,
+so that all of the plugins have a chance to participate in the
+processing.</li>
+</ol>
+</div>
+<div class="section" id="ceilometer-design">
+<h2>Ceilometer Design<a class="headerlink" href="#ceilometer-design" title="Permalink to this headline">¶</a></h2>
+<p>This analysis had a direct influence on the choices we made while
+implementing ceilometer.</p>
+<div class="section" id="discovery-and-import">
+<h3>Discovery and Import<a class="headerlink" href="#discovery-and-import" title="Permalink to this headline">¶</a></h3>
+<p>For finding and loading, we chose to use entry points because they
+were the simplest solution.  All of the apps that work on files
+instead of import references had issues, ranging from poorly
+implemented import path munging to packaging and distribution
+challenges. Even some of the code for working with import references
+directly was a little hairy. Leaving that to a library that handles
+the different cases transparently made our life a lot easier.</p>
+<p>They are easier for users to install and configure because they don’t
+have to understand how your code is laid out. That also makes them
+more resilient in the face of code changes.</p>
+<p>Entry points also support different package formats (egg, sdist,
+operating system packages), so it doesn’t matter how extensions are
+distributed.</p>
+<p>They also make it easier for code to be packaged by the Linux
+distributions, since the packages don’t have to share overlapping
+installation directories.</p>
+<p>There are alternate implementations of entry-point like systems, but
+none are so widely used or tested as pkg_resources.</p>
+<p>And to further simplify, we always use entry points, even for the
+plugins we distribute with our core. That eliminates any special
+cases.</p>
+</div>
+<div class="section" id="id1">
+<h3>Enabling<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h3>
+<p>We came up with a somewhat novel solution to manage which plugins are
+enabled.  For Ceilometer we wanted to default to collecting data, but
+allow deployers to disable certain meters to save storage space if
+they knew they did not need the data. The solution was to use explicit
+configuration, but invert it from the normal implementation.</p>
+<p>We assume that all of the extensions found should be loaded and used,
+unless they are explicitly <em>disabled</em> in the configuration file. We did
+that in the first version to simplify the configuration process,
+because we assumed most users would want most of the plugins to be
+used. Defaulting to enabled means users only have to provide a short
+list of the meters to turn off.</p>
+<p>Ceilometer plugins also have a chance, when they are being loaded, to
+disable themselves automatically. This is especially useful in the
+polling plugins, which can tell the app to ignore them if the resource
+they use for collecting measurements is not present (like they work
+with a different hypervisor, or external service that is not
+configured).</p>
+<p>Letting the plugin disable itself avoids repeated warning messages in
+the log file as a plugin is asked to poll for data that it cannot
+retrieve.</p>
+</div>
+<div class="section" id="integration">
+<h3>Integration<a class="headerlink" href="#integration" title="Permalink to this headline">¶</a></h3>
+<p>For our integration pattern we went with a fine-grained API using
+inspection.  There is a separate namespace for each type of plugin,
+and each plugin instance refers to a single class.  The application
+loads and instantiates that class, then calls methods on it it to
+determine what it provides and wants (which notifications to subscribe
+to and which meters are produced).</p>
+<p>This design lets us avoid having repetitious setup or configuration
+code in each plugin, since they provide data to the application on
+demand and the application configures itself.  The instances don’t
+know about the application, or each other.  They only run when the
+application calls them, never independently.</p>
+</div>
+<div class="section" id="id2">
+<h3>API Enforcement<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
+<p>To define the API for each set of plugins we created a separate
+abstract base class using the abc module.  This gives us a way to
+document each plugin API and Developers who use the base class get
+some help for free.</p>
+<p>Since we don’t enforce the class hierarchy we also watch for
+unexpected errors from the plugins any time we call into them.</p>
+</div>
+<div class="section" id="id3">
+<h3>Invocation<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h3>
+<p>We used all three invocation patterns, in different places.</p>
+<ol class="arabic simple">
+<li>We only use one storage system at a time, so we treat the storage
+plugin like a driver.</li>
+<li>We load all of the notification plugins, and then dispatch incoming
+messages to them based on the message content.</li>
+<li>We load all of the polling plugins and iterate through them on a
+regular schedule.</li>
+</ol>
+</div>
+</div>
+<div class="section" id="conclusions">
+<h2>Conclusions<a class="headerlink" href="#conclusions" title="Permalink to this headline">¶</a></h2>
+<p>After we had all of this working in ceilometer, I extracted some of
+the code into stevedore.  It wraps pkg_resources with a series of
+manager classes that implement the loading, enabling, and invocation
+patterns.</p>
+<div class="admonition-see-also admonition seealso">
+<p class="first admonition-title">See also</p>
+<ul class="last simple">
+<li>PyCon 2013 Video: <a class="reference external" href="http://pyvideo.org/video/1789/dynamic-code-patterns-extending-your-application">http://pyvideo.org/video/1789/dynamic-code-patterns-extending-your-application</a></li>
+<li>Slides: <a class="reference external" href="http://www.slideshare.net/doughellmann/dynamic-codepatterns">http://www.slideshare.net/doughellmann/dynamic-codepatterns</a></li>
+<li><a class="reference internal" href="../patterns_loading.html"><em>Patterns for Loading</em></a></li>
+<li><a class="reference internal" href="../patterns_enabling.html"><em>Patterns for Enabling</em></a></li>
+</ul>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Dynamic Code Patterns: Extending Your Applications with Plugins</a><ul>
+<li><a class="reference internal" href="#why-use-plugins">Why Use Plugins?</a></li>
+<li><a class="reference internal" href="#requirements-for-ceilometer">Requirements for Ceilometer</a></li>
+<li><a class="reference internal" href="#other-plugin-based-applications">Other Plugin-based Applications</a></li>
+<li><a class="reference internal" href="#discovery">Discovery</a></li>
+<li><a class="reference internal" href="#enabling">Enabling</a></li>
+<li><a class="reference internal" href="#importing">Importing</a></li>
+<li><a class="reference internal" href="#application-plugin-integration">Application/Plugin Integration</a></li>
+<li><a class="reference internal" href="#api-enforcement">API Enforcement</a></li>
+<li><a class="reference internal" href="#invocation">Invocation</a></li>
+<li><a class="reference internal" href="#ceilometer-design">Ceilometer Design</a><ul>
+<li><a class="reference internal" href="#discovery-and-import">Discovery and Import</a></li>
+<li><a class="reference internal" href="#id1">Enabling</a></li>
+<li><a class="reference internal" href="#integration">Integration</a></li>
+<li><a class="reference internal" href="#id2">API Enforcement</a></li>
+<li><a class="reference internal" href="#id3">Invocation</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#conclusions">Conclusions</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../install.html"
+                        title="previous chapter">Installation</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../history.html"
+                        title="next chapter">History</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/essays/pycon2013.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../history.html" title="History"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../install.html" title="Installation"
+             >previous</a> |</li>
+        <li><a href="../index.html">stevedore 0.12.15.g3e5c24f documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, DreamHost.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
