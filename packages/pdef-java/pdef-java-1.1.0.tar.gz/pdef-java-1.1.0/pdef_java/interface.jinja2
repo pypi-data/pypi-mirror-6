@@ -1,0 +1,52 @@
+// {{ generated_by }}
+package {{ interface.module|jpackage }};
+
+
+{% if interface.doc %}
+/** {{ interface.doc }} */
+{% endif %}
+{% if not interface.base -%}
+    public interface {{ interface|jname }} {
+{% else -%}
+    public interface {{ interface|jname }} extends {{ interface.base|jref }} {
+{% endif %}
+
+{% for method in interface.declared_methods %}
+    {% if method.doc %}
+    /** {{ method.doc|indent(4) }} */
+    {% endif %}
+    {{ method.result|jref_unboxed }} {{ method.name }}(
+        {%- for arg in method.args -%}
+                {{ arg.type|jref_unboxed }} {{ arg.name }}
+                {%- if loop.length > 1 and not loop.last %}, {% endif %}
+        {%- endfor %});
+
+{% endfor %}
+    static io.pdef.descriptors.InterfaceDescriptor<{{ interface|jname }}> DESCRIPTOR = io.pdef.descriptors.InterfaceDescriptor.<{{ interface|jname }}>builder()
+            .setJavaClass({{ interface|jname }}.class)
+        {% if interface.base %}
+            .setBase({{ interface.base|jdescriptor }})
+        {% endif %}
+        {% if interface.exc %}
+            .setExc({{ interface.exc|jdescriptor }})
+        {% endif %}
+        {% for method in interface.declared_methods %}
+            .addMethod(io.pdef.descriptors.MethodDescriptor.<{{ interface|jname }}, {{ method.result|jref }}>builder()
+                    .setName("{{ method.name }}")
+                    .setReflexiveInvoker({{ interface|jname }}.class)
+                {% if method.result.is_interface %}
+                    .setInterfaceResult({{ method.result|jref }}.class)
+                {% else %}
+                    .setResult({{ method.result|jdescriptor }})
+                {% endif %}
+                {% for arg in method.args %}
+                    .addArg("{{ arg.name }}", {{ arg.type|jdescriptor }}, {{ arg.is_query|jbool }}, {{ arg.is_post|jbool }})
+                {% endfor %}
+                {% if method.is_post %}
+                    .setPost(true)
+                {% endif %}
+                    .build())
+        {% endfor %}
+            .build();
+}
+
