@@ -1,0 +1,530 @@
+Metadata-Version: 1.0
+Name: TracAuthOpenId
+Version: 0.4.7
+Summary: OpenID plugin for Trac
+Home-page: https://github.com/dairiki/authopenid-plugin/
+Author: Jeff Dairiki
+Author-email: dairiki@dairiki.org
+License: Trac license (BSD-like)
+Description: ============================
+        OpenID Authentication Plugin
+        ============================
+        
+        Description
+        ===========
+        
+        This plugin allows to login to Trac using OpenID.  I use it with Trac 0.12.
+        It was developed under Trac 0.11, so it should work there too.
+        Version 0.4 of this plugin runs under trac 1.0 (formerly 0.13), but
+        this configuration has not yet been extensively tested or used in
+        production.
+        
+        Download & Source
+        =================
+        
+        The source repository is on github__.
+        You may submit bug reports and pull requests there.
+        
+        __ https://github.com/dairiki/authopenid-plugin/
+        
+        There are several ways to install this plugin.
+        
+        1. You can install directly from PyPI_ using ``easy_install`` or pip_::
+        
+               easy_install TracAuthOpenId
+        
+           or::
+        
+               pip install TracAuthOpenId
+        
+        .. _PyPI: http://pypi.python.org/pypi/TracAuthOpenId/
+        .. _pip: http://www.pip-installer.org/
+        
+        2. There is a `Debian package`_ for this plugin::
+        
+               sudo aptitude install trac-authopenid
+        
+        .. _Debian package: http://packages.qa.debian.org/t/trac-authopenid.html
+        
+        3. `Patrick Uiterwijk`_ has packaged__ this plugin for Fedora::
+        
+               yum install trac-authopenid-plugin
+        
+           Should you have questions regarding the Fedora packaging, please file
+           them in the Fedora `bug tracker`_.
+        
+        __ https://apps.fedoraproject.org/packages/trac-authopenid-plugin
+        .. _bug tracker: https://apps.fedoraproject.org/packages/trac-authopenid-plugin/bugs
+        
+        4. You can clone git repository somewhere in your system::
+        
+               cd /your/3rdparty/src
+               git clone git://github.com/dairiki/authopenid-plugin.git
+        
+           Then you should do following steps::
+        
+               cd authopenid-plugin
+               python setup.py install
+        
+           Alternatively, if you use pip_, you can  install directly from the git
+           repository::
+        
+               pip install git+git://github.com/dairiki/authopenid-plugin.git
+        
+        For any of the above methods, if you want to do a system-wide
+        installation, you will have to do this with *root* permissions
+        (e.g. using ``su`` or ``sudo``).
+        
+        
+        How to enable
+        =============
+        
+        ::
+        
+            [components]
+            trac.web.auth.* = disabled
+            authopenid.* = enabled
+        
+        
+        You don't need to disable default authentication mechanism
+        (trac.web.auth.*) if you are using it. OpenID plugin does not conflict
+        with default authentication mechanism.
+        
+        Options
+        =======
+        
+        This plugin has number of configuration options.  Here is an excerpt
+        from an example config file which lists all available options::
+        
+            [openid]
+        
+            ################################################################
+            # Provider selection
+        
+            # Single sign-on support
+            #
+            # If you want to support only a single OpenID provider and that
+            # provider allows the users to select his account as part of its
+            # authentication process, set default_openid to the OP identifier
+            # of the provider.  Then clicking the _OpenID Login_ link will take
+            # the user directly to the providers authentication interface,
+            # bypassing the openid provider/identity selection dialog.
+            #
+            # E.g. to use google as your sole openid provider, use
+            #default_openid = https://www.google.com/accounts/o8/id
+        
+            # (If you have set default_openid, the identity selection dialog is
+            # not displayed, and the rest of the options in this section are moot.)
+        
+            # Explicit set of provider names to display.  Should be set to a comman
+            # separated list of provider names.  Choices include:
+            # google, yahoo, aol, openid, myopenid, livejournal, flickr, technorati,
+            # wordpress, blogger, verisign, vidoop, claimid, as well as any
+            # custom provider you may have configured (via custom_provider_name).
+            # By default all known providers are listed.
+            #providers = google, myopenid
+        
+            # Add a custom openid provider to the form
+            # provider name
+            #custom_provider_name = myprovider
+            # label
+            #custom_provider_label = Enter your username
+            # identity template
+            #custom_provider_url = http://myprovider.example.net/{username}
+            # URL to image/icon
+            #custom_provider_image = /static/icons/myprovider.png
+            # image size (small or large)
+            #custom_provider_size = small
+        
+            # What is OpenID link.
+            whatis_link = http://openid.net/what/
+            # Sign-up link
+            signup_link = http://openid.net/get
+        
+            ################################################################
+            # Authorization
+        
+            # Identity white and black lists
+            #
+            # IMPORTANT: strip_protocol and strip_trailing_slash (see below) affectswhat
+            # openid will be given to white_list or black_list
+        
+            # white_list: If set, only identities matching this list will be accepted
+            # E.g. to allow only google and myopenid provided identities, use
+            #white_list = https://www.google.com/accounts/o8/id?id=*, http://*.myopenid.com/
+        
+            # black_list: If set, matching identities will not be accepted
+            #black_list = http://spammer.myopenid.com/
+        
+            # Comma separated list of allowed users, using the email address
+            # resolved via SREG or AX. Use in combination with trusted
+            # identity patterns in white_list.
+            #email_white_list = joe@example.com
+        
+            # In addition to white and black lists you can use external web
+            # service for allowing users into trac. To control that you must
+            # use check_list and check_list_key option. It will generate URL:
+            #
+            #     <check_list>?<check_list_key>=openid&email=email
+            #
+            # email will be attached only if available.
+            #
+            # It expects JSON result in following format:
+            #
+            #     {"<check_list_key>": true}
+            #
+            # Your check_list web app may also be used to map openid
+            # identifiers to your own internal authnames (usernames). (See
+            # check_list_username below.)
+            #
+            # IMPORTANT: strip_protocol and strip_trailing_slash affects what
+            # openid will be send to service
+            #
+            # You can use this option to map your OpenIDs to internal username.
+            #check_list = http://your.site.com/openidallow
+        
+            # The parameter name used both for passing the claimed identity
+            # to the authorization app, as well as for returning the authorization
+            # status.  Defaults to "check_list".
+            #check_list_key = check_list
+        
+            # Expiration time acts as timeout. E.g. if expiration time is 24
+            # hour and you login again in those 24 hours. Expiration time is
+            # extended for another 24 hours. (Default: false)
+            timeout = false
+        
+            ################################################################
+            # OpenID protocol and extensions
+        
+            # Require sreg data
+            sreg_required = false
+        
+            # Default PAPE method to request from OpenID provider.
+            # pape_method =
+        
+            # In some cases you might want allow users to login to different
+            # projects using different OpenIDs. In that case don't use
+            # absolute trust root.
+            absolute_trust_root = false
+        
+        
+            # Use the OpenIDTeams extension to request user's group membership.
+            # If a user is a member of any of the teams listed in this option,
+            # the user will be added to the trac permission group(s) of the same
+            # name.  (Set to to a comma-separated list.)
+            #
+            # NOTE: To use this option, the python-openid-teams package must be
+            # installed.
+            groups_to_request =
+        
+            ################################################################
+            # Authname (trac SID) generation
+        
+            # Force authname to lowercase (default true)
+            #lowercase_authname = true
+        
+            # Use SREG nickname as authname (default false)
+            #use_nickname_as_authname = false
+        
+            # If you want username to be written as
+            # "username_in_remote_system <openid_url>" use:
+            #combined_username = true
+        
+            # Remove http:// or https:// from URL that is used as
+            # username. (Default: false)
+            strip_protocol = false
+        
+            # Remove trailing slash from URL that is user as username (Defaul: false)
+            strip_trailing_slash = false
+        
+            # If you have an external authorization web app configured (via
+            # check_list), you may also use that to map openid identifiers to
+            # local usernames (authnames).   Set check_list_username to the name
+            # of a parameter which will be used to return the authname.
+            # E.g. if check_list_username=username, the expected JSON result from
+            # the authorization service is
+            #
+            #     {"check_list": true, "username": "Peter"}
+            #
+            #check_list_username=
+        
+            # Normally, the authname is not trusted to uniquely identify the user.
+            # (What if another user has already registered with the same username?)
+            # By default, a small integer is appended to the authname to make it
+            # unique.  To default this, you may set trust_authname to true.
+            #
+            # WARNING: Setting this can is many circumstances make identity theft
+            # very easy.  Only set this if you understand what you are doing.
+            #trust_authname = false
+        
+        
+            # Authentication cookie controls.
+            #
+            # Note that these are in the [trac] config section.
+        
+            [trac]
+        
+            # Check user IP address. IP addresses are masked because
+            # in some cases user is behind internal proxy and last
+            # number in IP address might vary.
+            # (Does not currently support IPv6.)
+            check_auth_ip = true
+            check_auth_ip_mask = 255.255.255.0
+        
+            # number of seconds until cookie will expire
+            auth_cookie_lifetime = 86400
+        
+        
+        Authors
+        =======
+        
+        This plugin was written by `Dalius Dobravolskas`_.
+        It is currently being maintained by `Jeff Dairiki`_.
+        Other contributors include: `Patrick Uiterwijk`_ and `@sleske`_.
+        
+        .. _Jeff Dairiki: mailto:dairiki@dairiki.org
+        .. _Dalius Dobravolskas: mailto:dalius@sandbox.lt
+        .. _Patrick Uiterwijk: https://github.com/puiterwijk
+        .. _@sleske: https://github.com/sleske
+        
+        
+        =======
+        Changes
+        =======
+        
+        Version 0.4.7 (2013-12-06)
+        ==========================
+        
+        Bug Fixes
+        ---------
+        
+        - Avoid ``KeyError: 'openid.return_to'`` error when user cancels verification.
+          (Fix__ by @sleske)
+        
+        __ https://github.com/dairiki/authopenid-plugin/pull/16
+        
+        - On login, first try to look up the username by the supplied OpenID
+          identifier. Only create a (new) username if the lookup fails. Thus
+          returning users will no longer get a new username if the data returned
+          by their OpenID provider changes. (Fixes `#14`_.)
+          Note that previous releases would create a new username with the same
+          OpenID identifier in this case. If that has happened in your
+          installation, there will be multiple usernames with the same OpenID
+          identifier. In that case the user will now always be logged into the
+          username that was last used, and a warning will be logged ("Multiple
+          users share the same openid identifier"). You should probably clean up
+          these "duplicate" usernames (usually by joining them). (Fix by @sleske)
+        
+        .. _#14: https://github.com/dairiki/authopenid-plugin/issues/14
+        
+        
+        Version 0.4.6 (2013-06-27)
+        ==========================
+        
+        Bug Fixes
+        ---------
+        
+        - Avoid ``AttributeError`` when neither name nor email is returned from
+          the OP. (Fixes `#9`_.)
+        
+        .. _#9: https://github.com/dairiki/authopenid-plugin/issues/9
+        
+        
+        Version 0.4.5 (2013-06-23)
+        ==========================
+        
+        (Another) brown bag release.  I botched release 0.4.4, *and* managed to
+        totally delete the PyPI repository in the process.  (Sorry.)
+        
+        Version 0.4.4 (2013-06-23)
+        ==========================
+        
+        New Features
+        ------------
+        
+        - (Contributed by Patrick Uiterwijk) Users can be added to trac groups
+          according to group membership provided via the OpenIDTeams_
+          extension.  Only groups listed in the new ``groups_to_request``
+          config option will be considered for possible membership.  To use
+          this feature you must install the python-openid-teams_ package.
+        
+        .. _OpenIDTeams: https://dev.launchpad.net/OpenIDTeams
+        .. _python-openid-teams: https://pypi.python.org/pypi/python-openid-teams
+        
+        Bug/Security Fixes
+        ------------------
+        
+        - Previously, if no email address was returned via AX or SREG, the
+          ``email_white_list`` config option was being ignored.  Now if
+          ``email_white_list`` is set and no email address can be determined,
+          authorization will be denied.
+        
+        - Do not create new users with a username which already has trac permissions
+          assigned to it.  (E.g. this might be the name of a trac group.)
+        
+        Documentation
+        -------------
+        
+        - Updated the example config in the README__ so that it more closely
+          matches current reality.  (Baby steps...)
+        
+        __ https://github.com/dairiki/authopenid-plugin#options
+        
+        Version 0.4.3 (2013-05-22)
+        ==========================
+        
+        Bug Fixes
+        ---------
+        
+        - Fix so that ``check_list_username`` actually works.  Now one can
+          actually use the ``check_list`` web API to implement custom identity
+          to username mapping.
+        
+        - Fall back to using the identifier URL as the authname (rather than
+          throwing an exception) if the OpenID provider did not return a full
+          name (or nickname).
+        
+        Packaging
+        ---------
+        
+        - README.rst: Patrick Uiterwijk has packaged this plugin for Fedora
+        
+        
+        Version 0.4.2 (2013-03-24)
+        ==========================
+        
+        New Features
+        ------------
+        
+        These features were contributed by Patrick Uiterwijk.
+        
+        - New config option ``use_nickname_as_authname``.  If set, the OpenID
+          nickname will be used for the authname (or trac username).
+        
+        - New config option ``trust_authname``.  If set, trust the
+          OpenID-derived authname to be unique.  **Security warning**: do not
+          set this unless you know what you are doing.
+        
+        
+        Version 0.4.1 (2012-06-25)
+        ==========================
+        
+        This is a brown bag release.  Release 0.4 was unusable.
+        
+        Bug Fixes
+        ---------
+        
+        - Packaging: A number of crucial files were omitted from the manifest.
+        
+        Version 0.4 (2012-06-25)
+        ========================
+        
+        Configuration Changes
+        ---------------------
+        
+        - The default for ``[trac] check_auth_ip`` is now ``False``.  **This
+          has security implications**.  If you want authorization to be tied
+          to the clients IP address *you must now explicitly set* this option
+          to ``True``.
+        
+          Prior to this change, if ``check_auth_ip`` was not explicitly set, we
+          ignored the global trac default (``False``) for the setting and behaved
+          as if it were set to ``True``.
+        
+          This change is being made for the sake of backwards compatibility
+          with trac 0.11 whose ``Configuration.has_option`` method does not
+          support the optional ``defaults`` argument added in 0.12.  Without
+          that there seems to be no clean way to determine whether a setting
+          is explicitly set in the ``.ini`` file.
+        
+        
+        New Features
+        ------------
+        
+        - We will now use the json_ package if your python version includes it
+          (python >= 2.6).   For older pythons, the simplejson_ package is now
+          required.
+        
+        
+        - A minor hack has been made which allows at least basic functionality
+          under the development branch, trac-1.0 (formerly know as trac-0.13).
+          Note that only very basic tests under trac-1.0 have not been
+          performed.  (The code in this plugin still does not adhere to
+          the modern `trac db API`_ usage recommendations.)
+        
+        .. _json: http://docs.python.org/library/json.html
+        .. _simplejson: https://github.com/simplejson/simplejson
+        .. _trac db API: http://trac.edgewall.org/wiki/TracDev/DatabaseApi
+        
+        Version 0.3.6 (2012-03-05)
+        ==========================
+        
+        New Maintainer
+        --------------
+        
+        Jeff Dairiki has taken over maintenance of this plugin from
+        the original author, Dalius Dobravolskas (who no longer uses trac.)
+        
+        The source repository for the plugin has moved to
+        https://github.com/dairiki/authopenid-plugin.
+        
+        New Features
+        ------------
+        
+        - Respect the ``[trac] auth_cookie_lifetime`` config value when
+          setting cookie expiration times.
+        
+        Deprecations
+        ------------
+        
+        - Using the ``[trac] expires`` setting to specify the auth cookie lifetime
+          is deprecated.  Use ``[trac] auth_cookie_lifetime`` instead.
+          (The ``expires`` setting does not seem to exist in trac 0.12 or 0.11.)
+        
+        Bug Fixes
+        ---------
+        
+        - Don't override the default value for the ``[trac] check_auth_ip``
+          configuration setting.   Trac declares this to have a default value
+          of *false*; we were overriding that default to *true*.
+        
+        Version 0.3.5 (2011-10-04)
+        ==========================
+        
+        
+        New Features
+        ------------
+        
+        - Now AX (as well as SREG) are attempted to get the user’s name.
+          This is tested with Google (which does not support SREG).
+        
+        - The new config setting ``[openid] lowercase_authname``
+          specifies whether to force authnames to lowercase.
+          For backwards compatibility, the default for this option is
+          *true* (see below__).  In general, however, I think it makes
+          more sense to set this option to *false*.
+        
+        __ `authnames were being lower-cased`_
+        
+        
+        Bug Fixes
+        ---------
+        
+        - _`Authnames were being lower-cased` when recovering them from the cookie,
+          but not when generating them initially.  This resulted — unless the
+          user’s name was all lower case to start with — in two sessions being
+          created upon initial login, one of which was ignored thereafter.
+        
+        - Always uniquify authnames.  When they are lowercased, there’s always a
+          chance of collision, even when they include the identity URL.
+        
+Keywords: trac openid
+Platform: Any
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Plugins
+Classifier: Environment :: Web Environment
+Classifier: Framework :: Trac
+Classifier: Intended Audience :: System Administrators
+Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Programming Language :: Python :: 2
+Classifier: License :: OSI Approved :: BSD License
