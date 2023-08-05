@@ -1,0 +1,105 @@
+#!/usr/bin/env python
+
+import os
+import time
+import subprocess
+
+def run_on_modify(run_what, on_what, with_args, at_rate_s):
+    """Runs a given command whenever a file's modification time is changed.
+
+    Usage: rompy <run_what> <on_what> [with_args] [at_rate_s]
+
+    Where:
+
+      run_what  - (Required) Executable to run when the target file is modified.
+
+      on_what   - (Required) Target file to check for modification.
+
+      with_args - (Optional) Arguments to be added to the command-line.
+
+      at_rate_s - (Optional) The rate at which the file will be checked for
+                  modification, in seconds. You can specify either an integer or
+                  floating-point value. If no value is entered, a rate of one (1)
+                  second is used.
+
+    Pandoc example:
+
+      rompy `which pandoc` index.md \"-o index.html\" &
+
+    This will run pandoc on index.md, (re)generating index.html every time index.md
+    changes. Using '&' at the end of the line forks the process on Linux/Mac OS X,
+    returning control to the command-line.
+
+    To convert reST files:
+
+      rompy `which rst2html.py` hello.rst '>hello.html' &
+
+    Converts hello.rst to hello.html, using similar semantics to the Pandoc example."""
+
+    # rate_s must be a positive value
+    assert at_rate_s > 0
+
+    # both options must be legitimate paths.
+    if not os.path.isfile(run_what):
+        raise IOError, "file not found: " + run_what
+    else:
+        # additionally, this must be executable.
+        if not os.access(run_what, os.X_OK):
+            raise IOError, "file not executable: " + run_what
+
+    if not os.path.isfile(on_what):
+        raise IOError, "file not found: " + on_what
+
+    # set some initial values
+    cmd = run_what + " " + with_args + " " + on_what
+    last_modify_time = os.path.getmtime(on_what)
+    last_file_check = time.time()
+
+    # call the command once to set things up.
+    subprocess.call(cmd, shell=True)
+
+    # now, loop and check for file modification.
+    while(True):
+        # sleep for a bit
+        time.sleep(at_rate_s)
+        # has the file been modified?
+        modify_time = os.path.getmtime(on_what)
+        if(modify_time > last_modify_time):
+            # try executing the command
+            try:
+                subprocess.call(cmd, shell=True)
+                last_modify_time = modify_time
+            except OSError as e:
+                print 'OSError ({}) : {}'.format(e.errno, e.strerror)
+
+# Check a file path to see if it has been updated.
+def is_updated(file_path, last_modify_time):
+    modify_time = os.path.getmtime(file_path)
+    return True if(modify_time > last_modify_time) else False
+
+# If rom.py is run directly from the command-line, the following code parses the
+# args and calls run_on_modify.
+if __name__ == "__main__":
+    import sys
+
+    # check for the number of args entered
+    args = len(sys.argv)
+
+    if args < 3:
+        if (args > 1) and (sys.argv[1].lower() == "help"):
+                print "\n    %s\n" % (run_on_modify.__doc__)
+        else:
+            print "You must specify a file to run, and on what."
+            print "Use \"help\" as the sole argument to get help."
+            # too few!
+
+        # either way...
+        sys.exit(1)
+
+    # Assign variables based on the arguments passed in.
+    rom_run = sys.argv[1]
+    rom_on = sys.argv[2]
+    rom_args = sys.argv[3] if args > 3 else ''
+    rom_rate = float(sys.argv[4]) if args > 4 else 1.0
+
+    run_on_modify(rom_run, rom_on, rom_args, rom_rate)

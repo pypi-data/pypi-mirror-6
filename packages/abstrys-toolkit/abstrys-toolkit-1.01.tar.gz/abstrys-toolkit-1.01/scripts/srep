@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+import sys
+import glob
+import re
+
+file_list = None
+search_term = None
+replace_term = None
+
+# takes 3 args (see usage string for details).
+if len(sys.argv) < 4:
+    print """
+Usage: srep <searchterm> <replaceterm> <filespec> ...
+
+Notes:
+  * All arguments are required.
+  * searchterm and/or replaceterm can be regular expressions.
+  * filespec can be a file name or glob. Multiple filespecs can be specified.
+"""
+    sys.exit(1)
+
+# the first two user arguments are the search and replace terms.
+(search_term, replace_term) = sys.argv[1:3]
+
+# this will alwasy return a list
+file_list = sys.argv[3:]
+
+# process all arguments to see if they're fileglobs (the user can type multiple
+# fileglobs, such as: *.txt *.md.
+expanded_list = []
+for filespec in file_list:
+    expanded_list += glob.glob(filespec)
+
+print "This will replace all instances of '%s' with '%s' in %d files.\n" % (
+        search_term, replace_term, len(expanded_list))
+
+confirm = raw_input("Continue? (y/n): ")
+confirm = confirm.lower()
+
+if confirm != 'y':
+    print("\nAborted operation.")
+    print("Whew. That was close!\n")
+    sys.exit()
+
+print ""
+for filename in expanded_list:
+    # read in the file contents
+    sys.stdout.write("  %s" % filename)
+    in_file = open(filename)
+    contents = in_file.read()
+    in_file.close()
+
+    # fuzzle 'em.
+    (contents, times) = re.subn(search_term, replace_term, contents, 0,
+            re.MULTILINE|re.UNICODE)
+
+
+    if times > 0:
+        end = 's' if times > 1 else ''
+        print " - %d replacement%s made." % (times, end)
+        # write out the results.
+        out_file = open(filename, "w+")
+        out_file.write(contents)
+        out_file.close()
+    else:
+        print " - unchanged."
+
+print "\nfinished!\n"
+sys.exit(0)
+
