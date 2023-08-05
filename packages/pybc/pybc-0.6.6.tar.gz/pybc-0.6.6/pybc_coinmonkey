@@ -1,0 +1,289 @@
+#!/usr/bin/env python2.7
+# pybc_coinmonkey: A stress-testing script that makes random coin transactions.
+
+import argparse, sys, os, itertools, time, logging, random, socket
+from twisted.internet import reactor
+
+import pybc
+import pybc.coin
+import pybc.transactions
+import pybc.util
+import pybc.science
+
+def parse_args(args):
+    """
+    Takes in the command-line arguments list (args), and returns a nice argparse
+    result with fields for all the options.
+    Borrows heavily from the argparse documentation examples:
+    <http://docs.python.org/library/argparse.html>
+    """
+    
+    # The command line arguments start with the program name, which we don't
+    # want to treat as an argument for argparse. So we remove it.
+    args = args[1:]
+    
+    # Construct the parser (which is stored in parser)
+    # Module docstring lives in __doc__
+    # See http://python-forum.com/pythonforum/viewtopic.php?f=3&t=36847
+    # And a formatter class so our examples in the docstring look good. Isn't it
+    # convenient how we already wrapped it to 80 characters?
+    # See http://docs.python.org/library/argparse.html#formatter-class
+    parser = argparse.ArgumentParser(description=__doc__, 
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    
+    # Now add all the options to it
+    parser.add_argument("blockstore",
+        help="the name of a file to store blocks in")
+    parser.add_argument("keystore",
+        help="the name of a file to store blocks in")
+    parser.add_argument("peerstore",
+        help="the name of a file to store peer addresses in")
+    parser.add_argument("--host", default=None,
+        help="the host or IP to advertise to other nodes")
+    parser.add_argument("--port", type=int, default=8008, 
+        help="the port to listen on")
+    parser.add_argument("--peer_host", type=str, default=None, 
+        help="the hostname of another peer to connect to")
+    parser.add_argument("--peer_port", type=int, default=None, 
+        help="the port of another peer to connect to")
+    parser.add_argument("--peer_file", type=argparse.FileType("r"),
+        default=None, 
+        help="a space-separated file of peer hosts and ports to bootstrap with")
+    parser.add_argument("--generate", action="store_true",
+        help="generate a block every so often")
+    parser.add_argument("--minify", type=int, default=None,
+        help="minify blocks burried deeper than this")
+    parser.add_argument("--science",
+        help="filename to log statistics to, for doing science")
+        
+    # Logging options
+    parser.add_argument("--loglevel", default="INFO", choices=["DEBUG", "INFO",
+        "WARNING", "ERROR", "CRITICAL"],
+        help="logging level to use")
+
+        
+    return parser.parse_args(args)
+    
+block_in_progress = None
+
+def generate_block(peer, wallet):
+    """
+    Keep on generating blocks in the background.
+    
+    Put the blocks in the given peer's blockchain, and send the proceeds to the
+    given wallet.
+    
+    Don't loop indefinitely, so that the Twisted main thread dying will stop
+    us.
+   
+    
+    """
+    
+    global block_in_progress
+    
+    if block_in_progress is not None:
+        # Keep working on the block we were working on
+        success = block_in_progress.do_some_work(peer.blockchain.algorithm)
+        
+        if success:
+            # We found a block!
+            logging.info("Generated block!")
+            
+            # Dump the block
+            logging.info("{}".format(block_in_progress))
+            for transaction_bytes in pybc.unpack_transactions(
+                block_in_progress.payload):
+                
+                logging.info("{}".format(pybc.coin.Transaction.from_bytes(
+                    transaction_bytes)))
+            
+            peer.send_block(block_in_progress)
+            # Start again
+            block_in_progress = None
+        elif time.time() > block_in_progress.timestamp + 60:
+            # This block is too old. Try a new one.
+            logging.info("Generating block is getting old! Restart generation!")
+            block_in_progress = None
+        elif (peer.blockchain.highest_block is not None and 
+            peer.blockchain.highest_block.block_hash() != 
+            block_in_progress.previous_hash):
+            
+            # This block is no longer based on the top of the chain
+            logging.info("New block from elsewhere! Restart generation!")
+            block_in_progress = None
+    else:
+        # We need to start a new block
+        block_in_progress = peer.blockchain.make_block(wallet.get_address())
+        
+        if block_in_progress is not None:
+            logging.info("Starting a block!")
+            
+            # Might as well dump balance here too
+            logging.info("Receiving address: {}".format(pybc.util.bytes2string(
+            wallet.get_address())))
+            logging.info("Current balance: {}".format(wallet.get_balance()))
+    
+    # Tell the main thread to make us another thread.
+    reactor.callFromThread(reactor.callInThread, generate_block, peer, wallet)
+
+# Keep a global set of addreses we have seen in blocks.
+seen_addresses = set()
+
+def collect_addresses(event, argument):
+    """
+    A function that listens to the blockchain and collects addresses from
+    incoming blocks.
+    """
+    
+    if event == "forward":
+        # We're moving forward a block, and the argument is a block.
+        
+        if argument.has_body:
+            # Only look at blocks that actually have transactions in them.
+            for transaction_bytes in pybc.transactions.unpack_transactions(
+                argument.payload):
+                
+                # Turn each transaction into a Transaction object.
+                transaction = pybc.coin.Transaction.from_bytes(
+                    transaction_bytes)
+                
+                for _, _, _, source in transaction.inputs:
+                    # Nothe that we saw a transaction from this source
+                    seen_addresses.add(source)
+                    
+                for _, destination in transaction.outputs:
+                    # Note that we saw a transaction to this destination
+                    seen_addresses.add(destination)
+                    
+def send_coins(peer, wallet):
+    """
+    Pick a random address that we know about and send some coins to it.
+    
+    """
+    
+    # How much can we send? At a minimum, 1
+    min_payment = 1
+    # At a maximum, send half of what we have available. This does not go down
+    # when we mark spendable outputs as not willing to spend (since we just
+    # broadcast a transaction trying to spend them), so this may often be more
+    # than we are willing to make a transaction for.
+    max_payment = int(0.5 * wallet.get_balance())
+    
+    if len(seen_addresses) > 0 and max_payment >= min_payment:
+        # We actually want to try to make a transaction
+        
+        # Pick a random destination. We don't use random.choice since it doesn't
+        # support unindexable things like sets.
+        destination = random.sample(seen_addresses, 1)[0]
+        
+        # Pick a random amount to send
+        to_send = random.randint(min_payment, max_payment)
+        
+        # Make a transaction
+        transaction = wallet.make_simple_transaction(to_send, destination)
+        
+        if transaction is not None:
+            # We successfully made a transaction
+            logging.info("Made random transaction sending {} to {}".format(
+                to_send, pybc.util.bytes2string(destination)))
+                
+            # Send out the transaction. It might go invalid if someone comes
+            # along while we're working, but then we'll try again later.
+            peer.send_transaction(transaction.to_bytes())
+                
+        else:
+            logging.debug("Refused to make transaction spending {}".format(
+                to_send))
+                
+    else:
+        logging.debug("Not making a transaction since we don't know anyone to "
+            "send to.")
+            
+    # Later, call in the main thread a function to call in its own thread this
+    # function again, with the same arguments. This lets us not sleep and block
+    # the whole program, while also not immediately running again, and not
+    # running again if the main thread has died by the time we want to run.
+    reactor.callLater(30, reactor.callFromThread, reactor.callInThread, 
+        send_coins, peer, wallet)
+                    
+                
+                
+def main(args):
+    """
+    Parses command line arguments, and runs a blockchain peer.
+    "args" specifies the program arguments, with args[0] being the executable
+    name. The return value should be used as the program's exit code.
+    
+    """
+    
+    options = parse_args(args) # This holds the nicely-parsed options object
+    
+    # Set the log level
+    pybc.util.set_loglevel(options.loglevel)
+    
+    if options.science is not None:
+        # Start the science
+        pybc.science.log_to(options.science)
+    
+    logging.info("Starting server on port {}".format(options.port))
+    
+    pybc.science.log_event("startup")
+    
+    # Make a CoinBlockchain, using the specified blockchain file
+    blockchain = pybc.coin.CoinBlockchain(options.blockstore,
+        minification_time=options.minify)
+        
+    # Listen to it so we can see incoming new blocks going forward and read
+    # their addresses.
+    blockchain.subscribe(collect_addresses)
+    
+    # Make a Wallet that uses the blockchain and our keystore
+    wallet = pybc.coin.Wallet(blockchain, options.keystore)
+    
+    logging.info("Receiving address: {}".format(pybc.util.bytes2string(
+        wallet.get_address())))
+    logging.info("Current balance: {}".format(wallet.get_balance()))
+    
+    # Now make a Peer.
+    peer = pybc.Peer("PyBC-Coin", 2, blockchain, peer_file=options.peerstore, 
+        external_address=options.host, port=options.port)
+    
+    if options.peer_host is not None and options.peer_port is not None:
+        # Point it at a user specified other peer.
+        peer.connect(options.peer_host, options.peer_port)
+        # Tell it it has a bootstrap peer
+        peer.peer_seen(options.peer_host, options.peer_port, None)
+        
+    if options.peer_file is not None:
+        # Load a whitespace-separated host port file
+        # Don't connect to all of them, but learn them.
+        for line in options.peer_file:
+            # Discard the \n
+            line = line.strip()
+            
+            if len(line) == 0:
+                # Skip blank lines
+                continue
+            
+            # Load the host and port
+            host, port = line.split()
+            
+            # Tell the peer it has a bootstrap peer
+            peer.peer_seen(host, int(port), None)
+            
+    
+    if options.generate:
+        # Schedule a block generation
+        reactor.callFromThread(generate_block, peer, wallet)
+        
+    # Schedule the random transaction generation job
+    reactor.callFromThread(send_coins, peer, wallet)
+    
+    # Run the peer (and thus the Twisted reactor)
+    peer.run()
+        
+    return 0
+
+if __name__ == "__main__" :
+    sys.exit(main(sys.argv))
+
