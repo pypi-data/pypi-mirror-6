@@ -1,0 +1,8 @@
+display_name = "pyrrd-fix"
+library_name = "pyrrd"
+version = "0.1.1"
+author = "Duncan McGreggor"
+author_email = "duncan@canonical.com"
+license = "BSD"
+url = "http://code.google.com/p/pyrrd/"
+description = "bug fixed for pyrrd"
