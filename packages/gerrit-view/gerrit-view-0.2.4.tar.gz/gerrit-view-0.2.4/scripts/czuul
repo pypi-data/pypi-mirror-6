@@ -1,0 +1,591 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+
+#    Copyright (C) 2013 Yahoo! Inc. All Rights Reserved.
+#
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
+
+import functools
+import logging
+import optparse
+import sys
+import threading
+
+import requests
+import urwid
+
+from datetime import (datetime, timedelta)
+
+logging.basicConfig(level=logging.ERROR,
+                    format='%(asctime)s %(levelname)s: %(message)s',
+                    stream=sys.stderr)
+LOG = logging.getLogger(__name__)
+
+### DEFAULT SETTINGS
+
+ZUUL_URL = 'http://zuul.openstack.org/status.json'
+ZUUL_FREQ = 30
+ZUUL_TIMEOUT = ZUUL_FREQ / 2.0
+ALARM_FREQ = 1.0
+SCREENS = 3
+
+### GUI CONSTANTS
+
+PALETTE = (
+    # General gui usage
+    ('body', urwid.DEFAULT, urwid.DEFAULT),
+    ('title', urwid.LIGHT_CYAN, urwid.DEFAULT, 'standout'),
+    ('clear', urwid.WHITE, urwid.DEFAULT, 'standout'),
+    # Time usage
+    ('ok', urwid.LIGHT_GREEN, urwid.DEFAULT),
+    ('dead', urwid.DARK_RED, urwid.DEFAULT, 'bold,underline'),
+    ('slow', urwid.YELLOW, urwid.DEFAULT),
+    ('veryslow', urwid.LIGHT_RED, urwid.DEFAULT),
+    ('superslow', urwid.LIGHT_MAGENTA, urwid.DEFAULT, 'bold,underline'),
+    # Progress bar usage
+    ('normal', urwid.WHITE, urwid.DARK_GRAY),
+    ('complete', urwid.WHITE, urwid.DARK_BLUE),
+    ('smooth', urwid.WHITE, urwid.LIGHT_BLUE),
+    # Column usage
+    ('selected', urwid.DARK_GRAY, urwid.DEFAULT),
+)
+QUIT_KEYS = ('q', 'Q', 'esc')
+REFRESH_KEYS = ('r', 'R')
+
+
+def select_time_attr(secs):
+    secs = max(0, int(secs))
+    if secs <= 300:
+        return 'ok'
+    if secs <= 600:
+        return 'slow'
+    if secs <= 1800:
+        return 'veryslow'
+    return 'superslow'
+
+
+def seconds_left(expiry_date, expires_in_secs):
+    now = datetime.now()
+    expires_on = expiry_date + timedelta(seconds=max(0, int(expires_in_secs)))
+    much_longer = expires_on - now
+    if much_longer.seconds <= 0 or expires_on <= now:
+        return 0
+    return int(much_longer.seconds)
+
+
+def format_time(secs, mins, only_mins=False):
+    if only_mins:
+        if mins <= 0.0:
+            return "0m"
+        else:
+            return "%0.1fm" % (mins)
+    else:
+        if mins <= 0.0:
+            return "%ss/0m" % (secs)
+        else:
+            return "%ss/%0.1fm" % (secs, mins)
+
+
+def calculate_completion(review):
+    jobs_total = 0
+    jobs_remaining = 0
+    for j in review.get("jobs", []):
+        jobs_total += 1
+        if get_int_key("remaining_time", j) > 0:
+            jobs_remaining += 1
+    if not jobs_total:
+        return 1.0
+    jobs_finished = max(0, jobs_total - jobs_remaining)
+    percent_complete = float(jobs_finished) / float(jobs_total)
+    if percent_complete > 1.0:
+        return 1.0
+    if percent_complete < 0:
+        return 0.0
+    return percent_complete
+
+
+def decode_millis(millis):
+    if millis < 0:
+        millis = 0
+    secs = millis / 1000
+    minutes = secs / 60.0
+    return (secs, minutes)
+
+
+def get_int_key(k, in_what, default=0):
+    try:
+        return int(in_what[k])
+    except (KeyError, ValueError, TypeError):
+        return default
+
+
+class ZuulWatcher(threading.Thread):
+    def __init__(self, url):
+        super(ZuulWatcher, self).__init__()
+        self.url = url
+        self.daemon = True
+        self.data = {}
+        self.event = threading.Event()
+        self._fetches = 0
+
+    def run(self):
+        while True:
+            self.event.wait(timeout=ZUUL_FREQ)
+            response = None
+            try:
+                response = requests.get(self.url, timeout=ZUUL_TIMEOUT)
+                self._fetches += 1
+            except requests.RequestException:
+                LOG.exception("Failed fetching zuul data from %s", self.url)
+            if response:
+                try:
+                    data = response.json()
+                    if isinstance(data, (dict)):
+                        self.data = dict(data)
+                        self.data['__fetched_when'] = datetime.now()
+                        self.data['__fetch_id'] = self._fetches
+                    else:
+                        raise TypeError("Expected dict type, got '%s'"
+                                        % type(data))
+                except (ValueError, TypeError):
+                    LOG.exception("Failed extracting/caching zuul data")
+            self.event.clear()
+
+
+class ZuulReview(urwid.Pile):
+    def __init__(self, review):
+        super(ZuulReview, self).__init__([])
+        self.review_id = review['id']
+        self.jobs = {}
+        self.progress_bar = urwid.ProgressBar('normal', 'complete',
+                                              0.0, 1.0, 'smooth')
+        self.progress_bar.set_completion(0.0)
+        title_pieces = [("title", self.review_id)]
+        if review.get("url"):
+            title_pieces.append(("body", " @ %s" % (review['url'])))
+        title = urwid.Text(title_pieces)
+        self.eta_text = urwid.Text([('clear', "ETA")], align='right')
+        rows = [
+            urwid.Columns([title, (urwid.FIXED, 12, self.eta_text)]),
+            self.progress_bar,
+        ]
+        for item in rows:
+            self.contents.append((item, (urwid.WEIGHT, 1)))
+
+    def refresh(self, review):
+        new_jobs = []
+        remaining_millis = []
+        failure_count = 0
+        for j in review.get("jobs", []):
+            if not j.get("name"):
+                continue
+            j_name = str(j.get('name'))
+            millis = get_int_key("remaining_time", j)
+            remaining_millis.append(millis)
+            (secs, mins) = decode_millis(millis)
+            time_add_on = ""
+            if j.get("result") == 'FAILURE' and j.get("voting"):
+                time_attr = 'dead'
+                time_add_on = "!"
+                failure_count += 1
+            else:
+                time_attr = select_time_attr(secs)
+            time_txt = format_time(secs, mins) + time_add_on
+            if j_name in self.jobs:
+                (name, remaining) = self.jobs[j_name]
+                remaining_txt = remaining.original_widget
+                remaining_txt.set_text(time_txt)
+                remaining.set_attr_map({None: time_attr})
+            else:
+                remaining_txt = urwid.Text(time_txt, align='right')
+                self.jobs[j_name] = [
+                    urwid.Text("- %s" % j_name, align='left'),
+                    urwid.AttrMap(remaining_txt, time_attr),
+                ]
+                new_jobs.append(j_name)
+        if new_jobs:
+            (p_bar, p_bar_options) = self.contents.pop()
+            for j_name in sorted(new_jobs):
+                (name_txt, time_txt) = self.jobs[j_name]
+                rows = [name_txt, (urwid.WEIGHT, 0.333, time_txt)]
+                self.contents.append((urwid.Columns(rows), (urwid.WEIGHT, 1)))
+            self.contents.append((p_bar, p_bar_options))
+        self.progress_bar.set_completion(calculate_completion(review))
+        if remaining_millis:
+            max_remaining_millis = max(remaining_millis)
+        else:
+            max_remaining_millis = 0
+        (secs, mins) = decode_millis(max_remaining_millis)
+        time_txt = format_time(secs, mins, only_mins=True)
+        time_markup = [
+            ('clear', "ETA ["),
+            ('clear', "]"),
+        ]
+        if failure_count:
+            time_attr = 'dead'
+            time_txt += "!"
+        else:
+            time_attr = select_time_attr(secs)
+        time_markup.insert(1, (time_attr, time_txt))
+        self.eta_text.set_text(time_markup)
+
+
+class ZuulPipelineHeader(urwid.Pile):
+    def __init__(self, name, description=''):
+        super(ZuulPipelineHeader, self).__init__([])
+        self.name = str(name)
+        title_pieces = [('clear', self.name.title())]
+        if description:
+            description = description[0].lower() + description[1:]
+            title_pieces.append(("body", ", %s" % description))
+        rows = [
+            urwid.Divider(u'─'),
+            urwid.Text(title_pieces),
+            urwid.Divider(u'─')
+        ]
+        for h in rows:
+            self.contents.append((h, (urwid.WEIGHT, 1)))
+        self.name = name
+
+
+class CyclingColumns(urwid.Columns):
+    def __init__(self, maker, count):
+        super(CyclingColumns, self).__init__([])
+        assert int(count) > 0, 'Column count must be > 0'
+        self.columns = []
+        self.count = int(count)
+        self.maker = maker
+        self.index = 0
+        for _i in range(0, self.count):
+            (c, w) = self.maker()
+            self.contents.append((w, (urwid.WEIGHT, 1, False)))
+            self.columns.append((c, w))
+        self.right_arrow = urwid.SolidFill(u"⇢")
+        self.right_arrow_on = False
+        self.left_arrow = urwid.SolidFill(u"⇠")
+        self.left_arrow_on = False
+
+    def clear(self):
+        while len(self.columns) > self.count:
+            self.columns.pop()
+        self.index = 0
+        for (c, w) in self.columns:
+            while len(c.contents):
+                c.contents.pop()
+        self._clear_contents()
+        self.right_arrow_on = False
+        self.left_arrow_on = False
+        for i in range(0, self.count):
+            w = self.columns[i][1]
+            self.contents.append((w, (urwid.WEIGHT, 1, False)))
+
+    def place(self, w, max_rows, max_cols):
+
+        def is_over_size(c, item_rows=0):
+            if len(c.contents) == 0:
+                return False
+            remaining = max_rows - item_rows
+            for w, (_f, _height) in c.contents:
+                rows = w.rows((max_cols,), c.focus_item == w)
+                remaining -= rows
+            if remaining <= 0:
+                return True
+            return False
+
+        w_rows = w.rows((max_cols,), False)
+        column = None
+        for (c, _w2) in self.columns:
+            if is_over_size(c, w_rows):
+                continue
+            column = c
+            break
+        if column is None:
+            (c, w2) = self.maker()
+            self.columns.append((c, w2))
+            column = c
+        column.contents.append((w, (urwid.PACK, None)))
+
+        if len(self.columns) > len(self.contents) and not self.right_arrow_on:
+            self.right_arrow_on = True
+            self.contents.append((self.right_arrow, (urwid.GIVEN, 1, False)))
+
+    def _clear_contents(self):
+        while len(self.contents):
+            self.contents.pop()
+
+    def shift_contents_left(self):
+        if (self.index + self.count) == len(self.columns):
+            return False
+        self.index += 1
+        j = self.index
+        self._clear_contents()
+        for _i in range(0, self.count):
+            w = self.columns[j][1]
+            self.contents.append((w, (urwid.WEIGHT, 1, False)))
+            j += 1
+        if self.index > 0:
+            self.left_arrow_on = True
+        if j == len(self.columns):
+            self.right_arrow_on = False
+        if self.right_arrow_on:
+            self.contents.append((self.right_arrow, (urwid.GIVEN, 1, False)))
+        if self.left_arrow_on:
+            self.contents.insert(0, (self.left_arrow, (urwid.GIVEN, 1, False)))
+        return True
+
+    def shift_contents_right(self):
+        if self.index == 0:
+            return False
+        self.index -= 1
+        j = self.index
+        self._clear_contents()
+        for _i in range(0, self.count):
+            w = self.columns[j][1]
+            self.contents.append((w, (urwid.WEIGHT, 1, False)))
+            j += 1
+        if self.index > 0:
+            self.right_arrow_on = True
+        if self.index == 0:
+            self.left_arrow_on = False
+        if self.right_arrow_on:
+            self.contents.append((self.right_arrow, (urwid.GIVEN, 1, False)))
+        if self.left_arrow_on:
+            self.contents.insert(0, (self.left_arrow, (urwid.GIVEN, 1, False)))
+        return True
+
+    def keypress(self, size, key):
+        if key is None:
+            return
+        if self.focus_position is None:
+            return key
+        widths = self.column_widths(size)
+        if self.focus_position >= len(widths):
+            return key
+        i = self.focus_position
+        mc = widths[i]
+        w, (t, n, b) = self.contents[i]
+        if len(size) == 1 and b:
+            key = w.keypress((mc, self.rows(size, True)), key)
+        else:
+            key = w.keypress((mc,) + size[1:], key)
+        m_key = self._command_map[key]
+        if m_key not in (urwid.CURSOR_LEFT, urwid.CURSOR_RIGHT):
+            return key
+        k = i
+        content_len = len(self.contents)
+        if self.left_arrow_on:
+            k -= 1
+            content_len -= 1
+        if self.right_arrow_on:
+            content_len -= 1
+        if k == 0:
+            if m_key == urwid.CURSOR_LEFT:
+                if self.shift_contents_right():
+                    return None
+        if k + 1 == content_len:
+            if m_key == urwid.CURSOR_RIGHT:
+                if self.shift_contents_left():
+                    for m in reversed(list(range(0, len(self.contents)))):
+                        if not self.contents[m][0].selectable():
+                            continue
+                        self.focus_position = m
+                        break
+                    return None
+        candidates = []
+        if m_key == urwid.CURSOR_RIGHT:
+            candidates.extend(range(i + 1, len(self.contents)))
+        else:
+            candidates.extend(reversed(list(range(0, i))))
+        for j in candidates:
+            if not self.contents[j][0].selectable():
+                continue
+            self.focus_position = j
+            return None
+        return key
+
+
+class ZuulFrame(urwid.Frame):
+    @staticmethod
+    def _make_columns(column_count):
+
+        def column_maker():
+            c = urwid.Pile([])
+            w = urwid.ListBox(urwid.SimpleFocusListWalker([c]))
+            w = urwid.AttrWrap(w, 'body')
+            w = urwid.AttrMap(urwid.LineBox(w), 'selected', 'body')
+            return (c, w)
+
+        return CyclingColumns(column_maker, column_count)
+
+    def __init__(self, options, source):
+        self.options = options
+        self.source = source
+        screen_count = options.screens
+        assert screen_count > 0, "One or more split-screens must be provided!"
+        self.screen_count = screen_count
+        self.right_footer = urwid.Text('', align='right')
+        self.left_footer = urwid.Text("Initializing...", align='left')
+        footer = urwid.AttrWrap(
+            urwid.Columns((self.left_footer, self.right_footer)), 'body')
+        self.last_fetched = None
+        self.last_fetch_id = None
+        self.columns = self._make_columns(screen_count)
+        self.last_reviews = {}
+        super(ZuulFrame, self).__init__(self.columns, footer=footer)
+
+    def keypress(self, size, key):
+        if key in REFRESH_KEYS:
+            self.source.event.set()
+            return None
+        return super(ZuulFrame, self).keypress(size, key)
+
+    def _refresh_pipelines(self, zuul_data, screen_size):
+        maxcol, maxrow = screen_size
+        maxcol = maxcol / self.screen_count
+
+        ok_pipelines = set([p.lower() for p in self.options.pipelines])
+        pipes = {}
+        for p in zuul_data.get('pipelines', []):
+            pipe_name = str(p.get('name', ''))
+            if not len(pipe_name):
+                continue
+            if len(ok_pipelines) and pipe_name not in ok_pipelines:
+                continue
+            pipes[pipe_name] = str(p.get("description", "")).strip()
+
+        def iter_pipeline(data):
+            for q in data.get('change_queues', []):
+                for h in q.get('heads', []):
+                    for raw_data in h:
+                        if not raw_data.get("id"):
+                            continue
+                        try:
+                            r = ZuulReview(raw_data)
+                            yield (r, raw_data)
+                        except (KeyError, TypeError):
+                            pass
+
+        reviews = {}
+        cleaned_pipes = {}
+        ordered_pipes = sorted(pipes.keys())
+        for name in ordered_pipes:
+            cleaned_pipes[name] = {
+                'pipeline': ZuulPipelineHeader(name, pipes[name]),
+                'reviews': [],
+            }
+            for p in zuul_data.get('pipelines', []):
+                if p.get('name') == name:
+                    for (r, raw_data) in iter_pipeline(p):
+                        if r.review_id in self.last_reviews:
+                            r = self.last_reviews[r.review_id]
+                        try:
+                            r.refresh(raw_data)
+                            reviews[r.review_id] = r
+                            cleaned_pipes[name]['reviews'].append(r.review_id)
+                        except (KeyError, TypeError):
+                            pass
+
+        def cmp_reviews(r1, r2):
+            try:
+                r1_i = int(r1.split(",", 1)[0])
+                r2_i = int(r2.split(",", 1)[0])
+                return cmp(r1_i, r2_i)
+            except (ValueError, TypeError):
+                return cmp(r1, r2)
+
+        self.last_reviews = reviews
+        self.columns.clear()
+        for name in ordered_pipes:
+            pipeline = cleaned_pipes[name]['pipeline']
+            self.columns.place(pipeline, maxrow, maxcol)
+            ids = sorted(cleaned_pipes[name]['reviews'], cmp=cmp_reviews)
+            for review_id in reversed(ids):
+                self.columns.place(reviews[review_id], maxrow, maxcol)
+
+        # Update right footer text
+        fetch_id = zuul_data['__fetch_id']
+        text = "%s pipelines (%sr, %sw, %sf)"
+        text = text % (len(cleaned_pipes), len(reviews),
+                       len(self.columns.columns), fetch_id)
+        self.right_footer.set_text(text)
+
+    def refresh(self, screen, screen_size):
+        if screen_size is None or not all(screen_size):
+            return
+
+        zuul_data = dict(self.source.data)
+        if not zuul_data:
+            self.source.event.set()
+            self.left_footer.set_text("Waiting for initial data...")
+            return
+
+        def poke(fetched_when):
+            much_longer_secs = seconds_left(fetched_when, ZUUL_FREQ)
+            if much_longer_secs <= 0:
+                self.source.event.set()
+
+        fetched_when = zuul_data['__fetched_when']
+        fetch_id = zuul_data['__fetch_id']
+        poke(fetched_when)
+
+        if self.last_fetch_id != fetch_id:
+            self._refresh_pipelines(zuul_data, screen_size)
+            self.last_fetched = fetched_when
+            self.last_fetch_id = fetch_id
+
+        # Update left footer text
+        much_longer_secs = seconds_left(self.last_fetched, ZUUL_FREQ)
+        text = "Refresh expected in %s seconds..." % (much_longer_secs)
+        self.left_footer.set_text(text)
+
+
+def refresh_zuul(loop, frame):
+    frame.refresh(loop.screen, loop.screen_size)
+
+
+def on_unhandled_input(key):
+    if key in QUIT_KEYS:
+        raise urwid.ExitMainLoop()
+
+
+def on_idle(loop, frame):
+    loop.set_alarm_in(ALARM_FREQ, refresh_zuul, user_data=frame)
+
+
+def main():
+    parser = optparse.OptionParser()
+    parser.add_option("-s", "--server", dest="server", action='store',
+                      help="zuul server [default: %default]",
+                      metavar="URL", default=ZUUL_URL)
+    parser.add_option("--split-screens", dest="screens", action='store',
+                      help="split screen count [default: %default]",
+                      type=int, metavar="SCREENS", default=SCREENS)
+    parser.add_option("-p", "--pipeline", dest="pipelines", action='append',
+                      help="only show given pipelines reviews",
+                      metavar="PIPELINE", default=[])
+    (options, args) = parser.parse_args()
+
+    watcher = ZuulWatcher(options.server)
+    frame = ZuulFrame(options, watcher)
+    loop = urwid.MainLoop(frame, PALETTE,
+                          handle_mouse=False,
+                          unhandled_input=on_unhandled_input)
+    watcher.start()
+    loop.event_loop.enter_idle(functools.partial(on_idle, loop, frame))
+    loop.run()
+
+
+if __name__ == "__main__":
+    main()
