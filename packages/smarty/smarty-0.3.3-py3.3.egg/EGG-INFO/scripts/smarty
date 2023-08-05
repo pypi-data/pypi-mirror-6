@@ -1,0 +1,48 @@
+#!/usr/bin/python
+
+import atexit, time
+
+import mpd
+
+from smarty import cmd_line_parser, communication_handler
+
+
+def main():
+	args = cmd_line_parser.get_args()
+	communication_handler.set_args(args)
+
+	client = mpd.MPDClient()
+	client.connect(args.ip, args.port)
+	communication_handler.set_client(client)
+
+	atexit.register(communication_handler.restore_previous_settings, communication_handler.save_current_settings())
+	communication_handler.disable_random()
+
+	while True:
+		pos, total = communication_handler.get_playlist_pos()
+		if total > args.max_num:
+			for i in range(total - args.max_num):
+					communication_handler.rm_song(0)
+		if pos != -1 and total - pos < args.songs_to_end:
+			playlist = communication_handler.parse_playlist()
+			next_genre = communication_handler.get_smart_genre(playlist)
+			if next_genre == None:
+				if args.verbose: print("No suitable genre found")
+				wait = 10
+			else:
+				new_song = communication_handler.get_song(next_genre)
+				if new_song == None:
+						if args.verbose: print("Skipping %s" % next_genre)
+				else:
+						if args.verbose: print("Adding %s" % next_genre)
+						communication_handler.add_song(communication_handler.get_song(next_genre))
+				del playlist
+
+				wait = 0.5
+		else:
+			wait = 10
+
+		time.sleep(wait)
+
+if __name__ == '__main__':
+	main()
