@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><meta  content="text/html; charset=utf-8" http-equiv="Content-Type"/>
+
+
+<link  href="../01-bootstrap.min.css" type="text/css" rel="StyleSheet"/>
+<link  href="../02-docstyle.css" type="text/css" rel="StyleSheet"/>
+<link  href="../syntax.css" type="text/css" rel="StyleSheet"/>
+<title>mitmproxy 0.10 - libmproxy</title></head><body><div class="navbar navbar-fixed-top">
+  <div class="navbar-inner">
+    <div class="container">
+      <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </a>
+      <a class="brand" href="../index.html">mitmproxy 0.10 docs</a>
+      </div><!--/.nav-collapse -->
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="row">
+    <div class="span3">
+      <div class="well sidebar-nav">
+            <ul class="nav nav-list">
+    <li><a href="../index.html">Introduction</a></li>
+    <li><a href="../install.html">Installation</a></li>
+    <li><a href="../howmitmproxy.html">How mitmproxy works</a></li>
+
+    <li class="nav-header">Tools</li>
+        <li><a href="../mitmproxy.html">mitmproxy</a></li>
+        <li><a href="../mitmdump.html">mitmdump</a></li>
+
+    <li class="nav-header">Features</li>
+        <li><a href="../features/anticache.html">Anticache</a></li>
+        <li><a href="../features/clientreplay.html">Client-side replay</a></li>
+        <li><a href="../features/filters.html">Filter expressions</a></li>
+        <li><a href="../features/forwardproxy.html">Forward proxy mode</a></li>
+        <li><a href="../features/proxyauth.html">Proxy Authentication</a></li>
+        <li><a href="../features/replacements.html">Replacements</a></li>
+        <li><a href="../features/serverreplay.html">Server-side replay</a></li>
+        <li><a href="../features/setheaders.html">Set Headers</a></li>
+        <li><a href="../features/sticky.html">Sticky cookies and auth</a></li>
+        <li><a href="../features/reverseproxy.html">Reverse proxy mode</a></li>
+        <li><a href="../features/upstreamcerts.html">Upstream Certs</a></li>
+
+    <li class="nav-header">Installing Certificates</li>
+        <li><a href="../ssl.html">Overview</a></li>
+        <li><a href="../certinstall/webapp.html">Using the Web App</a></li>
+        <li><a href="../certinstall/android.html">Android</a></li>
+        <li><a href="../certinstall/firefox.html">Firefox</a></li>
+        <li><a href="../certinstall/ios.html">IOS</a></li>
+        <li><a href="../certinstall/ios-simulator.html">IOS Simulator</a></li>
+        <li><a href="../certinstall/java.html">Java</a></li>
+        <li><a href="../certinstall/osx.html">OSX</a></li>
+        <li><a href="../certinstall/windows7.html">Windows 7</a></li>
+
+    <li class="nav-header">Transparent Proxying</li>
+        <li><a href="../transparent.html">Overview</a></li>
+        <li><a href="../transparent/linux.html">Linux</a></li>
+        <li><a href="../transparent/osx.html">OSX</a></li>
+
+    <li class="nav-header">Scripting mitmproxy</li>
+        <li><a href="inlinescripts.html">Inline Scripts</a></li>
+        <li class="active"><a href="libmproxy.html">libmproxy</a></li>
+
+    <li class="nav-header">Tutorials</li>
+        <li><a href="../tutorials/30second.html">Client playback: a 30 second example</a></li>
+        <li><a href="../tutorials/gamecenter.html">Setting highscores on Apple's GameCenter</a></li>
+        <li><a href="../tutorials/transparent-dhcp.html">Transparently proxify virtual machines</a></li>
+
+    <li class="nav-header">Hacking</li>
+        <li><a href="../dev/testing.html">Testing</a></li>
+</ul>
+
+      </div>
+    </div>
+
+    <div class="span9">
+        <div class="page-header">
+        <h1>libmproxy</h1>
+        </div>
+        <p>All of mitmproxy's basic functionality is exposed through the <strong>libmproxy</strong>
+library. The example below shows a simple implementation of the "sticky cookie"
+functionality included in the interactive mitmproxy program. Traffic is
+monitored for <strong>cookie</strong> and <strong>set-cookie</strong> headers, and requests are rewritten
+to include a previously seen cookie if they don't already have one. In effect,
+this lets you log in to a site using your browser, and then make subsequent
+requests using a tool like <strong>curl</strong>, which will then seem to be part of the
+authenticated session.</p>
+
+<div class="example"><div class="highlight"><pre><span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This example builds on mitmproxy&#39;s base proxying infrastructure to</span>
+<span class="sd">implement functionality similar to the &quot;sticky cookies&quot; option. This is at</span>
+<span class="sd">a lower level than the Flow mechanism, so we&#39;re dealing directly with</span>
+<span class="sd">request and response objects.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">libmproxy</span> <span class="kn">import</span> <span class="n">controller</span><span class="p">,</span> <span class="n">proxy</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="k">class</span> <span class="nc">StickyMaster</span><span class="p">(</span><span class="n">controller</span><span class="o">.</span><span class="n">Master</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">server</span><span class="p">):</span>
+        <span class="n">controller</span><span class="o">.</span><span class="n">Master</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">server</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stickyhosts</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">controller</span><span class="o">.</span><span class="n">Master</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">shutdown</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">handle_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+        <span class="n">hid</span> <span class="o">=</span> <span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="n">msg</span><span class="o">.</span><span class="n">port</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">msg</span><span class="o">.</span><span class="n">headers</span><span class="p">[</span><span class="s">&quot;cookie&quot;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">stickyhosts</span><span class="p">[</span><span class="n">hid</span><span class="p">]</span> <span class="o">=</span> <span class="n">msg</span><span class="o">.</span><span class="n">headers</span><span class="p">[</span><span class="s">&quot;cookie&quot;</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">hid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">stickyhosts</span><span class="p">:</span>
+            <span class="n">msg</span><span class="o">.</span><span class="n">headers</span><span class="p">[</span><span class="s">&quot;cookie&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stickyhosts</span><span class="p">[</span><span class="n">hid</span><span class="p">]</span>
+        <span class="n">msg</span><span class="o">.</span><span class="n">reply</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">handle_response</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
+        <span class="n">hid</span> <span class="o">=</span> <span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="n">msg</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">port</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">msg</span><span class="o">.</span><span class="n">headers</span><span class="p">[</span><span class="s">&quot;set-cookie&quot;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">stickyhosts</span><span class="p">[</span><span class="n">hid</span><span class="p">]</span> <span class="o">=</span> <span class="n">msg</span><span class="o">.</span><span class="n">headers</span><span class="p">[</span><span class="s">&quot;set-cookie&quot;</span><span class="p">]</span>
+        <span class="n">msg</span><span class="o">.</span><span class="n">reply</span><span class="p">()</span>
+
+
+<span class="n">config</span> <span class="o">=</span> <span class="n">proxy</span><span class="o">.</span><span class="n">ProxyConfig</span><span class="p">(</span>
+    <span class="n">cacert</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="s">&quot;~/.mitmproxy/mitmproxy-ca.pem&quot;</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="n">server</span> <span class="o">=</span> <span class="n">proxy</span><span class="o">.</span><span class="n">ProxyServer</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="mi">8080</span><span class="p">)</span>
+<span class="n">m</span> <span class="o">=</span> <span class="n">StickyMaster</span><span class="p">(</span><span class="n">server</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+</pre></div>
+
+<div class="example_legend">(examples/stickycookies)</div></div>
+
+    </div>
+  </div>
+
+  <hr>
+
+  <footer>
+    <p>© mitmproxy project, 2014</p>
+  </footer>
+</div>
+</body></html>
