@@ -1,0 +1,147 @@
+import xml.etree.cElementTree as ET
+import datetime
+# import pdb  
+
+class AtomGen(object):
+    """
+    Setups the Atomfeed Object.
+    The following parameters are ONLY used if you want to use other names for your dictionary elements than the default ones.
+    Don't touch these parameters to keep the default settings.
+
+    Each dictionary item contains the elements of an individual newsstand issue. And it should include the following items:
+
+    Parameters
+        ----------
+    id : string, optional
+        By defining this, you can rename id to any name you want to use in your original dictionary. So in your original dictionary instead of "id":123, you can have "whatever_i_want":123
+        The id element is used to identify the individual newsstand issue. This is an internal identifier that will not be displayed to customers. A new issue will be created if the ID is not found on an existing issue.
+
+    updated : datetime, optional
+        This has to be a datetime object
+        By defining this, you can rename updated to any name you want to use in your original dictionary
+        The updated date should be set to the date the metadata for this issue was most recently updated. Existing issues will be processed only if the updated date is later than the last modified date of the issue.
+
+
+    published : datetime, optional
+        This has to be a datetime object
+        By defining this, you can rename published to any name you want to use in your original dictionary
+        published: The published date is the earliest date your issue will appear on the App Store. The App Store will display the issue that has the closest published date prior to the current date, provided the issue has not ended. If multiple issues have the same published date, the most recently updated issue will be displayed.
+        The published date should be the same as the end_date of the previous issue. This ensures that there will be no gaps where no issue is available.
+
+
+    end_date : datetime, optional
+        This has to be a datetime object
+        By defining this, you can rename end_date to any name you want to use in your original dictionary
+        The end_date is optional in your dictionary and the atom feed. If provided, this is the latest date your issue will appear on the App Store. The end_date must be after the published date.
+    
+    summary : string, optional
+        By defining this, you can rename summary to any name you want to use in your original dictionary
+        The summary element should contain a description of the issue. This information will be displayed on the App Store when this issue is current. The summary must be between10 and 2000 bytes.
+
+
+    icon : string, optional
+        By defining this, you can rename icon to any name you want to use in your original dictionary
+        The cover art images should be *.png file and have an aspect ratio between 1:2 and 2:1. This icon must be at least 1024px on the long side. 
+
+    Returns
+        -------
+        AtomGen Object that is ready to parse a list of dictionaries
+
+        >>> import datetime
+        >>> from atomgen import AtomGen
+        >>> a=[{'id':'1','updated':datetime.datetime(2013, 12, 10, 1, 9, 53, 977342),'published':datetime.datetime(2013, 12, 10, 1, 10, 53, 977342),'summary':"This is the summary 1",'icon':"http://ccc.com/img.png"},{'id':2,'updated':datetime.datetime(2013, 12, 9, 1, 9, 53, 977342),'published':datetime.datetime(2013, 12, 10, 1, 7, 53, 977342),'summary':"This is the summary 2",'icon':"http://ccc2.com/img2.png"}]
+        >>> my_atom = AtomGen()
+
+        or redefining some elements:
+
+        >>> b=[{'my_id':'1','when_updated':datetime.datetime(2013, 12, 10, 1, 9, 53, 977342),'when_published':datetime.datetime(2013, 12, 10, 1, 10, 53, 977342),'the_summary':"This is the summary 1",'myicon':"http://ccc.com/img.png"},{'my_id':2,'when_updated':datetime.datetime(2013, 12, 9, 1, 9, 53, 977342),'when_published':datetime.datetime(2013, 12, 10, 1, 7, 53, 977342),'the_summary':"This is the summary 2",'myicon':"http://ccc2.com/img2.png"}]
+        >>> my_atom2 = AtomGen(id="my_id",published="when_published",updated="when_updated",summary="the_summary",icon="myicon")
+            
+    """
+
+    def __init__(self, **kwargs):
+
+        self.id = kwargs.pop('id', 'id')
+        self.updated_key = kwargs.pop('updated', 'updated')
+        self.published_key = kwargs.pop('published', 'published')
+        self.end_date = kwargs.pop('end_date', 'end_date')
+        self.summary = kwargs.pop('summary', 'summary')
+        self.img_source = kwargs.pop('icon', 'icon')
+
+
+    def run(self, infeed, update_time=datetime.datetime.utcnow()):
+        """
+        Creates the Atom feed from the list (or iterable) of dictionaries
+
+        Parameters
+        ----------
+        infeed : list or iterable
+            List of dictionaries. Each dictionary is a Newsstand entry.
+
+        update_time : datetime object, optional
+            This is by default set to the current UTC time. But you can set it manually too.
+
+        Example:
+            >>> a=[{'id':'1','updated':datetime.datetime(2013, 12, 10, 1, 9, 53, 977342),'published':datetime.datetime(2013, 12, 10, 1, 10, 53, 977342),'summary':"This is the summary 1",'icon':"http://ccc.com/img.png"},{'id':2,'updated':datetime.datetime(2013, 12, 9, 1, 9, 53, 977342),'published':datetime.datetime(2013, 12, 10, 1, 7, 53, 977342),'summary':"This is the summary 2",'icon':"http://ccc2.com/img2.png"}]
+            >>> my_atom = AtomGen()
+            >>> print my_atom.run(a, update_time=datetime.datetime(2013, 12, 10, 1, 9, 53, 977342))
+            <?xml version='1.0' encoding='UTF-8'?>
+            <feed xmlns="http://www.w3.org/2005/Atom" xmlns:news="http://itunes.apple.com/2011/Newsstand"><updated>2013-12-10T01:09:53Z</updated><entry><id>1</id><updated>2013-12-10T01:09:53Z</updated><published>2013-12-10T01:10:53Z</published><summary>This is the summary 1</summary><news:cover_art_icons><news:cover_art_icon size="SOURCE" src="http://ccc.com/img.png" /></news:cover_art_icons></entry><entry><id>2</id><updated>2013-12-09T01:09:53Z</updated><published>2013-12-10T01:07:53Z</published><summary>This is the summary 2</summary><news:cover_art_icons><news:cover_art_icon size="SOURCE" src="http://ccc2.com/img2.png" /></news:cover_art_icons></entry></feed>
+
+        
+        Example of redefining element names:
+            >>> b=[{'my_id':'1','when_updated':datetime.datetime(2013, 12, 10, 1, 9, 53, 977342),'when_published':datetime.datetime(2013, 12, 10, 1, 10, 53, 977342),'the_summary':"This is the summary 1",'myicon':"http://ccc.com/img.png"},{'my_id':2,'when_updated':datetime.datetime(2013, 12, 9, 1, 9, 53, 977342),'when_published':datetime.datetime(2013, 12, 10, 1, 7, 53, 977342),'the_summary':"This is the summary 2",'myicon':"http://ccc2.com/img2.png"}]
+            >>> my_atom2 = AtomGen(id="my_id",published="when_published",updated="when_updated",summary="the_summary",icon="myicon")
+            >>> print my_atom2.run(b, update_time=datetime.datetime(2013, 12, 10, 1, 9, 53, 977342))
+            <?xml version='1.0' encoding='UTF-8'?>
+            <feed xmlns="http://www.w3.org/2005/Atom" xmlns:news="http://itunes.apple.com/2011/Newsstand"><updated>2013-12-10T01:09:53Z</updated><entry><id>1</id><updated>2013-12-10T01:09:53Z</updated><published>2013-12-10T01:10:53Z</published><summary>This is the summary 1</summary><news:cover_art_icons><news:cover_art_icon size="SOURCE" src="http://ccc.com/img.png" /></news:cover_art_icons></entry><entry><id>2</id><updated>2013-12-09T01:09:53Z</updated><published>2013-12-10T01:07:53Z</published><summary>This is the summary 2</summary><news:cover_art_icons><news:cover_art_icon size="SOURCE" src="http://ccc2.com/img2.png" /></news:cover_art_icons></entry></feed>
+
+        As you can see it generates exactly the same Atom feed in the end.
+
+        """
+
+        # pdb.set_trace()   
+        update_time_formatted = update_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        feed = ET.Element('feed')
+        feed.set("xmlns","http://www.w3.org/2005/Atom")
+        feed.set("xmlns:news","http://itunes.apple.com/2011/Newsstand")
+        updated = ET.SubElement(feed, 'updated')
+        updated.text=update_time_formatted
+
+        for item in infeed:
+            entry = ET.SubElement(feed, 'entry')
+            entry_id = ET.SubElement(entry, 'id')
+            entry_id.text = str(item[self.id])
+
+            if self.updated_key in item:
+                entry_updated = ET.SubElement(entry, 'updated')
+                entry_updated.text = item[self.updated_key].strftime('%Y-%m-%dT%H:%M:%SZ')
+
+            if self.published_key in item:
+                entry_published = ET.SubElement(entry, 'published')
+                entry_published.text = item[self.published_key].strftime('%Y-%m-%dT%H:%M:%SZ')
+
+            if self.end_date in item:
+                entry_end_date = ET.SubElement(entry, 'news:end_date')
+                entry_end_date.text = item[self.end_date].strftime('%Y-%m-%dT%H:%M:%SZ')
+
+            if self.summary in item:
+                entry_summary = ET.SubElement(entry, 'summary')
+                entry_summary.text = str(item[self.summary])
+
+            if self.img_source in item:
+                icons = ET.SubElement(entry, 'news:cover_art_icons')
+                icon_source = ET.SubElement(icons, 'news:cover_art_icon')
+                icon_source.set("size","SOURCE")
+                icon_source.set("src",item[self.img_source])
+
+
+        result = ET.tostring(feed, encoding="UTF-8", method="xml")
+        return result
+
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
+
