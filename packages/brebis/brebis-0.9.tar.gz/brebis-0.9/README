@@ -1,0 +1,173 @@
+How to install Brebis 
+---------------------
+
+* You need at least Python 3.3.
+* Untar the tarball and go to the source directory with the following commands:
+
+$ tar zxvf brebis-0.9.tar.gz && cd brebis/
+
+To install Brebis on your computer, type the following command with the root user:
+
+# python3.3 setup.py install
+or
+# python3.3 setup.py install --install-scripts=/usr/bin
+
+Now the /usr/local/bin/brebis command or /usr/bin/brebis command should trigger the following output:
+
+$ /usr/local/bin/brebis -h
+usage: brebis [-h] [-c DIR] [-C DIR] [-d DELIMITER] [-g] [-G] [-l FILE]
+              [-L DIR] [-O DIR] [-v]
+              [archives [archives ...]]
+
+Fully automated backup checker
+
+positional arguments:
+  archives              archives to check
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -c DIR, --configpath DIR
+                        the path to the configurations
+  -C DIR, --output-conf-dir DIR
+                        the directory to store the configuration file
+  -d DELIMITER, --delimiter DELIMITER
+                        delimiter of the fields for the list of files
+  -g, --gen-list        generate a list of files inside a backup
+  -G, --gen-full        generate the configuration file and the list of files
+                        for the backup
+  -l FILE, --log FILE   the log file
+  -L DIR, --output-list-dir DIR
+                        the directory to store the list of files inside an
+                        archive or tree
+  -O DIR, --output-list-and-conf-dir DIR
+                        the directory to store the configuration file and the
+                        list of files inside an archive or tree
+  -v, --version         print the version of this program and exit
+
+For more information: http://www.brebisproject.org
+
+How to configure and use Brebis
+-------------------------------
+
+You need two files in order to use Brebis.
+
+Configuration of the backup checking session
+============================================
+
+The first one contains general information about the backup checking session. It is mandatory your configuration file uses the .conf extension. Here is an example with all the currently supported parameters: 
+
+[main]  
+name=mybackup-checking-session
+type=archive    
+path=tests/expected_mode/foos.tar.gz
+files_list=tests/expected_mode/files-list
+delimiter=|
+sha512=87d3325d3bb844734c1b011fb0f12a3ae47676153a8b05102a5e1b5347a86096d85b1b239752c3fdc10a8a2226928b64b5f31d8fd09f3e43a8eee3a4228f38b1
+
+[main] is mandatory.
+name is the name of your backup checking session. If you have several backup checking sessions, they MUST use a different name.
+type is the type of your backup. Currently you only have archive (tar, tar.gz, tar.bz2, zip files) and tree for a tree of directories and files.
+path is the path to the archive or the top directory of your files tree. Relative or absolute paths are accepted.
+files_list is the path to the file containing the information about the archive, the tree or the files inside your backups. Relative or absolute paths are accepted.
+delimiter (optional field) is the string to use in the list of files to mark the end of the key and the beginning of the value. Default is | (pipe).
+sha512 (optional field) provides the sha512 hash sum of the list of files, in order to check if this file is the expected one.
+
+
+Archive checking setup
+======================
+
+Understanding the parameters of the list of files in order to write it by yourself
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The second file you need is the list containing the information about the archive, the tree or the files inside your backups. Here is an example with the full list of the parameters available for now:
+
+[archive]
+size| <5m
+mode| 755
+uid| 5000
+gid| 5001
+sha1| e0f58dcc57caad2182f701eb63f0c81f347d3fe5
+
+[files] 
+foos/foo|
+foos/foo1| >105k type|f mode|755 uid|5022 gid|5023 unexpected md5|3718422a0bf93f7fc46cff6b5e660ff8
+
+The [archive] section hosts the parameter for the archive itself. This section is not mandatory if you do not need it.
+size defines what the archive size should be. You can specify <,> or =. Default value is expressed in bytes, also available are (k)ilo, (m)ega, (g)iga, (p)eta,(e)xa, (z)etta and (y)ottabyte.
+mode is for the expected mode of the archive.
+uid is for the expected uid of the archive.
+gid is for the expected gid of the archive.
+sha1 is for the expected md5 hash sum of the archive. Also available is sha1, sha224, sha256, sha384, sha512.
+
+The [files] section stands for the files inside the archive or the tree of directories and files. This section is not mandatory if you do not need it.
+
+foos/foo| means this file has to exist in the backup, whatever it is.
+foos/foo1| >105k defines that the file size of foos/foo1 in the archive should be strictly bigger than 105 kilobytes. You can specify <,> or =. Default value is expressed in bytes, also available are (k)ilo, (m)ega, (g)iga, (p)eta,(e)xa, (z)etta and (y)ottabyte.
+foos/foo1| type|f means the file foos/foo1 is expected to be of type f. Several types are allowed : f for files, d for directory, s for symbolic link, k for socket, b for block, c for character.
+foos/foo1| mode|755 means the file foos/foo1 is expected to have the mode 755 (meaning read, write and execute for the owner, read and execute for the group owner, read and execute for the others). All values respecting this octal representation (including values with setuid bit on four digits) is allowed.
+foos/foo1| uid|5022 means the file foos/foo1 is expected to have a uid of 5022.
+foos/foo1| gid|5023 means the file foos/foo1 is expected to have a gid of 5023.
+foo/bar| unexpected means that foo/bar is unexpected in this archive of tree of directories and files and that an alert should be launched about it.
+foos/foo1| md5|hashsum means the file foos/foo1 is expected to have a md5 hash sum of "hashsum". Also available is sha1, sha224, sha256, sha384, sha512.
+
+Generate a list of files within a backup
+========================================
+
+Starting from 0.4, Brebis is able to generate a list of files within a backup. You only have to reuse this file later, including it in your configuration file.
+
+Use the following command to generate the list of files:
+
+$ brebis -g mybackup.tar.gz
+$ ls
+mybackup.tar.gz mybackup.list
+
+Unsupported parameters for a given kind of archive
+==================================================
+
+Given the very nature of the different kind of archive formats, some parameters are not supported for a given archive type (e.g for a bzip2 file, original rights and mode of the file inside the archive are not saved). An explicit warning will appear in the brebis log file if you are using an unsupported feature for a given type of archive.
+
+Launching Brebis
+----------------
+
+You launch Brebis from the command line:
+
+$ brebis -c myconfs/
+
+The option -g or --generate parses the archive you give in parameter and returns a list of files inside the archive, allowing you to re-use later this file in order to check the archive.
+
+$ brebis -g myarchive.tar.bz
+
+Starting with the version 0.7, you can use the -G option in order to generate both the configuration file AND the list of files inside your archive or your tree of files:
+
+$ brebis -G logs-05092012.tar.gz
+$ls
+logs-05092012.tar.gz logs-05092012.conf logs-05092012.list
+
+The option -c or --configpath specifies a path to a directory where your Brebis configurations are stored. If any alert is triggered, it will appear in the your current working directory in a file named a.out. Relative or absolute paths are accepted.
+
+You can also specify your own output file: 
+
+$ brebis -c myconfs/ -l output/brebis.log
+
+The option -l or --log specifies your own output file.
+
+You can also modifiy the default delimiter ('|') that brebis uses and specify your own with the -d or --delimiter option:
+
+$ brebis -d @ -g myarchive.tar.bz
+
+or
+
+$ brebis  --delimiter @ -c myconfs/myconf.conf
+
+We use @ as the default delimiter for the two commands just above.
+
+By default, the files containing the different parameters of the content of the archive and the configuration file are created in the same directory as the archive itself. From Brebis 0.9, you can specifiy a custom directory for the configuration file (the -C option), for the list of files (the -L option) or both with the -O option.
+
+$ brebis -c /etc/brebis/ -l /var/log/brebis.log -C /etc/brebis/confs/ -L /etc/brebis/lists/
+
+The example above indicates a /etc/brebis/confs directory to store the configuration files of Brebis and a /etc/brebis/lists/ directory to store the list of files of Brebis.
+
+Links:
+------
+How to install Brebis: http://brebisproject.org/projects/brebis/wiki/How_to_install_Brebis_from_the_official_tarball_(targz_file)
+How to configure and use Brebis: http://brebisproject.org/projects/brebis/wiki/How_to_configure_and_use_Brebis
+Efficiently protect your data with Brebis and GPG : http://brebisproject.org/projects/brebis/wiki/Efficiently_protect_your_data_with_Brebis_and_GPG
