@@ -1,0 +1,67 @@
+#!/usr/bin/python
+# coding=utf-8
+#
+# Copyright (C) 2012 Allis Tauri <allista@gmail.com>
+# 
+# PBS Utils is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# indicator_gddccontrol is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <http://www.gnu.org/licenses/>.
+'''
+Created on Dec 2, 2013
+
+@author: Allis Tauri <allista@gmail.com>
+'''
+
+import os
+from PBSUtils.PBSJob import BatchFileJob, SerialJob
+
+class GarliJob(SerialJob, BatchFileJob):
+    
+    _bin         = '/usr/local/bin/Garli'
+    _name        = 'garli_run'
+    _description = 'Launch GARLI as a serial job on a cluster. \
+                    Accepts several .conf files.'
+    _extension   = '.conf'
+    
+    def _new_job(self, conf_file):
+        #get nex filename form conf filename
+        nex_file = None
+        for line in open(conf_file, 'r'):
+            if not line: continue
+            words = line.split('=')
+            if words[0].strip() == 'datafname':
+                nex_file = words[1].strip()
+                break
+        #check nex file
+        if not nex_file:
+            print 'No datafname option was found in %s' % conf_file
+            return None
+        if not os.path.isfile(nex_file):
+            print 'No such file: %s' % nex_file
+            return None
+        #create job file
+        job_file = self._jf.create_job([self._bin+' %(file1)s'],
+                                       name=nex_file.rstrip('.nex'),
+                                       walltime=self._walltime,
+                                       stagein_files=[conf_file, nex_file])
+        return job_file
+    #end def
+#end class
+
+if __name__ == '__main__':
+    try:
+        garli_job = GarliJob()
+        garli_job.parse_args()
+        garli_job.submit()
+    except Exception, e:
+        print str(e)
+        exit(1)
