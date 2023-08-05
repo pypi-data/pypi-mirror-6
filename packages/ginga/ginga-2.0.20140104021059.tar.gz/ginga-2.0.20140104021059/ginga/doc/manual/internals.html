@@ -1,0 +1,319 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Ginga Internals &mdash; Ginga 2.0.20140104021059 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.0.20140104021059',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="Ginga 2.0.20140104021059 documentation" href="../index.html" />
+    <link rel="up" title="The Ginga Viewer and Toolkit Manual" href="index.html" />
+    <link rel="prev" title="Developing with Ginga" href="developers.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="developers.html" title="Developing with Ginga"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Ginga 2.0.20140104021059 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">The Ginga Viewer and Toolkit Manual</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="ginga-internals">
+<span id="ch-programming-internals"></span><h1>Ginga Internals<a class="headerlink" href="#ginga-internals" title="Permalink to this headline">¶</a></h1>
+<p>This chapter explains the secret inner workings of Ginga and its classes
+so that you can subclass them and use them in your own applications.</p>
+<div class="section" id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h2>
+<p>Ginga uses a version of the <a class="reference external" href="http://en.wikipedia.org/wiki/Model_view_controller">Model-View-Controller
+design pattern</a>.
+The MVC pattern spells out a division of responsibilities and
+encapsulation where the Model provides various ways to access and
+interface to the data, the View provides ways to display the data and
+the Controller provides the methods and user interface hooks for
+controlling the view.</p>
+<div class="section" id="the-model">
+<h3>The Model<a class="headerlink" href="#the-model" title="Permalink to this headline">¶</a></h3>
+<div class="h figure" id="fig-astroimage">
+<a class="reference internal image-reference" href="../_images/ginga_AstroImage.png"><img alt="../_images/ginga_AstroImage.png" src="../_images/ginga_AstroImage.png" style="width: 541.0px; height: 363.0px;" /></a>
+<p class="caption">Hierarchy of Ginga <tt class="docutils literal"><span class="pre">AstroImage</span></tt> class</p>
+</div>
+<p>The Model classes are rooted in the base class <tt class="docutils literal"><span class="pre">BaseImage</span></tt>.  The basic
+interface to the data is expected to be a Numpy-like array object that is
+obtained via the <tt class="docutils literal"><span class="pre">get_data()</span></tt> method on the model.  It also provides
+methods for obtaining scaled, cutouts and transformed views of the data,
+and methods for getting and setting key-value like metadata.</p>
+<p>There are two subclasses defined on BaseImage: <tt class="docutils literal"><span class="pre">RGBImage</span></tt> and
+<tt class="docutils literal"><span class="pre">AstroImage</span></tt>.  RGBImage is used for displaying 3 channel RGB type
+images such as JPEG, TIFF, PNG, etc.  AstroImage is the subclass used to
+represent astronomical images and its organization is shown in
+Figure <a class="reference internal" href="#fig-astroimage"><em>Hierarchy of Ginga AstroImage class</em></a>.  It has two delegate objects devoted to
+handling World Coordinate System transformations and file IO.
+There is also a mixin class, <tt class="docutils literal"><span class="pre">LayerImage</span></tt> that can be used to create
+layered images with alpha compositing on each layer.</p>
+<p>New models can be created, subclassing from BaseImage or AstroImage.
+As long as the model
+<a class="reference external" href="http://en.wikipedia.org/wiki/Duck_typing">duck types</a> like a BaseImage
+it can be loaded into a view object with the <tt class="docutils literal"><span class="pre">set_image()</span></tt> method.
+AstroImage provides convenience methods for accessing WCS information
+that may be necessary when using the model in canvas subclasses of a
+View that allow graphics drawing.</p>
+</div>
+<div class="section" id="the-view">
+<h3>The View<a class="headerlink" href="#the-view" title="Permalink to this headline">¶</a></h3>
+<div class="h figure" id="fig-imageviewzoom">
+<a class="reference internal image-reference" href="../_images/ginga_ImageViewZoom.png"><img alt="../_images/ginga_ImageViewZoom.png" src="../_images/ginga_ImageViewZoom.png" style="width: 600.0px; height: 469.0px;" /></a>
+<p class="caption">Class hierarchy of Ginga <tt class="docutils literal"><span class="pre">ImageViewZoom</span></tt> class</p>
+</div>
+<p>Figure <a class="reference internal" href="#fig-imageviewzoom"><em>Class hierarchy of Ginga ImageViewZoom class</em></a> shows the class inheritance of the
+ImageViewZoom class, which is a typical end class to use in a program if
+one is not planning to do any graphical overplotting.  The figure key
+indicates the base class verses the widget specific classes.</p>
+<p>The View classes are rooted in the base class <tt class="docutils literal"><span class="pre">ImageView</span></tt>, which
+handles image display, scaling (zooming), panning, manual cut levels,
+auto cut levels, color mapping, transformations, and rotation.
+The ImageView is quite powerful compared to base classes in most
+inheritance designs, as it actually renders the view all the way out to
+RGB image planes in the appropriate sizes for the widget target window.
+Ginga supports &#8220;backends&#8221; for different widget sets (Gtk, Qt, Tk,
+etc.) through various subclasses of this base class, which do the actual
+painting of the resulting RGB image into a widget in the native widget set.</p>
+<p>In this example, <tt class="docutils literal"><span class="pre">ImageViewXYZ</span></tt> is a class that renders to a native
+widget in the &#8220;XYZ&#8221; toolkit.  <tt class="docutils literal"><span class="pre">ImageViewEvent</span></tt> adds event handlers for
+various pointing and keyboard events, but without connecting them to any
+particular handling scheme.  Finally, <tt class="docutils literal"><span class="pre">ImageViewZoom</span></tt> provides a
+concrete implementation of event handling by connecting the handlers in
+the ImageViewEvent class with the logic in the <tt class="docutils literal"><span class="pre">BindingMapper</span></tt> and
+<tt class="docutils literal"><span class="pre">Bindings</span></tt> delegate objects as will as some logic in the <tt class="docutils literal"><span class="pre">UIMixin</span></tt>
+class.  This event handling scheme is described in more detail in the
+section on the Controller.  With this layered class construction, it is
+possible to minimize the widget specific code and reuse a large amount
+of code across widget sets and platforms.
+Because the vast majority of work is done in the base class, and the
+outer classes simply inherit the widget-specific ones and mix in the
+others, it is a fairly simple matter to port the basic Ginga
+functionality to a new widget set.  All that is required is that the new
+widget set have some kind of native widget that supports painting an RGB
+image (like a canvas or image widget) and a way to register for user
+interaction events on that widget.</p>
+</div>
+<div class="section" id="the-controller">
+<h3>The Controller<a class="headerlink" href="#the-controller" title="Permalink to this headline">¶</a></h3>
+<p>The control interface is a combination of methods on the view object and
+a pluggable <tt class="docutils literal"><span class="pre">Bindings</span></tt> class which handles the mapping of user input
+events such as mouse, gesture and keystrokes into commands on the view.
+There are many callback functions that can be registered,
+allowing the user to create their own custom user interface for
+manipulating the view.</p>
+</div>
+</div>
+<div class="section" id="graphics-on-ginga">
+<h2>Graphics on Ginga<a class="headerlink" href="#graphics-on-ginga" title="Permalink to this headline">¶</a></h2>
+<div class="h figure" id="fig-imageviewcanvas">
+<a class="reference internal image-reference" href="../_images/ginga_ImageViewCanvas.png"><img alt="../_images/ginga_ImageViewCanvas.png" src="../_images/ginga_ImageViewCanvas.png" style="width: 412.0px; height: 412.0px;" /></a>
+<p class="caption">Class construction of Ginga <tt class="docutils literal"><span class="pre">ImageViewCanvas</span></tt> class.</p>
+</div>
+</div>
+<div class="section" id="miscellaneous-topics">
+<h2>Miscellaneous Topics<a class="headerlink" href="#miscellaneous-topics" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="i-want-to-use-my-own-world-coordinate-system">
+<span id="sec-custom-wcs"></span><h3>I want to use my own World Coordinate System!<a class="headerlink" href="#i-want-to-use-my-own-world-coordinate-system" title="Permalink to this headline">¶</a></h3>
+<p>No problem.  Ginga encapsulates the WCS behind a pluggable object used
+in the AstroImage class.  Your WCS should implement this abstract class:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">MyWCS</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logger</span>
+
+    <span class="k">def</span> <span class="nf">get_keyword</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">get_keywords</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">key</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="n">key</span><span class="p">],</span> <span class="n">args</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">load_header</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">header</span><span class="p">,</span> <span class="n">fobj</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">pixtoradec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idxs</span><span class="p">,</span> <span class="n">coords</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">):</span>
+        <span class="c"># calculate ra_deg, dec_deg</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">ra_deg</span><span class="p">,</span> <span class="n">dec_deg</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">radectopix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ra_deg</span><span class="p">,</span> <span class="n">dec_deg</span><span class="p">,</span> <span class="n">coords</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">,</span> <span class="n">naxispath</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="c"># calculate x, y</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">pixtosystem</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idxs</span><span class="p">,</span> <span class="n">system</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">coords</span><span class="o">=</span><span class="s">&#39;data&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">deg1</span><span class="p">,</span> <span class="n">deg2</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To use your WCS with Ginga create your images like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">ginga</span> <span class="kn">import</span> <span class="n">AstroImage</span>
+<span class="n">AstroImage</span><span class="o">.</span><span class="n">set_wcsClass</span><span class="p">(</span><span class="n">MyWCS</span><span class="p">)</span>
+<span class="o">...</span>
+
+<span class="n">image</span> <span class="o">=</span> <span class="n">AstroImage</span><span class="o">.</span><span class="n">AstroImage</span><span class="p">()</span>
+<span class="o">...</span>
+<span class="n">view</span><span class="o">.</span><span class="n">set_image</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>or you can override the WCS on a case-by-case basis:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">ginga</span> <span class="kn">import</span> <span class="n">AstroImage</span>
+<span class="o">...</span>
+
+<span class="n">image</span> <span class="o">=</span> <span class="n">AstroImage</span><span class="o">.</span><span class="n">AstroImage</span><span class="p">(</span><span class="n">wcsclass</span><span class="o">=</span><span class="n">MyWCS</span><span class="p">)</span>
+<span class="o">...</span>
+<span class="n">view</span><span class="o">.</span><span class="n">set_image</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You could also subclass AstroImage or BaseImage and implement your own
+WCS handling.  There are certain methods in AstroImage used for graphics
+plotting and plugins, however, so these would need to be supported if
+you expect the same functionality.</p>
+</div>
+<div class="section" id="i-want-to-use-my-own-file-storage-format-not-fits">
+<span id="sec-custom-io"></span><h3>I want to use my own file storage format, not FITS!<a class="headerlink" href="#i-want-to-use-my-own-file-storage-format-not-fits" title="Permalink to this headline">¶</a></h3>
+<p>No problem.  Ginga encapsulates the io behind a pluggable object used
+in the AstroImage class.  You should implement this abstract class:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">MyIOHandler</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logger</span>
+
+    <span class="k">def</span> <span class="nf">load_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filespec</span><span class="p">,</span> <span class="n">header</span><span class="p">,</span> <span class="o">**</span><span class="n">kwdargs</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">naxispath</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">save_as_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">header</span><span class="p">,</span> <span class="o">**</span><span class="n">kwdargs</span><span class="p">):</span>
+        <span class="k">pass</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">save_as_file</span></tt> method is optional if you will never need to save
+a modified file from Ginga.
+To use your io handler with Ginga create your images like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">ginga</span> <span class="kn">import</span> <span class="n">AstroImage</span>
+<span class="n">AstroImage</span><span class="o">.</span><span class="n">set_ioClass</span><span class="p">(</span><span class="n">MyIOHandler</span><span class="p">)</span>
+<span class="o">...</span>
+
+<span class="n">image</span> <span class="o">=</span> <span class="n">AstroImage</span><span class="o">.</span><span class="n">AstroImage</span><span class="p">()</span>
+<span class="n">image</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="o">...</span>
+<span class="n">view</span><span class="o">.</span><span class="n">set_image</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>or you can override the io handler on a case-by-case basis:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">ginga</span> <span class="kn">import</span> <span class="n">AstroImage</span>
+<span class="o">...</span>
+
+<span class="n">image</span> <span class="o">=</span> <span class="n">AstroImage</span><span class="o">.</span><span class="n">AstroImage</span><span class="p">(</span><span class="n">ioclass</span><span class="o">=</span><span class="n">MyIOHandler</span><span class="p">)</span>
+<span class="n">image</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="o">...</span>
+<span class="n">view</span><span class="o">.</span><span class="n">set_image</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You could also subclass AstroImage or BaseImage and implement your own
+I/O handling.</p>
+</div>
+<div class="section" id="porting-ginga-to-a-new-widget-set">
+<h3>Porting Ginga to a New Widget Set<a class="headerlink" href="#porting-ginga-to-a-new-widget-set" title="Permalink to this headline">¶</a></h3>
+<p>[<em>TBD</em>]</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Ginga Internals</a><ul>
+<li><a class="reference internal" href="#introduction">Introduction</a><ul>
+<li><a class="reference internal" href="#the-model">The Model</a></li>
+<li><a class="reference internal" href="#the-view">The View</a></li>
+<li><a class="reference internal" href="#the-controller">The Controller</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#graphics-on-ginga">Graphics on Ginga</a></li>
+<li><a class="reference internal" href="#miscellaneous-topics">Miscellaneous Topics</a><ul>
+<li><a class="reference internal" href="#i-want-to-use-my-own-world-coordinate-system">I want to use my own World Coordinate System!</a></li>
+<li><a class="reference internal" href="#i-want-to-use-my-own-file-storage-format-not-fits">I want to use my own file storage format, not FITS!</a></li>
+<li><a class="reference internal" href="#porting-ginga-to-a-new-widget-set">Porting Ginga to a New Widget Set</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="developers.html"
+                        title="previous chapter">Developing with Ginga</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/manual/internals.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="developers.html" title="Developing with Ginga"
+             >previous</a> |</li>
+        <li><a href="../index.html">Ginga 2.0.20140104021059 documentation</a> &raquo;</li>
+          <li><a href="index.html" >The Ginga Viewer and Toolkit Manual</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Eric Jeschke.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
