@@ -1,0 +1,222 @@
+
+<?xml version="1.0"  ?> 
+<?{{'xml-stylesheet'}} type="textxsl" href="{{stylesheet}}" ?>
+ 
+<!-- ******************************************************************************* -->
+<!-- File: define.xml                                                                -->
+<!-- Date: {{this.creationdate.strftime("%d%b%Y")}}                                  -->
+<!-- Description: Define.xml file for                                                -->
+<!-- ******************************************************************************* -->
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.2"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     xmlns:def="http://www.cdisc.org/ns/def/v1.0"
+     xsi:schemaLocation="http://www.cdisc.org/ns/odm/v1.2 define1-0-0.xsd"
+     FileOID="{{this.DEFINE_HEADER_METADATA.FILEOID}}"
+     ODMVersion="{{this.DEFINE_HEADER_METADATA.VERSION}}"
+     FileType="Snapshot"
+     CreationDateTime="{{this.creationdatetime.strftime("%Y-%m-%dT%H:%M:%S")}}"
+     >
+
+    <Study OID="{{this.DEFINE_HEADER_METADATA.STUDYOID}}">
+
+        <GlobalVariables>
+            {% for variable in globalVariables %}
+            <{{variable}}> {{  this.DEFINE_HEADER_METADATA.get(variable.upper())[0]  }} </{{variable}}>
+            {% endfor %}
+        </GlobalVariables>
+
+
+        <MetaDataVersion OID="CDISC.{{this.DEFINE_HEADER_METADATA.STANDARD[0]}}{{this.DEFINE_HEADER_METADATA.VERSION[0]}}"
+                 Name="{{ this.DEFINE_HEADER_METADATA.STUDYNAME[0]}},Data Definitions"
+                 Description=" {{this.DEFINE_HEADER_METADATA.STUDYNAME[0]}},Data Definitions"
+                 def:DefineVersion="1.0.0"
+                 def:StandardName="CDISC {{this.DEFINE_HEADER_METADATA.STANDARD[0]}}"
+                 def:StandardVersion="{{this.DEFINE_HEADER_METADATA.VERSION[0]}}">
+
+    {% if this.DEFINE_HEADER_METADATA.STANDARD[0] == "ADAM"  %}
+    <def:SupplementalDoc>
+        <def:DocumentRef LeafID="Suppdoc" />
+    </def:SupplementalDoc>
+    <def:leaf ID="Suppdoc" xlink:href="dataguide.pdf">
+        <def:title>
+            Data Guide
+        </def:title>
+    </def:leaf>
+    {% endif %}
+    {% if this.DEFINE_HEADER_METADATA.STANDARD[0] == "SDTM"  %}
+    <def:AnnotatedCRF>
+        <def:DocumentRef leafID="blankcrf" />
+    </def:AnnotatedCRF>
+    <def:leaf ID="blankcrf" xlink:href="{{crf}}">
+        <def:title>
+            Annotated Case Report Form
+        </def:title>
+    </def:leaf>
+    {% endif %}
+    
+    <!-- ******************************************* -->
+    <!-- COMPUTATIONAL METHOD INFORMATION        *** -->
+    <!-- ******************************************* -->
+    {% for i, row in this.COMPUTATION_METHOD.iterrows() %}
+            <def:ComputationMethod OID="{{row.get('COMPUTATIONMETHODOID')}}">
+                {{ row.get('COMPUTATIONMETHOD') }}
+            </def:ComputationMethod> 
+    {% endfor %}
+
+    <!-- ******************************************* -->
+    <!-- VALUE LEVEL LIST DEFINITION INFORMATION  ** -->
+    <!-- ******************************************* -->
+    {% for name, group in this.VALUELEVEL_METADATA.groupby('VALUELISTOID') %}      
+         <def:ValueListDef OID="{{name}}">
+             {% for i, row in group.iterrows() %}
+             <ItemRef ItemOID="{{name}}.{{row.get('VALUENAME')}}" Mandatory="{{row.get('MANDATORY')}}" />    
+             {% endfor %} 
+        </def:ValueListDef>
+    {% endfor %}
+
+
+    <!-- ******************************************* -->
+    <!-- ItemGroupDef INFORMATION ***                -->
+    <!-- ******************************************* -->
+     {% for name, group in 
+            merge(this.TOC_METADATA, 
+                  this.VARIABLE_METADATA, 
+                  how='inner', 
+                  left_on='NAME',
+                  right_on='DOMAIN').groupby('DOMAIN') 
+     %}   
+            <ItemGroupDef OID="{{name}}"
+                          Name="{{name}}"
+                          Repeating="{{ group.get('REPEATING').unique()[0]}}"
+                          Purpose="{{ group.get('PURPOSE').unique()[0]}}"
+                          IsReferenceData="{{ group.get('ISREFERENCEDATA').unique()[0]}}"
+                          def:Label="{{ group.get('LABEL_x').unique()[0]}}"
+                          def:Structure="{{ group.get('STRUCTURE').unique()[0]}}"
+                          def:DomainKeys="{{ group.get('DOMAINKEYS').unique()[0]}}"
+                          def:Class="{{ group.get('CLASS').unique()[0]}}"
+                          def:ArchiveLocationID="Location.{{ group.get('ARCHIVELOCATIONID').unique()[0]}}">
+                {% for i, row in group.iterrows() %}
+                <ItemRef {% if row.get('VARIABLE') in ("STUDYID","DOMAIN","USUBJID","SUBJID")  %} 
+                                ItemOID="{{row.get('VARIABLE')}}"
+                            {% else %}
+                                ItemOID="{{name}}.{{row.get('VARIABLE')}}"
+                         {% endif %}
+                         
+                         OrderNumber="{{row.get('VARNUM')}}"
+                         Mandatory="{{row.get('MANDATORY')}}"
+                         Role="{{row.get('ROLE')}}"
+                         RoleCodeListOID="CodeList.ROLECODE" />
+                {% endfor %}
+                <def:leaf ID="Location.{{name}}" xlink:href="./{{name}}.xpt">
+                    <def:title>./{{name}}.xpt </def:title>
+                </def:leaf>
+            </ItemGroupDef>
+    {% endfor %}
+
+
+            <!-- ************************************************************ -->
+            <!-- The details of each variable is here for all domains         -->
+            <!-- ************************************************************ -->
+    {% for i, row in this.VARIABLE_METADATA.iterrows() %}
+       <ItemDef                 
+                {% if row.get('VARIABLE') in ("STUDYID","DOMAIN","USUBJID","SUBJID")  %} 
+                                OID="{{row.get('VARIABLE')}}"
+                            {% else %}
+                                OID="{{row.get('DOMAIN')}}.{{row.get('VARIABLE')}}"
+                         {% endif %}
+                Name="{{row.get('VARIABLE')}}"
+                DataType="{{row.get('TYPE')}}"
+                Length="{{int( row.get('LENGTH') )}}"
+            {% if  row.get('SIGNIFICANTDIGITS') > 0 %}
+                SignificantDigits="{{row.get('SIGNIFICANTDIGITS')}}"
+            {% endif %}
+            {% if not pandas.isnull( row.get('DISPLAYFORMAT') ) %}
+              def:DisplayFormat="{{row.get('DISPLAYFORMAT')}}"
+            {% endif %}
+            {% if not pandas.isnull( row.get('COMPUTATIONMETHODOID') ) %}
+                def:ComputationMethodOID="{{row.get('COMPUTATIONMETHODOID')}}"
+            {% endif %}
+    {% if this.DEFINE_HEADER_METADATA.STANDARD[0] == "SDTM"%}
+        Origin="{{row.get('ORIGIN')}}"
+	    Comment="{{row.get('COMMENT')}}"
+        def:Label="{{row.get('LABEL')}}"
+     {% endif %}       
+            >
+     
+        {% if not pandas.isnull(  row.get('CODELISTNAME')  ) %}
+              <CodeListRef CodeListOID="CodeList.{{row.get('CODELISTNAME')}}" />
+        {% endif %}
+        {% if not pandas.isnull( row.get('VALUELISTOID') )  %}
+              <def:ValueListRef ValueListOID="{{row.get('VALUELISTOID')}}"  />
+        {% endif %}
+       </ItemDef>
+
+    {% endfor %}
+
+
+    {% for i, row in this.VALUELEVEL_METADATA.iterrows() %}
+       <ItemDef                 
+              OID="{{row.get('VALUELISTOID')}}.{{row.get('VALUENAME')}}"
+                Name="{{row.get('VALUENAME')}}"
+                DataType="{{row.get('TYPE')}}"
+                Length="{{int(row.get('LENGTH'))}}"
+            {% if row.get('SIGNIFICANTDIGITS') > 0 %}
+                SignificantDigits="{{row.get('SIGNIFICANTDIGITS')}}"
+            {% endif %}
+            {% if not pandas.isnull( row.get('DISPLAYFORMAT') ) %}
+              def:DisplayFormat="{{row.get('DISPLAYFORMAT')}}"
+            {% endif %}
+            {% if not pandas.isnull( row.get('COMPUTATIONMETHODOID') ) %}
+                def:ComputationMethodOID="{{row.get('COMPUTATIONMETHODOID')}}"
+            {% endif %}
+    {% if this.DEFINE_HEADER_METADATA.STANDARD[0] == "SDTM"%}
+        Origin="{{row.get('ORIGIN')}}"
+	    Comment="{{row.get('COMMENT')}}"
+        def:Label="{{row.get('LABEL')}}"
+     {% endif %}       
+            >
+     
+        {% if not pandas.isnull(  row.get('CODELISTNAME')  ) %}
+              <CodeListRef CodeListOID="CodeList.{{row.get('CODELISTNAME')}}" />
+        {% endif %}
+       </ItemDef>
+
+    {% endfor %}
+
+
+    <!-- ************************************************************ -->
+    <!-- Codelists are presented below                                -->
+    <!-- ************************************************************ -->
+
+    {% for name, group in this.CODELISTS.groupby('CODELISTNAME') %}      
+        <CodeList OID="CodeList.{{name}}" Name="{{name}}"  DataType="{{group.get('TYPE').unique()[0].lower()}}"  >
+
+        {% for i, row in group.iterrows() %}
+
+                {% if  pandas.isnull(row.get('CODELISTDICTIONARY')) %}
+                   <CodeListItem CodedValue="{{row.get('CODEVALUE')}}"
+                     {% if not pandas.isnull( row.get('RANK') ) %}
+	                    def:Rank="{{ row.get('RANK')   }}" 
+                     {% endif %}
+                          >                 
+                            <Decode>
+                                  <TranslatedText>
+                                        {{row.get('TRANSLATED')}}
+                                  </TranslatedText>
+                            </Decode>    
+                  </CodeListItem>                 
+                 {% endif %}
+               
+                {% if  not pandas.isnull(row.get('CODELISTDICTIONARY')) %}
+                  <ExternalCodeList Dictionary="{{row.get(CODELISTDICTIONARY)}}" Version = "{{row.get(CODELISTVERSION)}}" />
+                {% endif %}
+        {% endfor %}
+
+              </CodeList>
+
+    {% endfor %}
+
+            </MetaDataVersion>
+    </Study>
+</ODM>
