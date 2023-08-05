@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% load bootstrap %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-lg-12">
+            <h3>Your Hosts</h3>
+            <table class="table">
+            <thead>
+                <tr>
+                    <th>Host</th>
+                    <th>Available</th>
+                    <th>Faults</th>
+                    <th>IPv4 Address</th>
+                    <th>IPv6 Address</th>
+                    <th>Comment</th>
+                </tr>
+            </thead>
+            {% for host in hosts %}
+                <tr>
+                    <td><a href="{% url 'host_view' host.pk %}"><b>{{ host.subdomain }}.{{ host.domain.domain }}</b></a></td>
+                    <td>{{ host.available|yesno }}</td>
+                    <td>C: {{ host.client_faults }} S: {{ host.server_faults }}{% if host.abuse_blocked %} ABUSE-BLOCKED{% elif host.abuse %} ABUSE{% endif %}</td>
+                    <td>{{ host.get_ipv4 }} ({{ host.last_update_ipv4|timesince }}, {% if not host.ssl_update_ipv4 %}no {% endif %}SSL)</td>
+                    <td>{{ host.get_ipv6 }} ({{ host.last_update_ipv6|timesince }}, {% if not host.ssl_update_ipv6 %}no {% endif %}SSL)</td>
+                    <td>{{ host.comment }}</td>
+                </tr>
+            {% empty %}
+                <tr>No hosts yet.</tr>
+            {% endfor %}
+            </table>
+        </div>
+    </div>
+    <hr>
+
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="well well-sm">
+                <h3>Create a new Host</h3>
+                <form method="post" action="">
+                    {% csrf_token %}
+                    {{ form|bootstrap }}
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </form>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="well well-sm">
+                <h3>Help</h3>
+                <p>Here you can add new hosts (like routers, PCs, servers, ...).
+                </p>
+                <p>You need to be able to configure one of your machines so it sends dyndns2 compatible
+                   updates to us when your IP changes. Routers usually have some builtin software that does
+                   this, but you can also use some software on another system (like a PC or server).
+                </p>
+                <p>
+                   Just make sure your update client either is customizable well enough or has specific
+                   support for our service.
+                </p>
+                <p>
+                   We'll show you configuration examples after you add a host.
+                </p>
+            </div>
+            <div class="well well-sm">
+                <h3>Your current IP(s) + reverse DNS:</h3>
+                <p>
+                   <b>IPv4:</b> <span id="ipv4" class="ipv4addr">{{ request.session.ipv4 }}</span>
+                   <br>
+                   <b>rDNS:</b> <span id="ipv4_rdns" class="ipv4addr">{{ request.session.ipv4_rdns }}</span>
+                </p>
+                <p>
+                   <b>IPv6:</b> <span id="ipv6" class="ipv6addr">{{ request.session.ipv6 }}</span>
+                   <br>
+                   <b>rDNS:</b> <span id="ipv6_rdns" class="ipv6addr">{{ request.session.ipv6_rdns }}</span>
+                </p>
+            </div>
+        </div>
+    </div>
+{% endblock %}
