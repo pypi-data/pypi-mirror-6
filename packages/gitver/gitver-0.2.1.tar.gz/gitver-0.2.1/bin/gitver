@@ -1,0 +1,133 @@
+#!/usr/bin/env python2
+
+"""
+gitver - version strings management for humans
+Manuel Bua
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+"""
+
+import sys
+import argparse
+from os.path import dirname, abspath, realpath, exists, join
+
+
+def setup_env():
+    """Provides access to the gitver modules"""
+    prefix = dirname(dirname(realpath(abspath(__file__))))
+    gitver_mod = join(prefix, 'gitver', '__init__.py')
+    if exists(gitver_mod):
+        # source tree
+        sys.path.insert(1, prefix)
+    else:
+        # install tree
+        install_lib = join(prefix, 'share', 'gitver', 'lib')
+        sys.path.insert(1, install_lib)
+
+setup_env()
+
+
+from gitver.config import cfg
+from gitver.sanity import check_config, check_gitignore, check_project_root
+from gitver.commands import cmd_build_template, cmd_clean, cmd_cleanall, \
+    cmd_info, cmd_init, cmd_list_next, cmd_list_templates, cmd_next, cmd_version
+from gitver.termcolors import warn
+
+
+def main():
+    check_project_root()
+
+    # inject the default action "info" if none specified
+    if (len(sys.argv) < 2 or
+            len(sys.argv) == 2 and sys.argv[1] == '--ignore-gitignore'):
+        sys.argv.append('info')
+
+    args = parse_args()
+
+    # avoid check if 'init' command
+    if not 'init' in sys.argv:
+
+        check_config()
+        exit_on_error = args.func in [cmd_next, cmd_clean, cmd_cleanall]
+        if not args.ignore_gitignore:
+            check_gitignore(exit_on_error)
+        else:
+            print warn("(ignoring .gitignore warning)")
+
+    return args.func(args)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--ignore-gitignore',
+                        help='Ignore the .gitignore warning and continue '
+                             'running as normal (specify this flag before '
+                             'any other command, at YOUR own risk)',
+                        dest='ignore_gitignore',
+                        default=False,
+                        action='store_true')
+
+    sp = parser.add_subparsers(title='Valid commands')
+
+    add_command(sp, 'version', "Show gitver version", cmd_version)
+    add_command(sp, 'init', "Create gitver's configuration directory", cmd_init)
+
+    add_command(sp, 'info', "Print version information for this repository "
+                            "[default]",
+                cmd_info)
+
+    add_command(sp, 'list-templates', "Enumerates available templates",
+                cmd_list_templates)
+
+    add_command(sp, 'list-next', "Enumerates NEXT custom strings",
+                cmd_list_next)
+
+    p = add_command(sp, 'update', "Perform simple keyword substitution on the "
+                                  "specified template file(s) and place it to "
+                                  "the path described by the first line in the "
+                                  "template.", cmd_build_template)
+    p.add_argument('templates', default='', type=str)
+
+    p = add_command(sp, 'next', "Sets the NEXT version numbers for the "
+                                "currently reachable last tag. This will "
+                                "suppress the usage of the \"-" +
+                                cfg['next_suffix'] +
+                                "\" suffix, enable use of the custom \"-" +
+                                cfg['next_custom_suffix'] +
+                                "\" suffix and will use the supplied version "
+                                "numbers instead.", cmd_next)
+    p.add_argument('next_version_numbers', default='', type=str)
+
+    p = add_command(sp, 'clean', "Resets the NEXT custom string for the "
+                                 "currently active tag, or the specified tag, "
+                                 "to a clean state. Usage of the \"-" +
+                                 cfg['next_suffix'] + "\" suffix is restored.",
+                    cmd_clean)
+    p.add_argument('tag', nargs='?', type=str, default='')
+
+    add_command(sp, 'cleanall', "Resets all the NEXT custom strings for this"
+                                "repository. Usage of the \"-" +
+                                cfg['next_suffix'] +
+                                "\" suffix is restored.", cmd_cleanall)
+    return parser.parse_args()
+
+
+def add_command(parent, name, desc, func):
+    p = parent.add_parser(name, help=desc)
+    p.set_defaults(func=func)
+    return p
+
+
+if __name__ == "__main__":
+    sys.exit(main())
