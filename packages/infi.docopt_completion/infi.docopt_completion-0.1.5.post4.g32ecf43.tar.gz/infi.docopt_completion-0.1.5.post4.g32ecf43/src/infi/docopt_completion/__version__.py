@@ -1,0 +1,10 @@
+__version__ = "0.1.5.post4.g32ecf43"
+__git_commiter_name__ = "Arnon Yaari"
+__git_commiter_email__ = "arnony@infinidat.com"
+__git_branch__ = 'develop'
+__git_remote_tracking_branch__ = 'origin/develop'
+__git_remote_url__ = 'git@infinigit.infinidat.com:/host/infi-docopt_completion.git'
+__git_head_hash__ = '32ecf434d08b898a68ac843f4d99a906fe1a1e3f'
+__git_head_subject__ = 'sanitize bash function names. Fixes issue #2'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
