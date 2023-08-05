@@ -1,0 +1,82 @@
+from pyramid.response import Response
+from pyramid.view import (
+    view_config,
+    )
+from pyramid.httpexceptions import (
+    HTTPFound,
+    HTTPForbidden,
+    )
+from pyramid.security import (
+    remember,
+    forget,
+    authenticated_userid,
+    )
+
+from sqlalchemy.exc import DBAPIError
+
+import colander
+from deform import (
+    Form,
+    ValidationFailure,
+    widget,
+    )
+
+from .security import get_user
+
+from .models import (
+    DBSession,
+    User,
+    )
+
+
+# http://deformdemo.repoze.org/interfield/
+def login_validator(form, value):
+    user = DBSession.query(User).filter_by(email=value['username']).first()
+    if not user:
+        print('User %s not found' % value['username'])
+        raise colander.Invalid(form, 'Login failed')
+    if not user.check_password(value['password']):
+        print('Invalid password for user %s' % value['username'])
+        raise colander.Invalid(form, 'Login failed')
+     
+
+
+class Login(colander.Schema):
+    username = colander.SchemaNode(colander.String())
+    password = colander.SchemaNode(colander.String(),
+                    widget=widget.PasswordWidget())
+
+
+@view_config(route_name='home', renderer='templates/home.pt', permission='view')
+def view_home(request):
+    username = authenticated_userid(request)
+    return dict(username=username)
+
+@view_config(context=HTTPForbidden, renderer='templates/login.pt')
+@view_config(route_name='login', renderer='templates/login.pt')
+def view_login(request):
+    if authenticated_userid(request):
+        return HTTPFound(location=request.route_url('home'))
+    login = Login(validator=login_validator)
+    form = Form(login, buttons=('submit',))
+    if 'submit' in request.POST:
+        controls = request.POST.items()
+        try:
+            c = form.validate(controls)
+        except ValidationFailure, e:
+            return dict(login=e.render(),
+                         values=None)
+        headers = remember(request, c['username'])
+        return HTTPFound(location=request.route_url('home'),
+                          headers=headers)
+    return dict(login=form.render(),
+                 values=None)       
+
+@view_config(route_name='logout')
+def view_logout(request):
+    headers = forget(request)
+    return HTTPFound(location = request.route_url('home'),
+                      headers = headers)    
+
+
+
