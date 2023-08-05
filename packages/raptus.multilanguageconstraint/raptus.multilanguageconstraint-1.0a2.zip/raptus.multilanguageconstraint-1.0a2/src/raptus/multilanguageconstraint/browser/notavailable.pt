@@ -1,0 +1,122 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"
+      xmlns:tal="http://xml.zope.org/namespaces/tal"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+      lang="en"
+      metal:use-macro="context/main_template/macros/master"
+      i18n:domain="raptus.multilanguageconstraint">
+
+<head>
+    <metal:block fill-slot="top_slot"
+                 tal:define="dummy python:request.set('disable_border',1);
+                             disable_column_one python:request.set('disable_plone.leftcolumn',1);
+                             disable_column_two python:request.set('disable_plone.rightcolumn',1);" />
+</head>
+
+<body>
+<metal:main fill-slot="main"
+     tal:define="isAnon context/@@plone_portal_state/anonymous;
+                 toLocalizedTime nocall: context/@@plone/toLocalizedTime;">
+
+    <tal:redirect define="redirection_view context/@@plone_redirector_view">
+
+        <tal:redirect define="redirect_success redirection_view/attempt_redirect|nothing" replace="nothing">
+            If the attempt succeeds, we won't see any more of this template
+        </tal:redirect>
+
+        <h1 class="documentFirstHeading"
+            i18n:translate="">
+            This page does not seem to exist in your language
+        </h1>
+
+        <div id="content-core">
+            <p i18n:translate="">
+              We apologize for the inconvenience, but the page you were trying to access is not available
+              in <strong i18n:name="language" tal:content="view/language">English</strong>.
+              You can use the links below to help you find what you are looking for.
+            </p>
+
+            <p i18n:domain="plone"
+               i18n:translate="description_site_error_thank_you">
+              Thank you.
+            </p>
+
+            <tal:suggestions define="similar_items redirection_view/search_for_similar;
+                                     plone_view context/@@plone;
+                                     site_properties context/portal_properties/site_properties;
+                                     use_view_action site_properties/typesUseViewActionInListings|python:();
+                                     desc_length site_properties/search_results_description_length;
+                                     desc_ellipsis site_properties/ellipsis;
+                                     normalizeString nocall:plone_view/normalizeString;">
+
+                <tal:available define="available_items view/available_languages"
+                               condition="available_items">
+
+                    <h3 i18n:translate="">The page is available in the following languages&hellip;</h3>
+
+                    <dl>
+
+                    <tal:available repeat="item available_items">
+                        <dt>
+                           <a
+                             href="#"
+                             tal:attributes="href item/url"
+                             tal:content="item/language"></a>
+                           <span class="discreet"
+                                 tal:content="item/title"></span>
+                        </dt>
+
+                        <dd tal:content="python:plone_view.cropText(item['description'] or '', desc_length, desc_ellipsis)"> Description </dd>
+
+                    </tal:available>
+
+                    </dl>
+                </tal:available>
+
+                <!-- Offer search results for suggestions -->
+                <tal:suggestions condition="similar_items"
+                                 i18n:domain="plone">
+
+                    <h3 i18n:translate="heading_not_found_suggestions">You might have been looking for&hellip;</h3>
+
+                    <dl>
+
+                    <tal:similar repeat="similar similar_items">
+                        <tal:entry define="result_url similar/getURL;
+                                           result_type similar/portal_type;
+                                           item_icon python:plone_view.getIcon(similar);
+                                           url python:result_url+'/view' if result_type in use_view_action else result_url;">
+                            <dt tal:define="item_wf_state_class string:state-${similar/review_state};"
+                                tal:attributes="class python:'contenttype-' + normalizeString(result_type)">
+                              <img tal:replace="structure item_icon/html_tag" />
+                               <a
+                                 href="#"
+                                 tal:attributes="href url;
+                                                 class string:$item_wf_state_class"
+                                 tal:content="similar/pretty_title_or_id" />
+
+                                <span class="discreet" i18n:translate="results_by_author"
+                                  tal:condition="python: not isAnon or site_properties.allowAnonymousViewAbout">
+                                by <span tal:omit-tag="" tal:content="similar/Creator" i18n:name="author">Author</span>,
+                                <span tal:omit-tag="" tal:content="python:toLocalizedTime(similar.ModificationDate, long_format=1)" i18n:name="date">Modification Date</span>
+                                </span>
+
+                            </dt>
+
+                            <dd tal:content="python:plone_view.cropText(similar.Description or '', desc_length, desc_ellipsis)"> Description </dd>
+
+                        </tal:entry>
+                    </tal:similar>
+
+                    </dl>
+
+                </tal:suggestions>
+
+            </tal:suggestions>
+        </div>
+
+    </tal:redirect>
+
+</metal:main>
+</body>
+</html>
