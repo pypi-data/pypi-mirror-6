@@ -1,0 +1,222 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Usage &mdash; django-nomad-notifier 1.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '1.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="django-nomad-notifier 1.0.1 documentation" href="index.html" />
+    <link rel="prev" title="Installation" href="installation.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="installation.html" title="Installation"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">django-nomad-notifier 1.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="usage">
+<h1>Usage<a class="headerlink" href="#usage" title="Permalink to this headline">¶</a></h1>
+<p><tt class="docutils literal"><span class="pre">django-nomad-notifier</span></tt> is not functional by itself. You must do your
+homework to get it running. This app is meant to provide only the essential
+parts for the sole purpose of exposing a model and a mixin. Those minimal code
+helps you build <strong>notification models</strong> that will inherit the functionality
+and will hold the information needed in order to send email notifications
+(and show them on web as well).</p>
+<p>What we do at Nomadblue, for instance, is adding a new app <tt class="docutils literal"><span class="pre">notifications</span></tt>
+that will store the models, templates, and any other related files.</p>
+<div class="section" id="creating-notification-models">
+<h2>Creating notification models<a class="headerlink" href="#creating-notification-models" title="Permalink to this headline">¶</a></h2>
+<p>You must do three things to successfully create a new type of notification:</p>
+<ul class="simple">
+<li>Subclass <tt class="docutils literal"><span class="pre">models.Notification</span></tt> to get the model fields and basic methods.</li>
+<li>Use the <tt class="docutils literal"><span class="pre">NotificationMixin</span></tt> to get the basic methods.</li>
+<li>Override some methods to provide the minimal functionality.</li>
+</ul>
+<p>For this documentation we are going to create a simple <strong>welcome message</strong>
+notification that will be attached to a Django <tt class="docutils literal"><span class="pre">User</span></tt> model whenever a
+new user is created (i.e. a user signs up).</p>
+</div>
+<div class="section" id="subclassing-models-notification">
+<h2>Subclassing <tt class="docutils literal"><span class="pre">models.Notification</span></tt><a class="headerlink" href="#subclassing-models-notification" title="Permalink to this headline">¶</a></h2>
+<p>First of all, the code for the impatient:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">WelcomeNotification</span><span class="p">(</span><span class="n">Notification</span><span class="p">,</span> <span class="n">OurNotificationMixin</span><span class="p">,</span> <span class="n">NotificationMixin</span><span class="p">):</span>
+    <span class="n">web_noti_tmpl</span> <span class="o">=</span> <span class="s">&#39;notifications/web/welcome_notification.html&#39;</span>
+    <span class="n">email_subject_tmpl</span> <span class="o">=</span> <span class="s">&#39;notifications/email/welcome_noti_subject.txt&#39;</span>
+    <span class="n">email_plaintext_body_tmpl</span> <span class="o">=</span> <span class="s">&#39;notifications/email/welcome_noti_plaintext_body.txt&#39;</span>
+    <span class="n">email_html_body_tmpl</span> <span class="o">=</span> <span class="s">&#39;notifications/email/welcome_noti_html_body.html&#39;</span>
+
+    <span class="k">def</span> <span class="nf">get_obj_url</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">obj</span><span class="o">.</span><span class="n">get_absolute_url</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>As you can see, we must provide the template paths for the two notification
+types (web and email), the <tt class="docutils literal"><span class="pre">get_obj_url</span></tt> method (used in the
+<tt class="docutils literal"><span class="pre">views.ClearNotificationView</span></tt>) and, the most important, adding the
+<tt class="docutils literal"><span class="pre">NotificationMixin</span></tt> so our model inherits the methods defined there and
+which will help us sending the email notification.</p>
+<p>But wait! You surely have taken into account on another mixin we are using,
+<tt class="docutils literal"><span class="pre">OurNotificationMixin</span></tt>. This mixin, whose code we provide below, holds
+some other <strong>mandatory</strong> methods we must implement if we want to send
+notifications via email:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">OurNotificationMixin</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">get_email_headers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Replace &#39;Your name&#39; with your real name or project name</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s">&#39;From&#39;</span><span class="p">:</span> <span class="s">&#39;Your name &lt;</span><span class="si">%s</span><span class="s">&gt;&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">from_email</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="k">def</span> <span class="nf">get_recipients_list</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Here we include only the notification user email but</span>
+        <span class="c"># in fact the recipient/s could be whichever.</span>
+        <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">email</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>These two methods are conveniently stored in a mixin because tipically we end
+up creating many notification models with different templates but the same
+common functionality.</p>
+<p>Finally, we need to create our web and email templates. The property
+names are rather self-descriptive, but here it is defined what must
+each template contain:</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">web_noti_tmpl</span></tt>: template that renders the web notification
+snippet (each item on a notification list).</li>
+<li><tt class="docutils literal"><span class="pre">email_subject_tmpl</span></tt>: template that contains the email subject
+(e.g. &#8220;Thanks for signing up&#8221;)</li>
+<li><tt class="docutils literal"><span class="pre">email_plaintext_body_tmpl</span></tt>: template containing the plaintext
+version of your email.</li>
+<li><tt class="docutils literal"><span class="pre">email_html_body_tmpl</span></tt>: template containing the HTML version
+of your email.</li>
+</ul>
+</div>
+<div class="section" id="sending-email-notifications">
+<h2>Sending email notifications<a class="headerlink" href="#sending-email-notifications" title="Permalink to this headline">¶</a></h2>
+<p>OK, now what? As the example we are describing is a notification message a
+brand new user receives after the registration process in our site, we want
+firstly to send the email. So, we could for instance create a new instance of
+our <tt class="docutils literal"><span class="pre">WelcomeNotification</span></tt> from our signup view:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">try</span><span class="p">:</span>
+    <span class="n">user</span><span class="o">.</span><span class="n">welcomenotification</span>  <span class="c"># In case user is re-visiting the view by mistake</span>
+<span class="k">except</span> <span class="n">WelcomeNotification</span><span class="o">.</span><span class="n">DoesNotExist</span><span class="p">:</span>
+    <span class="n">WelcomeNotification</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="n">user</span><span class="p">,</span> <span class="n">obj</span><span class="o">=</span><span class="n">user</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Last step is to make the call to the
+<tt class="docutils literal"><span class="pre">NotificationMixin.send_notification_email</span></tt> method. We fancy using
+the <tt class="docutils literal"><span class="pre">post_save</span></tt> signal here:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">send_email_notification</span><span class="p">(</span><span class="n">sender</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">created</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">created</span><span class="p">:</span>
+        <span class="n">instance</span><span class="o">.</span><span class="n">send_notification_email</span><span class="p">()</span>
+
+<span class="n">post_save</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">send_email_notification</span><span class="p">,</span> <span class="n">sender</span><span class="o">=</span><span class="n">WelcomeNotification</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="displaying-web-notifications">
+<h2>Displaying web notifications<a class="headerlink" href="#displaying-web-notifications" title="Permalink to this headline">¶</a></h2>
+<p>What about showing a list of notifications in the user interface, where they
+can review them and clear them (mark as read)? We can go straight using the urls
+and views powered in the app. Include the calls in your root <tt class="docutils literal"><span class="pre">urls.py</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">url</span><span class="p">(</span><span class="s">r&#39;^notifications/&#39;</span><span class="p">,</span> <span class="n">include</span><span class="p">(</span><span class="s">&#39;notifier.urls&#39;</span><span class="p">)),</span>
+</pre></div>
+</div>
+<p>Assuming that you have already created your template (its path stored in
+<tt class="docutils literal"><span class="pre">web_noti_tmpl</span></tt>), if you visit <tt class="docutils literal"><span class="pre">http://localhost:8000/notifications/</span></tt>
+you should see a list of notifications. Of course you can go ahead and
+override the <tt class="docutils literal"><span class="pre">notifier/notifications_list.html</span></tt> template.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Usage</a><ul>
+<li><a class="reference internal" href="#creating-notification-models">Creating notification models</a></li>
+<li><a class="reference internal" href="#subclassing-models-notification">Subclassing <tt class="docutils literal"><span class="pre">models.Notification</span></tt></a></li>
+<li><a class="reference internal" href="#sending-email-notifications">Sending email notifications</a></li>
+<li><a class="reference internal" href="#displaying-web-notifications">Displaying web notifications</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="installation.html"
+                        title="previous chapter">Installation</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/usage.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="installation.html" title="Installation"
+             >previous</a> |</li>
+        <li><a href="index.html">django-nomad-notifier 1.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Hector Garcia.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
