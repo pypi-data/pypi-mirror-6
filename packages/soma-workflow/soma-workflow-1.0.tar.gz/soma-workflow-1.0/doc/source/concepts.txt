@@ -1,0 +1,211 @@
+.. _concepts:
+
+======================
+Soma-workflow concepts
+======================
+
+.. contents:: Soma-workflow concepts
+   :local:
+
+Overview
+========
+
+Soma-workflow was built to make easier the use of parallel computing resources.
+Although soma-workflow can be used to run MPI or OpenMP jobs, for now soma-workflow 
+main purpose is "coarse grain" parallelization, that is:
+
+  * no communication between job 
+  * "long" job (several minutes to several days)
+
+A typical use case is for example: single program/multiple data.
+
+Soma-workflow is not a resource manager. It interacts with the system managing 
+the computing resource (**DRMS**: Distributed Resource Management System) to: 
+  
+  * **submit jobs**: tell the system to execute a command on the computing resource.
+  * **monitor jobs**: get back the current status of the job (in the queue, running, done...)
+  * **control jobs**: mainly to cancel submitted jobs or kill running jobs.
+
+  .. figure:: images/interaction_with_DRMS.*
+    :scale: 70
+    
+    *Soma-workflow interacts with the resource management system (DRMS).*
+
+Soma-workflow includes a **workflow engine**. It let the user submit, at once, a set 
+of job with dependency between them. Soma-workflow handles the submission of each 
+job as soon as possible considering the dependencies. 
+
+Soma-workflow can handle **connection to remote computing resources**, the connection
+is transparent for the user. In case the computing resource and the user's 
+machine do not have a shared file system, soma-workflow provides two tools: 
+
+  * File transfer: allows to transfer files or directories. The file transfers are taken into account when a workflow is executed. 
+   
+  * Shared resource path: maps a path which is valid on the user machine with a path which is valid on the computing resource thanks to "translations" files.
+
+The file transfer and shared resource path objects can be used instead of any path
+in the definition of jobs or workflows (see :ref:`examples`).
+
+
+Job
+===
+
+  A job is mainly defined by a program command line. It does not necessarily 
+  need several CPU to be executed. A jobs has also a standard input, output and 
+  error, a working directory and can be associated to file transfers if needed 
+  (see :ref:`file-transfers-concept`).
+
+  A parallel job is a job made to run on several CPUs. The job program uses 
+  parallel code such as MPI, OpenMP... 
+
+ 
+Workflow
+========
+
+  A workflow organizes the execution of a set of jobs defining execution 
+  dependencies between jobs.
+
+  A dependency from a job A to a job B means that the job A will not start before 
+  the job B is done. 
+
+  .. figure:: images/workflow_example.*
+    :scale: 40 
+
+    *Workflow example. The jobs are represented by blue boxes and the 
+    dependencies by black arrows.*
+
+  Once the workflow is created, and submitted to a computing resource using the 
+  API or the GUI, soma-workflow handles the execution of the jobs on the 
+  computing resource. 
+  Each job starts as soon as possible considering its dependencies.
+
+  .. seealso:: :ref:`examples` and :ref:`workflow-creation-api`
+
+.. _file-transfers-concept:
+
+File Transfer
+=============
+  
+  The file transfers are optional. However, they can be useful when the user's file 
+  system is not shared with the computing resource.
+
+  The file transfers objects allow to transfer files or directories to and from 
+  the computing resource file system.
+
+  The file transfers can be associated to jobs (as input or output). That way 
+  soma-workflow can wait for the input files to be transfered or created before 
+  submitting the job to the computing resource.
+  
+  A file transfer object is a mapping between a file path valid on the user file 
+  system and a file path valid on the computing resource file system. It can thus
+  be used instead of any regular path in the definitions of jobs and workflows.
+
+  .. seealso:: :ref:`file_transfer_examples` in the example section.
+
+.. _shared-resource-path-concept:
+
+Shared Resource Path
+====================
+
+  As file transfers, shared resource paths are optional but can be useful when 
+  the user's file system is not shared by the computing resource. Shared Resource
+  Path are useful when a your data was already transfered on the computing resource 
+  side. 
+  
+  Shared resource path objects can be used instead of any regular path in the 
+  definition of jobs and workflows. Soma-workflow looks up into translation
+  files configured on the computing resource side to recover the corresponding 
+  valid path. 
+
+  Several translation files can be configured, and each of them is associated to 
+  a namespace (see :ref:`conf_server_option`). 
+
+  For example, if you want to configure file translation for an application "MyApp",
+  you will configure the translation file "my_app_translation" under the namespace
+  "MyApp". The content the translation file is a list of unique identifier 
+  associated to directory paths. For examples: ::
+
+    5ee1e9a0-5959-11e0-80e3-0800200c9a66  /home/myname/data_for_my_app/data1/
+    922ba490-5959-11e0-80e3-0800200c9a66  /home/myname/data_for_my_app/data2/
+    a7623ef0-5959-11e0-80e3-0800200c9a66  /home/myname/data_for_my_app/data3/
+
+  One can use more simple identifiers since each translation file is included 
+  into a namespace: ::
+
+    data1_dir  /home/myname/data_for_my_app/data1/
+    data2_dir  /home/myname/data_for_my_app/data2/
+    data3_dir  /home/myname/data_for_my_app/data3/
+
+  
+Soma-workflow modes
+===================
+
+Light mode 
+----------
+
+In the light mode, soma-workflow is a one process application which communicates
+with the DRMS.
+
+The application must run on a machine where a DRMS is installed and which is 
+configured for submission.
+ 
+In the light mode, the application should not be stopped while workflows or jobs 
+are running. If the application is closed, the workflow execution is stopped and 
+the current running jobs might be lost (on some systems you will need to kill 
+the jobs using the DRMS command). However, you will be able to restart the workflow 
+in an other session.
+
+.. figure:: images/architecture_overview_light.* 
+  :scale: 50
+
+  *Overview of soma-workflow architecture in the light mode.*
+
+
+.. seealso:: :ref:`light_mode_config`
+
+
+
+Client-server mode
+------------------
+
+Compared to the light mode, the client-server mode introduces two interesting
+features:
+
+* **Remote access** to computing resource through a client application.
+
+* **Disconnections**: the client application can be closed at any time, it won't stop the execution of workflows.
+
+.. figure:: images/architecture_overview.* 
+  :scale: 50
+
+  *Overview of soma-workflow architecture in the client-server mode*
+ 
+
+There are three main processes in the client-server mode:
+
+* The **workflow controller** process runs on the client side (on the user 
+  machine). When it is started, it connects to the remote machine and creates 
+  the workflow engine process. The two processes communicate together through a 
+  secured channel (ssh tunnel).
+
+* The **workflow engine** runs on the computing resource side with the user's 
+  rights. It processes the submitted workflows, submit, control and monitor jobs. 
+  It also updates the soma-workflow database at regular time interval with the
+  status of the jobs, worklfows and file transfers.
+
+* The **workflow database server** runs on the computing resource side as a
+  soma-workflow administrator user (no need to be the root user). It stores and 
+  queries all the informations about file transfers, jobs and workflows, to and 
+  from the soma-workflow database file.
+
+When the client application is closed (the workflow controller process stops), 
+the workflow engine process keeps on running until the submitted workflows and 
+jobs are done.
+
+Each time a client application starts, a workflow engine process is created on 
+the computing resource side. If no workflow or jobs are submitted with the
+client application or if they all ended, the workflow engine process stops as 
+soon as the client application is closed. 
+
+.. seealso:: :ref:`server` and :ref:`client_intall_config`
+
