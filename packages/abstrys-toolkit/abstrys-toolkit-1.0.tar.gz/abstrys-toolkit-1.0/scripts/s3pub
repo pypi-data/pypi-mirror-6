@@ -1,0 +1,126 @@
+#!/usr/bin/env python
+import sys
+import os
+
+def confirm(query):
+    answer = raw_input("%s (y/n): " % (query))
+    return answer.lower() == 'y'
+
+# the script
+if sys.argv[0] == __file__:
+    # these two might not be installed on the system.
+    try:
+        import boto
+    except ImportError, e:
+        print "boto is not installed. Run 'pip install boto' on the command-line"
+        print "to install it first."
+        sys.exit(1)
+
+    try:
+        import yaml
+    except ImportError, e:
+        print "pyyaml is not installed. Run 'pip install pyyaml' on the command-line"
+        print "to install it first."
+        sys.exit(1)
+
+    # make sure the user entered:
+    # 1. a file to publish
+    # 2. the bucket to publish it in.
+    if len(sys.argv) != 3:
+        print "Usage: %s <file> <s3_bucket+path>" % __file__
+        print "Both arguments are required!"
+        sys.exit(1)
+
+    # get the args. The `bucket_name` arg might have an object appended to it
+    # after the first slash character...
+    file_name, bucket_name = sys.argv[1:]
+    # This may or may not be part of bucket_name at this point.
+    object_name = None
+
+    # split the bucket name after the first slash character. Anything afterward
+    # is considered the S3 object name.
+    if '/' in bucket_name:
+        bucket_name, object_name = bucket_name.split('/', 1)
+
+    if not os.path.exists(file_name):
+        print "** local file does not exist: %s" % file_name
+        sys.exit(1)
+
+    # if no object name was provided (appended to the bucket name after '/'),
+    # then use the file name as the object name. We'll publish the file with
+    # the same name that it has on the local file system.
+    if object_name is None:
+        object_name = os.path.basename(file_name)
+
+    # Load aws-config.txt to see if there are AWS credentials there.
+    #
+    # We're expecting a YAML-formatted file like this:
+    #
+    #     ---
+    #     access_key_id:     ACCESSKEYID
+    #     secret_access_key: SECRETACCESKEY
+    #
+    CONFIG_FILE_NAME = 'aws-config.txt'
+    aws_config = dict()
+    s3 = None
+
+    # use the config file to connect to s3.
+    if os.path.exists(CONFIG_FILE_NAME):
+        config_file = open('aws-config.txt', 'r')
+        aws_config = yaml.safe_load(config_file)
+        config_file.close()
+        s3 = boto.connect_s3(aws_config['access_key_id'],
+                             aws_config['secret_access_key'])
+    else:
+        print "** Hmmm, no config file %s" % CONFIG_FILE_NAME
+        # without setting AWS credentials specifically, the AWS SDK will try to load
+        # them from the environment variables. Check the environment variables, just
+        # to make sure...
+        if os.environ.get('AWS_ACCESS_KEY_ID') and os.environ.get('AWS_ACCESS_KEY_ID'):
+            s3 = boto.connect_s3()
+        else:
+            print "** No AWS access information in environment, either. Aborting!"
+            sys.exit()
+
+    bucket = None
+
+    # get the s3 bucket.
+    if s3.lookup(bucket_name) is None:
+        print "No such bucket: %s" % bucket_name
+        print "** Bucket \"#{bucket_name}\" does not exist on S3!"
+        if not confirm("Do you want me to create it?"):
+            sys.exit(1)
+        bucket = s3.create_bucket(bucket_name)
+    else:
+        bucket = s3.get_bucket(bucket_name)
+
+    print "publishing:"
+    print "  %s" % file_name
+    print "  -> S3://%s/%s" % (bucket_name, object_name)
+
+    if not confirm("OK?"):
+        sys.exit(0)
+
+    # does the object already exist? If so, we should update it. If not, we'll
+    # create a new object.
+    s3obj = bucket.get_key(object_name)
+
+    if s3obj is None:
+        print "** creating new object"
+        from boto.s3.key import Key
+        s3obj = Key(bucket)
+        s3obj.key = object_name
+    else:
+        print "** updating existing object"
+
+    print "** writing object... "
+    s3obj.set_contents_from_filename(file_name)
+    print "complete!"
+    s3obj.set_acl('public-read')
+    print "** object has public_read access"
+    public_url = s3obj.generate_url(0, query_auth=False)
+
+    print "You can now access your object with the URL:"
+    print "  %s" % public_url
+
+# Fin!
