@@ -1,0 +1,10 @@
+__version__ = "0.2.5"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.2.5)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '35c1b8e0a60bee0cb1a1bb3551066b4fcb92cba8'
+__git_head_subject__ = 'Finished release v0.2.5.'
+__git_head_message__ = '* release/v0.2.5:\n  STORAGEMODEL-254\n  Revert "STORAGEMODEL-253 WindowsNativeMultipathModel.get_all_multipath_block_devices handles the case MPIO is not installed"\n  STORAGEMODEL-253 WindowsNativeMultipathModel.get_all_multipath_block_devices handles the case MPIO is not installed\n  HIP-868 adding missing import\n  HIP-868 handling WindowsException coming from diskmangement\n  HIP-868 handling WindowsException coming from diskmangement\n  STORAGEMODEL-248 redundant rescan of lun 0'
+__git_dirty_diff__ = ''
