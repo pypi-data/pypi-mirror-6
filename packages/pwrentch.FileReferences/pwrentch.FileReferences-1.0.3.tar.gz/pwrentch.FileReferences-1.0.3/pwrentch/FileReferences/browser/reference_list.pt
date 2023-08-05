@@ -1,0 +1,145 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      xmlns:tal="http://xml.zope.org/namespaces/tal"
+      metal:use-macro="context/main_template/macros/master">
+
+  <metal:override fill-slot="top_slot"
+                  tal:define="disable_column_one python:request.set('disable_plone.leftcolumn', 1);
+                              disable_column_two python:request.set('disable_plone.rightcolumn', 1);"
+                  />
+
+  <metal:styles fill-slot="style_slot">
+    <link rel="stylesheet" type="text/css"
+          tal:define="navroot context/@@plone_portal_state/navigation_root_url"
+          tal:attributes="href string:${navroot}/++resource++pwrentch.FileReferences/filereferences.css"
+          />
+  </metal:styles>
+
+  <metal:scripts fill-slot="javascript_head_slot">
+    <script type="text/javascript"
+            tal:define="navroot context/@@plone_portal_state/navigation_root_url"
+            tal:attributes="src string:${navroot}/++resource++pwrentch.FileReferences/filereferences.js"
+            ></script>
+  </metal:scripts>
+
+
+  <metal:slot fill-slot="content">
+    <div id="reflist-report">
+      <div metal:use-macro="context/global_statusmessage/macros/portal_message">
+        Status message
+      </div>
+
+      <div id="content">
+        <h1 class="documentFirstHeading">
+          File references report
+          <a rel="#options-dialog"
+             tal:define="aurl context/absolute_url"
+             tal:attributes="href string:${aurl}/@@reflist#options-dialog"
+             >customize</a>
+        </h1>
+
+        <div class="documentDescription">
+          List of all file items in the site and any site content
+          that link to them.
+        </div>
+
+        <div id="content-core">
+
+            <tal:types tal:repeat="type view/fileTypes">
+              <h2 tal:condition="python:type == 'unknown'">
+                documents of unknown type
+              </h2>
+              <h2 tal:condition="python:type != 'unknown'">
+                <span tal:content="type" /> documents
+              </h2>
+
+              <dl>
+                <tal:files tal:repeat="file python:view.files[type]">
+                  <dt>
+                    <h3>
+                      <a tal:attributes="href file/absolute_url"
+                         tal:content="python:file.absolute_url().split('/')[-1]" />
+                      <span class="small" tal:condition="file/Title">
+                        (<span tal:replace="file/Title" />)
+                      </span>
+                    </h3>
+                  </dt>
+                  <dd tal:define="refs python:view.getReferences(file)">
+                    <div tal:condition="not: refs">
+                      <span class="discreet">Nothing links to this item.</span>
+                    </div>
+
+                    <tal:refs tal:condition="refs">
+                      <ul tal:repeat="ref refs">
+                        <li>
+                          <span tal:content="ref/Title" />
+                          (<a tal:attributes="href ref/absolute_url"
+                              tal:content="python: '/'.join(ref.getPhysicalPath())" />)
+                        </li>
+                      </ul>
+                    </tal:refs>
+                  </dd>
+                </tal:files>
+              </dl>
+            </tal:types>
+
+        </div>
+
+
+        <a name="options-dialog"></a>
+        <div id="options-dialog">
+          <h2>Report options</h2>
+          <form method="post"
+                tal:attributes="action string:${context/absolute_url}/@@reflist">
+            <h3>Item types to include</h3>
+            <ul tal:define="ptypes python:['File', 'Image',]">
+              <li tal:repeat="ptype ptypes">
+                <tal:block tal:condition="python: ptype in view.portalTypes">
+                  <input type="checkbox" checked="checked"
+                         tal:attributes="name  string:portal-type-${ptype};
+                                         id    string:portal-type-${ptype};
+                                         value ptype;"
+                         />
+                </tal:block>
+                <tal:block tal:condition="python: ptype not in view.portalTypes">
+                  <input type="checkbox"
+                         tal:attributes="name  string:portal-type-${ptype};
+                                         id    string:portal-type-${ptype};
+                                         value ptype;"
+                         />
+                </tal:block>
+                <label tal:attributes="for string:portal-type-${ptype}"
+                       tal:content="ptype" />
+              </li>
+            </ul>
+
+            <h3 class="docTypes">Document types to include</h3>
+            <ul class="docTypes">
+              <li tal:repeat="type view/allFileTypes">
+                <tal:block tal:condition="python: type in view.fileTypes">
+                  <input type="checkbox" checked="checked"
+                         tal:attributes="name  string:doc-type-${type};
+                                         id    string:doc-type-${type};
+                                         value type"
+                         />
+                </tal:block>
+                <tal:block tal:condition="python: type not in view.fileTypes">
+                  <input type="checkbox"
+                         tal:attributes="name  string:doc-type-${type};
+                                         id    string:doc-type-${type};
+                                         value type"
+                         />
+                </tal:block>
+                <label tal:attributes="for string:doc-type-${type}"
+                       tal:content="type" />
+              </li>
+            </ul>
+
+            <input type="submit" name="submit" value="Update" />
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </metal:slot>
+</html>
