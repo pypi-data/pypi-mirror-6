@@ -1,0 +1,67 @@
+First we need to grok our test and the test resources:
+
+  >>> grok('silva.resourceinclude.tests.collector.collector_fixtures')
+
+Resources are merged when the processus is starting.
+
+  >>> from zope.processlifetime import ProcessStarting
+  >>> from zope.event import notify
+
+  >>> notify(ProcessStarting())
+
+We need a test request:
+
+  >>> from zope.publisher.browser import TestRequest
+  >>> request = TestRequest()
+
+If we adapts the request with the IResourceCollector we should
+get one:
+
+  >>> from zope import component
+  >>> from silva.resourceinclude.interfaces import IResourceCollector
+
+  >>> collector = component.getMultiAdapter(
+  ...      (object(), request), IResourceCollector)
+  >>> collector
+  <silva.resourceinclude.collector.ResourceCollector object at ...>
+  >>> verifyObject(IResourceCollector, collector)
+  True
+
+Our request in our case doesn't have any layer by default, so we
+don't have any resources associated:
+
+  >>> collector.collect()
+  ()
+
+Now let's get a request which use our test layer:
+
+  >>> from silva.resourceinclude.tests.collector.collector_fixtures.collector import ITestLayer
+  >>> request = TestRequest(skin=ITestLayer)
+  >>> collector = component.getMultiAdapter(
+  ...      (object(), request), IResourceCollector)
+
+There are some resources now, one for CSS, one for JS:
+
+  >>> merged_resources = collector.collect()
+  >>> merged_resources
+  (<silva.resourceinclude.resource.MergedDirectoryResourceView object at ...>,
+   <silva.resourceinclude.resource.MergedDirectoryResourceView object at ...>)
+
+  >>> map(lambda r: r.context.content_type, merged_resources)
+  ['application/javascript', 'text/css']
+
+  >>> css_resource = merged_resources[1]
+
+We can access to files in static the same way before:
+
+  >>> images_resource = css_resource.publishTraverse(request, 'images')
+  >>> images_resource
+  <silva.resourceinclude.resource.ResourceView object at ...>
+
+
+If files doesn't exists, however we still have an error:
+
+  >>> css_resource.publishTraverse(request, 'i don\'t know you')
+  Traceback (most recent call last):
+     ...
+  NotFound: Object: ... name: "i don't know you"
