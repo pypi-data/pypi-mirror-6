@@ -1,0 +1,121 @@
+{% extends "primitivegallery/base.html" %}
+{% load static from staticfiles %}
+
+{% block content %}
+
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+
+<script type="text/javascript">
+var oldindex = {{ index }};
+var index = {{ index }};
+var random = false;
+var auto = false;
+var autointerval = 4000;
+var controls_hide_timer_id = null;
+function loadimage() {
+    var viewport_width = $(document).width();
+    var size = '';
+    if(viewport_width <= 900 && viewport_width > 480) {
+        size = 'medium';
+    } else if (viewport_width <= 480) {
+        size = 'small';
+    }
+    $.ajax("{% url 'api_list' subfolder %}?index=" + index + '&random=' + random + '&size=' + size, {
+        'success': function(data) {
+            var anchor = $('<a></a>');
+            var img = $('<img />');
+            var videooverlay = $('<div id="videooverlay">Video. Click to view / download.</div>');
+            anchor.attr('href', data.fullsize);
+            if(data.is_video) {
+                img.attr('src', data.medium);
+                videooverlay.show();
+            } else {
+                img.attr('src', data.image);
+                videooverlay.hide();
+            }
+            anchor.append(img);
+            anchor.append(videooverlay);
+            $('#slideshow').html(anchor);
+
+            $('#cache').html('');
+            if(random == false) {
+                $.each(data.images, function(index, src) {
+                    var img = $('<img />');
+                    img.attr('src', src);
+                    $('#cache').append(img);
+                });
+            }
+
+            oldindex = index;
+        },
+        'error': function() {
+            index = 0;
+            loadimage();
+        }
+    });
+}
+
+function update_buttonstate() {
+    if(auto) {
+        $('#auto img').attr('src', '{% static "primitivegallery/img/play_white.png" %}');
+    } else {
+        $('#auto img').attr('src', '{% static "primitivegallery/img/play_grey.png" %}');
+    }
+    if(random) {
+        $('#random img').attr('src', '{% static "primitivegallery/img/shuffle_white.png" %}');
+    } else {
+        $('#random img').attr('src', '{% static "primitivegallery/img/shuffle_grey.png" %}');
+    }
+}
+
+$(function() {
+    loadimage();
+    update_buttonstate();
+    setInterval(function() {
+        if(auto) {
+            index++;
+            loadimage();
+        }
+    }, autointerval);
+    $(window).on('keydown', function(e) {
+        if(e.keyCode == 39) {
+            index++;
+            loadimage();
+        }
+        if(e.keyCode == 37) {
+            if(index == 0) return;
+            index--;
+            loadimage();
+        }
+        if(e.keyCode == 27) {
+            console.log('adsa');
+            window.location = $('#back').attr('href');
+        }
+    });
+    $('#auto').on('click', function() {
+        auto = !auto;
+        update_buttonstate();
+    });
+    $('#random').on('click', function() {
+        random = !random;
+        update_buttonstate();
+    });
+    $(window).on('mousemove', function() {
+        $('#slideshownav').show();
+        clearTimeout(controls_hide_timer_id);
+        controls_hide_timer_id = setTimeout(function() {
+            $('#slideshownav').fadeOut();
+        }, 3000);
+    });
+});
+</script>
+
+<div id="slideshow"></div>
+<div id="slideshownav">
+    <a href="{% url 'primitivegallery.views.list' size=size subfolder=subfolder %}" id="back"><img src="{% static "primitivegallery/img/back_white.png" %}" /></a>
+    <a href="#" id="auto"><img src="" /></a>
+    <a href="#" id="random"><img src="" /></a>
+</div>
+<div id="cache"></div>
+
+{% endblock %}
