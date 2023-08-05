@@ -1,0 +1,110 @@
+.TH ANSIBLE.EC2_VPC 3 "2014-01-08" "1.4.4" "ANSIBLE MODULES"
+.\" generated from library/cloud/ec2_vpc
+.SH NAME
+ec2_vpc \- configure AWS virtual private clouds
+.\" ------ DESCRIPTION
+.SH DESCRIPTION
+.PP
+Create or terminates AWS virtual private clouds.  This module has a dependency on python-boto. 
+.\" ------ OPTIONS
+.\"
+.\"
+.SH OPTIONS
+   
+.IP aws_access_key
+AWS access key. If not set then the value of the AWS_ACCESS_KEY environment variable is used. (default: None)   
+.IP aws_secret_key
+AWS secret key. If not set then the value of the AWS_SECRET_KEY environment variable is used. (default: None)   
+.IP cidr_block
+The cidr block representing the VPC, e.g. 10.0.0.0/16(required)   
+.IP dns_hostnames
+toggles the "Enable DNS hostname support for instances" flag
+.IR Choices :
+yes,no. (default: yes)   
+.IP dns_support
+toggles the "Enable DNS resolution" flag
+.IR Choices :
+yes,no. (default: yes)   
+.IP internet_gateway
+Toggle whether there should be an Internet gateway attached to the VPC
+.IR Choices :
+yes,no. (default: no)   
+.IP region
+region in which the resource exists.   
+.IP route_tables
+A dictionary array of route tables to add of the form: { subnets: [172.22.2.0/24, 172.22.3.0/24,], routes: [{ dest: 0.0.0.0/0, gw: igw},] }. Where the subnets list is those subnets the route table should be associated with, and the routes list is a list of routes to be in the table.  The special keyword for the gw of igw specifies that you should the route should go through the internet gateway attached to the VPC. gw also accepts instance-ids in addition igw. This module is currently unable to affect the 'main' route table due to some limitations in boto, so you must explicitly define the associated subnets or they will be attached to the main table implicitly.   
+.IP state
+Create or terminate the VPC(required) (default: present)   
+.IP subnets
+A dictionary array of subnets to add of the form: { cidr: ..., az: ... }. Where az is the desired availability zone of the subnet, but it is not required. All VPC subnets not in this list will be removed.   
+.IP vpc_id
+A VPC id to terminate when state=absent   
+.IP wait
+wait for the VPC to be in state 'available' before returning
+.IR Choices :
+yes,no. (default: no)   
+.IP wait_timeout
+how long before wait gives up, in seconds (default: 300).\"
+.\"
+.\" ------ NOTES
+.\"
+.\"
+.\" ------ EXAMPLES
+.\" ------ PLAINEXAMPLES
+.SH EXAMPLES
+.nf
+# Note: None of these examples set aws_access_key, aws_secret_key, or region.
+# It is assumed that their matching environment variables are set.
+
+# Basic creation example:
+      local_action:
+        module: ec2_vpc
+        state: present
+        cidr_block: 172.23.0.0/16
+        region: us-west-2
+# Full creation example with subnets and optional availability zones.
+# The absence or presense of subnets deletes or creates them respectively.
+      local_action:
+        module: ec2_vpc
+        state: present
+        cidr_block: 172.22.0.0/16
+        subnets: 
+          - cidr: 172.22.1.0/24
+            az: us-west-2c
+          - cidr: 172.22.2.0/24
+            az: us-west-2b
+          - cidr: 172.22.3.0/24
+            az: us-west-2a
+        internet_gateway: True
+        route_tables:
+          - subnets: 
+              - 172.22.2.0/24
+              - 172.22.3.0/24
+            routes: 
+              - dest: 0.0.0.0/0
+                gw: igw
+          - subnets:
+              - 172.22.1.0/24
+            routes:
+              - dest: 0.0.0.0/0
+                gw: igw
+        region: us-west-2
+      register: vpc
+
+# Removal of a VPC by id
+      local_action:
+        module: ec2_vpc
+        state: absent
+        vpc_id: vpc-aaaaaaa 
+        region: us-west-2  
+If you have added elements not managed by this module, e.g. instances, NATs, etc then
+the delete will fail until those dependencies are removed.
+
+.fi
+
+.\" ------- AUTHOR
+.SH AUTHOR
+Carson Gee
+.SH SEE ALSO
+.IR ansible (1),
+.I http://ansible.github.com/modules.html#ec2-vpc

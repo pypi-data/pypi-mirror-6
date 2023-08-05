@@ -1,0 +1,110 @@
+.TH ANSIBLE.DOCKER 3 "2014-01-08" "1.4.4" "ANSIBLE MODULES"
+.\" generated from library/cloud/docker
+.SH NAME
+docker \- manage docker containers
+.\" ------ DESCRIPTION
+.SH DESCRIPTION
+.PP
+Manage the life cycle of docker containers. 
+.\" ------ OPTIONS
+.\"
+.\"
+.SH OPTIONS
+   
+.IP command
+Set command to run in a container on startup   
+.IP count
+Set number of containers to run (default: yes   
+.IP detach
+Enable detached mode on start up, leaves container running in background (default: yes   
+.IP dns
+Set custom DNS servers for the container   
+.IP docker_url
+URL of docker host to issue commands to (default: unix://var/run/docker.sock)   
+.IP env
+Set environment variables (e.g. env="PASSWORD=sEcRe7,WORKERS=4")   
+.IP hostname
+Set container hostname   
+.IP image
+Set container image to use(required)   
+.IP lxc_conf
+LXC config parameters,  e.g. lxc.aa_profile:unconfined   
+.IP memory_limit
+Set RAM allocated to container (default: 256MB)   
+.IP password
+Set remote API password   
+.IP ports
+Set private to public port mapping specification (e.g. ports=22,80 or ports=:8080 maps 8080 directly to host)   
+.IP privileged
+Set whether the container should run in privileged mode   
+.IP state
+Set the state of the container
+.IR Choices :
+present,stopped,absent,killed,restarted. (default: present)   
+.IP username
+Set remote API username   
+.IP volumes
+Set volume(s) to mount on the container   
+.IP volumes_from
+Set shared volume(s) from another container.\"
+.\"
+.\" ------ NOTES
+.\"
+.\"
+.\" ------ EXAMPLES
+.\" ------ PLAINEXAMPLES
+.SH EXAMPLES
+.nf
+Start one docker container running tomcat in each host of the web group and bind tomcat's listening port to 8080
+on the host:
+
+- hosts: web
+  sudo: yes
+  tasks:
+  - name: run tomcat servers
+    docker: image=centos command="service tomcat6 start" ports=:8080
+
+The tomcat server's port is NAT'ed to a dynamic port on the host, but you can determine which port the server was
+mapped to using docker_containers:
+
+- hosts: web
+  sudo: yes
+  tasks:
+  - name: run tomcat servers
+    docker: image=centos command="service tomcat6 start" ports=8080 count=5
+  - name: Display IP address and port mappings for containers
+    debug: msg={{inventory_hostname}}:{{item.NetworkSettings.Ports['8080/tcp'][0].HostPort}}
+    with_items: docker_containers
+
+Just as in the previous example, but iterates over the list of docker containers with a sequence:
+
+- hosts: web
+  sudo: yes
+  vars:
+    start_containers_count: 5
+  tasks:
+  - name: run tomcat servers
+    docker: image=centos command="service tomcat6 start" ports=8080 count={{start_containers_count}}
+  - name: Display IP address and port mappings for containers
+    debug: msg={{inventory_hostname}}:{{docker_containers[{{item}}].NetworkSettings.Ports['8080/tcp'][0].HostPort}}"
+    with_sequence: start=0 end={{start_containers_count - 1}}
+
+Stop, remove all of the running tomcat containers and list the exit code from the stopped containers:
+
+- hosts: web
+  sudo: yes
+  tasks:
+  - name: stop tomcat servers
+    docker: image=centos command="service tomcat6 start" state=absent
+  - name: Display return codes from stopped containers
+    debug: msg="Returned {{inventory_hostname}}:{{item}}"
+    with_items: docker_containers
+
+.fi
+
+.\" ------- AUTHOR
+.SH AUTHOR
+Cove Schneider
+.SH SEE ALSO
+.IR ansible (1),
+.I http://ansible.github.com/modules.html#docker

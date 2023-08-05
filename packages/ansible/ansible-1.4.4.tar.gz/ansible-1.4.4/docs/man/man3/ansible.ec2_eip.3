@@ -1,0 +1,81 @@
+.TH ANSIBLE.EC2_EIP 3 "2014-01-08" "1.4.4" "ANSIBLE MODULES"
+.\" generated from library/cloud/ec2_eip
+.SH NAME
+ec2_eip \- associate an EC2 elastic IP with an instance.
+.\" ------ DESCRIPTION
+.SH DESCRIPTION
+.PP
+This module associates AWS EC2 elastic IP addresses with instances 
+.\" ------ OPTIONS
+.\"
+.\"
+.SH OPTIONS
+   
+.IP ec2_access_key
+EC2 access key. If not specified then the EC2_ACCESS_KEY environment variable is used.   
+.IP ec2_secret_key
+EC2 secret key. If not specified then the EC2_SECRET_KEY environment variable is used.   
+.IP ec2_url
+URL to use to connect to EC2-compatible cloud (by default the module will use EC2 endpoints)   
+.IP in_vpc
+allocate an EIP inside a VPC or not(Added in Ansible version 1.4.)
+   
+.IP instance_id
+The EC2 instance id   
+.IP public_ip
+The elastic IP address to associate with the instance.If absent, allocate a new address   
+.IP region
+the EC2 region to use   
+.IP state
+If present, associate the IP with the instance.If absent, disassociate the IP with the instance.
+.IR Choices :
+present,absent. (default: present).\"
+.\"
+.\" ------ NOTES
+.SH NOTES
+.PP
+This module will return \fCpublic_ip\fR on success, which will contain the public IP address associated with the instance. 
+.PP
+There may be a delay between the time the Elastic IP is assigned and when the cloud instance is reachable via the new address. Use wait_for and pause to delay further playbook execution until the instance is reachable, if necessary. 
+.\"
+.\"
+.\" ------ EXAMPLES
+.\" ------ PLAINEXAMPLES
+.SH EXAMPLES
+.nf
+- name: associate an elastic IP with an instance
+  ec2_eip: instance_id=i-1212f003 ip=93.184.216.119
+
+- name: disassociate an elastic IP from an instance
+  ec2_eip: instance_id=i-1212f003 ip=93.184.216.119 state=absent
+
+- name: allocate a new elastic IP and associate it with an instance
+  ec2_eip: instance_id=i-1212f003
+
+- name: allocate a new elastic IP without associating it to anything
+  ec2_eip:
+  register: eip
+- name: output the IP
+  debug: msg="Allocated IP is {{ eip.public_ip }}"
+
+- name: provision new instances with ec2
+  ec2: keypair=mykey instance_type=c1.medium image=emi-40603AD1 wait=yes group=webserver count=3
+  register: ec2
+- name: associate new elastic IPs with each of the instances
+  ec2_eip: "instance_id={{ item }}"
+  with_items: ec2.instance_ids
+
+- name: allocate a new elastic IP inside a VPC in us-west-2
+  ec2_eip: region=us-west-2 in_vpc=yes
+  register: eip
+- name: output the IP
+  debug: msg="Allocated IP inside a VPC is {{ eip.public_ip }}"
+
+.fi
+
+.\" ------- AUTHOR
+.SH AUTHOR
+Lorin Hochstein <lorin@nimbisservices.com>
+.SH SEE ALSO
+.IR ansible (1),
+.I http://ansible.github.com/modules.html#ec2-eip
