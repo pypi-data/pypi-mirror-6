@@ -1,0 +1,150 @@
+#
+# Bash command line completer for `chewy`
+#
+
+have chewy && {
+
+_guess_modules_dir()
+{
+    local modules_dir=
+    local curdir=`pwd`
+
+    while [ -z "${modules_dir}" -a -n "${curdir}" -a "${curdir}" != "/" ]; do
+        if [ -d "${curdir}/cmake/modules" ]; then
+            modules_dir="${curdir}/cmake/modules"
+        elif [ -d "${curdir}/cmake" ]; then
+            modules_dir="${curdir}/cmake"
+        else
+            curdir=`dirname "${curdir}"`
+        fi
+    done
+    _upvar modules_dir "${modules_dir}"
+} # _guess_modules_dir()
+
+_get_modules_dir_and_command()
+{
+    local i
+    local next=
+    local modules_dir=
+    local cmd=
+
+    for (( i=1; i < cword; i++ )); do
+        if [ -z "${next}" ]; then
+            if [ "${COMP_WORDS[i]}" = "-m" -o "${COMP_WORDS[i]}" = "--modules-dir" ]; then
+                next="modules-dir"
+                continue
+            else
+                cmd=${COMP_WORDS[i]}
+                break
+            fi
+        elif [ "${next}" = "modules-dir" ]; then
+            modules_dir=${COMP_WORDS[i]}
+            next="command"
+            continue
+        elif [ "${next}" = "command" ]; then
+            cmd=${COMP_WORDS[i]}
+            break
+        else
+            echo "chewy error: Invalid command line"
+            return 1
+        fi
+    done
+    if [ -z "${modules_dir}" ]; then
+        _guess_modules_dir
+    fi
+    __expand_tilde_by_ref modules_dir
+    _upvar modules_dir "${modules_dir}"
+    _upvar cmd "${cmd}"
+} # _get_modules_dir_and_command()
+
+_get_repobases_started_with()
+{
+    local starts_with=$1
+    # Return full repobase paths
+    if [ ! -d "${modules_dir}" ]; then
+        return                                              # Not existed dir: do nothing!
+    fi
+    local repolist=`grep --color=none -nr "X-Chewy-RepoBase: ${starts_with}" "${modules_dir}/"*.cmake 2>/dev/null \
+        | sed "s,.*X-Chewy-RepoBase:\s*\(${starts_with}.*\)\s*$,\1," \
+        | sort \
+        | uniq \
+        `
+    _upvar repolist "${repolist}"
+} # _get_repobases_started_with()
+
+_chewy()
+{
+    # Make sure a stupid^W user is not trying to 'complete' a `directory/chewy/`
+    local program=$1
+    type "${program}" &>/dev/null || return 0
+
+    local _chewy_commands="install uninstall list status update in un ls st"
+    local _chewy_long_opts="--modules-dir"
+    local _chewy_short_opts="-m"
+
+    COMPREPLY=()
+    local cur
+    local prev
+    local words
+    local cword
+    _get_comp_words_by_ref -n ':' cur prev words cword
+    _expand || return 0
+
+    local cmd=
+    local modules_dir=
+    local repolist=
+
+    if [ ${#words[@]} -ge 1 ]; then
+        _get_modules_dir_and_command
+    fi
+
+    case "$prev" in
+    ${program})
+        COMPREPLY=( $(compgen -W "${_chewy_long_opts} ${_chewy_short_opts} ${_chewy_commands}" \
+            -- ${cur}) )
+        ;;
+    -m | --modules-dir)
+        _filedir -d
+        ;;
+    *)
+        if [ -z "${cmd}" ]; then
+            COMPREPLY=( $(compgen -W "${_chewy_commands}" \
+                -- ${cur}) )
+            return
+        fi
+        case "$cmd" in
+        install | list | in | ls)
+            if [ -n "${modules_dir}" ]; then
+                _get_repobases_started_with "${cur}"
+            fi
+            if [[ ${#cur} -ge 7 ]]; then
+                compopt +o nospace
+            else
+                compopt -o nospace
+            fi
+            COMPREPLY=( $(compgen -W "http:// https:// ${repolist}" \
+                -- "${cur}") )
+            __ltrim_colon_completions ${cur}
+            ;;
+        uninstall | status | update | un | st | up)
+            # If modules-dir found, change current dir temporary...
+            if [ -n "${modules_dir}" -a -d "${modules_dir}" ]; then
+                cd ${modules_dir}
+            fi
+            # TODO Is it reasonable to find a real chewy modules and complete only
+            # them instead of all files?
+            _filedir cmake
+            if [ -n "${modules_dir}" -a -d "${modules_dir}" ]; then
+                cd - >/dev/null
+            fi
+            ;;
+        esac
+        ;;
+    esac
+} # _chewy()
+
+complete -F _chewy chewy
+
+} # have chewy
+
+# kate: hl bash;
