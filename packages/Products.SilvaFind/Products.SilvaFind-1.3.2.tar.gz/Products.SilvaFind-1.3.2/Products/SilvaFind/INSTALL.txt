@@ -1,0 +1,87 @@
+Copyright (c) 2006-2011 Infrae.
+All rights reserved. See also LICENSE.txt
+
+Dependencies:
+-------------
+
+  * SilvaFind 1.0 depends on Silva-1.6 or later.
+
+Installation instructions:
+--------------------------
+
+  * Fresh install
+
+    Put SilvaFind into your Products folder and restart zope. When you create a
+    fresh Silva Root, everything will be setup automaticly. You will have a
+    Silva Find instance called 'search' in your Site Root.
+
+  * Upgrade
+
+    Put SilvaFind into your Products folder, restart zope, and install Silva
+    Find in the Service Extensions. (If you have an existing Silva Find
+    installed, click the refresh button in silva_extensions.) Now you should be
+    able to add a "Silva Find" object in the select dropdown box of the Silva
+    contents screen. If not, go to the "properties" screen, then click on
+    "addables" and check the checkbox next to Silva Find.
+    
+    When a user is in a Silva Find content type, an extra stylesheet is called
+    to style the search results. This CSS is located in:
+    
+    http://[yourSilva]/service_resources/SilvaFind/search.css
+    
+    In order to call the CSS, there needs to be a check for the metatype
+    included in your layout. Add the following code within the <head> section
+    of your layout_macro, after the stylesheet links:
+    
+    <!-- Injector for content-specific css/js inclusion -->
+    <link tal:replace="structure here/head_inject | nothing" />
+    
+    This calls a (new) page template called 'head_inject'. To install it, you
+    can reinstall the layout templates as explained here:
+    
+    http://infrae.com/products/silva/docs/manager/ZMI_Silva#ZMI__Layout_templates
+    
+    This will install all the templates including the new head_inject page
+    template. You can delete all the 'default_*'s that appeared.
+    
+    Now the Silva Find result pages should include the search stylesheet.
+    
+  * Customization
+    
+    If you want to modify the search.css, you can copy its selectors and change
+    the head_inject to call yourSearch.css. Don't modify the search.css on the
+    file system in service_resources, as it should be overwritten in an upgrade.
+    
+  * Silva Layout extension users
+    
+    If you're using the new Five-based Silva Layout you'll need to add
+    the above link tag to your main and possibly other templates.
+        
+  * Creating a head_inject manually
+    
+    You can skip installing the layout templates and create a page template
+    called 'head_inject' in your Silva root with the following code:
+    
+<tal:comment replace="nothing">
+  define a model variable that works in public and smi preview skins
+</tal:comment>
+<tal:block tal:define="model request/model|here">
+<tal:block tal:condition="python:model.meta_type == 'Silva Find'">
+  <tal:comment replace="nothing">
+    load custom styles for search form and search results
+    if we're viewing a Silva Find instance
+  </tal:comment>
+  <link rel="stylesheet" type="text/css" media="all"
+    tal:define="metatypecss here/service_resources/SilvaFind/search.css/absolute_url | nothing"
+    tal:condition="metatypecss"
+    tal:attributes="href metatypecss" />
+  <tal:comment replace="nothing">
+    Make sure search results are never cached.
+  </tal:comment>
+  <tal:block replace="structure model/@@set_nocache" />
+</tal:block></tal:block>
+    
+    Note that extension developers can use this to call specific css files for
+    special content types. Modify the head_inject to check for your metatypes
+    too. However, in the Five-based future, extensions will control their own
+    views and this metatype checking won't be necessary.
