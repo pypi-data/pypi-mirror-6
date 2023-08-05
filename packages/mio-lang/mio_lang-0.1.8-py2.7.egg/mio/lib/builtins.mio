@@ -1,0 +1,313 @@
+utils = FFI clone("utils", """
+def tobin(x):
+    return bin(int(x))
+
+
+def tobool(x):
+    return bool(x)
+
+
+def tochr(x):
+    return chr(int(x))
+
+
+def tohex(x):
+    return hex(int(x))
+
+
+__all__ = ("tobin", "tobool", "tochr", "tohex",)
+""")
+
+abs = block(x,
+    Number clone() setValue(x :("__abs__"))
+)
+
+all = block(xs,
+    xs foreach(x,
+        bool(x) ifFalse(return False)
+    )
+    True
+)
+
+any = block(xs,
+    xs foreach(x,
+        bool(x) ifTrue(return True)
+    )
+    False
+)
+
+assert = block(expression, message,
+    (expression) ifFalse (
+        raise AssertionError(message ifNone(call message args at(0)))
+    )
+)
+
+bin = block(x, utils tobin(x))
+
+bool = block(x, utils tobool(x))
+
+callable = block(x,
+    (x has("__call__")) ifTrue(
+        True
+    ) ifFalse(
+        (x type == "Block")
+    )
+)
+
+chr = block(x, utils tochr(x))
+
+dict = block(
+    d = Dict clone()
+    call message args foreach(arg,
+        arg eval(d)
+    )
+    d
+)
+
+eval = block(code, context,
+    Parser parse(code) eval(context ifNone(Root))
+)
+
+exit = block(status,
+    status ifNone(
+        System exit(0)
+    )
+    System exit(status)
+)
+
+filter = block(f, xs,
+    rs = List clone()
+    xs foreach(x,
+        (f is None) ifTrue(
+            (x is not None) ifTrue(
+                rs append(x)
+            )
+        ) ifFalse(
+            (f(x)) ifTrue(
+                rs append(x)
+            )
+        )
+    )
+    rs
+)
+
+from = import = Importer get("import")
+
+hash = block(x, x __hash__())
+
+hex = block(x, utils tohex(x))
+
+input = block(prompt,
+    search = "\n"
+    stdin = System stdin
+    stdout = System stdout
+    (prompt is not None) ifTrue(
+        stdout write(prompt)
+        stdout flush()
+    )
+    while(True,
+        line = stdin readline()
+
+        (not line) ifTrue(
+            return
+        )
+
+        (search in line) ifTrue(
+            return line strip()
+        )
+    )
+)
+
+iter = block(iterable,
+    iterable __iter__()
+)
+
+len = block(xs, xs __len__())
+
+list = block(iterable,
+    xs = List clone()
+    iterable foreach(x, xs append(x))
+    xs
+)
+
+loop = block(
+    code = call message args at(0)
+    c = Continuation current()
+    code eval(call sender)
+    c()
+)
+
+min = block(iterable,
+    r = None
+    iterable foreach(x,
+        (r is None) ifTrue(
+            r = x
+        ) ifFalse(
+            (x < r) ifTrue(
+                r = x
+            )
+        )
+    )
+    r
+)
+
+map = block(f, xs,
+    rs = List clone()
+    xs foreach(x,
+        rs append(f(x))
+    )
+    rs
+)
+
+max = block(iterable,
+    r = None
+    iterable foreach(x,
+        (r is None) ifTrue(
+            r = x
+        ) ifFalse(
+            (x > r) ifTrue(
+                r = x
+            )
+        )
+    )
+    r
+)
+
+next = block(iterator,
+    try (
+        iterator __next__
+    ) catch (AttributeError,
+        raise TypeError("{0} is not an iterator" format(iterator))
+    )
+    iterator __next__()
+)
+
+open = block(filename,
+    File clone() open(filename)
+)
+
+print = block(*args, sep=" ", end="\n", file=System stdout,
+    file write(sep join(*args))
+    file write(end)
+    file flush()
+    None
+)
+
+raise = Exception get("raise")
+
+range = block(*args, Range clone(*args))
+
+reduce = block(f, xs, s,
+    it = iter(xs)
+
+    s ifNone (
+        try (
+            s = next(it)
+        ) catch(StopIteration,
+            raise TypeError("reduce() of empty sequence with no initial value")
+        )
+    )
+
+    a = s
+    c = Continuation current
+    try(
+        a = f(a, next(it))
+        c()
+    )
+    a
+)
+
+repr = block(x, x __repr__())
+
+return = block(value,
+    (call sender type != "Locals") ifTrue(
+        raise RunTimeError("return outside Block")
+    )
+    call sender state setReturn(value)
+    value
+)
+
+str = block(x, x __str__())
+
+sum = block(iterable,
+    r = 0
+    iterable foreach(x,
+        r += x
+    )
+    r
+)
+
+try = Exception get("try")
+
+with = block(
+    obj = call message arg(0, call sender)
+    res = call message arg(1, call sender)
+    obj close
+    res
+)
+
+while = block(
+    test = call message args at(0)
+    code = call message args at(1)
+    c = Continuation current()
+    (test eval(call sender)) ifTrue(
+        code eval(call sender)
+        c()
+    )
+    None
+)
+
+yield = block(
+    ("generator" in call sender keys) ifTrue(
+        call sender generator setNextMessage(call message next)
+        value = call message arg(0)
+        call sender state setReturn(value)
+        value
+    ) ifFalse(
+        generator = Generator clone()
+        call sender state setReturn(generator)
+        generator
+    )
+)
+
+#
+# Syntactic Sugar
+#
+
+set("()", Object get("evalArg"))
+set(":", block(
+    (call sender has("call") and (call sender call message name == "{}")) ifTrue(
+        value = call message arg(0)
+        key = call target
+        d = call sender d
+        (key __hash__()) ifNone(
+            raise TypeError("Unsupported type: {0}" format(key type))
+        )
+        d __setitem__(key, value)
+    ) ifFalse(
+        call target primitive(call message arg(0))
+    )
+))
+set("[]", block(*args,
+    xs = List clone()
+    args foreach(x, xs append(x))
+    xs
+))
+set("{}", block(
+    d = Dict clone()
+    call message evalArgs(d)
+    d
+))
+
+set("*", block(call sender get(call message args at(0) name)))
+
+set("?",
+    block(
+        try (
+            call message args at(0) eval(call target)
+        )
+    )
+)
+
+from errors import *
+from iterators import *
