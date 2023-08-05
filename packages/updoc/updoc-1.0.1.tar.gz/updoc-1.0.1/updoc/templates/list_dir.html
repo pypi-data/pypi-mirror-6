@@ -1,0 +1,81 @@
+{% extends "root.html" %}{% load staticfiles %}{% load url from future %}{% load i18n %}{% load updoc %}
+{% block body %}
+    <div id="main-container">
+        <table>
+            <tr>
+                <td>
+                    <h2 class="colheader">{% trans 'Properties' %}</h2>
+
+                    <div class="colbody">
+                        <ul>
+                            {% if doc.user %}
+                                <li>{% trans 'Uploaded by:' %} {{ doc.user }}</li>
+
+                            {% endif %}
+                            <li>{{ doc.upload_time|date:"SHORT_DATETIME_FORMAT" }}</li>
+                            <li>
+                                <a class="btn inline-btn other" href="{% url 'updoc.views.compress_archive' doc_id=doc.id fmt='zip' %}">
+                                    {% trans 'Download as ZIP' %}
+                                </a>
+                            </li>
+                            {% if editable %}
+                                <li>
+                                    <a class="btn inline-btn error"
+                                       onclick="return confirm('{% trans 'Delete this file?' %}');"
+                                       href="{% url 'updoc.views.delete_doc' doc_id=doc.id %}">
+                                        {% trans 'Delete' %}
+                                    </a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </td>
+                <td>
+                    <h2 class="colheader">{% trans 'Document:' %}
+                        <span {% if editable %}contenteditable="true"
+                              onblur="edit_title({{ doc.id }}, this);"{% endif %}>{{ doc }}</span>
+                        <img class="loading" id="loading_title" src="{% static 'images/ajax-loader.gif' %}"
+                             alt="{% trans 'loading…' %}"/>
+                    </h2>
+
+                    <div class="colbody">
+                        <div class="keywords">
+                            {% trans 'Keywords:' %}
+                        <span {% if editable %}contenteditable="true"
+                              onblur="edit_keywords({{ doc.id }}, this);"{% endif %}>{{ keywords }}</span>
+                            <img class="loading" id="loading_keywords" src="{% static 'images/ajax-loader.gif' %}"
+                                 alt="{% trans 'loading…' %}"/>
+                        </div>
+                        {% if directory %}
+                            <div class="breadcrumbs">
+                                <em>{{ directory.title }}</em>
+                                {% for t in directory.titles %}
+                                    {% if not forloop.first %} » {% endif %}<img class="icon" src="{% static t.2 %}"
+                                                                                 alt=""/>
+                                    {% if t.0 %}<a href="{{ t.0 }}">{{ t.1 }}</a>{% else %}{{ t.1 }}{% endif %}
+                                {% endfor %}</div>
+                            <table class="directory">
+                                <tr>
+                                    <th style="width: 3em">&nbsp;</th>
+                                    <th>{% trans 'Name' %}</th>
+                                    <th style="width: 7em">{% trans 'Size' %}</th>
+                                    <th style="width: 12em">{% trans 'Modified on' %}</th>
+                                </tr>
+                                {% for element in directory.elements %}
+                                    <tr class="{% cycle 'row1' 'row2' %}">
+                                        <td><img class="large-icon" src="{% static element.icon %}" alt=""/></td>
+                                        <td><a href="{{ element.url }}">{{ element.name }}</a></td>
+                                        <td class="details">{{ element.size|si_unit:"B" }}</td>
+                                        <td class="details">{% if element.date %}
+                                            {{ element.date|date:"SHORT_DATETIME_FORMAT" }}
+                                        {% endif %}</td>
+                                    </tr>
+                                {% endfor %}
+                            </table>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+{% endblock %}
