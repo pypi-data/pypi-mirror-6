@@ -1,0 +1,10 @@
+__version__ = "0.2.3"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.2.3)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'a32a796d3c7bf3acac89a9310e00430e244f6b25'
+__git_head_subject__ = 'Finished release v0.2.3.'
+__git_head_message__ = '* release/v0.2.3:\n  TRIVIAL fixing tests\n  TRIVIAL deleting a test that needs to be in smock and not in storagemodel\n  HIP-829 fix infinite recursion in _get_scsi_serial_for_repr\n  Unfreezing dependencies'
+__git_dirty_diff__ = ''
