@@ -1,0 +1,194 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Using django-pgfields &mdash; django-pgfields 1.2.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/pyramid.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.2.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="django-pgfields 1.2.0 documentation" href="index.html" />
+    <link rel="next" title="Simple Fields" href="fields.html" />
+    <link rel="prev" title="Welcome to django-pgfields" href="index.html" />
+    
+<link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Neuton&amp;subset=latin" type="text/css" media="screen" charset="utf-8" />
+<link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Nobile:regular,italic,bold,bolditalic&amp;subset=latin" type="text/css" media="screen" charset="utf-8" />
+<!--[if lte IE 6]>
+<link rel="stylesheet" href="_static/ie6.css" type="text/css" media="screen" charset="utf-8" />
+<![endif]-->
+
+    <link rel="stylesheet" href="_static/pgfields.css"
+                                                            type="text/css" />
+
+  </head>
+  <body>
+
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="fields.html" title="Simple Fields"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Welcome to django-pgfields"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">django-pgfields 1.2.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="using-django-pgfields">
+<h1>Using django-pgfields<a class="headerlink" href="#using-django-pgfields" title="Permalink to this headline">¶</a></h1>
+<p>Using django-pgfields&#8217; extension to the Django ORM is fairly straightforward.
+You don&#8217;t need to use a custom backend (indeed, django-pgfields does not
+provide one).</p>
+<div class="section" id="instructions">
+<h2>Instructions<a class="headerlink" href="#instructions" title="Permalink to this headline">¶</a></h2>
+<p>The short version of usage is that in order to use the features that
+django-pgfields adds, you need to do two things.</p>
+<div class="section" id="add-django-pg-to-installed-apps">
+<h3>Add django_pg to INSTALLED_APPS<a class="headerlink" href="#add-django-pg-to-installed-apps" title="Permalink to this headline">¶</a></h3>
+<p>First, you must add <tt class="docutils literal"><span class="pre">django_pg</span></tt> to your settings module&#8217;s
+<tt class="docutils literal"><span class="pre">INSTALLED_APPS</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">INSTALLED_APPS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="c"># your other apps</span>
+    <span class="s">&#39;django_pg&#39;</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>It doesn&#8217;t matter where in the list you add it, as long as it&#8217;s present.</p>
+</div>
+<div class="section" id="from-django-pg-import-models">
+<h3>from django_pg import models<a class="headerlink" href="#from-django-pg-import-models" title="Permalink to this headline">¶</a></h3>
+<p>Second, import django-pgfields&#8217; <tt class="docutils literal"><span class="pre">models</span></tt> module instead of the one
+supplied by Django.</p>
+<p>So, everywhere that you would write this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.db</span> <span class="kn">import</span> <span class="n">models</span>
+</pre></div>
+</div>
+<p>Instead, write this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django_pg</span> <span class="kn">import</span> <span class="n">models</span>
+</pre></div>
+</div>
+<p>Internally, django-pgfields loads all of the things provided by the Django
+<tt class="docutils literal"><span class="pre">models</span></tt> module, subclassing certain items needed to make everything
+work, and adding the fields it provides.</p>
+</div>
+</div>
+<div class="section" id="explanation">
+<h2>Explanation<a class="headerlink" href="#explanation" title="Permalink to this headline">¶</a></h2>
+<p>Django provides a rich ORM with a valuable and customizable QuerySet API.
+One aspect of this ORM is a high wall of separation between the use of data
+in your application (such as the Python objects that are assigned to model
+instance attributes) and the actual SQL that is generated to perform
+operations, which additionally also changes to account for the fact that
+Django ships with four backends (and several more are available).</p>
+<p>One consequence of this design is that Field subclasses have a somewhat
+restricted set of overridable bits. In particular, they can&#8217;t (easily) touch
+the representation of database field names or operators. This is
+delegated to the backend and to a series of specialized classes which are
+responsible for generating various pieces of the final SQL query.</p>
+<p>The ultimate choreographer of this complex dance is the <a class="reference external" href="https://docs.djangoproject.com/en/dev/topics/db/managers/">Manager</a> class.
+The <tt class="docutils literal"><span class="pre">Manager</span></tt> class instantiates the <tt class="docutils literal"><span class="pre">QuerySet</span></tt> class, which in turn
+instantiates internal classes such as <tt class="docutils literal"><span class="pre">WhereNode</span></tt> and <tt class="docutils literal"><span class="pre">SQLExpression</span></tt>
+which are ultimately responsible for taking your querysets and constructing
+actual queries suitable for your backend. Field classes have a very defined
+(and limited) role in this dance, to avoid breaking down the wall between
+the different segments of logic.</p>
+<p>Complex fields like <tt class="docutils literal"><span class="pre">ArrayField</span></tt> and <tt class="docutils literal"><span class="pre">CompositeField</span></tt> are non-trivial,
+and aren&#8217;t use cases covered by Django&#8217;s stock query construction classes.
+Therefore, in order for them to function correctly, these classes must
+be subclassed.</p>
+<p>Importing your models module from django_pg instead of from django.db means
+that you get django-pgfields&#8217; subclasses of <tt class="docutils literal"><span class="pre">Model</span></tt> and <tt class="docutils literal"><span class="pre">Manager</span></tt>
+which enable this extra functionality, as well as providing additional
+(optional) hooks for other Field subclasses.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Using django-pgfields</a><ul>
+<li><a class="reference internal" href="#instructions">Instructions</a><ul>
+<li><a class="reference internal" href="#add-django-pg-to-installed-apps">Add django_pg to INSTALLED_APPS</a></li>
+<li><a class="reference internal" href="#from-django-pg-import-models">from django_pg import models</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#explanation">Explanation</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter">Welcome to django-pgfields</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="fields.html"
+                        title="next chapter">Simple Fields</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="fields.html" title="Simple Fields"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Welcome to django-pgfields"
+             >previous</a> |</li>
+        <li><a href="index.html">django-pgfields 1.2.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Luke Sneeringer.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.1.
+    </div>
+  </body>
+</html>
