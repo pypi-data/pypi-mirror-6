@@ -1,0 +1,27 @@
+language: python
+env:
+  matrix:
+    - PLONE_VERSION=4.0
+    - PLONE_VERSION=4.1
+    - PLONE_VERSION=4.2
+    - PLONE_VERSION=4.3
+python:
+  - 2.7
+install:
+  - sed -ie "s#travis-4.x.cfg#travis-$PLONE_VERSION.x.cfg#" base.cfg
+  - if [ $PLONE_VERSION==4.0 -o $PLONE_VERSION==4.1 ] ; then echo -e "plone.app.testing=4.2.2\n" >> base.cfg; fi
+  - cat base.cfg # debug
+  - mkdir -p buildout-cache/eggs
+  - mkdir -p buildout-cache/downloads
+  - python bootstrap.py -c base.cfg
+  - bin/buildout -N -t 3 -c base.cfg install download install
+  - bin/buildout -N -t 3 -c base.cfg
+before_script:
+  - "export DISPLAY=:99.0"
+  - "sh -e /etc/init.d/xvfb start"
+script:
+  - bin/test
+after_script:
+  - cd parts/test
+  - tar cvjf artifacts.tar.bz2 *
+  - curl http://collective_artifacts.rr.nu/submit_artifacts   --form archive=@artifacts.tar.bz2 --form TRAVIS_JOB_ID=$TRAVIS_JOB_ID
