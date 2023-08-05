@@ -1,0 +1,218 @@
+#!/usr/bin/env python
+
+######################################################################
+# ssh-deploy-key is a tool to rapidly push out ssh key files
+# to one or more remote hosts.  It is based on the example
+# located here:
+#
+# http://29a.ch/2010/9/8/deploy-ssh-public-key-multiple-servers-python-paramiko
+#
+#######################################################################
+
+# Copyright (C) 2014, Travis Bear
+# All rights reserved.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
+import os
+from getpass import getpass
+import sys
+import stat
+import socket
+import pwd
+from threading import Thread
+from Queue import Queue
+import colorama
+from colorama import Fore
+
+
+class DeployKeyThread(Thread):
+    """
+    Consumer thread.  Reads hosts from the queue and deploys the
+    key to them.
+    """
+
+    def __init__(self):
+        Thread.__init__(self)
+
+    def deploy_key(self, server):
+        prefix = "  copying key to %s@%s:%s/%s..." %(config.username,
+                                                    server,
+                                                    config.ssh_dir,
+                                                    config.authorized_keys)
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(server,
+                           username=config.username,
+                           password=config.password,
+                           port=config.port,
+                           timeout=config.timeout_seconds)
+            client.exec_command('mkdir -p %s' %config.ssh_dir)
+        except socket.error:
+            print ("%s %sCONNECTION FAILURE%s" % (prefix, Fore.RED, Fore.RESET))
+            return False
+        except paramiko.AuthenticationException:
+            print ("%s %sAUTHENTICATION FAILURE%s" % (prefix, Fore.RED, Fore.RESET))
+            return False
+        if config.append:
+            client.exec_command('echo "%s" >> %s/%s' %(key, config.ssh_dir, config.authorized_keys))
+        else:
+            client.exec_command('echo "%s" > %s/%s' %(key, config.ssh_dir, config.authorized_keys))
+        client.exec_command('chmod 644 %s/%s' % (config.ssh_dir, config.authorized_keys))
+        client.exec_command('chmod 700 %s' %config.ssh_dir)
+        print "%s %sSUCCESS!%s" % (prefix, Fore.GREEN, Fore.RESET)
+        return True
+
+    def run(self):
+        while True:
+            server = queue.get()
+            self.deploy_key(server)
+            queue.task_done()
+
+
+def is_stdin_terminal():
+    mode = os.fstat(0).st_mode
+    if stat.S_ISFIFO(mode):
+        # stdin is piped (e.g. 'cat host_list | ssh-deploy-key')
+        return False
+    elif stat.S_ISREG(mode):
+        # stdin is redirected (e.g. 'ssh-deploy-key < host_list')
+        return False
+    else:
+        # stdin is from an interactive terminal!
+        return True
+
+COL_USERNAME = 0
+COL_HOME_DIR = 5
+DEFAULT_PUBLIC_KEY_FILE = "%s%s.ssh%sid_rsa.pub" %(pwd.getpwuid(os.geteuid())[COL_HOME_DIR], os.sep, os.sep)
+DEFAULT_REMOTE_AUTHORIZED_KEYS_FILE = "authorized_keys"
+DEFAULT_REMOTE_SSH_DIR = "~/.ssh"
+DEFAULT_SSH_PORT = 22
+DEFAULT_TIMEOUT_SECONDS=3
+DEFAULT_THREADCOUNT = 100
+# Using os.getlogin() to determine username fails when using
+# piped/redirected stdin under linux
+DEFAULT_USERNAME = pwd.getpwuid(os.geteuid())[COL_USERNAME]
+EXIT_COMMAND = "exit"
+colorama.init()
+
+try:
+    import paramiko
+except ImportError:
+    print ("FATAL: paramiko libraries not present.")
+    print ("run 'pip install paramiko' to fix")
+    sys.exit(1)
+try:
+    import argparse
+except ImportError:
+    print ("FATAL: unsupported version of python.  Need 2.7 or higher")
+    sys.exit()
+
+parser = argparse.ArgumentParser(description='Distribute an ssh key to remote hosts.')
+parser.add_argument('-a', '--authorized_keys',
+                    default = DEFAULT_REMOTE_AUTHORIZED_KEYS_FILE,
+                    help='Name of the remote authorized keys file.  (Changing \
+                          this setting is uncommon.)')
+parser.add_argument('-d', '--append',
+                    action='store_true',
+                    default = False,
+                    help='Add the ssh key to the end of the remote authorized \
+                          keys file instead of overwriting it.  If the ssh key \
+                          already exists in the remote authorized keys file, \
+                          no action is taken. (SMART APPEND NOT YET IMPLEMENTED). \
+                          Default is false.')
+#parser.add_argument('-f', '--file',
+#                    action='store_true',
+#                    help='File containing list of remote hosts')
+parser.add_argument('-k', '--key_file',
+                    default = DEFAULT_PUBLIC_KEY_FILE,
+                    help='Path to the local public ssh key file.  Default is \
+                          %s' % DEFAULT_PUBLIC_KEY_FILE)
+parser.add_argument('-m', '--timeout_seconds',
+                    default=DEFAULT_TIMEOUT_SECONDS,
+                    type=int,
+                    help='Timeout value (in seconds) for connecting to each \
+                          host.  Default is %s' %DEFAULT_TIMEOUT_SECONDS)
+parser.add_argument('-o', '--port',
+                    default=22,
+                    type=int,
+                    help='The ssh port to connect to the remote hosts on. \
+                          Default is %s' %DEFAULT_SSH_PORT)
+parser.add_argument('-p', '--password',
+                    default=None,
+                    help='Password to use on remote hosts.  If not specified \
+                    here, you will be prompted for this interactively.')
+parser.add_argument('-s', '--ssh_dir',
+                    default=DEFAULT_REMOTE_SSH_DIR,
+                    help='Directory to copy the key into on the remote \
+                          host.  Default is %s' %DEFAULT_REMOTE_SSH_DIR)
+parser.add_argument('-t', '--threads',
+                    default = DEFAULT_THREADCOUNT,
+                    type=int,
+                    help='Number of threads to use for simultaneous key \
+                          distribution.  Default is %d.' %DEFAULT_THREADCOUNT)
+parser.add_argument('-u', '--username',
+                    default=DEFAULT_USERNAME,
+                    help="Username to use on remote hosts.  Default is \
+                          %s" %DEFAULT_USERNAME)
+# TODO: put this into an exclusion group with filename
+parser.add_argument('hosts',
+                    nargs='*',
+                    help='Zero or more remote hosts to receive the ssh key.  If\
+                         this value is unspecified, remote hosts will be read\
+                         from standard in.')
+
+config = parser.parse_args()
+
+queue = Queue(maxsize=10*config.threads)
+
+try:
+    key = open(config.key_file).read().strip()
+except:
+    print ("FATAL: key file '%s' could not be opened." %config.key_file)
+    sys.exit(1)
+if not config.password:
+    config.password = getpass("Enter common password for remote hosts: ")
+deployer_threads = []
+for i in range(config.threads):
+    deployer_thread = DeployKeyThread()
+    deployer_thread.daemon = True
+    deployer_thread.start()
+    deployer_threads.append(deployer_thread)
+
+if config.append:
+    print ("Distributing key '%s' to remote hosts in smart-append mode." %config.key_file)
+else:
+    print ("Distributing key '%s' to remote hosts in overwrite mode." %config.key_file)
+
+# Either use the hosts supplied on the command line (the preference) or use hosts read from
+# standard in.
+if config.hosts:
+    for host in config.hosts:
+        queue.put(host)
+else:
+    if is_stdin_terminal():
+        print ("Enter one hostname per line.  Terminate with 'exit' or ^D.")
+    line = sys.stdin.readline()
+    while line and not line.strip() == EXIT_COMMAND:
+        line = line.strip()
+        if line:
+            host = line.split()[0]
+            queue.put(host)
+        line = sys.stdin.readline()
+
+queue.join()
+
