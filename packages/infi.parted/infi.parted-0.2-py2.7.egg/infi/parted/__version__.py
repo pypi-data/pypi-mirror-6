@@ -1,0 +1,10 @@
+__version__ = "0.2"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.2)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '5ac503a4e847e573532e100058f806cd962ab6b7'
+__git_head_subject__ = 'Finished release v0.2.'
+__git_head_message__ = '* release/v0.2:\n  buildout.cfg: changed isolated python version to v2.7.5.4\n  TRVIIAL fixing PartedV1.get_size_in_bytes\n  empty commit\n  HIP-811 creating aligned partitions\n  Revert "STORAGEMODEL-238 resize partition" as it doesn\'t work\n  STORAGEMODEL-238 resize partition\n  TRIVIAL updated bootstrap.py\n  empty commit after version v0.1.16'
+__git_dirty_diff__ = ''
