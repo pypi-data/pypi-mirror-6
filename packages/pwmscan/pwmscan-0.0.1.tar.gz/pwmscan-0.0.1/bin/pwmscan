@@ -1,0 +1,86 @@
+#!/usr/bin/env python
+
+import sys
+import os
+try:
+    import pwmscan
+except:
+    sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))
+    import pwmscan
+
+def usage(msg=None):
+    if msg:
+        sys.stderr.write('%s\n' % msg)
+    sys.stderr.write(pwmscan.__doc__)
+    sys.stderr.write('''----
+
+Usage: pwmscan {opts} target.fasta query.pwm
+
+Options:
+    -revcomp     Use the reverse-compliment of the PWM
+    -pseudo val  Use {val} as the pseudo count 
+                 (default: 0.8, use 0 to disable)
+
+    -bg a,c,g,t  Use a,c,g,t as the background frequencies (0-1.0)
+                 (default: 0.3,0.2,0.2,0.3)
+
+''')
+    sys.exit(1)
+
+
+
+if __name__ == '__main__':
+    ref_fname = None
+    pwm_fname = None
+    pseudo = 0.8
+    background_freq = pwmscan.default_background_freq
+    verbose = False
+    revcomp = False
+
+    last = None
+    for arg in sys.argv[1:]:
+        if arg == '-h':
+            usage()
+
+        if last == '-bg':
+            vals = [float(x) for x in arg.split(',')]
+            background_freq['A'] = vals[0]
+            background_freq['C'] = vals[1]
+            background_freq['G'] = vals[2]
+            background_freq['T'] = vals[3]
+            last = None
+        elif last == '-pseudo':
+            pseudo = float(arg)
+            last = None
+        elif arg == '-v':
+            verbose = True
+        elif arg == '-revcomp':
+            revcomp = True
+        elif arg in ['-bg', '-pseudo']:
+            last = arg
+        elif not ref_fname and os.path.exists(arg):
+            ref_fname = arg
+        elif not pwm_fname and os.path.exists(arg):
+            pwm_fname = arg
+        else:
+            usage("Unknown option: %s" % arg)
+
+    if not ref_fname:
+        usage("Missing target FASTA file!")
+
+    if not pwm_fname:
+        usage("Missing PWM file")
+
+    pwm = pwmscan.PWM(pwm_fname, pseudo=pseudo, background_freq=background_freq)
+    if revcomp:
+        pwm = pwm.revcomp()
+
+    if verbose:
+        print 'Log-likelihood matrix:'
+        pwm.dump()
+
+    print "Consensus sequence: %s" % pwm.consensus
+    print 'Max score: %s' % pwm.maxscore
+    print "Using a score threshold of: %s (50%% max score)" %  (pwm.maxscore / 2)
+
+    pwmscan.pwmscan(ref_fname, pwm, pwm.maxscore / 2) 
