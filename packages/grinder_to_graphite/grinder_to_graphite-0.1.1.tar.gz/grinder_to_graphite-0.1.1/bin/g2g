@@ -1,0 +1,137 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2011-2014, Travis Bear
+# All rights reserved.
+#
+# This file is part of Grinder to Graphite.
+#
+# Grinder to Graphite is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# Grinder to Graphite is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Grinder to Graphite; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+
+import datetime
+from optparse import OptionParser
+import sys
+from g2g.engine import Engine
+from g2g import g2g_config
+import logging as log
+
+EXAMPLE_CONFIG_FILE = "g2g.example.yaml"
+
+
+def usage():
+    print ("type 'g2g --help' for usage.")
+    sys.exit(1)
+
+
+def _get_config_from_opts():
+    parser = OptionParser()
+    #: TODO: add prefix/suffix options
+    parser.add_option("-m", "--mapping_file",
+                      dest="mapping_file",
+                      help="""Sets the Grinder mapping file to use. A
+                              mapping file will typically have a name like
+                              '<hostnam>-0.log'.""",
+                      metavar="MAPPING_FILE")
+    parser.add_option("-e", "--example-config-file",
+                      action="store_true",
+                      help="""Generates a new example config file.
+                              This is intended to be a template which
+                              you can adjust to your needs.""",
+                      dest="example")
+    parser.add_option("-s", "--set-config-file",
+                      dest="default_config",
+                      help="""Sets the default g2g config file.  This default
+                              will be in place for all subsequent runs, and will
+                              be used whenever a config file is not set on
+                              the command line.""",
+                      metavar="CONFIG_FILE")
+    parser.add_option("-d", "--data-file",
+                      dest="data_file",
+                      help="""Set the grinder data file to ingest.  A
+                              Grinder data file will typically have a name
+                              like '<hostname>-0-data.log'.""",
+                      metavar="DATA_FILE")
+    parser.add_option("-f", "--follow",
+                      dest="follow",
+                      help="""Enable continually watching DATA_FILE for new entries""",
+                      metavar="True|False")
+    parser.add_option("-r", "--resume",
+                      dest="resume",
+                      help="Read DATA_FILE from the last read location instead of from the beginning.",
+                      metavar="True|False")
+    parser.add_option("-p", "--carbon-prefix",
+                      dest="carbon_prefix",
+                      help="""prefix to be used when sending data to Carbon.
+                      Data shows up in the graphite namespace under
+                      Graphite/<carbon prefix>/<hostname>/<carbon suffix>/<transaction>""",
+                      metavar="CARBON_PREFIX")
+    parser.add_option("-u", "--carbon-suffix",
+                      dest="carbon_suffix",
+                      help="""suffix to be used when sending data to Carbon""",
+                      metavar="CARBON_SUFFIX")
+
+    (options, args) = parser.parse_args()
+    if options.example:
+        g2g_config.create_example_config_file(EXAMPLE_CONFIG_FILE)
+        return
+    if options.default_config:
+        print ("Setting default config to %s" % options.default_config)
+        g2g_config.set_default_config(options.default_config)
+        return
+    config = g2g_config.get_config(args)
+    if not config:
+        print("FATAL: could not get config.")
+        usage()  # TODO: is this ever called?  Can we delete?
+    if options.data_file:
+        config.data_file = options.data_file
+    if options.resume:
+        log.warn("Setting resume: %s" % options.resume)
+        config.resume = options.resume.lower().startswith("t")
+    if options.carbon_suffix:
+        log.warn("Overriding carbon suffix from '%s' to '%s'" %(
+            config.carbon_suffix, options.carbon_suffix))
+        config.carbon_suffix = options.carbon_suffix
+    if options.carbon_prefix:
+        log.warn("Overriding carbon prefix from '%s' to '%s'" %(
+            config.carbon_prefix, options.carbon_prefix))
+        config.carbon_prefix = options.carbon_prefix
+    if options.follow:
+        config.follow = options.follow.lower().startswith("t")
+    if options.mapping_file:
+        config.mapping_file = options.mapping_file
+    return config
+
+
+def main():
+    config = _get_config_from_opts()
+    if not config:
+        sys.exit()
+    log.warn("Ingesting log file '%s'.  Forwarding data to graphite host at '%s'" % (
+        config.data_file,
+        config.carbon_host))
+    engine = Engine(config)
+    start_time, end_time = engine.ingest_log()
+    if end_time:
+        log.warn("Log ingestion complete.  Log data begins at: %d (%s), Log data ends at: %d (%s)" % (
+            start_time,
+            datetime.datetime.fromtimestamp(start_time),
+            end_time,
+            datetime.datetime.fromtimestamp(end_time)))
+    else:
+        log.warn("No new data in %s to read." % config.data_file)
+
+
+if __name__ == "__main__":
+    main()
