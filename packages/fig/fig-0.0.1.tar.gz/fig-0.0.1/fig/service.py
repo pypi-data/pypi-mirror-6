@@ -1,0 +1,205 @@
+from docker.client import APIError
+import logging
+import re
+import os
+import sys
+from .container import Container
+
+log = logging.getLogger(__name__)
+
+
+class BuildError(Exception):
+    pass
+
+
+class Service(object):
+    def __init__(self, name, client=None, project='default', links=[], **options):
+        if not re.match('^[a-zA-Z0-9]+$', name):
+            raise ValueError('Invalid name: %s' % name)
+        if not re.match('^[a-zA-Z0-9]+$', project):
+            raise ValueError('Invalid project: %s' % project)
+        if 'image' in options and 'build' in options:
+            raise ValueError('Service %s has both an image and build path specified. A service can either be built to image or use an existing image, not both.' % name)
+
+        self.name = name
+        self.client = client
+        self.project = project
+        self.links = links or []
+        self.options = options
+
+    def containers(self, stopped=False, one_off=False):
+        l = []
+        for container in self.client.containers(all=stopped):
+            name = get_container_name(container)
+            if not name or not is_valid_name(name, one_off):
+                continue
+            project, name, number = parse_name(name)
+            if project == self.project and name == self.name:
+                l.append(Container.from_ps(self.client, container))
+        return l
+
+    def start(self, **options):
+        for c in self.containers(stopped=True):
+            if not c.is_running:
+                self.start_container(c, **options)
+
+    def stop(self, **options):
+        for c in self.containers():
+            c.stop(**options)
+
+    def kill(self, **options):
+        for c in self.containers():
+            c.kill(**options)
+
+    def remove_stopped(self, **options):
+        for c in self.containers(stopped=True):
+            if not c.is_running:
+                c.remove(**options)
+
+    def create_container(self, one_off=False, **override_options):
+        """
+        Create a container for this service. If the image doesn't exist, attempt to pull
+        it.
+        """
+        container_options = self._get_container_options(override_options, one_off=one_off)
+        try:
+            return Container.create(self.client, **container_options)
+        except APIError, e:
+            if e.response.status_code == 404 and e.explanation and 'No such image' in e.explanation:
+                log.info('Pulling image %s...' % container_options['image'])
+                self.client.pull(container_options['image'])
+                return Container.create(self.client, **container_options)
+            raise
+
+    def start_container(self, container=None, **override_options):
+        if container is None:
+            container = self.create_container(**override_options)
+
+        options = self.options.copy()
+        options.update(override_options)
+
+        port_bindings = {}
+
+        if options.get('ports', None) is not None:
+            for port in options['ports']:
+                port = unicode(port)
+                if ':' in port:
+                    internal_port, external_port = port.split(':', 1)
+                    port_bindings[int(internal_port)] = int(external_port)
+                else:
+                    port_bindings[int(port)] = None
+
+        volume_bindings = {}
+
+        if options.get('volumes', None) is not None:
+            for volume in options['volumes']:
+                external_dir, internal_dir = volume.split(':')
+                volume_bindings[os.path.abspath(external_dir)] = internal_dir
+
+        container.start(
+            links=self._get_links(),
+            port_bindings=port_bindings,
+            binds=volume_bindings,
+        )
+        return container
+
+    def next_container_name(self, one_off=False):
+        bits = [self.project, self.name]
+        if one_off:
+            bits.append('run')
+        return '_'.join(bits + [unicode(self.next_container_number(one_off=one_off))])
+
+    def next_container_number(self, one_off=False):
+        numbers = [parse_name(c.name)[2] for c in self.containers(stopped=True, one_off=one_off)]
+
+        if len(numbers) == 0:
+            return 1
+        else:
+            return max(numbers) + 1
+
+    def _get_links(self):
+        links = {}
+        for service in self.links:
+            for container in service.containers():
+                links[container.name] = container.name
+        return links
+
+    def _get_container_options(self, override_options, one_off=False):
+        keys = ['image', 'command', 'hostname', 'user', 'detach', 'stdin_open', 'tty', 'mem_limit', 'ports', 'environment', 'dns', 'volumes', 'volumes_from']
+        container_options = dict((k, self.options[k]) for k in keys if k in self.options)
+        container_options.update(override_options)
+
+        container_options['name'] = self.next_container_name(one_off)
+
+        if 'ports' in container_options:
+            container_options['ports'] = [unicode(p).split(':')[0] for p in container_options['ports']]
+
+        if 'volumes' in container_options:
+            container_options['volumes'] = dict((v.split(':')[1], {}) for v in container_options['volumes'])
+
+        if 'build' in self.options:
+            if len(self.client.images(name=self._build_tag_name())) == 0:
+                self.build()
+            container_options['image'] = self._build_tag_name()
+
+        return container_options
+
+    def build(self):
+        log.info('Building %s...' % self.name)
+
+        build_output = self.client.build(
+            self.options['build'],
+            tag=self._build_tag_name(),
+            stream=True
+        )
+
+        image_id = None
+
+        for line in build_output:
+            if line:
+                match = re.search(r'Successfully built ([0-9a-f]+)', line)
+                if match:
+                    image_id = match.group(1)
+            sys.stdout.write(line)
+
+        if image_id is None:
+            raise BuildError()
+
+        return image_id
+
+    def _build_tag_name(self):
+        """
+        The tag to give to images built for this service.
+        """
+        return '%s_%s' % (self.project, self.name)
+
+
+NAME_RE = re.compile(r'^([^_]+)_([^_]+)_(run_)?(\d+)$')
+
+
+def is_valid_name(name, one_off=False):
+    match = NAME_RE.match(name)
+    if match is None:
+        return False
+    if one_off:
+        return match.group(3) == 'run_'
+    else:
+        return match.group(3) is None
+
+
+def parse_name(name, one_off=False):
+    match = NAME_RE.match(name)
+    (project, service_name, _, suffix) = match.groups()
+    return (project, service_name, int(suffix))
+
+
+def get_container_name(container):
+    if not container.get('Name') and not container.get('Names'):
+        return None
+    # inspect
+    if 'Name' in container:
+        return container['Name']
+    # ps
+    for name in container['Names']:
+        if len(name.split('/')) == 2:
+            return name[1:]
