@@ -1,0 +1,147 @@
+Metadata-Version: 1.0
+Name: django-kvmodel
+Version: 0.1.11
+Summary: A package that helps creating django key-value models easily.
+Home-page: https://github.com/amdorra/django-kvmodel
+Author: Abdallah Dorra
+Author-email: amdorra@gmail.com
+License: The MIT License (MIT)
+
+Copyright (c) 2013 abdallah dorra
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Description: ==============
+        Django KVModel
+        ==============
+        
+        ``KVModel`` provides a very convenient way to create key-value models with
+        just two lines of code. ::
+        
+            from kvmodel.models import KVModel
+            
+            class SystemSettings(KVModel):
+                """    
+                SystemSettings Model now extends KVModel, and you will
+                be able to access the key and the value fields on that Model
+                """
+        
+        Installation
+        ------------
+        
+        You can Install ``django-kvmodel`` from PyPI.
+            ``pip install django-kvmodel``
+        
+        Configuration
+        -------------
+        
+        Add ``kvmodel`` to your ``INSTALLED_APPS`` setting:::
+        
+            INSTALLED_APPS = (
+                ...
+                'kvmodel',
+                ...
+            )
+        
+        This will enable kvmodel, form more advanced settings please check the advanced
+        section.
+        
+        Usage
+        -----
+        
+        ``KVModel`` is an abstract model that has two fields ``key`` and ``value``.
+        
+        - ``key`` is a unique `CharField`. 
+        - ``value`` is a `SerializableField` which means that it's type is restored when
+          loading an instance from the database, check out the advanced section for more
+          details about ``SerializableField``.
+        
+        Defining key-value models
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+        Extend ``KVModel`` to create a key-value model::
+        
+            from kvmodel.models import KVModel
+        
+            class Settings(KVModel):
+                pass
+        
+        Creating instances
+        ^^^^^^^^^^^^^^^^^^
+        You can create Instances the same way you will use a Django Model
+            ``setting = Settings(key='dragons_in_store', value=123)``
+        
+        for a persistent instance
+            ``setting = Settings.create(key='dragons_in_store', value=123)``
+        
+        Retrieving instances
+        ^^^^^^^^^^^^^^^^^^^^
+        you can use Django filters to retrieve data from your model, however you
+        shouldn't use the value field to search for data.
+        
+        there is also a method to retrieve objects using their key:
+            ``setting = Settings.get_by_key('dragons_in_store')``
+        
+        which is equivalent to:
+            ``setting = Settings.get(key='dragons_in_store')``
+        
+        Advanced Usage
+        --------------
+        
+        SerializableField
+        ^^^^^^^^^^^^^^^^^
+        this is a custom field that extends ``TextField``, it encodes the data before
+        saving and decodes it once an instance is loaded from the database.
+        
+        you can use ``SerilizableField`` like this::
+            
+            from kvmodes.models import KVModel
+            from kvmodel.fields import SerilizableField
+        
+            class SystemSettings(KVModel):
+                default = SerialiableField()
+        
+        By default ``SerializableField`` uses JSON for de-serializing data however you
+        can define your custom de-serializers.     
+        
+        the `serialize` function is called before the object is saved to the database,
+        it should accept the value and returns a string.
+        
+        the `deserialize` function is called when loading an instance from the data base,
+        it should accept a string and return the restored value 
+        
+        Defining Custom serializer/derserilizer
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        
+        define the functions you want to use as de-serilizers::
+        
+            aes_serialize(value):
+                return aes_encrypt(json.dumps(value), key='super secret key')
+        
+            aes_deserialize(s):
+                return json.loads(aes_decrypt(s, key='super secret key'))
+        
+        next you should update the ``KVMODEL`` setting::
+        
+            KVMODEL = {
+                'SERIALIZE_FUNCTION': 'appname.modulename.aes_serilize',
+                'DESERIALIZE_FUNCTION': 'appname.modulename.aes_deserialize'
+            }
+        
+        
+        
+Platform: UNKNOWN
