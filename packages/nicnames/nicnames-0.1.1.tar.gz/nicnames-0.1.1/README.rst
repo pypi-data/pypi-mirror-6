@@ -1,0 +1,1 @@
+Provides a collection of functions to perform whois and DNS query lookups - the goal being to provide some flexibility and make 'light' lookups wherever possible.
