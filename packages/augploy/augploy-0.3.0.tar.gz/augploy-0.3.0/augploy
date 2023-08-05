@@ -1,0 +1,197 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import sys
+import os
+import traceback
+import shutil
+import re
+import argparse
+import time
+
+from os import path
+from subprocess import check_output, CalledProcessError
+
+VERSION = '0.3.0'
+BASEDIR = path.expanduser('~/.augploy')
+SECRET_VARS = ['mysql.root']
+
+
+def log(msg):
+    print(msg)
+
+
+def makedirs(dir):
+    if not path.isdir(dir):
+        os.makedirs(dir)
+
+
+def copytree(src, dst, symlinks=False, ignore=None):
+    names = os.listdir(src)
+    if ignore is not None:
+        ignored_names = ignore(src, names)
+    else:
+        ignored_names = set()
+
+    if not os.path.isdir(dst):
+        os.makedirs(dst)
+
+    errors = []
+    for name in names:
+        if name in ignored_names:
+            continue
+        src_path = os.path.join(src, name)
+        dst_name = os.path.join(dst, name)
+        try:
+            if symlinks and os.path.islink(src_path):
+                linkto = os.readlink(src_path)
+                os.symlink(linkto, dst_name)
+            elif os.path.isdir(src_path):
+                copytree(src_path, dst_name, symlinks, ignore)
+            else:
+                # Will raise a SpecialFileError for unsupported file types.
+                shutil.copy2(src_path, dst_name)
+        # Catch the Error from the recursive copytree so that we can continue with other files.
+        except shutil.Error as err:
+            errors.extend(err.args[0])
+        except EnvironmentError as why:
+            errors.append((src_path, dst_name, str(why)))
+    try:
+        shutil.copystat(src, dst)
+    except OSError as why:
+        if WindowsError is not None and isinstance(why, WindowsError):
+            # Copying file access times may fail on Windows.
+            pass
+        else:
+            errors.extend((src, dst, str(why)))
+    if errors:
+        raise shutil.Error(errors)
+
+
+def get_setdefault(d, key, default=None):
+        v = d.get(key)
+        if v is None:
+            if default is None:
+                default = {}
+            v = d[key] = default
+        return v
+
+
+def is_scp_style(repo_url):
+    return re.match(r'(.*@|.*).*:.*', repo_url)
+
+
+def parse_repo_url(repo_url):
+    tmp = repo_url.split('#')
+    repo_url = tmp[0]
+    repo_revision = 'master'
+    if len(tmp) > 1:
+        repo_revision = str.join('#', tmp[1:])
+    repo_name = repo_url.split(':')[1].replace('.git', '').replace('/', '-')
+    return (repo_url, repo_name, repo_revision)
+
+
+def prepare_repo(repo_url, tmp_path):
+    log('prepare repo %s ...' % repo_url)
+
+    # We take this repo_url as local file path if it doesn't matche scp style, we need to copy it to tmp path.
+    # If it does match, we need to fetch it from remote, export it to tmp path with specified revision.
+    if not is_scp_style(repo_url):
+        repo_name = path.basename(repo_url.rstrip('/'))
+        tmp_repo_path = path.join(tmp_path, repo_name)
+        copytree(repo_url, tmp_repo_path, symlinks=True,
+                 ignore=lambda src, names: names if path.basename(src) == '.git' else [])
+        return tmp_repo_path
+
+    repos_path = path.join(BASEDIR, 'repos')
+    makedirs(repos_path)
+
+    (repo_url, repo_name, repo_revision) = parse_repo_url(repo_url)
+    repo_path = path.join(repos_path, repo_name)
+    tmp_repo_path = path.join(tmp_path, repo_name)
+
+    if not path.isdir(repo_path):
+        log('    clone ...')
+        check_output('git clone --mirror %s %s' % (repo_url, repo_path), shell=True)
+    else:
+        os.chdir(repo_path)
+        log('    update ...')
+        check_output('git remote update', shell=True)
+
+    makedirs(tmp_repo_path)
+    log('    checkout %s ...' % repo_revision)
+    os.chdir(repo_path)
+    check_output('git archive %s | (cd %s && tar xf -)' % (repo_revision, tmp_repo_path), shell=True)
+    return tmp_repo_path
+
+
+def check_bin_version(ap_repo_path):
+    augploy_content = open(path.join(ap_repo_path, 'bin', 'augploy')).read()
+    version_matches = re.findall(r"^VERSION\s*=\s*'([\.\d]+)'$", augploy_content, re.MULTILINE)
+    version = version_matches[0]
+
+    if version != VERSION:
+        raise Exception('this utility is outdated, please run `pip install -U augploy` to upgrade')
+
+
+def main(origin_args):
+    # Args parsing.
+    parser = argparse.ArgumentParser(
+        description='augploy - AUGmentum dePLOYment automation tool, powered by ansible',
+        epilog='''
+                repo url format:
+                1. scp style, eg. git@git.augmentum.com.cn:ops/augploy.git#master, '#master' part is optional,
+                can be used to specify git revision: branch name or commit id, default is master
+                2. local absolute directory path, eg. /home/user/workspace/ops/augploy,
+                git revision is not supported in this type.
+                ''',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    args_repo_group = parser.add_mutually_exclusive_group()
+    args_repo_group.add_argument(
+        '-r', '--repo', default=os.getcwd(),
+        help='url of the repo to deploy, default is current working directory for quick test')
+    args_repo_group.add_argument(
+        '-n', '--no_repo', action='store_true',
+        help='to omit the defaut value of -r(--repo), in case there is no repo need to deploy')
+    parser.add_argument(
+        '-R', '--ap_repo', default='git@git.augmentum.com.cn:ops/augploy.git',
+        help='url of augploy repo in which ansible playbooks is stored, \
+              this option is for dev purpose, otherwise you should use the default value')
+    parser.add_argument(
+        'config_file',
+        help='config file path, relative to augploy directory in the repo to deploy, \
+              or relative to root directory in augploy repo')
+    parser.add_argument('-V', action='version', version='%%(prog)s %s' % VERSION)
+
+    args, ansible_args = parser.parse_known_args(origin_args)
+
+    # In order to avoid confilcts when run multiple config files at the same time,
+    # prepare tmp dir for exporting repos.
+    tmp_path = path.join(BASEDIR, str(time.time()))
+    makedirs(tmp_path)
+    exit_code = 0
+
+    try:
+        repo_path = prepare_repo(args.repo, tmp_path) if args.no_repo is False else None
+        ap_repo_path = prepare_repo(args.ap_repo, tmp_path)
+        check_bin_version(ap_repo_path)
+
+        sys.path.insert(0, path.join(ap_repo_path, 'bin'))
+        import augploy_core
+        try:
+            augploy_core.run_playbook(args, ansible_args, repo_path, ap_repo_path)
+        except augploy_core.AugployError as err:
+            exit_code = 1
+            log(err)
+    except CalledProcessError as err:
+        exit_code = err.returncode
+
+    except Exception:
+        exit_code = 1
+        traceback.print_exc()
+    finally:
+        shutil.rmtree(tmp_path)
+        sys.exit(exit_code)
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
