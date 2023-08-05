@@ -1,0 +1,1719 @@
+#+TITLE: Octopasty manual
+#+AUTHOR: Ubity inc.
+#+INCLUDE: "setup.org"
+
+#+BIND: org-export-latex-image-default-option ""
+#+LATEX_HEADER: \usepackage{hyperref}
+#+LATEX_HEADER: \hypersetup{colorlinks,linkcolor=blue}
+#+LATEX_HEADER: \renewcommand{\rmdefault}{phv} % Arial
+#+OPTIONS: ^:{}
+
+# Typographical conventions: =attribute=, /class/, =function=, =method=, *module*, *package*, *program*, /type/, =variable=.
+
+* Octopasty services
+** Introduction
+Octopasty is essentially an Asterisk AMI (Asterisk Manager Interface)
+proxy.  It connects to one or many Asterisk servers on their AMI port,
+and accepts one or many connections on its own AMI port, acting like
+an Asterisk server for these connections.
+
+This documentation uses the word /server/ to describe any of the
+Asterisk servers Octopasty connects to, and for which it is itself a
+client.  It uses the word /client/ to describe the connections it
+receives, even if from the viewpoint of these connections, it is a
+server.  The terminology may be slightly confusing, so let's get it
+straight: a /client/ connects on the Octopasty AMI port, and Octopasty
+connects on /servers/ AMI port.
+
+Now, clients have to authentify themselves, and through configuration,
+each account code gets an artificially limited view on the servers.
+The overall idea is that each user gets the impression of connecting
+on his own Asterisk server.  If many servers are collectively
+participating to provide Asterisk services for an account code, or to
+a set of related account codes, the AMI messages from the client are
+broadcasted to all pertaining servers, and the responses from the
+servers are transparently aggregated.
+** Development goals
+While Octopasty is an Asterisk AMI proxy to start with, its
+architecture is meant to be extensible in a few ways.  The client side
+may be extended to support other protocols than AMI for contacting and
+querying the Asterisk servers, one could think of REST interfaces,
+SOAP links, or other contact mechanisms.  Configuration, which was
+traditionally provided in INI style files, could be provided in other
+formats, or even through databases.  A plugin system should allow to
+add features programmaticaly, or to go beyond the limits of basic
+configuration in term of filtering or alteration of AMI messages.
+Octopasty is internally programmed using Python, yet hooks might be
+offer to connect to modules written in other languages, and
+communicating through pipes or files.
+
+In preparation for these developments, Octopasty has overgone a deep
+internal ovehaul, meant to increase legibility, simplicity, modularity
+of features, and consequently, ease of programming.  Octopasty
+behavior is now formulated in terms of many cooperating so-called
+/bubbles/, each being implemented as a light thread.  [[Bubbles]] are
+technnically detailed later in this document.  This information is
+meant for programmers extending Octopasty much more than for direct
+Octopasty users.  On the other hand, the AMI protocol is rather
+fastidious for humans, it really calls for being tamed and offered
+through more appealing interfaces.  Some programming just seems
+unavoidable!
+* Installation and usage
+** Installing Octopasty
+For installing Octopasty:
+
+1. Fetch and unpack the distribution.
+2. You might need Internet access for the next step to fetch
+   dependencies.
+3. Check that you have write access to the =/usr/local/= hierarchy.
+4. Install the package *libevent-dev*, if it is not already installed.
+5. Execute:
+  #+BEGIN_SRC sh
+    python setup.py install
+  #+END_SRC
+6. Create or copy the configuration file =opasty.yaml= somewhere
+   Octopasty will find it when later started, like in =~/.opasty.yaml=
+   or =/usr/local/etc/opasty.yaml=.
+7. Also install wanted Octopasty plugins, if any, from their own packages.
+
+Here, we prefer to install Octopasty within a virtual environment,
+like this:
+
+  #+BEGIN_SRC sh
+    virdir=/home/octopasty/env
+    sudo apt-get install libevent-dev
+    virtualenv $virdir
+    . $virdir/bin/activate
+    python setup.py install
+    cp config.yaml $virdir
+    cp etc/octopasty /etc/init.d/
+    update-rc.d octopasty defaults
+  #+END_SRC
+
+You should of course modify the above recipe and files to taste.
+Plugins should ideally be installed using the same virtual
+environment.  The =etc/octopasty= script is meant to help starting and
+stopping Octopasty automatically with the system. Edit it if you want
+to change the value of =$virdir=, the location of the installed
+=config.yaml=, starting options, and such things.
+** Invoking Octopasty
+Once Octopasty has been installed, and its configuration file written
+(see the [[Configuration]] section), it may be started with the shell
+command:
+
+#+BEGIN_SRC sh
+opasty [OPTION]...
+#+END_SRC
+
+that is, the word =opasty=, possibly followed by one or more options.
+Options have a short form, starting with a single dash immediately
+followed by an option letter, or a long form, starting with two dashes
+followed by an option word.  How Octopasty gets started is really to
+be specified through configuration files rather than command options.
+The options are only meant to specify how to find these files, or
+maybe alter a few on-the-spot debugging features.
+
+Options =-h= or =--help= and =-V= or =--version= are special in that they give
+some information, then immediately exits Octopasty without doing
+anything else.  Option =-h= gives a short summary of Octopasty options,
+while option =-V= shows the version numbers for Octopasty.
+
+Option =-A= or =--amifile= is to be followed by the name of zero or more
+files containing AMI messages.  These messages are initially fed to an
+internal Octopasty client, which is not tied to a socket.  If option
+=-A= is not used, all files names =opasty.ami= or =.opasty.ami=, either in
+the current, directory, the user's home directory, =/usr/local/etc= or
+=/etc=, are processed in turn.  Such files may be useful for performing
+an initial login and doing other actions, like altering or completing
+the Octopasty configuration, Not following =-A= by any file is a way to
+inhibit default AMI files.
+
+Option =-C= or =--config= is to be followed by the name of one or more
+YAML configuration files.  If there is more than one file, their
+information is merged.  If option =-C= is not used, all files named
+=opasty.yaml= or =.opasty.yaml=, either in the current directory, the
+user's home directory, =/usr/local/etc=. or =/etc=, are merged.  If no
+configuration file is found at all, Octopasty does not start.  YAML
+configuration is done before initial AMI messages are executed, would
+it be only to setup a user for an initial AMI login to succeed.
+
+Option =-P= or =--plugins= is to be followed by a single string giving the
+names of plugins to be activated, the names should be separated by
+commas with no intervening space.  If this option is used, only the
+named plugins are activated, but if this option is not used, all
+available plugins are activated.  Beware that some plugins may still
+refuse to activate if they are not properly configured in
+configuration files.  See [[Plugins]] for more information on the plugin
+system.
+
+Option =-p-= or =--pid= is to be followed by the name of a file to
+maintain the Octopasty process ID.  When this option is given,
+Octopasty creates or overwrites the file when it starts and remove the
+file when it stops.  The file has a single line with the decimal
+expression of the process ID.  However, Octopasty refuses to start if
+that file already exists, with the ID number of a process which is
+currently running.
+
+Option =-l= or =--log= is to be followed by a name of one or more files to
+receive Octopasty logs.  Entries written to log files are flushed to
+disk within 3 seconds.  A file name may be preceded by a flags
+specification, to select what categories of log entries are to be
+collected in the log file, in which case there is a colon between the
+flags and the file name.  Flags is a comma-separated list of symbols.
+If there is no flags before the colon, the log receives log entries
+from all categories.  If there is no file name after the colon, the
+log is sent to standard error (so =-l:= is a lazy way to get everything
+on the terminal!).  When no log option is specified at all,
+=info,warn,error:= is assumed.  Here some predefined flags:
+
+  | Symbol | What is being reported?              |
+  |--------+--------------------------------------|
+  | debug  | Miscellaneous details for debugging  |
+  | info   | General information on progress      |
+  | warn   | Any bizarre or unexpected situation  |
+  | error  | Serious defect or problem condition  |
+  |--------+--------------------------------------|
+  | action | All AMI messages related to actions  |
+  | event  | All AMI messages representing events |
+  | user   | User typos or other misusage errors  |
+  | web    | Accesses to the HTTP AMI web server  |
+
+There might be others: these flags are allocated on the fly when
+referenced.
+
+Option =-d= or =--debug= triggers a fairly verbose debugging trace of
+inner Octopasty workings on the standard error stream, which is meant
+for Octopasty developers.  Option =-t= does the same in a more limited
+way: it is followed by one or more hook patterns, and it activates
+debugging trace automatically for any bubble registering itself on a
+hook matching one of the hook patterns.  See [[Hooks]] for more
+information.
+* Configuration
+Octopasty requires some substantial configuration to describe its
+client side, its server side, and each possible user.  Currently, all
+configuration is to be given through one or more YAML files.  If the
+configuration information changes, Octopasty has to be stopped and
+restarted to read its configuration afresh.
+
+FIXME: (older thoughts, not implemented) While most bubbles are
+implemented through plugins, a few bubbles pre-exist in Octopasty for
+starting it up and configuring it.  These so-called system bubbles
+have special roles or unusual priviledges.  The /boot/ bubble is the
+first one to exist and receive control.  It creates the /plumber/ bubble
+and some configuration bubble to feed it.  There are many ways to
+provide configuration, and for each configuration file format or
+configuration method, there exists a specialized bubble able to decode
+or receive the configuration information and translate it into a
+sequence of configuration messages to be sent to the plumber.  The
+plumber, driven by those configuration messages, builds up the
+topology of a running Octopasty application.  The plumber may create
+or destroy bubbles, or alter the output bus of existing bubbles.
+** YAML example
+The configuration file is given in [[http://www.yaml.org/spec/1.2/spec.html][YAML]] format.  There are many ways,
+in YAML, to represent exactly the same information, and how this is
+best done is a matter of personal style and taste.  At one end of the
+YAML spectrum, configuration may look /exactly/ like [[http://tools.ietf.org/html/rfc4627][JSON]], which is
+itself a subset of JavaScript; strict JSON does not allow comments
+however.  At the other end of the YAML spectrum, indentation marks
+structure, light markup annonces types, and most of JSON syntactic
+encumbrance may be left out.  One may mix both approaches, by using
+JSON at will whenever a value is expected.
+
+Here is an simplistic example of an Octopasty configuration file:
+
+#+BEGIN_EXAMPLE
+# Experimental configuration for Octopasty.
+---
+
+clients:
+
+- name: backdoor
+  host: localhost
+  port: 1234
+
+- name: http
+  host: localhost
+  port: 8988
+
+- name: tcp
+  host: localhost
+  port: 5038
+
+servers:
+
+- name: vdev1
+  host: vdev1.ubity.com         # telnet vdev1.ubity.com 5038
+  port: 5038                    # Action: login
+  username: fpinard             # Username: fpinard
+  password: secret-password     # Secret: some-password
+
+- name: vdev2
+  host: vdev2.ubity.com
+  port: 5038
+  username: fpinard
+  password: yet-another-password
+
+users:
+
+- name: someuser
+  password: some-coded-password
+  acl:
+    - 127.0.0.1/32
+    - 10.0.0.0/8
+  server: vgwmtl
+  accountcode: u01
+  event_filter:
+    - call
+    - presence
+    - cdr
+  action_filter: call
+
+- name: anotheruser
+  password: another-coded-password
+  # etc.
+#+END_EXAMPLE
+
+An Octopasty configuration file contains a =clients:= section giving the
+parameters for the client side of Octopasty, that is, how it accepts
+connections from clients which then perceive Octopasty as an Asterisk
+server; see [[Client]] below for the description of such clients.  The
+configuration file has a =servers:= section which describes its server
+side, that is, the Asterisk servers it connects to; see [[Server]] below
+for the description of one of these servers.  A =users:= section lists
+the authorization identity of possible Octopasty clients, and specific
+operation modalities pertaining to each of these users; see [[User]] below
+for the description of one of these users.
+
+Notice how indentation is used to stress out information nesting, and
+how leading dash introduces the elements of an enumeration, or list.
+Each such dash signals the start of another server in the list of
+servers, a new user in the list of users, etc.  The information for a
+single server does not have to start with =name:= and the dash applies
+to the whole block of lines, the first of which just happens to use
+the =name:= key, but the keys in a block could really be given in any
+order.
+
+JSON-like writing could sometimes increase legibility.  For example,
+the three lines pertaining to the =acl:= key may be rewritten in a
+single line with a JSON value:
+
+#+BEGIN_EXAMPLE
+acl: ['127.0.0.1/32', '10.0.0.0/8']
+#+END_EXAMPLE
+
+or even, removing most of JSON syntactical and lexical boilerplate:
+
+#+BEGIN_EXAMPLE
+acl: 127.0.0.1/32, 10.0.0.0/8
+#+END_EXAMPLE
+
+In the configuration file, comments are introduced by an octohorpe and
+extend to the end of the line, and empty lines could be used to
+organize the information more legibly.  The example above uses two
+spaces for an indentation step, but it could be anything else, and
+does not even have to be the same in various sections of the
+configuration.  Briefly said, if it /looks right/, it is likely right:
+one may go a long way without studying the excruciating details of the
+YAML specification.
+
+The line containing three dashes in a row, near the beginning,
+annonces the real start of the YAML data.  That line may be omitted in
+the example, yet when given, some special YAML directives may be given
+above it; this is no concern for Octopasty configuration.  A useful
+YAML feature, however, is the capability of defining an alias name for
+a tedious or complex value the first time it is used in a
+configuration file, and later using the alias name alone for later
+repetitions.  For example, instead of writing:
+
+#+BEGIN_EXAMPLE
+  servers: vgw1, vgw2, vgw3, vgw5, vgw6
+#+END_EXAMPLE
+
+when it is known that the sequence is often used in a configuration
+file, the first occurrence could be written:
+
+#+BEGIN_EXAMPLE
+  servers: &vgwmtl vgw1, vgw2, vgw3, vgw5, vgw6
+#+END_EXAMPLE
+
+This defines =vgwmtl= as an alias for the sequence.  Later occurrences
+can be abbreviated to:
+
+#+BEGIN_EXAMPLE
+  servers: *vgwmtl
+#+END_EXAMPLE
+
+As may be seen above, the =&= character announces the definition of an
+alias symbol, while the =*= character asks for its expansion.
+** Client configuration
+Octopasty needs to know on which Internet port it waits for incoming
+client connections, and also, which kind of services are to be
+available on this port.  This is configured in the =clients:= section of
+the configuration file.  Each client is described by the following set
+of keys and values.
+
+- The =name:= key is mandatory, the value describes the kind of service
+  being offerred on the associated port.  Names may not be freely
+  chosen, they currently may only have one of the values =backdoor=,
+  =http= or =tcp=.
+
+- The =host:= key introduces on which network interface Octopasty
+  listens.  If not specified, value =127.0.0.1= is implied, and means
+  the local pseudo network interface.  Other popular values are
+  =localhost=, which means the same, and =0.0.0.0=, for listening to all
+  interfaces at once.
+
+- The =port:= key tells on which port number clients should connect for
+  obtaining the service.  It is given as an integer or as the string
+  representaton of an integer.  When the name is either =backdoor= or
+  =http=, the port /must/ be specified, as there is no default value.
+  When the name is =tcp=, the port defaults to =5038=.
+
+- The =timeout:= key specifies a maximum time without activity after
+  which the incoming connection gets terminated.  It is given as an
+  integral number of seconds.  The default is to not expire the
+  connection.  It is only meaningful for =http= or =tcp= blocks.
+
+When there is a =backdoor= block, Octopasty automatically starts a
+backdoor server: see [[Backdoors]] in this manual for some more
+information on this.  When there is an =http= block, Octopasty starts an
+HTTP server able to process HTTP AMI requests using one of the
+=manager=, =mxml= or =rawman= formats, similarly to Asterisk; Octopasty also
+offers =json= formatted replies by using the =json= resource name on the
+requested URL.  When there is a =tcp= block, Octopasty start a /Welcomer/
+bubble able to handle many regular AMI sessions.
+
+If the =clients:= section is wholly omitted, a =tcp= block is implied with
+=localhost= and =5038= for host and port.
+** Server configuration
+Octopasty connects to one or more Asterisk servers, at least one of
+these must be configured.  Each of these servers may be described by
+the following keys and values.
+
+- The =name:= key, which is mandatory, tells the name of the server
+  within the configuration file.  The server name has to be a single
+  word.
+
+- The =host:= key says on which machine the Asterisk server may be
+  found, the value is either an IP quad or a fully qualified domain
+  name.  This is a required key.
+
+- The =port:= key tells the port number to use while connecting.  It is
+  given as an integer or as the string representation of an integer,
+  and defaults to 5038.
+
+- The =username:= key gives the login identification for connecting to
+  the Asterisk server.  This is a required key.
+
+- The =password:= key contains, in clear, the password meant to validate
+  the login process.  This is a required key.  FIXME: Should implement
+  password protecting protocols.
+
+- The =readonly:= key, when its value is either =true= or =yes=
+  (capitalization not withstanding) is meant to protect the server
+  from anymore client actions, once Octopasty has logged into that
+  server.  Events coming out from that server are still listened to.
+** User configuration
+When a client establishes contact with Octopasty, it should first
+authenticate as a particular user.  The configuration should describe
+at least one user.  Each user is described by the following keys and
+values.
+
+- The =name:= key, which is mandatory, tells the name of this user
+  within the configuration file.  The user name has to be a single
+  word.  FIXME: There is no user reference anywhere else in the
+  configuration file.
+
+- The =accountcode:= key tells the user account code for the
+  authentication process into Octopasty.  It defaults as being the
+  same as the value of the =name:= key.
+
+- The =passord:= key contains an encrypted or clear password meant to
+  validate the login process.  If encrypted, it should be using either
+  MD5 or SHA1.  If left in clear, then the login request should be
+  preceded by a challenge request.  This is a required key.
+
+- If a user has no =acl:= defined, there is no access restriction based
+  on the incoming IP address.  Otherwise, the client IP must match one
+  of the values given.  Each has the form =A.B.C.D=, in which case the
+  address has to match that IP quad exactly, or =A.B.C.D/S=, where =S= is
+  an integer between 1 and 32 indicating a sub-network, in which case
+  the first =S= bits of the IP address should match the IP quad.  FIXME:
+  Should ACLs allow fully-qualified names?
+
+- The =servers:= key restricts the list of Asterisk servers this user
+  account may connect to.  The values are server names from the
+  `servers:' section in the configuration file.  AMI actions coming
+  from the user may access one or many of these servers depending on
+  the action, and the response, either aggregated or not, is returned
+  to the user.  Also, events from all these servers are available to
+  the user, if other conditions permit.  Without this key, there is no
+  restriction, and all available Asterisk servers might be addressed.
+
+- The =priviledges:= key tells which AMI priviledges are granted to the
+  user.  The value is =all= or a comma separated list of priviledges
+  among =agent=, =call=, =command=, =config=, =originate=, =reporting=, =system= or
+  =user=, yet none of these are verified, so new priviledges may easily
+  be invented on the Asterisk side and be used here.  By convention,
+  =all= is a priviledge available on all AMI commands, but otherwise, it
+  is merely a name among others.  Each AMI action lists required
+  priviledges allowing its use, and a user must be configured with at
+  least one of them before using this action.  If this key is not
+  given in the user configuration, =all= is assumed.
+
+- If the user has no =event_filter:= defined, all events from the
+  Asterisk servers are available to the user.  If a single value, that
+  value names the type of events which may be seen, whatever the
+  server it comes from.  If a list of values, all these types of
+  events are available.
+
+- If the user has no =action_filter:= defined, any AMI action gets
+  forwarded from the user to the Asterisk servers.  If a single value,
+  that value names the type of allowed actions.  If a list of values,
+  all such actions are permitted.
+* Plugins
+Some added functionnality may be added over the base Octopasty
+framework, in form of Python code following special conventions, which
+is being added either when Octopasty is getting loaded and started, or
+later in some circumstances.  FIXME: Plugin load mechanics is still to
+come!  Plugins may eventually become hot loadable or reloadable.  This
+is a good reason to foresee moving as much Octopasty code as possible
+into plugins.  Since plugins have to interact with the Octopasty
+framework and topology, the plugin writer needs a deeper knowledge of
+the overall architecture, and also of the inner working and usage of
+the *ami* and *bubble* modules.
+** Architecture
+The inners of Octopasty revolve around the concept of messages flowing
+between many cooperating bubbles.  See the section on [[Generic bubbles]]
+to get a deeper understanding of bubbles.  The following schema
+illustrates a simplified Octopasty setup, in which a single Octopasty
+client is proxyed into two Asterisk servers, and for which one AMI
+action is currently being processed.  The client side of Octopasty is
+shown in the yellow area on the left, the server side is shown in the
+green area on the right.
+
+#+ATTR_LATEX: width=12cm
+[[file:diagram.png]]
+
+When Octopasty starts, it instantiates one /Server/ bubble for each
+configured Asterisk server, and one /Welcomer/ bubble.  The purpose of
+this last bubble is to listen for incoming connections and create a
+/Client/ bubble for each new connection.  Each /Client/ and /Server/ bubble
+generates its own /Reader/ and /Writer/ bubbles.  So, for example, if
+Octopasty currently handles three client connections and is configured
+to speak to five Asterisk servers, it surely launches at least 25
+bubbles to do so: 25 = 1 + (3 + 5) * 3.
+
+Each /Reader/ and /Writer/ bubble pair is associated with a precise socket
+buffer data in both directions.  A /Reader/ bubble takes care of
+buffering socket input and decoding AMI messages into memory
+structures while receiving them; a /Writer/ bubble encodes back memory
+structures into AMI messages before sending them away.
+
+The /Server/ bubble initially logs into an Asterisk server, after which
+it essentially forward AMI messages on its own output bus, except when
+directed to do othewise as explained below.  The /Client/ bubble first
+requests the user to authenticate itself, after which it registers on
+the output bus of all /Server/ bubbles corresponding to the Asterisk
+servers the user has access to, as pictured with green dashed arrows
+in the diagram above.  Such listening bus is meant for AMI events.
+
+AMI actions and responses use different paths, illustrated in red in
+the diagram.  For each and every AMI action received from the client,
+a separate bubble is created to handle that sole request.  The word
+/Action/ appears in red in the diagram, but this is only a generic name:
+the actual class name for the bubble bears the name of the =Action;=
+field of the AMI message, and all such bubble classes use
+/Manager_Action/ as a base.  Whatever its real name, that /Action/ bubble
+inserts a unique /Action ID/ into the request and submits it to all
+Asterisk servers, yet once the bubble instructed each server to
+intercept and redirect all responses containing that /Action ID/ to
+itself.  The /Action/ bubble then aggregates responses from all servers
+into a single response message, which is returned to the user.  That
+particular /Action/ bubble then vanishes.
+
+The diagram above is only indicative, and does not represent the full
+truth.  /Server/ bubbles are not really created by the starting
+Octopasty, but rather by a /*Login/ bubble — which is the real name for
+/Action/ while processing an =Action: Login= message, the asterisk is only
+there to mark that the class itself has been dynamically generated —
+the creation is delayed until a user successfully authenticates into
+Octopasty, being the first to mention that server within its own
+configuration.  The diagram is also silent about the internal client
+used to process configuration files, transient helper bubbles,
+specialized bubbles meant for logging, debugging and tracing, bubbles
+for accessing input and output streams, etc.
+** Action processing
+Octopasty recognizes many actions for one of its client.  Besides a
+few actions which are fully processed by Octopasty without contacting
+any Asterisk server, an action has to be known by at least one of the
+Asterisk servers configured for this client.
+
+Depending on the AMI action type, an action message may be broadcasted
+to all Asterisk servers, sent to a specific server, or sent to a
+server selected at random.  When many servers are contacted, all the
+responses have to be aggregated in some way.  The default behaviour is
+to copy the client AMI message to one server selected in a round-robin
+way (among those knowing that action), to collect AMI messages a
+=Response:= key is seend, and to return those messages to the client.
+
+The original AMI message may contain a =Server:= key to select a
+particular server among those which are authorized.  The value of that
+key is a single server name, using the name as per the =servers:=
+section in the Octopasty configuration files, or a comma-separated
+list of server names.  A diagnostic is issued if any listed server is
+not allowed in the user configuration file.  However, any server named
+after =Server:= key and not recognizing the action type is silently
+discarded, would it mean that no servers remain at all.
+** Overriding actions
+A plugin may intercept existing AMI actions or declare new ones.  To
+do so, it is sufficient to create a new Python class and make it a
+subclass of /ami.Manager_Action/.  The name of the new class is
+automatically the name of the action to be intercepted or created.
+
+The new class often contains a =broadcast= method for deciding to which
+Asterisk servers the action message should be sent.  This method
+accepts three arguments.
+
+- The =client= argument gives the Octopasty /ami.Client/ bubble from which
+  the action originates.  Some interesting fields are =config=
+  containing the whole configuration, =user_config= for the user
+  configuration, =reader= and =writer= giving access to the the /Reader/ and
+  /Writer/ bubbles associated with the client.
+
+- The =ami_message= argument holds the /ami.AMI_Message/ object
+  representing the received AMI message.  This is a special kind of
+  ordered dictionary where keys are the AMI message keys where case
+  does not matter much.  The only restriction is when setting key
+  values: keys should either be lower case, or use mixed case in a
+  consistent way.
+
+- The =servers= argument is a dictionary relating server names to
+  /ami.Server/ bubbles.  That dictionary only contains servers which
+  know that action already.  If there is a =Server:= clause of the AMI
+  message, the dictionary is reduced even further.
+
+The method returns =None= or a list of Asterisk servers (a list of
+values extracted from the =servers= dictionary) which should receive a
+copy of the AMI message.  For a new action which is to be fully
+processed by Octopasty, the method should return =None= or an empty
+list.  If the =broadcast= method is not given, the default is to pick a
+server which has not be recently sollicited, as in a round-robin, as
+far as reasonable; or to return =None= if no server is eligible.
+
+The new class may contain an =aggregate= method, at least if the
+=broadcast= method may return one than one server.  That method receives
+a single argument, which is a dictionary giving, for each server
+selected by the =broadcast= method, the list of AMI messages received
+from that server in response to the original AMI message.  The method
+should return either a single AMI message or a list of AMI messages,
+all meant for the Octopasty client.  For a new action which is to be
+fully processed by Octopasty, the received dictionary is empty, and
+the return value has to be fully made up: the programmer may find
+convenient to use =broadcast= method for generating the reply because
+that method receives more information in its arguments, saving the
+reply in an instance variable which the =aggregate= method then
+retrieves and returns.  If the =aggregate= method is not given, the
+default is to check if =self.response= has been set and then return its
+value, or else, to pick one of the servers which replied a bit at
+random (there is no ambiguity if only one server replies), and to
+return what that server sent; or else return an error response if no
+server replied (likely because =broadcast= did not retain any).
+
+In a few unusual cases, the new class may also contain an =is_last=
+method.  That method receives an AMI message from a server, and
+decides by looking at this message whether if this message is the last
+in the series of replies, or not.  If there is no such =is_last= method,
+the default is to declare the reply complete when an AMI message
+contains the "Response:" key.
+** The *internal* plugin
+The *internal* plugin provides basic interception of some AMI messages
+by Octopasty.  The following sections summarize AMI action types which
+receive another treatment than the default one.
+
+- Challenge :: This action does not go beyond Octopasty, and no
+               Asterisk server is queried.  A challenge is selected by
+               Octopasty and returned to the user, which would
+               normally use it for encoding the password in the
+               subsequent Login action.
+- ListCommands :: This action does not go beyond Octopasty, and no
+                  Asterisk server is queried.  Octopasty replies with
+                  the list of supported actions for this client, that
+                  is, actions known to at least one of the Asterisk
+                  servers the client has access to, and also internal
+                  Octopasty actions.  However, any internal action
+                  requiring *octopasty* priviledge remains invisible for
+                  clients which are not granted this priviledge.
+- Login :: This action does not go beyond Octopasty, and no Asterisk
+           server is queried.  Users log directly into Octopasty, and
+           need an account described in Octopasty configuration.  The
+           =Events:= key, which is =on= by default, may be set to =off= to
+           inhibit the echoing of events from servers.
+- Logoff :: This action does not go beyond Octopasty, and no Asterisk
+            server is queried.  After the reply, the connection
+            between the client and Octopasty is severed, but the
+            action has no effect between Octopasty and Asterisk
+            servers.
+- QueueStatus :: Accumulation of replies from the Asterisk servers do
+                 not stop at an AMI message having a =Response:= key,
+                 but rather at an AMI message showing =Event:
+                 QueueStatusComplete=.
+- Status :: Accumulation of replies from the Asterisk servers do not
+            stop at an AMI message having a =Response:= key, but rather
+            at an AMI message showing =Event: StatusComplete=.
+** Hooks
+Plugins usually provide new bubbles, each of which installs before or
+after another existing bubble, or replaces one of these, altering the
+overall Octopasty topology.  Hooks are mere associations between a
+name key and a bubble, which allow the bubble to be found by plugins
+or any other bubble.  New bubbles from plugins may also register as
+hooks.  By registering a bubble as a hook, the programmer foresees the
+capability for later plugins to add some new functionality around it.
+
+Once the *bubble* module has been imported, the =bubble.get_hook= function
+accepts a name key for a bubble instance which previously registered
+itself, and returns that instance; if the name is not known, the value
+=None= is returned instead.  The =bubble.set_hook= function accepts two
+arguments, the first being a name key, the second being a bubble
+instance that should be associated with that key; if that key was
+previously associated with some other bubble instance, that previous
+association is lost; moreover, if the new value is =None=, the previous
+association is deleted without being replaced.  The =bubble.each_hook=
+function accepts a shell-style wildcard pattern and returns an
+iterator, which itself yields name key and instance pairs from the
+hook namespace, given that the key matches the pattern.
+
+Some plugins may install new bubble instances and maybe register them
+as hook for other bubbles to find, yet more usually, new bubble are
+installed relative to some other bubble hanging on a hook.  There are
+three main ways to install a new bubble, and one function for each
+way:
+
+- When a new bubble installs /after/ another, the new bubble becomes the
+  sole listener on the output bus of that other bubbler, and the new
+  bubble output bus is populated with all bubbles which were
+  previously listening on the output bus of the other bubble.  In a
+  diagram, the new bubble is added on the side of the other bubble
+  where the arrows /originate/, effectively intercepting them near their
+  starting end.  Calling =bubble.add_after_hook(NAME, NEW)= does exactly
+  this, and contrarily to the two following cases, the hook is left
+  alone.
+
+- When a new bubble installs /before/ another, it intercepts all
+  messages which would otherwise reach that other bubble, and that
+  other bubble then becomes the sole listener on the output bus of the
+  new bubble.  In a diagram, the new bubble is added on the side of
+  the other bubble from where the arrows /come from/, effectively
+  intercepting the arrows near their pointing end.  These actions
+  result from a call to =bubble.add_before_hook(NAME, NEW)=; the hook is
+  also redefined to point to the new bubble.
+
+- When a new bubble /replaces/ another, it intercepts all messages to
+  the old bubble, and the new bubble output is directed to all bubbles
+  which were listening on the other bubble.  In a diagram, the new
+  bubble is added over the other bubble, hiding it, effectively
+  stealing all arrows flowing into it or out of it.  Calling
+  =bubble.replace_hook(NAME, NEW)= does exactly this; the hook is set to
+  point to point to the new bubble and the previous bubble gets
+  killed.
+
+The call =bubble.monitor_hooks(INSTANCE)= declares that the given bubble
+instance wants to monitor all later hook changes.  There might be many
+monitoring bubbles at once.  Whenever a new hook is added or a
+previous hook is removed or modified, all monitoring bubbles
+automatically receive a 3-tuple message holding the key name, the
+previous bubble instance (or =None=) and the new bubble instance (or
+=None=).  Plugins, for example, may dynamically spy and react when new
+bubbles register themselves on hooks.  There is no explicit way to
+withdraw monitoring, yet monitoring stops when a monitoring bubble
+dies.
+
+FIXME: (older thoughts, not implemented) When a bubble disappears, its
+output bus contents gets added to the output bus of all bubbles
+feeding its input queue.  If the typing system is used cleverly
+enough, this should allow the seamless destruction of filtering
+bubbles and such.
+* Generic bubbles
+That section only interests Octopasty programmers, and explains in
+greater detail how generic bubbles are created and used.
+** What is a bubble?
+A bubble is an actor within a cooperative, concurrent execution model.
+It is implemented as a greenlet instance adorned with a few precise
+usage conventions.  Summarized, a bubble is a greenlet having an input
+queue and an output bus, and some useful magic.
+
+Each and every bubble has a input queue meant to contain messages
+coming from other bubbles.  This input queue may be written by any
+bubble, but only read by the bubble owning that queue.  A bubble gets
+messages from its input queue by calling its own =get_message= method.
+To another bubble it happens to know, a bubble may /send/ a message by
+using the =add_message= method of this other bubble: the message is then
+added to the other bubble's input queue.
+
+Each bubble has its own output bus, which is a kind of path yielding
+to one or many other bubbles (or none at all).  A bubble may use its
+own =send_message= method to broadcast a message on its output bus.
+Each bubble /listening/ on that bus then receives that message in its
+input queue.  Bubbles expose methods =add_to_output_bus= and
+=remove_from_output_bus= for managing their own output bus contents.
+
+Each bubble also has an =idle_timeout= attribute, defaulting to *None*.
+The value can also be an integer or floating number of seconds: if a
+bubble had no activity for that amount of time, a =gevent.Timeout=
+exception may be raised within that bubble, and this might have the
+effect of terminating that bubble.
+** The bubble principle
+The Octopasty implementation framework is based over Python greenlets
+(more precisely, greenlets as colored by the *gevent* package — [[http://www.gevent.org][gevent]]
+being: /a Python networking library that uses [[http://codespeak.net/py/0.9.2/greenlet.html][greenlet]] to provide
+synchronous API on top of [[http://monkey.org/~provos/libevent/][libevent]] event loop/).  However, not all of
+greenlets capabilities may be used: by choice and through discipline,
+some greenlet features are plainly avoided, and greenlet processes
+ought to be used in a particular way.  To stress that Octopasty
+processes just may not be full greelets, we use a different
+terminology and call them /bubbles/ instead.  A bubble is an instance of
+either the /Active_Bubble/ or the /Reactive_Bubble/ class, which are
+themselves, indirectly, subclasses of /gevent.Greenlet/.
+
+Here is the important /bubble principle/: a bubble is in full control of
+its own internal state, and bubble state evolves only while the bubble
+is itself executing as a greenlet process.  The goal is that a bubble
+should never /fear/ being altered or tampered upon by any other bubble:
+it executes as an independent entity, and as such, never has to
+explicitly use any kind of synchronization device to protect its own
+consistency.  As a consequence, none of the public methods of a bubble
+may change its own state: if other bubbles were indeed using one
+bubble's methods, this bubble state would be changing while it is not
+executing, violating the bubble principle.  However, there is an
+exception: a bubble is permitted to expose public methods to other
+bubbles which generate and add messages to its own input queue.
+
+A bubble instance is both a Python object and a full greenlet.  We
+voluntarily refrain from using all capabilities herited from this
+double nature.  The expected reward is a more solid system, avoiding
+problems which sometimes plague multi-threaded applications.
+Cooperation rather than preemption means less synchronisation, so less
+overhead and more speed.  Finally, the bubble approach might ease
+modular, incremental development.
+** Messages and types
+Messages, which are moving between bubbles, may be of any Python type.
+By Python type, we really mean a subclass of /object/; the safest
+approach is to add a =__metaclass__ = type= line near the beginning of
+all Python modules, the cleanest is to avoid ever subclassing
+explictly from /object/.  The framework adds some envelope information
+to the message when adding it to an input queue: currently an
+identification of the sending bubble and a stamp of the insertion
+time; that information is stripped out when the bubble reads the
+message from its input queue, but is made available through some
+conventional fields within the bubble instance.
+
+A bubble has some system state in it (for example, its output bus).
+The bubble principle holds for such system state just as well:
+altering that state may only be done by the bubble itself.  So the
+bubble should be asked politely, using one of its exposed methods.
+For all other messages a bubble is willing to accept and knows how to
+handle, the bubble =accepted_types= attribute should be preset with a
+tuple of types.  As a convenience, a class attribute of that name may
+also be a single type which is then automatically turned in a tuple
+when the class is imported, yet if the class attribute is later
+modified, it then ought to be a tuple.  If not specified, it defaults
+to the empty tuple, meaning that the bubble accepts no user messages
+at all.
+
+The framework then ensures that any message is an instance of an
+acceptable type, or a subtype thereof.  When a bubble sends a message
+to an explicit bubble, the types ought to match, else an error is
+reported.  When a bubble sends a message on its output bus, the
+message is only sent to these listening bubbles which have declared
+themselves able to process it.
+
+A message type error, and other kinds of detected misconduct with
+bubbles, raise a =bubble.Error= exception.  Also, because it may be
+indicative of some underlying problem, an innocuous warning is added
+to the Octopasty log whenever a message is issued when there is no
+consumer for it, or more precisely, when one bubble sends on its
+output bus a message which no listening bubble can handle.  A bubble
+may suppress that warning through an optional =warn=False= argument
+while calling its =send_message= method.
+
+It may be tempting to circumvent the checking devices by stating that
+a bubble accepts /object/ for its messages type.  It sometimes make
+sense to do so: for example, it is normal for a logging or debugging
+bubble to accept generic messages.  However, proper typing yields
+added solidity and is well worth considering.
+** Special decorators
+The =@bubble.switching= decorator to a bubble's method makes it callable
+by the current bubble, by other bubbles, or by non-bubble greenlets.
+Whenever the method is called in blocking mode (which is the default),
+the behaviour depends on the origin of the call.  If called from the
+same bubble, the method is executed immediately like any other
+ordinary method would have been, exactly as if the decorator has not
+been there.  Otherwise, a message is added to the called bubble's
+magic queue to represent that call, and the calling bubble blocks.  At
+some later time, the called bubble gets running and evaluates the
+method, and the value is transmitted back to the caller, unblocking
+it.  For the programmer calling such a method, it almost looks like a
+normal method call returning a value, it only happens that it gets
+executed within another greenlet.  Of course, the programmer may
+choose to ignore the value, and just take advantage of the automatic
+synchronization.
+
+Any method decorated this way also accepts two optional arguments,
+=block= and =timeout=, which respectively default to *True* and *None*.  These
+arguments are not transmitted, so the method itself should not declare
+these arguments, as it would be useless.  The =timeout= argument may
+specify an integer or floating number of seconds, in which case a
+=gevent.Timeout= exception is raised if the method does not return
+within that amount of time; if =timeout= is not specified, it inherits
+the value of =idle_timeout= from the calling bubble.  Whenever a
+decorated method is called using =block=False=, a message is still added
+to the called bubble's magic queue to represent that future call, and
+the calling bubble immediately resumes its execution.  In such
+non-blocking cases, the method returns a =gevent.event.AsyncResult=
+object for the future result of the method call.  This object has a
+=get()= method, which may be later used to get the function value, then
+blocking as necessary until that result becomes available; such =get()=
+calls also accept an optional =timeout= argument.  Of course, the
+programmer may choose to ignore the value, and just take advantage of
+the automatic parallelism.  It is unusual to specify both =block=False=
+and =timeout=VALUE= at once, as this would immediately raise a
+=gevent.Timeout= exception.
+
+The bubble principle forbids a bubble from executing another bubble's
+method.  This is automatically enforced at run time: if the bubble
+principle is violated, the framework raises a =bubble.Error= exception.
+However, it happens that some corner case methods are really to be
+made available to other bubbles with no violation, these methods
+should then use the =@bubble.exposed= decorator.  All =@bubble.switching=
+methods are automatically exposed, so there is no need to do so.
+Finally, the bubble principle checks are inhibited for any method
+which name begins by =_= or =do__=, such methods are clearly not designed
+for public usage, and a programmer who decides to err in such areas is
+willing to take responsibility for any later damage!
+
+The decorator to a bubble's method fully hide the message construction
+and handling, to the point the decorated methods just /look like/ they
+violate the bubble principle, while in fact they do not.
+** Handling messages
+Bubbles may handle messages either in active mode or in reactive mode,
+as explained below.
+
+For /Active_Bubble/ bubbles, a bubble has to actively call its
+=get_message= method, which returns the next message from the input
+queue, and if no =timeout= argument is given, blocks as long as needed
+for such a message to become available.  If =timeout= is not specified,
+it inherits the value of =idle_timeout= from the bubble.  These calls
+are always explicit, and in practice, made from within methods having
+special decorators.  For stylistic reasons only, one may choose to
+name a =@bubble.switching def main()= method in each active bubble,
+meant to orchestrate the preparation and activity of such bubbles, and
+make sure to call it using =block=False=.
+
+On the other hand, /Reactive bubble/ bubbles rely on the presence of
+=do_TYPE= methods.  Whenever a bubble has a method named =do_TYPE=, that
+method is called to process an incoming message of that type.  The
+bubble merely reacts to the arrival of messages, instead of actively
+fetching them.  The message is given as an argument to the method.
+Theses calls are not explicit, they occur from the bubble main
+execution loop.  For convenience, =do_TYPE= may also name a super-type
+of the type of the message; and if there is more than one =do_TYPE=
+method matching a given message, the most specific type wins, that is,
+the /closest/ type in method resolution order.  Beware that =do_TYPE= has
+to give the real name of the type, which is usually identical to the
+name of the variable holding that type.  As a protective measure, when
+bubble classes are declared, a diagnostic is issued on standard error
+it there is some =do_TYPE= method with =TYPE= not listed in
+=accepted_types=, or if some /TYPE/ in =accepted_types= has no corresponding
+=do_TYPE= method.  For stylistic reasons only, one may choose to always
+name a =@bubble.switching def configure()= method, meant to ready the
+bubble for later messages.
+
+Those two approaches are very different, best is to stick either to
+active mode using =get_message=, or to reactive mode using =do_TYPE=, not
+mixing them.  If you absolutely want to do otherwise, the following
+considerations apply: =get_message= /never/ returns messages for which
+there is a =do_TYPE= method, and =do_TYPE= messages might get received out
+of order respective to (non =do_TYPE=) messages.  Moreover, while
+expecting input, =get_message= fully blocks the bubble despite there
+could be unprocessed =do_TYPE= messages.
+
+Internally, when a message is being added to some input queue, it is
+first put into an envelope telling when the message was sent and which
+bubble sent it.  The variable =self.envelope= is updated by =get_message=,
+or before calling a =do_TYPE= method.  The =stamp= attribute may give an
+idea about /how old/ a message is.  The =sender= attribute relieves the
+sender to identify itself within the message, which might be useful in
+some user-defined communication protocols where a reply is expected
+from the recipient.  The envelope is also useful for tracing purposes.
+** Start and termination
+Before starting an application based on bubbles, the programmer has to
+call =bubble.bootstrap()=; this call accepts an optional =timeout=
+argument, which then becomes the value of =idle_timeout= within preset
+bubbles.  The program should also call =bubble.shutdown()= once the
+bubble application has completed.
+
+A bubble is instanciated and started by calling its class constructor.
+Unless the =__init__= method of the bubble got overridden, the
+constructor normally accepts two optional parameters: =suffix= and
+=timeout=.
+
+The name of a bubble gets printed in dumps and in other contexts, this
+is all related to Octopasty debugging usually.  The way a bubble name
+is printed changed a few times over the history of Octopasty, seeking
+some better balance between information, legibility and terseness.
+Currently, the name of a bubble contains fragments separated by dots,
+meant to show the ancestry of that bubble: by removing the rightmost
+fragment, one gets the name of the parent bubble which dynamically
+created the current one.  The rightmost fragment itself is the bubble
+type name, maybe followed by some suffix.  When the bubble topology is
+well known and there is only one instance of some bubble type created
+by a given bubble, there is no ambiguity, the suffix might be more
+polluting than helpful, in which case a mere =suffix=None= on the bubble
+constructor inhibits it.  In other cases, the suffix may convey some
+useful identification, coming from configuration arguments or
+otherwise.  If the suffix is not specified at all, it defaults to an
+increasing ordinal which, while not being much meaningful, might
+guarantee a unique name.
+
+By default, and unless the created bubble already defines a value for
+=idle_timeout=, even *None*, the created bubble inherits the =idle_timeout=
+attribute from the creating bubble.  However, the bubble constructor
+(presuming the =__init__= method has not been overriden) accepts an
+optional =timeout= argument which can force another idle timeout
+instead.  In particular, an explicit =timeout=None= may defeat the idle
+timeout check on the created bubble.
+
+Each individual bubble instance calls a parameterless =bootstrap= method
+at the beginning of its execution and calls a parameterless =shutdown=
+method before exiting.  Both are defined in the base class, but may be
+overriden as needed in other bubble classes, in which case the =super=
+calls should be done at the beginning for =bootstrap= and at end for
+=shutdown=, like this:
+
+#+BEGIN_SRC python
+  class MyBubble(bubble.Active_Bubble):
+
+      # ...
+
+      def bootstrap(self):
+          super(MyBubble, self).bootstrap()
+          # MyBubble initialisation code:
+          # ...
+
+      def shutdown(self):
+          # MyBubble clean up code:
+          # ...
+          super(MyBubble, self).shutdown()
+
+      # ...
+#+END_SRC
+
+FIXME: (older thoughts, not implemented) A bubble's specific
+configuration may either be given as constructor arguments, which
+should then be *argparse*-able, or as a specialized message in its input
+queue.
+
+A bubble may get control as soon as it gets instantiated, it does not
+have to be /started/ explicitly.  Since the configuration of a bubble
+may only be accomplished by itself, it needs to be active to do so.
+If a set of bubbles are to be organized in some complex topology, this
+should be all set up before input is admitted in the system.  In
+particular, bubbles which spontaneously produce messages for other
+bubbles before even having received anything from their own input
+queue, should start in some throttled state, and offer some mechanism
+to release themselves free.
+
+When a bubble kills another one, the killed bubble might catch the
+=gevent.GreenletExit= exception or use its own =shutdown= method to
+protect the overall consistency of the application.  All
+=@bubble.switching= methods, as well as =do_TYPE= methods, may call
+=self.kill(block=False)= to trigger a break out of their bubble main
+execution loop.
+
+Beware that when the initial greenlet quits, all other greenlets or
+bubbles get interrupted abruptly, whether they completed their work or
+not.  So the initial greenlet needs to carefully refrain from quitting
+prematurely: calling a =@bubble.switching= method to block until
+everything finishes, explicitly using some bubble =kill()= or =join()=, or
+relying on any other suitable machinery.
+
+The function =bubble.shutdown= does its best effort at terminating
+everything properly, and describes the actions it decides to take
+using =sys.stdout.write=; an argument to the function may be used to
+provide an alternate writing function.  However, when a bubble's
+=daemon= attribute is true, it may be shutdown silently.  In a perfectly
+written application, there should not be any output at shutdown time,
+so diagnostics provide hints to the programmer about missing =kill=
+calls or otherwise leaked bubbles.  Only the programmer knows for
+certain how a parallelized application should shutdown, and
+=bubble.shutdown= may indeed terminate bubbles in an inappropriate
+order.  If the shutdown does not terminate cleanly enough, a bubble
+dump is triggered; see the [[Dumps]] section to learn how to read it.
+** Proper usage
+A bubble should /never/ alter another bubble state, would it be through
+changing its variables or calling its internal methods.  Here is a
+practical rule of thumb: /a bubble should never call any user-written
+method of another bubble/, unless this method has been declared using
+special decorators.
+
+The bubble preparing a message may adjust it at will.  However, once a
+message has been sent to another bubble, it now pertains to the
+recipient bubble even when it stands in its input queue, and the
+sender should refrain from altering it anymore, even if Python would
+allow such tampering.  Of course, it also implies that a message
+contents /may not/ be used as a communication device between two
+bubbles.  If a message has to be modified by more than one bubble, it
+has to be sent to the modifying bubble first, as a bubble may only
+alter a message it actually owns.  Once a message gets sent to more
+than one bubble, no bubble really owns it anymore, and it should not
+be modified at all.  The safest practice is to never modify received
+messages.
+
+It is good style to keep grouped in the same module: some subclass of
+/Active_Bubble/ or /Reactive_Bubble/, the classes declaring specialized
+messages only meaningful for that bubble type, and the code for
+constructing those messages.
+** Input and output
+For reading an input stream, there is an /Input/ bubble class, which
+ought to be configured by calling the =set_file= method to use an file
+already opened for read or any other file-like object, or the
+=set_socket= method to read from the given socket connection.  However,
+due to *gevent* limitations, no attempt should be made to read the
+standard input stream.  Some methods return information directly to
+the caller: =bytes(N)= returns /N/ bytes, =line= returns the next line,
+=lines= returns a list of all remaining lines, and =rest= returns all the
+remaining bytes.  Other methods get the bubble to send information to
+other bubbles without without tieing the caller: =forward_lines= sends
+one message per line, while =forward_rest= sends all at once, in one
+message, the remainder of the input stream.  In these cases,
+information is sent to the output bus by default, yet an optional
+=recipient= argument may direct the information to a particular
+recipient instead.  Once an /Input/ bubble has delivered all its data,
+it kills itself.
+
+For writing an output stream, there is an /Output/ bubble class.  Any
+string sent to an /Output/ is written to the standard output stream by
+default.  This can be changed by calling the =set_file= method to
+channel textual information into a an file already opened for write,
+or a file-like object instead, the =set_socket= method to write into a
+socket connection or the =set_write= method to redirect text to any user
+function accepting a string argument.  There is a =flush= method to
+force the memory buffer out to disk or to the network, yet it has no
+effect after a =set_write=.  The =set_file= method may accept a second
+integer argument specifying the maximum time in seconds between a
+write to the output stream and the automatic flushing of its memory to
+disk; when that second argument is missing, no flushing is forced.
+
+The expressions:
+
+#+BEGIN_SRC python
+bubble.get_hook('preset.input')
+bubble.get_hook('preset.output')
+#+END_SRC
+
+respectively reach the default /Input/ bubble, and the default /Output/
+bubble.
+** Debugging tools
+*** Backdoors
+There is a way to use *telnet* on a chosen port and obtain an
+interactive Python session right into Octopasty.
+
+#+BEGIN_SRC python
+backdoor = bubble.get_hook('preset.backdoor')
+backdoor.start_server(port=PORT)
+#+END_SRC
+
+It is necessary to call =start_server= and set the port; there is a
+=host== argument for when =localhost= is not appropriate, it could be set
+to =0.0.0.0= for accepting connections from any machine, given the
+firewalls allow these.  The preset backdoor may also be automatically
+activated, see [[Backdoor configuration]].  For symmetry more than for
+real use, a Backdoor bubble offers a parameterless =stop_server= method.
+
+The *readline* module does not play nicely with *gevent* greenlets, so the
+backdoor Python has no choice than being rather dumb at the level of
+interaction (no history and no completion, that is to say, this is no
+IPython yet!).  To alleviate the problem, one may use the backdoor
+through a *readline* wrapper.  For example, I use:
+
+#+BEGIN_SRC sh
+  rlwrap -pcyan -r nc astproxy.ubity.com 1234
+#+END_SRC
+
+The above command gives me access to the history of commands, even
+from the previous sessions.  Despite some timid learning occurs
+because of the *-r* option, completion stays rather crude.
+
+Here is a way for producing an overview of the currently existing
+bubbles:
+
+#+BEGIN_EXAMPLE
+  from octopasty import bubble
+  bubble.dump_summary()
+#+END_EXAMPLE
+
+To get hold on Octopasty structures, one may have to resort to clever
+Python introspection.  It is much easier when some provision already
+exists in the code to access the structures.  Here is an example where
+I wanted to check if the *popup* bubble has some preset timeout (and as
+I expected, it had none):
+
+#+BEGIN_SRC python
+  from ubity_pasty import popup
+  print popup.run.popup.idle_timeout
+#+END_SRC
+*** Dumps
+A bubble dump shows all existing bubbles, their current status, their
+topology and their queues.  It occurs automatically at =bubble.shutdown=
+time if the shutdown does not end cleanly.  A programmer may also call
+the =bubble.dump= function wherever appropriate.  This function accepts
+a few keywords arguments, shown here with their default value:
+
+- =envelopes=False= controls the display of the last envelope delivered
+  to a bubble,
+- =queues=True= decides if the input and magic queue contents are
+  detailed,
+- =topology=True= shows how bubbles interconnects through their output
+  bus,
+- =write=sys.stdout.write= means to redirect dump output.
+
+The function =bubble.dump_summary= only accepts a =write= argument, and
+does the same as =bubble.dump= with =False= implied for all other
+arguments.  Here is an output example:
+
+#+BEGIN_EXAMPLE
+--- Begin bubble dump -----------------------------------
+Backdoor1 (preset.backdoor):
+Logger2 (preset.logger): outputs to 1
+Input3 (preset.input):
+Tracer4 (preset.tracer): outputs to 1
+Output5 (preset.output): listens to 3
+Forward_Log9: in get_message, outputs to 1
+Logger11: listens to 1, outputs to 1
+Welcomer16 (ami.welcomer)
+Client23: listens to 1
+Reader26: in get_message
+Writer30:
+Server43 (ami.server.test): CURRENT, outputs to 1
+Reader52: 4 inputs
+Writer55:
+--- End bubble dump -------------------------------------
+#+END_EXAMPLE
+
+Each existing bubble is listed in turn, from the oldest to the
+youngest.  Each line shows the bubble name and general status.  The
+bubble internal name may be followed by all its hook names within
+parentheses, if any.  A colon then introduces a few flags:
+
+  - =CURRENT= if this bubble is currently executing at the time the dump
+    is being produced,
+  - =N inputs= where /N/ is the length of the bubble's input queue,
+  - =N magics= where /N/ is the length of the bubble's magic queue,
+  - =listens to N= where /N/ counts occurrence of this bubble in others'
+    output bus,
+  - =outputs to N= where /N/ is the number of other bubbles in its output
+    bus.
+
+The last four flags are not produced when /N/ is zero, or when the
+detailed information is provided by /not/ using =queues=False= or
+=topology=False=.  Here is the same example as above, but this time,
+produced through a mere =bubble.dump()= call:
+
+#+BEGIN_EXAMPLE
+--- Begin bubble dump -----------------------------------
+
+Backdoor1 (preset.backdoor):
+
+Logger2 (preset.logger):
+  Output bus: Output5
+
+Input3 (preset.input):
+
+Tracer4 (preset.tracer):
+  Output bus: Output5
+
+Output5 (preset.output):
+  Listening to: Logger2, Tracer4, Logger11
+
+Forward_Log9: in get_message
+  Output bus: Logger11
+
+Logger11:
+  Listening to: Forward_Log9
+  Output bus: Output5
+
+Welcomer16 (ami.welcomer)
+
+Client23
+  Listening to: Server43
+
+Reader26: in get_message
+
+Writer30:
+
+Server43 (ami.server.test): CURRENT
+  Output bus: Client23
+
+Reader52:
+  Input queue:
+    1: `5.361792 Input54 'Event: FullyBooted\r\n''
+    2: `5.361817 Input54 'Privilege: system,all\r\n''
+    3: `5.361839 Input54 'Status: Fully Booted\r\n''
+    4: `5.361861 Input54 '\r\n''
+
+Writer55:
+--- End bubble dump -------------------------------------
+#+END_EXAMPLE
+
+A spacer line appears between bubbles, and each line after the first
+is indented.
+
+The topology of the bubble is described by the optional =Listening to:=
+and =Output bus:= lines, each followed by a list of bubble internal
+names.  A bubble is listening to another bubble when it sits on that
+other bubble's output bus.
+
+The input and magic queue contents are then listed, if any, one entry
+per line.  Each entry represents the envelope of a message, displaying
+its time stamp (counted in seconds since the *bubble* module was
+imported), the sender of the message, then the message itself
+presented according to its type.
+
+It is instructive to compare the above dump with the diagram in the
+[[Architecture]] section.  For example, there are many /Reader/ and /Writer/
+bubbles, and to understand which is which, one may relate the
+chronological order, going from the top down in the dump, with the
+logical order or creation implied by the diagram.  Another trick for
+getting more meaningful dumps is installing bubbles on hooks, so
+giving them a name.
+*** Logs
+While logging is often an informative or administrative tool, it may
+also be useful for debugging, and that's why it is described here.
+Let's consider a program writing /Hello world!/ as a log message:
+
+#+BEGIN_SRC python
+import bubble
+
+bubble.bootstrap()
+log = bubble.Log_Factory()
+log.info("Hello world!")
+bubble.shutdown()
+#+END_SRC
+
+There is a default /Logger/ bubble which is set up at bootstrap time,
+and available as =bubble.get_hook('preset.logger')=.  By default, it
+does not use its output bus and directly feeds the standard error
+stream.  Of course, one may create other loggers, and add either one
+or more outputs to each logger output bus.  A /Logger/ accepts 8-bit
+strings, Unicode strings, or special /Log_Entry/ instances (see
+/Log_Factory/ below), and turn each into a group of one or more log
+lines; each log entry may indeed use multiple lines separated by =\n=.
+A time stamp containing the date and the time is written to the left
+of the first line of a group, and all succeeding lines are shifted
+right so they align vertically with the text on the first line,
+establishing a left margin having the width of the time stamp.
+
+The =set_options= method of a /Logger/ alters its future behavior.
+Keywords name options and introduce values, options not named by
+keywords are not changed.  =width=COLUMNS= tells the maximum number of
+columns on each produced line, a long log line gets split to fit; by
+default, no splitting occur.  =decimals=NUMBER= gives the number of
+decimals for the second, and is an integer not greater than 6: the
+value 6 yields a microsecond resolution; the value 0 yields an
+integral number for the second and is the default; a value less then 0
+means a resolution to the minute.  =color=True= has the effect of
+writing the date, the time, and the log category in bold color, this
+option is not active by default, and should be only activated for
+output meant to be directly displayed on a terminal; it is
+particularly convenient when log output and trace output are both sent
+to the terminal.  =mask=INTEGER= is only meaningful when displaying
+/Log_Entry/ instances, which have a category associated: bits being
+counted from right to left starting at 0, a log entry of a given
+category is only reported when the corresponding bit is set in the
+mask, and ignored otherwise; the default being to accept all
+categories.  =level=CATEGORY= is an alternate way to mention the mask
+value, it means that the logger accepts all log categories from 0 up
+to /CATEGORY/; if both =mask== and =level== are given in the same
+=set_options= call, their effects combine.
+
+Each instance of the /Log_Factory/ class is a convenient function
+factory.  It accepts an optional argument which is a /Logger/ instance,
+defaulting to the preset logger: all functions which come out of that
+instance have the effect of sending specialized /Log_Entry/ objects to
+the selected logger.  Functions are made or retrieved through
+attribute access, and the name of the attribute specifies the category
+of the log entry.  For example, =log.info= is a function writing a log
+entry having =info= as a category symbol, automatically creating that
+category and assigning a category number on the fly the first time
+=log.info= is used.  The category number, which is useful for
+constructing masks, can be retrieved with =log.info.category=.  The
+color of the category in the log may be set with =log.info.color =
+bubble.COLOR=, with =COLOR= among =None=, =NORMAL=, =RED=, =GREEN=, =YELLOW=, =BLUE=,
+=MAGENTA=, =CYAN= or =WHITE= (which is the default); the value =None= inhibits
+writing the category regardless of the log being colored or not.  The
+=log.info= function, or any other =log.SYMBOL= function, accepts one or
+more arguments; the first argument is a format, the succeeding
+arguments are the format arguments.  It is advantageous /not/ using the
+=%= operator to format the log entry, the formatting then gets delayed
+until a log entry is effectively constructed, and may even be wholly
+bypassed if the log entry is not produced.  Something like:
+
+#+BEGIN_SRC python
+log.debug("some-complex-format", many-formatted-arguments, ...)
+#+END_SRC
+
+avoids the cost of formatting (but not the cost of function call) for
+when =debug= is not reported in any log, and without having to wrap all
+logging code within *if* statements for the sake of efficiency.
+*** Traces
+When the function =bubble.set_trace= is given no argument or a true
+value argument, tracing is activated on all future bubbles of any
+class; if given a false value argument, tracing is not automatically
+activated anymore.  For a specific bubble, tracing may be turned on or
+off using its own =set_trace= method, giving it either a true or false
+argument, a missing argument implies true.  (By presetting the bubble
+class attribute =trace_flag= to any true value, all future bubble
+instances of that class get automatically traced.)  Traced bubbles
+send special tracing messages to the preset tracer, which may be found
+through =bubble.get_hook('preset.tracer')=.  Tracers receive special
+tracing packets from the bubble core engine, and turn them into text.
+The preset tracer feeds the preset writer; one may create more writers
+and make them listen to the preset tracer (or to any other tracer),
+thus allowing the tracing output to be logged in many different ways
+at once.
+
+To demonstrate tracing, here is some simplistic source code:
+
+#+BEGIN_SRC python
+import bubble
+
+class Outer(bubble.Reactive_Bubble):
+
+    @bubble.switching
+    def try_square(self, arg):
+        inner = Inner()
+        value = inner.square(arg)
+        inner.kill(block=False)
+        return value
+
+class Inner(bubble.Reactive_Bubble):
+
+    @bubble.switching
+    def square(self, arg):
+        return arg * arg
+
+bubble.bootstrap()
+bubble.set_trace()
+outer = Outer()
+print outer.try_square(3)
+outer.kill()
+bubble.shutdown()
+#+END_SRC
+
+And here is the corresponding output (slightly reformatted):
+
+#+BEGIN_EXAMPLE
+0.000862 other   | Outer6  0 : try_square(3)
+0.000956 Outer6  |         1 \
+0.001168         | Inner12 0 : square(3)
+0.001238 Inner12 |         1 \
+0.001251         |         0 / square(3) -> 9
+9
+0.001368 Outer6  |         0 : _exit()
+0.001380         | Outer6  0 / try_square(3) -> 9
+0.001507 Inner12 | Inner12 1 \ _exit()
+0.001519         |         0 /
+0.001561 other   | Outer6  0 : _exit()
+0.001758 Outer6  |         1 \
+0.001770         |         0 /
+#+END_EXAMPLE
+
+In the trace, each line represents some modification in an input or
+magic queue.  There are three parts in each line, and these parts are
+reasonably maintained at the same width, so the vertical assembly of
+the trace lines show three areas.  Vertical bars separated the left
+area from the central area, The central area ends with a single
+character mark (colon, backslash, slash, plus or minus sign), and the
+right area follows.  The left area is about the currently executing
+greenlet, the central area is about identifying a particular queue and
+how its size is changing, and the right area givens information about
+the queue message affected by the change.
+
+The first two columns, before the vertical bar, tell when the event
+occurred and which bubble was currently executing.
+
+  - The first column holds a floating number with 6 decimals, this is
+    an elapsed clock time expressed in seconds, precise to the
+    microsecond, relative to the time the *bubble* module got loaded.
+    That number steadily increases when reading down from line to
+    line.
+
+  - The second column identifies the executing bubble.  Bubble
+    greenlets are identified by the bubble type name followed by an
+    integer.  That integer is an ordinal, counting from 1, for each
+    newly created bubble of this type.  Non-bubble greenlets are
+    identified by the word =other=, without trying to distinguish among
+    them.  A bubble identifier is left blank rather then repeated when
+    it is identical to the bubble vertically above it in the
+    preceeding line.  This should ease detecting when another bubble
+    becomes executing.
+
+Columns after the vertical bar, describe how a queue changed, by
+identifying the queue owner, size and change type.
+
+  - The next column identifies the bubble owning the queue being
+    changed.  Notice that for queue additions, the bubble owning the
+    queue being changed is usually different from the currently
+    executing bubble, it happens less frequently that a bubble adds a
+    message in its own queue.  For queue removals, the bubble owning
+    the queue /is/ necessarily the currently executing bubble, as a
+    bubble may not remove a message from another bubble queue.  Here
+    as well, a bubble identifier is left blank rather then repeated
+    when it is identical to the bubble vertically above it in the
+    preceeding line.
+
+  - After it, we see the size of the queue, which is a small integer,
+    as it is /before/ the queue increses or decreases.
+
+  - The following column contains an single character event mark.  For
+    the input queue, this is either a plus or minus sign, depending
+    whether if a message is being added (plus sign) or removed (minus
+    sign).  For the magic queue, this is either and a colon, a
+    backslash or a slash, depending whether a function is being merely
+    scheduled (colon), is starting its execution (backslash) or
+    returning (slash).  So, from the symbol, one may infer the queue
+    type, either input or magic.
+
+The remaining columns display information taken from the message
+envelope, about the message being added or removed from the queue.
+
+  - For brievety, the timestamp on the message envelope is normally
+    not displayed.  A
+    =bubble.get_hook('preset.tracer').set_options(envelope=True)= could
+    change that; then, as trace lines are ordered in increasing time,
+    by looking for the envelope time stamp at the appropriate place in
+    the history of events, one may infer the creation context for a
+    particular message.
+
+  - For brievety as well, the sender of the message is normally not
+    displayed.  This can be changed the same way as for the envelope
+    timestamp above.
+
+  - The message being added or removed is shown.  It usually does not
+    appear columnar, as it depends on the =__repr__= method for that
+    message, which may be about anything.  The programmer would devise
+    the =__repr__= method of messages in view of this trace, so it
+    provides compact and meaningful information.  A message is left
+    blank rather then repeated when it is identical to the bubble
+    vertically above it in the preceeding line.
+
+  - Finally, in the case of a return from a =@bubble.switching= method,
+    an arrow (=->=) follows the message and signals a method resulting
+    value, which then follows.
+
+Beware that if regular output and tracing output are sent to the same
+file, their output may be intermixed in apparently the wrong order, as
+each uses its own buffering. Also, for speed reasons, the Tracer
+bubble is not used synchronously.
+* Internals
+Some information below may help reading the code, understanding
+choices, deciphering magic.  It is assumed that the reader is already
+familiar with generic bubbles, as described earlier.
+** gevent incompatibilities
+Octopasty uses collaborative green threads from the *gevent* module,
+so avoiding the heavier preemptible threads from the *thread* or
+*threading* modules and all their associated synchronization or mutual
+exclusion problems.  Moreover, these do not mix: green threads do not
+advance anymore if *thread* or *threading* is used.
+
+An interactive shell for Octopasty was planned as a mere other
+built-in client within Octopasty, but we sadly found out that reading
+input (and using *readline*) is not compatible with the current *gevent*
+module: all green threads stop advancing when the mix is attempted.
+This is why Octopasty became split into the *opasty* server and a
+separate *pasty* application.  The latter, for being able to handle user
+input, avoids green threads and uses the *thread* module instead.
+
+The *urllib* module, which is used by some Octopasty plugins, uses the
+regular *socket* module underneath.  Regular sockets and sockets
+obtained through =from gevent import socket= do not mix either.  Using a
+regular socket may freeze all green threads.  The only way out is
+monkey patching the regular *socket* module: this is achieved by =from
+gevent import monkey= followed by =monkey.patch_socket()=.
+
+But monkey patching is also incompatible with the *thread* module, so we
+could not do it from the *ami* module as we used to.  So now, monkey
+patching is only meaningful to the *opasty* program and not to *pasty*, so
+monkey patching is done within the *opasty* module (rather than *ami* say)
+even if that module does not itself use sockets.
+
+However, remain a few usages of =from gevent import socket= in the *ami*
+and *bubble* modules.  They do not clash with *threading*, because sockets
+created that way are only meant for the /Backdoor/, /Server/ and /Welcomer/
+bubbles, which are not used with the *threading* module as from the
+*pasty* program.  Happily enough, usage of =from gevent import socket= and
+monkey patching do not seem incompatible to one another!
+** Manager actions
+We sometimes use stunts over module introspection where it would be
+more natural to use meta-classes.  The problem is that Python requires
+the metaclass of derived classes to be subtypes of the metaclasses of
+base classes, or if not specified, that one of them be the subtype of
+all others.  This is a stringent condition when one wants to develop
+classes with mixins at runtime.  In such case, the simplest is to
+stick to *type* as the metaclass, even if it would be natural to use a
+small metaclass for building a class registry.  To palliate, we resort
+to module introspection to build such registries.
+
+The /Manager_Action/ base class qualifies all other classes meant for
+code handling specifics of individual AMI messages.  There is such a
+base class in the *ami*, *asterisk* and *internal* modules.  The *ami* module
+contains the genuine base /Manager_Action/ base class, the one which
+contains the default methods, but no derived classes at all.  The two
+other /Manager_Action/ are just empty base classes, but have many
+derived classes.  The *asterisk* module is meant to provide
+documentation and privilege information for known varieties of AMI
+messages, while the *internal* module mainly provides operational
+methods for only a few varieties of AMI messages.
+
+The *asterisk* and *internal* modules have an =introspect= function which
+collects a mapping from class name to the proper subclass into a
+=manager_actions= variable.  The *asterisk* module also has a /Manager_Key/
+base class meant for various other classes explaining the possible
+values for manager action keys.  Its =introspect= function collects a
+=manager_keys= mapping names to proper subclasses.  All classes defining
+a member =_abstract_class= are ignored by the introspecting functions.
+
+The *ami* module also has an =introspect= function, which looks into the
+already introspected *asterisk* and *internal* modules, and combine
+classes derived from /Manager_Action/ and having the same name, into new
+classes inheriting from these component classes at once, from the
+genuine /Manager_Action/, and from /Active_Bubble/ as well.  In that way,
+each produced manager action class holds the documentation details, a
+few specific methods if any, and default methods to use; moreover,
+instanciating such a resulting class launches a new bubble.  The
+result is saved within the *ami* module into a =manager_actions= mapping,
+from name to produced class.  At the same time, a =canonical_action=
+mapping is created for repairing capitalization, given a lower-cased
+manager action name.
+
+If Octopasty ever logs in an Asterisk server which, though the results
+of a =ListCommands= action, documents otherwise unknown commands, it
+dynamically create classes deriving from /Manager_Action/, and updates
+both =manager_actions= and =canonical_action= mappings.
+
+* The Pasty utility
+** Goal and configuration
+The Octopasty distribution also installs the Pasty user tool under the
+name *pasty*.  This is a simple convenience utility for interactively
+writing AMI messages to an Asterisk server.  It may also be used as an
+interactive Octopasty client front-end.  Pasty does not offer a
+graphical user interface, it should be called from within any ANSI
+terminal emulator.
+
+While AMI messages are human-readable, they are more likely meant to
+be written by programs than by humans, as the format is not that
+comfortable.  However, in exploration or debugging situations, one may
+nevertheless have to type AMI messages at a terminal, and the Pasty
+tool should alleviate the burden of doing so, at least a tiny bit.
+
+Pasty accepts the same =-C= and =-A= arguments as Octopasty, and searches
+in the same places when these options are not specified.  So, if Pasty
+uses the same =-C= and =-A= arguments as a previously started Octopasty,
+Pasty connects itself to that running Octopasty.
+
+AMI messages typed at Pasty are sent to Asterisk, and AMI messages
+coming out of Asterisk are echoed back to the user by Pasty.  However,
+AMI messages are interactively accumulated and sent whole, instead of
+being sent one interactive line at a time like it would happen if
+someone directly connected a terminal to the AMI port of an Asterisk
+server.  For each AMI message to send, there is a filling phase and a
+correction phase, as explained below.
+** Filling phase
+The user types *Enter* once ready to compose a new AMI message.  Pasty
+reacts by sending an =Action:= prompt, and waits for the user to select
+a value for the action.  If the action is not known to Pasty, it
+immediately skips to the correction phase.  Otherwise, Pasty echoes a
+short documentation for that action, and then prompts with all keys
+associated with this particular action, one key at a time, until all
+information has been sollicited and collected.  Before prompting for a
+key, Pasty usually prints a short documention about the meaning of
+that key.  At any time during these prompts, the user may type *Tab*
+once to complete characters as far as possible when there is no
+ambiguity, and *Tab* a second time to list further possibilities at the
+current point.
+
+In many cases, the user is free to accept suggested possibilities or
+else, add a new one: the new value is then added to the list of
+possibilities for that particular prompt.  In that way, and for the
+duration of a Pasty session, the completion facility /learns/ from
+previous user replies.  While usually a good thing, it may become
+inconvenient in case of user errors, as these errors will be presented
+as later completion possibilities.
+
+In many cases as well, a key is not mandatory, and by immediately
+typing *Enter* on a prompt, the user signals that the prompted key is
+not wanted in the AMI message being created.  Some keys have a number
+suffix allowing multiple keys: Pasty asks for a value for the first
+such numbered key, and auto-increment the number in the key while
+prompting for the next value, etc. until the user merely replies *Enter*
+on such a prompt, meaning that all values have now been entered and
+there is no more value in that sequence of keys.
+** Correction phase
+Once the initial filling of all key values is done, Pasty displays the
+collected AMI message at the terminal, exactly as it would send it to
+Asterisk.  The user may immediately type *Enter* to send it, but if
+any error is detected, corrections may be done first by typing one or
+more lines in full (that is: the key, a colon, the value) without
+prompting nor completion.  If the key is repeated with no value after
+the colon, it is removed from the message; if the key is repeated with
+another value after the colon, the previous value is replaced; if they
+is new, the key and its corresponding value are added.
+
+Once the AMI message has been sent, no other prompt gets issued,
+letting the screen clear to display the Asterisk response or events.
+To get an =Action:= prompt again, the user should type *Enter* as
+explained in the previous section.
+** AMI message history
+Previously sent AMI messages may be recalled in full and resent whole
+by using *Ctrl-P* and *Ctrl-N*, or by using arrow keys.  One may also
+retrieve a previous AMI message by searching though the message
+history, the search is initiated with *Ctrl-R*.  However, this is only
+effective prior that that precise *Enter* that would otherwise have
+displayed an =Action:= prompt.
+
+That history is saved between Pasty sessions in file =~/.pasty-history=.
+** Caveats
+Asynchronous event messages coming from Asterisk are not throttled in
+the correction phase, they may then pop up on the screen at any time,
+including while the user is typing.  This may be distracting.
+However, messages are witheld in the filling phase while a prompt is
+displayed.
+
+The *Secret* key is not echoed while being filled in by the user, but
+gets displayed in clear on the screen for the correction phase of the
+AMI message.
+
+Work (and AMI message understanding) is still needed to do better
+validation of values, more exact determination of mandatory and
+optional values, and checking of overall AMI message consistency, and
+maybe filtering of priviledges.  Hopefully, Asterisk itself will
+produce necessary diagnostics.
+
+The configuration file should cover more aspects, like for selecting
+the key binding file (the key bindings might be explained in this
+manual), selecting the history file, the ANSI colors to use while
+writing to the terminal, etc.
+
+Pasty might need some internal commands to inhibit the production of
+an AMI message once started, use better editor interfaces, have a GUI,
+etc.  Pasty is merely an interim measure, and our goal being in fact
+to drive Octopasty from outside by more sophisticated tools.
+
+The *Ctrl-C* key should not interrupt Pasty, or at least, not without
+confirmation.
+
+The history, made up of full AMI messages, is more distracting then
+useful when used at completion time.  Some completion should be
+offered in the correction phase (like, for example, proposing all keys
+still unfilled in the current AMI message, for simple keys as well as
+for key counters).
