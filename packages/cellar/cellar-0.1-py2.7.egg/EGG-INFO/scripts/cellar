@@ -1,0 +1,124 @@
+#!python
+
+import os
+import sys
+import re
+import argh
+import requests
+
+from os import path
+
+
+def get_formulas():
+    data = requests.get("https://api.github.com/users/saltstack-formulas/repos").json()
+    formulas = filter(lambda x: x["name"].endswith("-formula"), data)
+    return sorted(formulas, key=lambda x: x["name"])
+
+
+def curdir_parent_path():
+    return path.split(path.realpath(path.curdir))[0]
+
+
+def curdir_name():
+    return path.split(path.realpath(path.curdir))[1]
+
+
+def formulas_location():
+    if curdir_name() == "salt":
+        return path.join(curdir_parent_path(), "formulas")
+
+    return path.join(path.realpath(path.curdir), "formulas")
+
+
+def list():
+    for i in get_formulas():
+        print i["name"].replace("-formula", ""),
+        if i["description"] and i["description"].strip():
+            print "-", i["description"]
+        else:
+            print
+
+
+def get_formula(formulas, name):
+    if name in [x["name"].replace("-formula", "") for x in formulas] + [x["name"] for x in formulas]:
+        return filter(lambda x: x["name"] in name or x["name"].replace("-formula", "") == name.replace("-formula", ""), formulas)[0]
+
+    # github_username/repository_name
+    if re.match(r"[\w\-_]+/[\w\-_]+", name):
+        return requests.get("https://api.github.com/repos/%s" % name).json()
+
+    # expecting a git url
+    if ":" in name:
+        return {"clone_url": name, "html_url": name}
+
+    sys.stderr.write("Unknow formula: %s\n" % name)
+    sys.exit(1)
+
+
+
+def install(*names):
+    if not names:
+        if not path.exists(path.join(path.curdir, "formulas.txt")):
+            sys.stderr("Give me a list of formulas to install or write a formulas.txt\n")
+            sys.exit(1)
+
+        names = filter(lambda x: x and not x.startswith("#"), map(lambda x: x.strip(), open(path.join(path.curdir, "formulas.txt")).read().split("\n")))
+
+    for name in names:
+        formula = get_formula(get_formulas(), name)
+
+        short_name = filter(None, name.split("/"))[-1].replace("-formula", "").replace(".git", "")
+
+        if not path.exists(formulas_location()):
+            os.makedirs(formulas_location())
+
+        destination_path = path.join(formulas_location(), short_name)
+        if not path.exists(destination_path):
+            print "Retreive %s ..." % name
+            os.system("git clone -q %s %s" % (formula["clone_url"], destination_path))
+
+        source = path.join(formulas_location(), short_name, short_name)
+        if not path.exists(source):
+            source = path.join(formulas_location(), short_name, short_name + ".sls")
+
+        if not path.exists(source):
+            sys.stderr.write("Error: was expecting to find a %s/ directory or a %s.sls file in %s\n" % (short_name, short_name, formula["html_url"]))
+            sys.exit(1)
+
+        target = path.join(path.curdir, path.split(source)[1])
+
+        if not path.exists(target):
+            print "Link %s" % short_name
+            os.symlink(source, target)
+        else:
+            print "Already installed: %s" % short_name
+
+
+def uninstall(*names):
+    if not names:
+        sys.stderr("Give me a list of formulas to uninstall\n")
+        sys.exit(1)
+
+    for name in names:
+        target = path.join(path.curdir, name)
+        if not path.exists(target):
+            target += ".sls"
+
+        if not path.exists(target):
+            sys.stderr.write("Error: %s is not installed\n" % name)
+            sys.exit(1)
+
+        if not path.islink(target):
+            sys.stderr.write("Error: %s is not a symlink, unexpected situation, abort\n" % name)
+            sys.exit(1)
+
+        print "Uninstall %s" % name
+        os.remove(target)
+
+
+parser = argh.ArghParser()
+parser.add_commands([list, install, uninstall])
+
+
+if __name__ == '__main__':
+    parser.dispatch()
