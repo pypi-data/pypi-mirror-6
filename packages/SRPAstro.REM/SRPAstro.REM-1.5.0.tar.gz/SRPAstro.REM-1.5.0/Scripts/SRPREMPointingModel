@@ -1,0 +1,572 @@
+""" Code to derive model parameters
+    
+Context : SRP
+Module  : SRPREMPointingModel
+Author  : Stefano Covino
+Date    : 09/01/2014
+E-mail  : stefano.covino@brera.inaf.it
+URL:    : http://www.merate.mi.astro.it/utenti/covino
+Purpose : Derive REM pointing model.
+
+Usage   : SRPREMPointingModel [-h] -d file [-D pos1 pos2 pos3 pos4] [-g] [-G par ...] [-m model] -o
+                           file [-n file] [-p file] [-v] [--version]
+
+            -d Data input file (degrees)
+            -D Data input file column positions: AZ AZOff ALT ALTOff
+                        (e.g. 1 2 3 4)
+            -g Show plot
+            -G PM parameter guess for fitting
+            -m Model flavour
+            -o Output file with new model parameters (pilar format)
+            -p File with present model parameters
+
+    
+History : (24/08/2012) First version.
+        : (01/07/2013) Correction of paramter names.
+        : (14/08/2013) More correct plot.
+        : (15/08/2013) Bug in full model computation.
+        : (17/08/2013) Possibility to guess PM parameters.
+        : (21/08/2013) Minor bug corrected.
+        : (22/08/2013) Code re-organization.
+        : (28/08/2013) Fitting re-organization and Extra model.
+        : (16/09/2013) Extended models.
+        : (22/11/2013) Bug correction for scipy 0.13.
+        : (03/12/2013) Better naming of PM parameters.
+        : (07/01/2014) Better organization of the code.
+        : (09/01/2014) Bug correction.
+"""
+
+__version__ = '2.4.1'
+
+
+import argparse
+import atpy
+import math
+import numpy
+import pylab
+from scipy.optimize import fmin
+import SRP.SRPREM.PM as SSP
+from SRP.SRPREM.PM.Classic import Classic
+from SRP.SRPREM.PM.ClassicExt import ClassicExt
+from SRP.SRPREM.PM.Extra import Extra
+from SRP.SRPREM.PM.ExtraExt import ExtraExt
+from SRP.SRPREM.PM.Full import Full
+from SRP.SRPREM.PM.FullExt import FullExt
+from SRP.SRPREM.PM.Simple import Simple
+from SRP.SRPREM.PM.minClassic import minClassic
+from SRP.SRPREM.PM.minClassicExt import minClassicExt
+from SRP.SRPREM.PM.minExtra import minExtra
+from SRP.SRPREM.PM.minExtraExt import minExtraExt
+from SRP.SRPREM.PM.minFull import minFull
+from SRP.SRPREM.PM.minFullExt import minFullExt
+from SRP.SRPREM.PM.minSimple import minSimple
+from SRP.SRPREM.PM.FindOrigCoord import FindOrigCoord
+
+
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-d", "--data", action="store", help="Data input file (degrees)", metavar='file', required=True)
+parser.add_argument("-D", "--datapos", action="store", nargs=4, type=int, help="Data input file column positions: AZ AZOff ALT ALTOff (e.g. 1 2 3 4)", 
+    metavar=('pos1','pos2','pos3','pos4'), default=(1,3,5,7))
+parser.add_argument("-g", "--graph", action="store_true", help="Show plot")
+parser.add_argument("-G", "--guess", action="store", nargs='*', type=float, help="PM parameter guess for fitting", metavar='par')
+parser.add_argument("-m", "--model", action="store", help="Model flavour", metavar='model', default='classic',choices=SSP.PMFlavours)
+parser.add_argument("-n", "--nofile", action="store", help="File with input data with no PM", metavar='file')
+parser.add_argument("-o", "--outfile", action="store", help="Output file with new model parameters (pilar format)", required=True, metavar='file')
+parser.add_argument("-p", "--presfile", action="store", help="File with present model parameters", metavar='file')
+parser.add_argument("-v", "--verbose", action="store_true", help="Fully describe operations")
+parser.add_argument("--version", action="version", version=__version__)
+options = parser.parse_args()
+
+
+#
+try:
+    dt = atpy.Table(options.data, type='ascii')
+except IOError:
+    parser.error("Invalid data input file.")
+if options.verbose:
+    print "Data input file: %s" % options.data
+#
+for i in options.datapos:
+    msg = "Column positions: "
+    if i < 0:
+        parser.error("Column positions in data input file must be positive.")
+    elif i > len(dt.columns.keys):
+        parser.error("Column position %d not existent in input data file." % i)
+    msg = msg + "%d " % i
+    if options.verbose:
+        print msg
+#
+tAZ = dt[dt.columns.keys[options.datapos[0]-1]]
+AZOffs = dt[dt.columns.keys[options.datapos[1]-1]]
+tALT = dt[dt.columns.keys[options.datapos[2]-1]]
+ALTOffs = dt[dt.columns.keys[options.datapos[3]-1]]
+#print tAZ
+#print AZOffs
+#print tALT
+#print ALTOffs
+#
+if options.presfile:
+    try:
+        pp = atpy.Table(options.presfile, type='ascii')
+    except IOError:
+        parser.error("Invalid present model parameter file.")
+    if options.verbose:
+        print "Present parameter model file: %s" % options.presfile
+#
+if options.presfile:
+    if len(pp.columns.keys) != 3:
+        parser.error("Number of columns in present parameter file is incorrect.")
+if options.model == 'simple':
+    s_AOFS = 0.0
+    s_EOFS = 0.0
+elif options.model == 'classic':
+    c_AN = 0.0
+    c_AE = 0.0
+    c_NPAE = 0.0
+    c_BNP = 0.0
+    c_TF = 0.0
+    c_AOFS = 0.0
+    c_EOFS = 0.0
+elif options.model == 'full':
+    f_AAN = 0.0
+    f_EAN = 0.0
+    f_AAE = 0.0
+    f_EAE = 0.0
+    f_NPAE = 0.0
+    f_BNP = 0.0
+    f_AES = 0.0
+    f_AEC = 0.0
+    f_EES = 0.0
+    f_EEC = 0.0
+    f_AOFS = 0.0
+    f_EOFS = 0.0
+elif options.model == 'extra':
+    e_AAN = 0.0
+    e_EAN = 0.0
+    e_AAE = 0.0
+    e_EAE = 0.0
+    e_NPAE = 0.0
+    e_BNP = 0.0
+    e_AES = 0.0
+    e_AEC = 0.0
+    e_EES = 0.0
+    e_EEC = 0.0
+    e_AOFS = 0.0
+    e_EOFS = 0.0
+    e_ES2A = 0.0
+    e_EC2A = 0.0
+    e_ES3A = 0.0
+    e_EC3A = 0.0
+    e_C5 = 0.0
+#
+if options.presfile:
+    try:
+        if options.model == 'simple':
+            for i in pp:
+                if i[0] == 's_AOFS':
+                    s_AOFS = float(i[2])
+                elif i[0] == 's_EOFS':
+                    s_EOFS = float(i[2])
+        elif options.model == 'classic':
+            for i in pp:
+                if i[0] == 'c_AN':
+                    c_AN = float(i[2])
+                elif i[0] == 'c_AE':
+                    c_AE = float(i[2])
+                elif i[0] == 'c_NPAE':
+                    c_NPAE = float(i[2])
+                elif i[0] == 'c_BNP':
+                    c_BNP = float(i[2])
+                elif i[0] == 'c_TF':
+                    c_TF = float(i[2])
+                elif i[0] == 'c_AOFS':
+                    c_AOFS = float(i[2])
+                elif i[0] == 'c_EOFS':
+                    c_EOFS = float(i[2])
+        elif options.model == 'full':
+            for i in pp:
+                if i[0] == 'f_AAN':
+                    f_AAN = float(i[2])
+                elif i[0] == 'f_EAN':
+                    f_EAN = float(i[2])
+                elif i[0] == 'f_AAE':
+                    f_AAE = float(i[2])
+                elif i[0] == 'f_EAE':
+                    f_EAE = float(i[2])
+                elif i[0] == 'f_NPAE':
+                    f_NPAE = float(i[2])
+                elif i[0] == 'f_BNP':
+                    f_BNP = float(i[2])
+                elif i[0] == 'f_AOFS':
+                    f_AOFS = float(i[2])
+                elif i[0] == 'f_EOFS':
+                    f_EOFS = float(i[2])
+                elif i[0] == 'f_AES':
+                    f_AES = float(i[2])
+                elif i[0] == 'f_AEC':
+                    f_AEC = float(i[2])
+                elif i[0] == 'f_EES':
+                    f_EES = float(i[2])
+                elif i[0] == 'f_EEC':
+                    f_EEC = float(i[2])
+        elif options.model == 'extra':
+            for i in pp:
+                if i[0] == 'e_AAN':
+                    e_AAN = float(i[2])
+                elif i[0] == 'e_EAN':
+                    e_EAN = float(i[2])
+                elif i[0] == 'e_AAE':
+                    e_AAE = float(i[2])
+                elif i[0] == 'e_EAE':
+                    e_EAE = float(i[2])
+                elif i[0] == 'e_NPAE':
+                    e_NPAE = float(i[2])
+                elif i[0] == 'e_BNP':
+                    e_BNP = float(i[2])
+                elif i[0] == 'e_AOFS':
+                    e_AOFS = float(i[2])
+                elif i[0] == 'e_EOFS':
+                    e_EOFS = float(i[2])
+                elif i[0] == 'e_AES':
+                    e_AES = float(i[2])
+                elif i[0] == 'e_AEC':
+                    e_AEC = float(i[2])
+                elif i[0] == 'e_EES':
+                    e_EES = float(i[2])
+                elif i[0] == 'e_EEC':
+                    e_EEC = float(i[2])
+                elif i[0] == 'e_ES2A':
+                    e_ES2A = float(i[2])
+                elif i[0] == 'e_EC2A':
+                    e_EC2A = float(i[2])
+                elif i[0] == 'e_ES3A':
+                    e_ES3A = float(i[2])
+                elif i[0] == 'e_EC3A':
+                    e_EC3A = float(i[2])
+                elif i[0] == 'e_C5':
+                    e_C5 = float(i[2])
+    except ValueError:
+        parser.error("Data format not correct in present parameter file.")
+#
+if options.guess:
+    if (options.model == 'simple' and len(options.guess) != 2) or (options.model == 'classic' and len(options.guess) != 7) or (options.model == 'full' and len(options.guess) != 12)  or (options.model == 'extra' and len(options.guess) != 17):
+        parser.error("Wrong number of guessed parameters.")
+#
+#print s_AOFS, s_EOFS
+if options.verbose:
+    print "Ouput parameter file: %s" % options.outfile
+    print
+#
+if options.model == 'simple':
+    oldAZ, oldALT = Simple((tAZ,tALT),(s_AOFS,s_EOFS))
+elif options.model == 'classic':
+    oldAZ, oldALT = Classic((tAZ,tALT),(c_AN,c_AE,c_NPAE,c_BNP,c_TF,c_AOFS,c_EOFS))
+elif options.model == 'full':
+    oldAZ, oldALT = Full((tAZ,tALT),(f_AAN,f_EAN,f_AAE,f_EAE,f_NPAE,f_BNP,f_AES,f_AEC,f_EES,f_EEC,f_AOFS,f_EOFS))
+elif options.model == 'extra':
+    oldAZ, oldALT = Extra((tAZ,tALT),(e_AAN,e_EAN,e_AAE,e_EAE,e_NPAE,e_BNP,e_AES,e_AEC,e_EES,e_EEC,e_AOFS,e_EOFS,e_ES2A,e_EC2A,e_ES3A,e_EC3A,e_C5))
+#
+oAZ = AZOffs+oldAZ
+oALT = ALTOffs+oldALT
+if options.nofile:
+    ff = file(options.nofile,'w')
+    for o in range(len(tAZ)):
+        ff.write("%.5f : %.5f : %.5f : %.5f\n" % (tAZ[o], oAZ[o], tALT[o], oALT[o]))
+    ff.close()
+    if options.verbose:
+        print "Data corrected for past PM saved in %s" % options.nofile
+        print
+#
+# fit
+if options.model == 'simple':
+    if options.guess:
+        s_AOFS = options.guess[0]
+        s_EOFS = options.guess[1]
+    inizio = [s_AOFS,s_EOFS]
+elif options.model == 'classic':
+    if options.guess:
+        c_AN = options.guess[0]
+        c_AE = options.guess[1]
+        c_NPAE = options.guess[2]
+        c_BNP = options.guess[3]
+        c_TF = options.guess[4]
+        c_AOFS = options.guess[5]
+        c_EOFS = options.guess[6]
+    inizio = [c_AN,c_AE,c_NPAE,c_BNP,c_TF,c_AOFS,c_EOFS]
+    if not options.guess:
+        inizio = [c_AOFS,c_EOFS]
+        vars = (tAZ,tALT,oAZ,oALT)
+        pars = fmin (minSimple, inizio, args=vars,disp=False,xtol=1e-6,ftol=1e-6)
+        inizio = [c_AN,c_AE,c_NPAE,c_BNP,c_TF,pars[0],pars[1]]
+elif options.model == 'full':
+    if options.guess:
+        f_AAN = options.guess[0]
+        f_EAN = options.guess[1]
+        f_AAE = options.guess[2]
+        f_EAE = options.guess[3]
+        f_NPAE = options.guess[4]
+        f_BNP = options.guess[5]
+        f_AES = options.guess[6]
+        f_AEC = options.guess[7]
+        f_EES = options.guess[8]
+        f_EEC = options.guess[9]
+        f_AOFS = options.guess[10]
+        f_EOFS = options.guess[11]
+    inizio = [f_AAN,f_EAN,f_AAE,f_EAE,f_NPAE,f_BNP,f_AES,f_AEC,f_EES,f_EEC,f_AOFS,f_EOFS]
+    if not options.guess:
+        inizio = [f_AOFS,f_EOFS]
+        vars = (tAZ,tALT,oAZ,oALT)
+        pars = fmin (minSimple, inizio, args=vars,disp=False,xtol=1e-6,ftol=1e-6)
+        inizio = [f_AAN,f_EAN,f_AAE,f_EAE,f_NPAE,f_BNP,f_AES,f_AEC,f_EES,f_EEC,pars[0],pars[1]]
+elif options.model == 'extra':
+    if options.guess:
+        e_AAN = options.guess[0]
+        e_EAN = options.guess[1]
+        e_AAE = options.guess[2]
+        e_EAE = options.guess[3]
+        e_NPAE = options.guess[4]
+        e_BNP = options.guess[5]
+        e_AES = options.guess[6]
+        e_AEC = options.guess[7]
+        e_EES = options.guess[8]
+        e_EEC = options.guess[9]
+        e_AOFS = options.guess[10]
+        e_EOFS = options.guess[11]
+        e_ES2A = options.guess[12]
+        e_EC2A = options.guess[13]
+        e_ES3A = options.guess[14]
+        e_EC3A = options.guess[15]
+        e_C5 = options.guess[16]
+    inizio = [e_AAN,e_EAN,e_AAE,e_EAE,e_NPAE,e_BNP,e_AES,e_AEC,e_EES,e_EEC,e_AOFS,e_EOFS,e_ES2A,e_EC2A,e_ES3A,e_EC3A,e_C5]
+    if not options.guess:
+        inizio = [e_AOFS,e_EOFS]
+        vars = (tAZ,tALT,oAZ,oALT)
+        pars = fmin (minSimple, inizio, args=vars,disp=False,xtol=1e-6,ftol=1e-6)
+        inizio = [e_AAN,e_EAN,e_AAE,e_EAE,e_NPAE,e_BNP,e_AES,e_AEC,e_EES,e_EEC,pars[0],pars[1],e_ES2A,e_EC2A,e_ES3A,e_EC3A,e_C5]
+#
+vars = (tAZ,tALT,oAZ,oALT)
+#
+oldrms = 1e6
+diffang = 1e6
+fstep = 1
+while diffang > 1e-4 and fstep <= 10:
+    if options.verbose:
+        print "Step {}".format(fstep)
+    #
+    if options.model == 'simple':
+        pars = fmin (minSimple, inizio, args=vars,disp=False,xtol=1e-6,ftol=1e-6)
+        rms = minSimple(pars,tAZ,tALT,oAZ,oALT)/len(tAZ)
+    elif options.model == 'classic':
+        pars = fmin (minClassic, inizio, args=vars,disp=False,xtol=1e-6,ftol=1e-6)
+        rms = minClassic(pars,tAZ,tALT,oAZ,oALT)/len(tAZ)
+    elif options.model == 'full':
+        pars = fmin (minFull, inizio, args=vars,disp=False,xtol=1e-6,ftol=1e-6)
+        rms = minFull(pars,tAZ,tALT,oAZ,oALT)/len(tAZ)
+    elif options.model == 'extra':
+        pars = fmin (minExtra, inizio, args=vars,disp=False,xtol=1e-6,ftol=1e-6)
+        rms = minExtra(pars,tAZ,tALT,oAZ,oALT)/len(tAZ)
+    #
+    fstep = fstep + 1
+    inizio = pars
+    diffang = oldrms - rms
+    oldrms = rms
+#
+if options.verbose:
+    print
+#
+g = open(options.outfile,'w')
+g.write("type = %s\n" % options.model)
+#
+if options.model == 'simple':
+    g.write("s_AOFS = %.5f\n" % pars[0])
+    g.write("s_EOFS = %.5f\n" % pars[1])
+    #
+    if options.verbose:
+        print "s_AOFS (azimuth zero point correction) : %.5f deg" % pars[0]
+        print "s_EOFS (altitude zero point correction): %.5f deg" % pars[1]
+        #print "\trms on azimuth axis : %.0f arcsec" % (rmsAZ*3600.0)
+        #print "\trms on altitude azis: %.0f arcsec" % (rmsALT*3600.0)
+        print "\tAverage pointing error: %.0f arsec" % (rms*3600.0)
+    else:
+        print "%.5f %.5f %.0f" % (pars[0], pars[1], rms*3600.0)
+    cAZ,cALT = Simple((tAZ,tALT),pars)
+elif options.model == 'classic':
+    g.write("c_AN = %.5f\n" % pars[0])
+    g.write("c_AE = %.5f\n" % pars[1])
+    g.write("c_NPAE = %.5f\n" % pars[2])
+    g.write("c_BNP = %.5f\n" % pars[3])
+    g.write("c_TF = %.5f\n" % pars[4])
+    g.write("c_AOFS = %.5f\n" % pars[5])
+    g.write("c_EOFS = %.5f\n" % pars[6])
+    #
+    if options.verbose:
+        print "c_AN (error in the leveling of the telescope toward north)        : %.5f deg" % pars[0]
+        print "c_AE (error in the leveling of the telescope toward east)         : %.5f deg" % pars[1]
+        print "c_NPAE (non-perpendicularity of the azimuth and elevation axis)   : %.5f deg" % pars[2]
+        print "c_BNP (non-perpendicularity of the optical and the elevation axis): %.5f deg" % pars[3]
+        print "c_TF (sagging of the tube)                                        : %.5f deg" % pars[4]  
+        print "c_AOFS (azimuth zero point correction)                            : %.5f deg" % pars[5]
+        print "c_EOFS (altitude zero point correction)                           : %.5f deg" % pars[6]
+        #print "\trms on azimuth axis : %.0f arcsec" % (rmsAZ*3600.0)
+        #print "\trms on altitude azis: %.0f arcsec" % (rmsALT*3600.0)
+        print "\tAverage pointing error: %.0f arsec" % (rms*3600.0)
+    else:
+        print "%.5f %.5f %.5f %.5f %.5f %.5f %.5f %.0f" % (pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], rms*3600.0)
+    cAZ,cALT = Classic((tAZ,tALT),pars)
+elif options.model == 'full':
+    g.write("f_AAN = %.5f\n" % pars[0])
+    g.write("f_EAN = %.5f\n" % pars[1])
+    g.write("f_AAE = %.5f\n" % pars[2])
+    g.write("f_EAE = %.5f\n" % pars[3])
+    g.write("f_NPAE = %.5f\n" % pars[4])
+    g.write("f_BNP = %.5f\n" % pars[5])
+    g.write("f_AES = %.5f\n" % pars[6])
+    g.write("f_AEC = %.5f\n" % pars[7])
+    g.write("f_EES = %.5f\n" % pars[8])
+    g.write("f_EEC = %.5f\n" % pars[9])
+    g.write("f_AOFS = %.5f\n" % pars[10])
+    g.write("f_EOFS = %.5f\n" % pars[11])
+    #
+    if options.verbose:
+        print "f_AAN (error in the leveling of the telescope toward north, azimuth)   : %.5f deg" % pars[0]
+        print "f_EAN (error in the leveling of the telescope toward north, elevation) : %.5f deg" % pars[1]
+        print "f_AAE (error in the leveling of the telescope toward east, azimuth)    : %.5f deg" % pars[2]
+        print "f_EAE (error in the leveling of the telescope toward east, elevation)  : %.5f deg" % pars[3]
+        print "f_NPAE (non-perpendicularity of the azimuth and elevation axis)        : %.5f deg" % pars[4]
+        print "f_BNP (non-perpendicularity of the optical and the elevation axis)     : %.5f deg" % pars[5]
+        print "f_AES (eccentricity of the encoders)                                   : %.5f deg" % pars[6]
+        print "f_AEC (eccentricity of the encoders)                                   : %.5f deg" % pars[7]
+        print "f_EES (eccentricity of the encoders)                                   : %.5f deg" % pars[8]
+        print "f_EEC (eccentricity of the encoders)                                   : %.5f deg" % pars[9]
+        print "f_AOFS (azimuth zero point correction)                                 : %.5f deg" % pars[10]
+        print "f_EOFS (altitude zero point correction)                                : %.5f deg" % pars[11]
+        #print "\trms on azimuth axis : %.0f arcsec" % (rmsAZ*3600.0)
+        #print "\trms on altitude azis: %.0f arcsec" % (rmsALT*3600.0)
+        print "\tAverage pointing error: %.0f arsec" % (rms*3600.0)
+    else:
+        print "%.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.0f" % (pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], pars[11], rms*3600.0)
+    cAZ,cALT = Full((tAZ,tALT),pars)
+elif options.model == 'extra':
+    g.write("e_AAN = %.5f\n" % pars[0])
+    g.write("e_EAN = %.5f\n" % pars[1])
+    g.write("e_AAE = %.5f\n" % pars[2])
+    g.write("e_EAE = %.5f\n" % pars[3])
+    g.write("e_NPAE = %.5f\n" % pars[4])
+    g.write("e_BNP = %.5f\n" % pars[5])
+    g.write("e_AES = %.5f\n" % pars[6])
+    g.write("e_AEC = %.5f\n" % pars[7])
+    g.write("e_EES = %.5f\n" % pars[8])
+    g.write("e_EEC = %.5f\n" % pars[9])
+    g.write("e_AOFS = %.5f\n" % pars[10])
+    g.write("e_EOFS = %.5f\n" % pars[11])
+    g.write("e_ES2A = %.5f\n" % pars[12])
+    g.write("e_EC2A = %.5f\n" % pars[13])
+    g.write("e_ES3A = %.5f\n" % pars[14])
+    g.write("e_EC3A = %.5f\n" % pars[15])
+    g.write("e_C5 = %.5f\n" % pars[16])
+    #
+    if options.verbose:
+        print "e_AAN (error in the leveling of the telescope toward north, azimuth)   : %.5f deg" % pars[0]
+        print "e_EAN (error in the leveling of the telescope toward north, elevation) : %.5f deg" % pars[1]
+        print "e_AAE (error in the leveling of the telescope toward east, azimuth)    : %.5f deg" % pars[2]
+        print "e_EAE (error in the leveling of the telescope toward east, elevation)  : %.5f deg" % pars[3]
+        print "e_NPAE (non-perpendicularity of the azimuth and elevation axis)        : %.5f deg" % pars[4]
+        print "e_BNP (non-perpendicularity of the optical and the elevation axis)     : %.5f deg" % pars[5]
+        print "e_AES (eccentricity of the encoders)                                   : %.5f deg" % pars[6]
+        print "e_AEC (eccentricity of the encoders)                                   : %.5f deg" % pars[7]
+        print "e_EES (eccentricity of the encoders)                                   : %.5f deg" % pars[8]
+        print "e_EEC (eccentricity of the encoders)                                   : %.5f deg" % pars[9]
+        print "e_AOFS (azimuth zero point correction)                                 : %.5f deg" % pars[10]
+        print "e_EOFS (altitude zero point correction)                                : %.5f deg" % pars[11]
+        print "e_ES2A (irregularities in the bearing race)                            : %.5f deg" % pars[12]
+        print "e_EC2A (irregularities in the bearing race)                            : %.5f deg" % pars[13]
+        print "e_ES3A (irregularities in the bearing race)                            : %.5f deg" % pars[14]
+        print "e_EC3A (irregularities in the bearing race)                            : %.5f deg" % pars[15]
+        print "e_C5 (empirical term)                                                  : %.5f deg" % pars[16]
+        #print "\trms on azimuth axis : %.0f arcsec" % (rmsAZ*3600.0)
+        #print "\trms on altitude azis: %.0f arcsec" % (rmsALT*3600.0)
+        print "\tAverage pointing error: %.0f arsec" % (rms*3600.0)
+    else:
+        print "%.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.0f" % (pars[0], pars[1], pars[2], pars[3], pars[4], pars[5], pars[6], pars[7], pars[8], pars[9], pars[10], pars[11], pars[12], pars[13], pars[14], pars[15], pars[16], rms*3600.0)
+    cAZ,cALT = Extra((tAZ,tALT),pars)
+g.close()
+print
+# plot
+if options.graph:
+    p = pylab.figure()
+    #
+    #px1 = p.add_subplot(232)
+    px1 = pylab.subplot2grid ((3,3),(0,1),colspan=2,rowspan=2)
+    px1.set_aspect('equal')
+    [i.set_linewidth(2) for i in px1.spines.itervalues()]
+    pylab.xlabel("Azimuth offset (arcsec)")
+    pylab.ylabel("Altitude offset (arcsec)")
+    pylab.plot(0.,0.,'o',label='True positions',ms=10)
+    offaz = (cAZ-oAZ)*3600.0*numpy.cos(numpy.radians(tALT))
+    offalt = (cALT-oALT)*3600.0
+    pylab.plot(offaz,offalt,'*',label='PM corrected postions')
+    for i in range(len(offaz)):
+        pylab.text(offaz[i],offalt[i],str(i+1))
+    leg = pylab.legend(loc='best',numpoints=1)
+    ltext  = leg.get_texts()
+    pylab.setp(ltext, fontsize='small')
+    if pylab.xlim()[0] <= pylab.ylim()[0]:
+        min = pylab.xlim()[0]
+    else:
+        min = pylab.ylim()[0]
+    if pylab.xlim()[1] <= pylab.ylim()[1]:
+        max = pylab.xlim()[1]
+    else:
+        max = pylab.ylim()[1]
+    if math.fabs(min) > math.fabs(max):
+        pylab.xlim((min,-min))
+        pylab.ylim((min,-min))
+    else:
+        pylab.xlim((-max,max))
+        pylab.ylim((-max,max))    
+    pylab.tick_params(length=6,width=2,which='major')
+    pylab.tick_params(length=4,width=1,which='minor')
+    #
+    #px2 = p.add_subplot(235)
+    px2 = pylab.subplot2grid ((3,3),(2,0), colspan=3)
+    [i.set_linewidth(2) for i in px2.spines.itervalues()]
+    pylab.xlabel("Azimuth (deg)")
+    pylab.ylabel("Azimuth offset (arcsec)")
+    offaz = (cAZ-oAZ)*3600.0*numpy.cos(numpy.radians(tALT))
+    pylab.plot(tAZ,offaz,'*')
+    for i in range(len(offaz)):
+        pylab.text(tAZ[i],offaz[i],str(i+1))
+    pylab.xlim((0.,360.))
+    m,M = pylab.ylim()
+    if math.fabs(m) >= math.fabs(M):
+        sca = math.fabs(m)
+    else:
+        sca = math.fabs(M)
+    pylab.ylim((-sca,sca))  
+    pylab.tick_params(length=6,width=2,which='major')
+    pylab.tick_params(length=4,width=1,which='minor')
+    #
+    #px3 = p.add_subplot(234)
+    px3 = pylab.subplot2grid ((3,3),(0,0), rowspan=2)
+    [i.set_linewidth(2) for i in px3.spines.itervalues()]
+    pylab.ylabel("Altitude (deg)")
+    pylab.xlabel("Altitude offset (arcsec)")
+    offalt = (cALT-oALT)*3600.0
+    pylab.plot(offalt,tALT,'*')
+    for i in range(len(offalt)):
+        pylab.text(offalt[i],tALT[i],str(i+1))
+    pylab.ylim((0.,90.))
+    m,M = pylab.xlim()
+    if math.fabs(m) >= math.fabs(M):
+        sca = math.fabs(m)
+    else:
+        sca = math.fabs(M)
+    pylab.xlim((-sca,sca))    
+    pylab.tick_params(length=6,width=2,which='major')
+    pylab.tick_params(length=4,width=1,which='minor')
+    #
+    pylab.subplots_adjust(wspace=0.15, hspace=0.40, top=0.95, right=0.95, left=0.10, bottom=0.10)
+    pylab.show()
+#

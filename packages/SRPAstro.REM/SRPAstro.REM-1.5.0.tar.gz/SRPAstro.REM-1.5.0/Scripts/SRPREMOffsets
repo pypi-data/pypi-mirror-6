@@ -1,0 +1,61 @@
+""" Code to derive model parameters
+    
+Context : SRP
+Module  : SRPREMOffsets
+Author  : Stefano Covino
+Date    : 05/09/2013
+E-mail  : stefano.covino@brera.inaf.it
+URL:    : http://www.merate.mi.astro.it/utenti/covino
+Purpose : Compute REM offsets.
+
+Usage   : SRPREMOffsets [-h] [-c x y] -f file [-v] [--version]
+            -c x y, Coordinate center
+            -f file, REM FITS file or list of files
+
+    
+History : (23/08/2013) First version.
+        : (05/09/2013) Better chevck on input.
+"""
+
+__version__ = '1.0.1'
+
+
+import argparse
+from SRP.SRPREM.GetREMOffsets import GetREMOffsets
+from SRP.SRPSystem.ListOfFitsFiles import ListOfFitsFiles
+
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-c", "--center", action="store", nargs=2, type=float, help="Coordinate center", metavar=('x','y'))
+parser.add_argument("-f", "--fitsfile", action="store", help="REM FITS file or list of files", metavar='file', required=True)
+parser.add_argument("-v", "--verbose", action="store_true", help="Fully describe operations")
+parser.add_argument("--version", action="version", version=__version__)
+options = parser.parse_args()
+
+
+#
+if options.verbose:
+    print "Input file: {}".format(options.fitsfile)
+lff = ListOfFitsFiles (options.fitsfile)
+#
+if options.center:
+    ctr = {'x':options.center[0], 'y':options.center[1]}
+    if options.verbose:
+        print "Coordinate center x: {}, y: {}".format(options.center[0], options.center[1])
+else:
+    ctr = None
+
+for f in lff:
+    res = GetREMOffsets(f, ctr)
+    if res != None:
+        if options.verbose:
+            print "Pointed coordinate for file {}".format(f)
+            print "RA: %.5f, DEC: %.5f, AZ: %.5f, ALT: %.5f" % (res['RA'], res['DEC'], res['AZ'], res['ALT'])
+            print "Offsets (arcsec) wrt ccordinate center:"
+            print "RA %.5f, DEC: %.5f, AZ: %.5f, ALT: %.5f" % (res['RAOff']*3600., res['DECOff']*3600., res['AZOff']*3600., res['ALTOff']*3600.)
+        else:
+            print "%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f" % (f, res['RA'], res['AZOff'], res['DEC'], res['DECOff'], res['AZ'], res['AZOff'], res['ALT'], res['ALTOff'])
+    else:
+        parser.error("FITS file %s cannot be read." % f)
+#

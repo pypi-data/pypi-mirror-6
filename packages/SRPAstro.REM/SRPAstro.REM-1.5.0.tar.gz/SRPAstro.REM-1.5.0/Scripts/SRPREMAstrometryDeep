@@ -1,0 +1,165 @@
+""" Code to compute astrometric solutions for REM frames
+
+Context : SRP
+Module  : SRPREMAstrometryDeep
+Author  : Stefano Covino
+Date    : 09/01/2014
+E-mail  : stefano.covino@brera.inaf.it
+URL:    : http://www.merate.mi.astro.it/utenti/covino
+Purpose : Compute REM frame astrometry.
+
+Usage   : SSRPREMAstrometryDeep [-h] [-a [angle [angle ...]]] -i file [-m rms]
+                            [-n nsrc ncat] -o file [-v] [--version]
+            -a Postion angles to try
+            -i Input FITS file
+            -m Max rms (arcsec) for an acceptable solution
+            -n nsrc ncat, Number of objects to analyze (source catalog)
+            -o Output FITS file
+
+    
+History : (06/04/2012) First version.
+        : (21/06/2013) Both ROSS and ROS2 are considered.
+        : (13/08/2013) Better shift computation.
+        : (24/08/2013) Better management of output file and of the ROS2 camera.
+        : (25/08/2013) Minor correction.
+        : (09/04/2013) Various improvements.
+        : (09/01/2014) Max residual.
+"""
+
+__version__ = '1.2.1'
+
+
+import argparse, os, shutil
+from SRP.SRPFits.GetHeaderValue import GetHeaderValue
+import SRP.SRPFits.FitsConstants as SSF
+from SRP.SRPSystem.Pipe import Pipe
+from SRP.SRPSystem.Which import Which
+import SRP.SRPREM as SRPREM
+
+
+cmdshort = "SRPAstrometry -i %s -o %s -n %d %d -m %.1f"
+cmdlong = "SRPAstrometry -i %s -o %s -x %f %f -r %f -n %d %d -m %.1f"
+cmdshorto = "SRPAstrometry -i %s -o %s -n %d %d -O -m %.1f"
+cmdlongo = "SRPAstrometry -i %s -o %s -x %f %f -r %f -n %d %d -O -m %.1f"
+
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-a", "--angleseq", action="store", type=float, nargs='*', metavar="angle", default=(0.,45.,90.), help="Position angles to try")
+parser.add_argument("-i", "--inpfile", action="store", help="Input FITS file.", metavar="file", required=True)
+parser.add_argument("-m", "--maxrms", action="store", type=float, default=3.0, help="Max rms (arcsec) for an acceptable solution", metavar="rms")
+parser.add_argument("-n", "--nobjs", action="store", type=int, nargs=2, default=(10,10), help="Number of objects to analyze (source catalog)", metavar=("nsrc", "ncat"))
+parser.add_argument("-o", "--outfile", action="store", help="Output FITS file", metavar="file", required= True)
+parser.add_argument("-v", "--verbose", action="store_true", help="Fully describe operations")
+parser.add_argument("--version", action="version", version=__version__)
+options = parser.parse_args()
+
+
+# Component safety check
+if Which(SRPREM.astro) == None:
+    parser.error("%s not found." % SRPREM.astro)
+
+if options.nobjs[0] < 5 or options.nobjs[1] < 5:
+    parser.error("Number of considered objects must be at least 5.")
+
+if options.maxrms <= 0.0:
+    parser.error("Max acceptable residual must be positive.")
+
+if options.verbose:
+    print "Input FITS file : %s" % options.inpfile
+    print "Output FITS file: %s" % options.outfile
+    print "Number of source/catalogue objects to consider: %d/%d" % (options.nobjs[0], options.nobjs[1])
+    print "Max rms: %.1f" % options.maxrms
+    msg = "Angle sequence: "
+    for i in options.angleseq:
+        msg = msg + "%.1f " % i
+    print msg
+
+
+# Read header
+cam = GetHeaderValue (options.inpfile, SRPREM.CAMERA)
+if cam == None:
+    parser.error("Problem in reading input file %s" % options.inpfile)
+
+#
+ROSSflg = False
+ROS2flg = False
+REMIRflg = False
+#
+if cam[1] == SSF.FitsHeaderFound:
+    # ROSS
+    if cam[0] == SRPREM.ROSS:
+        ROSSflg = True
+    elif cam[0] == SRPREM.ROS2:
+        ROS2flg = True
+    # REMIR
+    elif cam[0] == SRPREM.REMIR:
+        REMIRflg == True
+    else:
+        parser.error("REM camera not recognized.")
+elif cam[1] == SSF.FitsFileNotFound:
+    parser.error("Input FITS file not found.")
+elif cam[1] == SSF.FitsHeaderNotFound:
+    parser.error("Input FITS file does not seem to be a REM frame.")
+else:
+    parser.error("Unexpected error.")
+
+# filename processing
+fileout = os.path.join(os.path.dirname(options.outfile),'__'+os.path.basename(options.outfile))
+
+
+if options.verbose:
+    print "Trying at pointing coordinates..."
+
+Astrflg = False
+# Astrometry N
+cmd = cmdshort % (options.inpfile, fileout, options.nobjs[0], options.nobjs[1], options.maxrms)
+res = Pipe(cmd)
+if res != None:
+    if res.split()[0] == '1':
+        Astrflg = True
+    else:
+        for r in options.angleseq:
+            if options.verbose:
+                print "Trying with position angle %.1f..." % (r)
+            if ROSSflg or ROS2flg:
+                cmd = cmdlong % (options.inpfile, fileout, -SRPREM.ROSSPixSize, SRPREM.ROSSPixSize, r, options.nobjs[0], options.nobjs[1], options.maxrms)
+            else:
+                cmd = cmdlong % (options.inpfile, fileout, -SRPREM.REMIRPixSize, SRPREM.REMIRPixSize, r, options.nobjs[0], options.nobjs[1], options.maxrms)
+            res = Pipe(cmd)
+            if res != None:
+                if res.split()[0] == '1':
+                    Astrflg = True
+                    break
+                if ROSSflg:
+                    cmd = cmdlong % (options.inpfile, fileout, SRPREM.ROSSPixSize, SRPREM.ROSSPixSize, r, options.nobjs[0], options.nobjs[1], options.maxrms)
+                    res = Pipe(cmd)
+                    if res != None:
+                        if res.split()[0] == '1':
+                            Astrflg = True
+                            break
+                    else:
+                        parser.error("Problem with %s." % SRPREM.astro)
+            else:
+                parser.error("Problem with %s." % SRPREM.astro)
+else:
+    parser.error("Problem with %s." % SRPREM.astro)
+#
+if Astrflg:
+    if options.verbose:
+        print "Astrometry for frame %s computed." % options.inpfile
+        print "Astrometrized file %s generated." % options.outfile
+        print "Average residual: %s arcsec for %s stars." % (res.split()[1], res.split()[2]) 
+        print "RA [x cos(DEC)] and DEC shift wrt the pointing coordinates: %s %s arcsec" % (res.split()[3], res.split()[4])
+    else:
+        print res
+    #
+else:
+    if options.verbose:
+        print "Astrometry for frame %s cannot be computed." % options.inpfile
+        print "Average residual: %s arcsec for %s stars." % (res.split()[1], res.split()[2])
+    else:
+        print res
+#
+shutil.move(fileout,options.outfile)
+#

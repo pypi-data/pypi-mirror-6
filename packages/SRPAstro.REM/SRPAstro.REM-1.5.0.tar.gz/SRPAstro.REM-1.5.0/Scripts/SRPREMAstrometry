@@ -1,0 +1,130 @@
+""" Code to compute astrometric solutions for REM frames
+
+Context : SRP
+Module  : SRPREMAstrometry
+Author  : Stefano Covino
+Date    : 09/01/2014
+E-mail  : stefano.covino@brera.inaf.it
+URL:    : http://www.merate.mi.astro.it/utenti/covino
+Purpose : Compute REM frame astrometry.
+
+Usage   : SRPREMAstrometry [-h] [-a [angle [angle ...]]] [-b box] -i file
+                        [-m rms] [-n nsrc ncat] -o file [-s step] [-v] [--version]
+            -a Position angles to try
+            -b Box size (deg)
+            -i Input FITS file
+            -m Max rms (arcsec) for an acceptable solution
+            -n Number of objects to analyze (source catalog)
+            -o Output FITS file
+            -s Steps in box scanning
+    
+History : (25/08/2013) First version.
+        : (04/09/2013) Minor improvements.
+        : (09/01/2014) Max residual.
+"""
+
+__version__ = '1.1.1'
+
+
+import argparse, os, shutil
+import numpy
+from SRP.SRPFits.GetHeaderValue import GetHeaderValue
+import SRP.SRPFits.FitsConstants as SSF
+from SRP.SRPSystem.Pipe import Pipe
+from SRP.SRPSystem.Which import Which
+import SRP.SRPREM as SRPREM
+from SRP.SRPMath.AngularDistance import AngularDistance
+
+
+cmdd = "SRPREMAstrometryDeep -i %s -o %s -n %d %d -a %s -m %.1f"
+cmds = "SRPREMAstrometrySearch -i %s -o %s -n %d %d -b %.1f -s %d -m %.1f"
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-a", "--angleseq", action="store", type=float, nargs='*', metavar="angle", default=(0.,45.,90.), help="Position angles to try")
+parser.add_argument("-b", "--boxsize", action="store", type=float, default=0.5, help="Box size (deg)", metavar="box")
+parser.add_argument("-i", "--inpfile", action="store", help="Input FITS file", metavar="file", required=True)
+parser.add_argument("-m", "--maxrms", action="store", type=float, default=3.0, help="Max rms (arcsec) for an acceptable solution", metavar="rms")
+parser.add_argument("-n", "--nobjs", action="store", type=int, nargs=2, default=(10,10), help="Number of objects to analyze (source catalog)", metavar=("nsrc", "ncat"))
+parser.add_argument("-o", "--outfile", action="store", help="Output FITS file", metavar="file", required= True)
+parser.add_argument("-s", "--step", action="store", type=int, default=6, help="Steps in box scanning", metavar="step")
+parser.add_argument("-v", "--verbose", action="store_true", help="Fully describe operations")
+parser.add_argument("--version", action="version", version=__version__)
+options = parser.parse_args()
+
+
+# Component safety check
+if Which(SRPREM.astro) == None:
+    parser.error("%s not found." % SRPREM.astro)
+if Which(SRPREM.astrod) == None:
+    parser.error("%s not found." % SRPREM.astrod)
+if Which(SRPREM.astros) == None:
+    parser.error("%s not found." % SRPREM.astros)
+
+
+if options.nobjs[0] < 5 or options.nobjs[1] < 5:
+    parser.error("Number of considered objects must be at least 5.")
+
+if options.boxsize < 0.15:
+    parser.error("Box size must be larger than 0.15")
+
+if options.step < 1:
+    parser.error("Number of steps must be positive.")
+
+if options.maxrms <= 0.0:
+    parser.error("Max acceptable residual must be positive.")
+
+agl = ""
+for i in options.angleseq:
+    agl = agl + "%.1f " % i
+
+if options.verbose:
+    print "Input FITS file : %s" % options.inpfile
+    print "Output FITS file: %s" % options.outfile
+    print "Number of source/catalogue objects to consider: %d/%d" % (options.nobjs[0], options.nobjs[1])
+    print "Box size: %.2f" % options.boxsize
+    print "Number of steps: %d" % options.step
+    print "Max rms: %.1f" % options.maxrms
+    msg = "Angle sequence: "
+    print msg+agl
+
+
+#
+ASTRFLG = False
+if options.verbose:
+    print "Processing by 'deep' algorithm..."
+cmd = cmdd % (options.inpfile, options.outfile, options.nobjs[0], options.nobjs[1], agl, options.maxrms)
+res = Pipe(cmd)
+if res != None:
+    if res.split()[0] == '1':
+        ASTRFLG = True
+else:
+    parser.error("Problem with %s." % SRPREM.astrod)
+#
+if not ASTRFLG:
+    if options.verbose:
+        print "Processing by 'search' algorithm..."
+    cmd = cmds % (options.inpfile, options.outfile, options.nobjs[0], options.nobjs[1], options.boxsize, options.step, options.maxrms)
+    res = Pipe(cmd)
+    if res != None:
+        if res.split()[0] == '1':
+            ASTRFLG = True
+    else:
+        parser.error("Problem with %s." % SRPREM.astros)
+#
+if ASTRFLG:
+    if options.verbose:
+        print "Astrometry for frame %s computed." % options.inpfile
+        print "Astrometrized file %s generated." % options.outfile
+        print "Average residual: %s arcsec for %s stars." % (res.split()[1], res.split()[2]) 
+        print "RA [x cos(DEC)] and DEC shift wrt the pointing coordinates: %s %s arcsec" % (res.split()[3], res.split()[4])
+    else:
+        print res
+    #
+else:
+    if options.verbose:
+        print "Astrometry for frame %s cannot be computed." % options.inpfile
+        print "Average residual: %s arcsec for %s stars." % (res.split()[1], res.split()[2])
+    else:
+        print res
+#
