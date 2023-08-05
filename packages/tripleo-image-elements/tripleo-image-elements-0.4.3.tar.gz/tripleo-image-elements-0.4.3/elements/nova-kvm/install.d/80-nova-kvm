@@ -1,0 +1,33 @@
+#!/bin/bash
+set -eux
+
+# for libvirt clouds only
+install-packages libvirt-bin python-libvirt kvm pm-utils kpartx
+
+# Fedora don't always have the libvirtd group created
+if ! grep ^libvirtd /etc/group > /dev/null 2>&1; then
+  groupadd -f libvirtd
+fi
+
+usermod -a -G libvirtd nova
+
+os-svc-daemon nova-novncproxy  nova nova-novncproxy          "--config-dir /etc/nova"
+os-svc-enable -n nova-novncproxy
+
+# On Fedora configure polkit to allow nova to use libvirt
+if [ -e /etc/polkit-1/rules.d ] ; then
+    cat - <<-EOF > /etc/polkit-1/rules.d/50-nova.rules
+// openstack-nova libvirt management permissions
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.libvirt.unix.manage" &&
+        subject.user == "nova") {
+        return polkit.Result.YES;
+    }
+});
+EOF
+fi
+
+# We delete the default libvirt network to avoid a possible
+# collision with the network on the seed host machine
+rm -f /etc/libvirt/qemu/networks/autostart/default.xml
+rm -f /etc/libvirt/qemu/networks/default.xml
