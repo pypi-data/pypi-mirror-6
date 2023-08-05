@@ -1,0 +1,214 @@
+#!/usr/bin/env python
+
+"""Clean up branches from your Git remotes."""
+
+import os
+import subprocess
+import sys
+import argparse
+
+
+try:
+    raw_input
+except NameError:
+    raw_input = input
+
+
+__version__ = '0.3'
+
+
+class GitSweepException(Exception):
+
+    """git-sweep-related exceptions."""
+
+
+def remotes(path):
+    """Return list of remotes."""
+    return [line.strip() for line in git(['remote'],
+                                         path=path).splitlines()]
+
+
+def git(arguments, path, raise_exception_on_error=True):
+    """Run git."""
+    process = subprocess.Popen(
+        ['git'] + arguments,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=path)
+
+    result = process.communicate()
+
+    if raise_exception_on_error and process.returncode != 0:
+        raise GitSweepException(result[1].decode('utf-8').strip())
+
+    return result[0].decode('utf-8')
+
+
+def remote_heads(remote, path):
+    """Yield heads."""
+    for line in git(['ls-remote', '--heads', remote], path=path).splitlines():
+        text = line.split()[1]
+        start = 'refs/heads/'
+        assert text.startswith(start)
+        yield text[len(start):]
+
+
+def filtered_remotes(origin, skip, path):
+    """Return a list of remote refs, skipping ones you don't need.
+
+    If ``skip`` is empty, it will default to ``['HEAD',
+    self.master_branch]``.
+
+    """
+    return [head for head in remote_heads(origin, path)
+            if not head in skip]
+
+
+def master_ref(origin, master_branch, path):
+    """Find the master ref object that matches master branch."""
+    for head in remote_heads(origin, path):
+        if head == master_branch:
+            return head
+
+    raise GitSweepException(
+        'Could not find ref for {0}'.format(master_branch))
+
+
+def merged_refs(path, remote_name, master_branch, skip):
+    """Return a list of remote refs that have been merged into the master.
+
+    The "master" branch may have a different name than master. The value
+    of ``self.master_name`` is used to determine what this name is.
+
+    """
+    master = master_ref(remote_name,
+                        master_branch=master_branch,
+                        path=path)
+
+    refs = filtered_remotes(remote_name,
+                            skip=['HEAD', master_branch] + skip,
+                            path=path)
+    for ref in refs:
+        upstream = '{origin}/{master}'.format(origin=remote_name,
+                                              master=master)
+        head = '{origin}/{branch}'.format(origin=remote_name,
+                                          branch=ref)
+        try:
+            output = git(['cherry', upstream, head],
+                         path=path)
+            if not output:
+                yield ref
+        except GitSweepException:
+            pass
+
+
+def sweep(argv):
+    """Run git-sweep."""
+    args = parse_args(argv[1:])
+
+    for path in args.path:
+        _sweep(path, args)
+
+
+def _sweep(path, args):
+    """Run git-sweep on a local repository."""
+    remote_name = args.origin
+
+    # Fetch from the remote so that we have the latest commits
+    if args.fetch:
+        for remote in remotes(path):
+            if remote == remote_name:
+                sys.stdout.write('Fetching from the remote\n')
+                git(['fetch', '--prune', remote], path=path)
+
+    ok_to_delete = list(merged_refs(path,
+                                    remote_name=remote_name,
+                                    master_branch=args.master,
+                                    skip=args.skips))
+
+    if ok_to_delete:
+        sys.stdout.write(
+            'These branches have been merged into {0}:\n\n'.format(
+                args.master))
+    else:
+        sys.stdout.write('No remote branches are available for '
+                         'cleaning up\n')
+        return
+
+    for ref in ok_to_delete:
+        sys.stdout.write('  {0}\n'.format(ref))
+
+    if args.dry_run:
+        sys.stdout.write('\nTo delete them, run again without --dry-run\n')
+    else:
+        if not args.force:
+            sys.stdout.write('\nDelete these branches? (y/n) ')
+            answer = raw_input()
+        if args.force or answer.lower().startswith('y'):
+            sys.stdout.write('\n')
+            for ref in ok_to_delete:
+                sys.stdout.write('  deleting {0}'.format(ref))
+                git(['push', remote_name, ':{0}'.format(ref)], path=path)
+                git(['branch', '--delete', ref],
+                    path=path, raise_exception_on_error=False)
+                sys.stdout.write(' (done)\n')
+
+            sys.stdout.write('\nAll done!\n')
+            sys.stdout.write("\nTell everyone to run 'git fetch --prune' "
+                             'to sync with this remote.\n')
+            sys.stdout.write('(you don\'t have to, yours is synced)\n')
+        else:
+            sys.stdout.write('\nOK, aborting.\n')
+
+
+def parse_args(arguments):
+    """Return parsed arguments."""
+    parser = argparse.ArgumentParser(
+        prog='git-sweep',
+        description='Clean up your Git remote branches.')
+
+    parser.add_argument('--force', action='store_true', default=False,
+                        dest='force', help='do not ask, cleanup immediately')
+    parser.add_argument('--origin',
+                        help='name of the remote you wish to clean up '
+                             '(default: %(default)s)',
+                        default='origin')
+    parser.add_argument('--master',
+                        help='name of what you consider the master branch '
+                             '(default: %(default)s)',
+                        default='master')
+    parser.add_argument('--no-fetch', dest='fetch',
+                        help='do not fetch from the remote',
+                        action='store_false',
+                        default=True)
+    parser.add_argument('--skip', dest='skips',
+                        help='comma-separated list of branches to skip',
+                        default='')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='show what would be swept')
+
+    parser.add_argument('path', nargs='*', default=[os.getcwd()],
+                        help='local repositories to sweep '
+                             '(default: %(default)s)')
+
+    args = parser.parse_args(arguments)
+
+    args.skips = [i.strip() for i in args.skips.split(',')]
+
+    return args
+
+
+def main():
+    """Run git-sweep."""
+    try:
+        sweep(sys.argv)
+        return 0
+    except GitSweepException as exception:
+        sys.stderr.write(str(exception) + '\n')
+
+    return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())
