@@ -1,0 +1,263 @@
+Metadata-Version: 1.1
+Name: python-veracity
+Version: 0.0.11
+Summary: Python wrapper for Veracity's command-line interface.
+Home-page: http://pypi.python.org/pypi/python-veracity
+Author: Jace Browning
+Author-email: jacebrowning@gmail.com
+License: LGPL
+Description: Introduction
+        ============
+        
+        This library provides a Python wrapper for Veracity's command-line interface.
+        It includes objects for repositories, working copies, and other commonly-used
+        items. The library also installs several command-line tools to work with
+        Veracity's distributed build tracking features.
+        
+        .. NOTE::
+           0.0.x releases are experimental and interfaces will likely change.
+        
+        
+        
+        Getting Started
+        ===============
+        
+        Requirements
+        ------------
+        
+        * Python 3.3
+        
+        * Veracity 2.5
+        
+        
+        Dependencies
+        ------------
+        
+        * sh: https://pypi.python.org/pypi/sh (subprocess wrapper for Mac/Linux)
+        
+        * pbs: https://pypi.python.org/pypi/pbs (subprocess wrapper for Windows)
+        
+        * virtualenv: https://pypi.python.org/pypi/virtualenv (isolated builds)
+        
+        
+        Installation
+        ------------
+        
+        The package can be installed using ``pip``::
+        
+            pip install python-veracity
+        
+        or directly from source::
+        
+            python setup.py install
+        
+        After installation, it is available under the name ``veracity``::
+        
+            >>> import veracity
+            >>> veracity.__version__
+        
+            >>> from veracity import vv
+            >>> vv.version()
+            >>> vv.repos()
+        
+        
+        
+        Scripting Interface
+        ===================
+        
+        A sample script might look similar to the following::
+        
+            #!/usr/bin/env python
+        
+            from veracity import Repository, WorkingCopy, Item
+        
+            # Clone a repo
+            repo = Repository('veracity', remote='http://public.veracity-scm.com/repos/veracity')
+        
+            # Display Repository attributes
+            print repo.name
+            print repo.users
+            print repo.branches
+            print repo.tags
+        
+            # Check out a working copy (from a Repository)
+            work = repo.checkout("~/v/veracity")
+            work.delete()
+        
+            # Check out a working copy (by repo name)
+            work = WorkingCopy("~/v/veracity", repo='veracity')
+            work.update(branch='master')
+        
+            # Change some files
+            item = Item('docs/GettingStarted.txt', work=work)
+            item.lock()
+        
+        
+        
+        Build Tracking
+        ==============
+        
+        This package also installs a set of command-line tools to work with Veracity's
+        Build Tracking feature: http://veracity-scm.com/qa/questions/123
+        
+        Configuration
+        -------------
+        
+        In your master branch, create a ``setup.cfg`` similar to the following::
+        
+           [vv-tracking]
+        
+           repositories = python-veracity
+           series = N, C
+           environments = W, M, L
+           virtualenv = True
+        
+        
+           [vv-poller]
+        
+           N_branches = *
+           N_command = [ $( date "+%H" ) = 00 ]
+           N_command-nt = if %TIME:~0,2%==00 (exit /b 0) else (exit /b 1)
+           N_sleep = 60 * 30
+           N_start = Q
+        
+           C_branches = master, develop, feature-*, release-*, hotfix-*
+           C_sleep = 60
+           C_start = Q
+        
+        
+           [vv-builder]
+        
+           U_enter = Q
+           U_path = .
+           U_command = make depends
+           U_fail = UF
+        
+           B_enter = U
+           B_path = .
+           B_command = make install
+           B_fail = BF
+        
+           T_enter = B
+           T_path = .
+           T_command = make test
+           T_fail = TF
+        
+           C_enter = T
+           C_path = .
+           C_command = make check
+           C_fail = CF
+           C_exit = D
+        
+        The series, environments, and statuses must match what is defined in your
+        repository's build configuration page: http://SERVER.com/repos/REPO/build-setup
+        
+        
+        Poller
+        ------
+        
+        To run one iteration of a poller for your repository::
+        
+            vv-poller <repository names>
+        
+        Or, to run forever as a daemon::
+        
+            vv-poller <repository names> --daemon
+        
+        From within a working copy, the poller configuration can be tested using::
+        
+            vv-poller --test
+        
+        
+        Builder
+        -------
+        
+        To run one iteration of a builder for your repository::
+        
+            vv-builder <repository names> --env <environment alias>
+        
+        Or, to run forever as a daemon::
+        
+            vv-builder <repository names> --env <environment alias> --daemon
+        
+        From within a working copy, the builder configuration can be tested using::
+        
+            vv-builder --test
+        
+        Changelog
+        =========
+        
+        0.0.11 (2014/01/26)
+        -------------------
+        
+        - Updated the package from a template.
+        
+        0.0.10 (2013/11/19)
+        -------------------
+        
+        - Switched to Python 3.
+        
+        0.0.9 (2013/09/19)
+        -------------------
+        
+        - Prepared files for porting to Python 3
+        
+        0.0.8 (2013/08/24)
+        ------------------
+        
+        - Expanded vv-tracking interface to initialize repos and delete builds.
+        - Now always pushing when builds are created.
+        
+        0.0.7 (2013/08/01)
+        ------------------
+        
+        - Added '--no-config' argument to vv-poller/builder to ignore local config.
+        - Implemented WorkingCopy.copy() method.
+        - Now always pushing new build requests and updated build statuses.
+        
+        0.0.6 (2013/07/23)
+        ------------------
+        
+        - Repository.get_builds() now returns builds descending by start time.
+        
+        0.0.5 (2013/07/23)
+        ------------------
+        
+        - Preserving case in setup.cfg options.
+        - [vv-tracking] 'virtualenv' is a now a boolean (env name: vv-builder-env)
+        - Now limiting Repository.get_builds() to 50 parsed build requests.
+        
+        0.0.4 (2013/07/20)
+        ------------------
+        
+        - Removed pull/push logging on daemons.
+        
+        0.0.3 (2013/07/20)
+        ------------------
+        
+        - Daemons now only show logging output on activity.
+        - Added better repo synchronization in the poller and builder.
+        
+        0.0.2 (2013/07/19)
+        ------------------
+        
+        - Added a [vv-tracking] setting to build in a virtualenv: virtualenv=<name>
+        - Added a [vv-poller] setting to allow rebuilds: <A>_rebuild = True
+        - Removed the non-ETA states (UP, BP, TP, CP) from the sample build configuration.
+        - Limiting the rate of automatic push/pull to every 30 seconds.
+        
+        0.0.1 (2013/07/16)
+        ------------------
+        
+        - Initial release of python-veracity.
+        
+        
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Console
+Classifier: License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)
+Classifier: Natural Language :: English
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3.3
+Classifier: Topic :: Software Development :: Libraries
+Classifier: Topic :: Software Development :: Version Control
