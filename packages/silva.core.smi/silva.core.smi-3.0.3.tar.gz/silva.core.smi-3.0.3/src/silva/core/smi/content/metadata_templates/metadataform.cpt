@@ -1,0 +1,104 @@
+<form class="form-content form-fields-container" name="#"
+      data-form-novalidation="true"
+      tal:attributes="name view.prefix"
+      tal:condition="view.set_names"
+      i18n:domain="silva">
+  <div class="form-head">
+    <h4 tal:content="view.label" tal:condition="view.should_display_label()">
+      Label
+    </h4>
+  </div>
+  <tal:sets tal:repeat="set_name view.set_names">
+    <div class="form-head">
+      <h5 tal:content="view.get_set_title(set_name)">
+        Metadata set title
+      </h5>
+      <p tal:define="description view.get_set_description(set_name)"
+         tal:condition="description"
+         tal:content="structure description">
+        Description
+      </p>
+    </div>
+    <div class="form-body">
+      <tal:section tal:repeat="element_name view.get_element_names(set_name)">
+        <div class="form-section ui-helper-clearfix ${error and 'form-error' or ''} ${not is_editable and 'form-readonly' or ''}"
+             tal:define="error path:view/errors/?set_name/?element_name | nothing;
+                         identifier (set_name, element_name);
+                         is_hidden view.is_element_hidden(*identifier);
+                         is_acquired view.is_element_acquired(*identifier);
+                         is_editable view.is_element_editable(*identifier)">
+          <tal:hidden
+             tal:condition="is_hidden"
+             tal:replace="structure python: view.render_element(*identifier)" />
+          <tal:field tal:condition="not is_hidden">
+            <div class="form-label">
+              <label tal:content="view.get_element_title(*identifier)"
+                     tal:attributes="for is_editable and view.html_id(*identifier) or None">
+                Element name
+              </label>
+              <span class="form-required"
+                    tal:condition="view.is_element_required(*identifier)"
+                    i18n:translate="">
+                required
+              </span>
+              <span class="form-acquirable"
+                    tal:condition="view.is_element_acquireable(*identifier)"
+                    i18n:translate="">
+                acquirable
+              </span>
+              <p tal:define="description view.get_element_description(*identifier)"
+                 tal:condition="description"
+                 tal:content="structure description">
+                Element description
+              </p>
+            </div>
+            <div class="form-field">
+              <tal:value tal:condition="not is_editable">
+                <p class="form-acquired"
+                   tal:omit-tag="not is_acquired"
+                   tal:define="element_view view.render_element_view(*identifier);
+                               element_view_dash element_view or '-'">
+                  <span class="form-acquired-label"
+                        tal:condition="is_acquired"
+                        i18n:translate="">
+                    Acquired Value:
+                  </span>
+                  <tal:value tal:replace="structure element_view_dash" />
+                </p>
+              </tal:value>
+
+              <tal:edit tal:condition="is_editable">
+                <tal:input
+                   tal:content="structure view.render_element(*identifier)">
+                  Widget
+                </tal:input>
+                <p class="form-acquired" tal:condition="is_acquired">
+                  <span class="form-acquired-label"
+                        i18n:translate="">
+                    Acquired Value:
+                  </span>
+                  <tal:value tal:replace="structure view.render_element_view(*identifier)" />
+                </p>
+              </tal:edit>
+            </div>
+            <div class="form-error-message">
+              <div class="form-error-detail"
+                   tal:condition="error"
+                   tal:content="error">
+                Error message
+              </div>
+            </div>
+          </tal:field>
+        </div>
+      </tal:section>
+    </div>
+    <div class="form-footer">
+      <div class="form-controls" tal:condition="view.actionWidgets">
+        <input tal:repeat="widget view.actionWidgets"
+               tal:replace="structure widget.render()" />
+      </div>
+    </div>
+  </tal:sets>
+  <!-- This empty submit trigger the form submission with enter -->
+  <input type="submit" style="display: none" />
+</form>
