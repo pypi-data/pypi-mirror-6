@@ -1,0 +1,26 @@
+Installation
+===========
+
+1. Install Ralph.
+
+1. Install the ``ralph_assets`` package from PyPi by running::
+  
+    pip install ralph_assets
+
+
+2. After installation add a line to the end of ``INSTALLED_APPS``::
+
+
+    INSTALLED_APPS += (
+    ...
+    'ralph_assets',
+    )
+
+3. Run::
+
+    ralph migrate
+
+
+That's it. Now just run Ralph as described in its documentation, and login to
+the Ralph system.  You will see an additional item, "Assets" in the main menu.
+
