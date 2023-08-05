@@ -1,0 +1,10 @@
+__version__ = "0.6.19"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.6.19)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'fb5f073ddb6fef93b9a2d7660d9a118162c68257'
+__git_head_subject__ = 'Finished release v0.6.19.'
+__git_head_message__ = '* release/v0.6.19:\n  adding strip keyword argument to str_field\n  more buffer compatability'
+__git_dirty_diff__ = ''
