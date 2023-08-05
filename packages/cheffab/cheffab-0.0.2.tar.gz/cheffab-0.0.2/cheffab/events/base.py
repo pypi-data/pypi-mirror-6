@@ -1,0 +1,3 @@
+
+class BaseEvent(object):
+    pass
