@@ -1,0 +1,159 @@
+{% extends "pages/page.html" %}
+{% load mezzanine_tags donate_tags %}
+{% block main %}
+{% if request.GET.sent %}
+  {% editable page.donationpage.response %}
+  {{ page.donationpage.response|richtext_filters|safe }}
+  {% endeditable %}
+{% else %}
+  {% block content %}
+    {% editable page.donationpage.content %}
+    {{ page.donationpage.content|richtext_filters|safe }}
+    {% endeditable %}
+  {% endblock %}
+
+  {% block form %}
+      <form id="donate-form" method="POST" class="form-horizontal">
+        {% csrf_token %}
+        <div class="control-group {% if form.name.errors %}error{% endif %}">
+          <div class="controls">
+            <input type="text" name="{{ form.name.html_name }}"
+                   placeholder="Name"
+                   value = "{{ form.name.value|default_if_none:"" }}"/>
+            {% if form.name.errors %}
+            <span class="help-inline">{{ form.name.errors }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="control-group {% if form.email.errors %}error{% endif %}">
+          <div class="controls">
+            <input type="email" name="{{ form.email.html_name }}"
+                   placeholder="Email"
+                   value = "{{ form.email.value|default_if_none:"" }}"/>
+            {% if form.email.errors %}
+            <span class="help-inline">{{ form.email.errors }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="control-group {% if form.phone.errors %}error{% endif %}">
+          <div class="controls">
+            <input type="text" name="{{ form.phone.html_name }}"
+                   placeholder="Phone no."
+                   value = "{{ form.phone.value|default_if_none:"" }}"/>
+            {% if form.phone.errors %}
+            <span class="help-inline">{{ form.phone.errors }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="control-group {% if form.note.errors %}error{% endif %}">
+          <div class="controls">
+            <textarea rows="4"
+                      name="{{ form.note.html_name }}"
+                      placeholder="Short note">{{ form.name.value|default_if_none:"" }}</textarea>
+            {% if form.note.errors %}
+            <span class="help-inline">{{ form.note.errors }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="control-group {% if form.amount.errors %}error{% endif %}">
+          <div class="controls">
+            <input type="text" name="{{ form.amount.html_name }}"
+                   placeholder="$0.00"
+                   value = "{{ form.amount.value|default_if_none:"" }}"/>
+            {% if form.amount.errors %}
+            <span class="help-inline">{{ form.amount.errors }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="control-group number-cvc">
+          <div class="controls form-inline">
+            <input type="text" name="card-number" class="input-medium card-number"
+                   placeholder="Credit Card number" />
+            <input type="text" name="card-cvc" class="input-mini card-cvc"
+                   placeholder="CVC" />
+          </div>
+        </div>
+
+        <div class="control-group exp-date">
+          <div class="controls form-inline">
+            <select name="card-expiry-month" class="input-small card-expiry-month">
+              {% generate_months %}
+            </select>
+            <select name="card-expiry-year" class="input-small card-expiry-year">
+              {% generate_years %}
+            </select>
+          </div>
+        </div>
+
+        <div class="control-group error">
+          <div class="controls">
+            <span class="form-errors help-inline">{{ form.non_field_errors.as_text }}</span>
+          </div>
+        </div>
+        <button type="submit" class="btn">Donate!</button>
+      </form>
+  {% endblock %}
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/jquery.payment/1.0.1/jquery.payment.min.js"></script>
+<script type="text/javascript" src="https://js.stripe.com/v2/"></script>
+<script>
+  $(document).ready(function() {
+    Stripe.setPublishableKey('pk_test_PfOL1Q9FRqWxItjAtbD0x3l2');
+    var sensitiveFields = ['.card-number', '.card-cvc',
+                           '.card-expiry-month', '.card-expiry-year']
+
+    function stripeResponseHandler(status, response) {
+      if (response.error) {
+        var selector;
+        switch (response.error.param) {
+          case "invalid_number":
+            selector = ".exp-date";
+            $(selector).addClass("error");
+            $('.form-errors').html(response.error.message);
+            break;
+          case "number":
+          case "cvc":
+            selector = ".number-cvc";
+            $(selector).addClass("error");
+            $('.form-errors').html(response.error.message);
+            break;
+        }
+      } else {
+        var $form = $('#donate-form'),
+            token = response['id'];
+        $.each(sensitiveFields, function(index, value) {
+          $(value).val("");
+        });
+        $form.append("<input type='hidden' name='stripeToken' value='" + token + "'/>")
+        $form.get(0).submit();
+      }
+    }
+
+    $('#donate-form').submit(function(e) {
+      e.preventDefault();
+
+      /* reset errors that could have been set by stripe */
+      $('.form-errors').html("");
+      $.each(sensitiveFields, function(index, value) {
+          $(value).removeClass("error");
+        });
+
+      Stripe.card.createToken({
+        number: $('.card-number').val(),
+        cvc: $('.card-cvc').val(),
+        exp_month: $('.card-expiry-month').val(),
+        exp_year: $('.card-expiry-year').val()
+      }, stripeResponseHandler);
+    });
+  });
+</script>
+{% endblock %}
