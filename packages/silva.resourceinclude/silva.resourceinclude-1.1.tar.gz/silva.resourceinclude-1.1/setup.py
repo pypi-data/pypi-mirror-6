@@ -1,0 +1,48 @@
+# Copyright (c) 2008 Infrae. All rights reserved.
+# See also LICENSE.txt
+# $Id$
+
+from setuptools import setup, find_packages
+import os
+
+version = '1.1'
+
+setup(name='silva.resourceinclude',
+      version=version,
+      description="z3c.resourceinclude support for Silva 2.1",
+      long_description=open("README.txt").read() + "\n" +
+                       open(os.path.join("docs", "HISTORY.txt")).read(),
+      # Get more strings from http://www.python.org/pypi?:action=list_classifiers
+      classifiers=[
+          "Environment :: Web Environment",
+          "Intended Audience :: Developers",
+          "License :: OSI Approved :: Zope Public License",
+          "Programming Language :: Python",
+          "Topic :: Software Development :: Libraries :: Python Modules",
+          "Framework :: Zope2",
+          ],
+      keywords='zope2 resourceinclude z3c',
+      author='Sylvain Viollon',
+      author_email='info@infrae.com',
+      url='https://github.com/silvacms/silva.resourceinclude',
+      license='ZPL',
+      packages=find_packages(exclude=['ez_setup']),
+      namespace_packages=['silva'],
+      include_package_data=True,
+      zip_safe=False,
+      install_requires=[
+          'chameleon.zpt',
+          'five.grok',
+          'martian',
+          'plone.memoize',
+          'setuptools',
+          'silva.core.conf',
+          'silva.core.views',
+          'zope.component',
+          'zope.contentprovider',
+          'zope.interface',
+          'zope.publisher',
+          'zope.schema',
+          'zope.traversing',
+          ],
+      )
