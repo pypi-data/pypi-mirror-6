@@ -1,0 +1,936 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>zope.interface.declarations &mdash; zope.interface 4.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '4.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="zope.interface 4.0.1 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../../../index.html">zope.interface 4.0.1 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for zope.interface.declarations</h1><div class="highlight"><pre>
+<span class="c">##############################################################################</span>
+<span class="c"># Copyright (c) 2003 Zope Foundation and Contributors.</span>
+<span class="c"># All Rights Reserved.</span>
+<span class="c">#</span>
+<span class="c"># This software is subject to the provisions of the Zope Public License,</span>
+<span class="c"># Version 2.1 (ZPL).  A copy of the ZPL should accompany this distribution.</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED &quot;AS IS&quot; AND ANY AND ALL EXPRESS OR IMPLIED</span>
+<span class="c"># WARRANTIES ARE DISCLAIMED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED</span>
+<span class="c"># WARRANTIES OF TITLE, MERCHANTABILITY, AGAINST INFRINGEMENT, AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE.</span>
+<span class="c">##############################################################################</span>
+<span class="sd">&quot;&quot;&quot;Implementation of interface declarations</span>
+
+<span class="sd">There are three flavors of declarations:</span>
+
+<span class="sd">  - Declarations are used to simply name declared interfaces.</span>
+
+<span class="sd">  - ImplementsDeclarations are used to express the interfaces that a</span>
+<span class="sd">    class implements (that instances of the class provides).</span>
+
+<span class="sd">    Implements specifications support inheriting interfaces.</span>
+
+<span class="sd">  - ProvidesDeclarations are used to express interfaces directly</span>
+<span class="sd">    provided by objects.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">__docformat__</span> <span class="o">=</span> <span class="s">&#39;restructuredtext&#39;</span>
+
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">from</span> <span class="nn">types</span> <span class="kn">import</span> <span class="n">FunctionType</span>
+<span class="kn">from</span> <span class="nn">types</span> <span class="kn">import</span> <span class="n">MethodType</span>
+<span class="kn">from</span> <span class="nn">types</span> <span class="kn">import</span> <span class="n">ModuleType</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">import</span> <span class="nn">weakref</span>
+
+<span class="kn">from</span> <span class="nn">zope.interface.advice</span> <span class="kn">import</span> <span class="n">addClassAdvisor</span>
+<span class="kn">from</span> <span class="nn">zope.interface.interface</span> <span class="kn">import</span> <span class="n">InterfaceClass</span>
+<span class="kn">from</span> <span class="nn">zope.interface.interface</span> <span class="kn">import</span> <span class="n">SpecificationBase</span>
+<span class="kn">from</span> <span class="nn">zope.interface.interface</span> <span class="kn">import</span> <span class="n">Specification</span>
+<span class="kn">from</span> <span class="nn">zope.interface._compat</span> <span class="kn">import</span> <span class="n">CLASS_TYPES</span> <span class="k">as</span> <span class="n">DescriptorAwareMetaClasses</span>
+<span class="kn">from</span> <span class="nn">zope.interface._compat</span> <span class="kn">import</span> <span class="n">PYTHON3</span>
+
+<span class="c"># Registry of class-implementation specifications</span>
+<span class="n">BuiltinImplementationSpecifications</span> <span class="o">=</span> <span class="p">{}</span>
+
+<span class="n">_ADVICE_ERROR</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;Class advice impossible in Python3.  &#39;</span>
+                 <span class="s">&#39;Use the @</span><span class="si">%s</span><span class="s"> class decorator instead.&#39;</span><span class="p">)</span>
+
+<span class="n">_ADVICE_WARNING</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;The </span><span class="si">%s</span><span class="s"> API is deprecated, and will not work in Python3  &#39;</span>
+                   <span class="s">&#39;Use the @</span><span class="si">%s</span><span class="s"> class decorator instead.&#39;</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">Declaration</span><span class="p">(</span><span class="n">Specification</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Interface declarations&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+        <span class="n">Specification</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_normalizeargs</span><span class="p">(</span><span class="n">interfaces</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">changed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">originally_changed</span><span class="p">):</span>
+        <span class="n">Specification</span><span class="o">.</span><span class="n">changed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">originally_changed</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_v_attrs</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">__contains__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">interface</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Test whether an interface is in the specification</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">extends</span><span class="p">(</span><span class="n">interface</span><span class="p">)</span> <span class="ow">and</span> <span class="n">interface</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return an iterator for the interfaces in the specification</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">flattened</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return an iterator of all included and extended interfaces</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__iro__</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__sub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Remove interfaces from a specification</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Declaration</span><span class="p">(</span>
+            <span class="o">*</span><span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span><span class="p">()</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="p">[</span><span class="n">j</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">other</span><span class="o">.</span><span class="n">interfaces</span><span class="p">()</span>
+                        <span class="k">if</span> <span class="n">i</span><span class="o">.</span><span class="n">extends</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="mi">0</span><span class="p">)]</span>
+                <span class="p">]</span>
+                <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Add two specifications or a specification and an interface</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">seen</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                <span class="n">seen</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">other</span><span class="o">.</span><span class="n">interfaces</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                <span class="n">seen</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">Declaration</span><span class="p">(</span><span class="o">*</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="n">__radd__</span> <span class="o">=</span> <span class="n">__add__</span>
+
+
+<span class="c">##############################################################################</span>
+<span class="c">#</span>
+<span class="c"># Implementation specifications</span>
+<span class="c">#</span>
+<span class="c"># These specify interfaces implemented by instances of classes</span>
+
+<span class="k">class</span> <span class="nc">Implements</span><span class="p">(</span><span class="n">Declaration</span><span class="p">):</span>
+
+    <span class="c"># class whose specification should be used as additional base</span>
+    <span class="n">inherit</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="c"># interfaces actually declared for a class</span>
+    <span class="n">declared</span> <span class="o">=</span> <span class="p">()</span>
+
+    <span class="n">__name__</span> <span class="o">=</span> <span class="s">&#39;?&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;&lt;implementedBy </span><span class="si">%s</span><span class="s">&gt;&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__reduce__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">implementedBy</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">inherit</span><span class="p">,</span> <span class="p">)</span>
+
+<div class="viewcode-block" id="implementedByFallback"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.implementedByFallback">[docs]</a><span class="k">def</span> <span class="nf">implementedByFallback</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the interfaces implemented for a class&#39; instances</span>
+
+<span class="sd">      The value returned is an IDeclaration.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;__implemented__&#39;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+
+        <span class="c"># we can&#39;t get the class dict. This is probably due to a</span>
+        <span class="c"># security proxy.  If this is the case, then probably no</span>
+        <span class="c"># descriptor was installed for the class.</span>
+
+        <span class="c"># We don&#39;t want to depend directly on zope.security in</span>
+        <span class="c"># zope.interface, but we&#39;ll try to make reasonable</span>
+        <span class="c"># accommodations in an indirect way.</span>
+
+        <span class="c"># We&#39;ll check to see if there&#39;s an implements:</span>
+
+        <span class="n">spec</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="s">&#39;__implemented__&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="c"># There&#39;s no spec stred in the class. Maybe its a builtin:</span>
+            <span class="n">spec</span> <span class="o">=</span> <span class="n">BuiltinImplementationSpecifications</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">spec</span>
+            <span class="k">return</span> <span class="n">_empty</span>
+
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">__class__</span> <span class="o">==</span> <span class="n">Implements</span><span class="p">:</span>
+            <span class="c"># we defaulted to _empty or there was a spec. Good enough.</span>
+            <span class="c"># Return it.</span>
+            <span class="k">return</span> <span class="n">spec</span>
+
+        <span class="c"># TODO: need old style __implements__ compatibility?</span>
+        <span class="c"># Hm, there&#39;s an __implemented__, but it&#39;s not a spec. Must be</span>
+        <span class="c"># an old-style declaration. Just compute a spec for it</span>
+        <span class="k">return</span> <span class="n">Declaration</span><span class="p">(</span><span class="o">*</span><span class="n">_normalizeargs</span><span class="p">((</span><span class="n">spec</span><span class="p">,</span> <span class="p">)))</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span> <span class="n">Implements</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">spec</span>
+
+    <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="n">BuiltinImplementationSpecifications</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">spec</span>
+
+    <span class="c"># TODO: need old style __implements__ compatibility?</span>
+    <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="c"># old-style __implemented__ = foo declaration</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="p">(</span><span class="n">spec</span><span class="p">,</span> <span class="p">)</span> <span class="c"># tuplefy, as it might be just an int</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="n">Implements</span><span class="p">(</span><span class="o">*</span><span class="n">_normalizeargs</span><span class="p">(</span><span class="n">spec</span><span class="p">))</span>
+        <span class="n">spec</span><span class="o">.</span><span class="n">inherit</span> <span class="o">=</span> <span class="bp">None</span>    <span class="c"># old-style implies no inherit</span>
+        <span class="k">del</span> <span class="n">cls</span><span class="o">.</span><span class="n">__implemented__</span> <span class="c"># get rid of the old-style declaration</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">bases</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">__bases__</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;ImplementedBy called for non-factory&quot;</span><span class="p">,</span> <span class="n">cls</span><span class="p">)</span>
+            <span class="n">bases</span> <span class="o">=</span> <span class="p">()</span>
+
+        <span class="n">spec</span> <span class="o">=</span> <span class="n">Implements</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">implementedBy</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">bases</span><span class="p">])</span>
+        <span class="n">spec</span><span class="o">.</span><span class="n">inherit</span> <span class="o">=</span> <span class="n">cls</span>
+
+    <span class="n">spec</span><span class="o">.</span><span class="n">__name__</span> <span class="o">=</span> <span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="s">&#39;__module__&#39;</span><span class="p">,</span> <span class="s">&#39;?&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s">&#39;?&#39;</span><span class="p">)</span> <span class="o">+</span> \
+                    <span class="s">&#39;.&#39;</span> <span class="o">+</span> <span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="s">&#39;__name__&#39;</span><span class="p">,</span> <span class="s">&#39;?&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s">&#39;?&#39;</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">cls</span><span class="o">.</span><span class="n">__implemented__</span> <span class="o">=</span> <span class="n">spec</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="s">&#39;__providedBy__&#39;</span><span class="p">):</span>
+            <span class="n">cls</span><span class="o">.</span><span class="n">__providedBy__</span> <span class="o">=</span> <span class="n">objectSpecificationDescriptor</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">DescriptorAwareMetaClasses</span><span class="p">)</span>
+            <span class="ow">and</span>
+            <span class="s">&#39;__provides__&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cls</span><span class="o">.</span><span class="n">__dict__</span><span class="p">):</span>
+            <span class="c"># Make sure we get a __provides__ descriptor</span>
+            <span class="n">cls</span><span class="o">.</span><span class="n">__provides__</span> <span class="o">=</span> <span class="n">ClassProvides</span><span class="p">(</span>
+                <span class="n">cls</span><span class="p">,</span>
+                <span class="nb">getattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="s">&#39;__class__&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">cls</span><span class="p">)),</span>
+                <span class="p">)</span>
+
+    <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;ImplementedBy called for non-type&quot;</span><span class="p">,</span> <span class="n">cls</span><span class="p">)</span>
+        <span class="n">BuiltinImplementationSpecifications</span><span class="p">[</span><span class="n">cls</span><span class="p">]</span> <span class="o">=</span> <span class="n">spec</span>
+
+    <span class="k">return</span> <span class="n">spec</span>
+</div>
+<span class="n">implementedBy</span> <span class="o">=</span> <span class="n">implementedByFallback</span>
+
+<div class="viewcode-block" id="classImplementsOnly"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.classImplementsOnly">[docs]</a><span class="k">def</span> <span class="nf">classImplementsOnly</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Declare the only interfaces implemented by instances of a class</span>
+
+<span class="sd">      The arguments after the class are one or more interfaces or interface</span>
+<span class="sd">      specifications (``IDeclaration`` objects).</span>
+
+<span class="sd">      The interfaces given (including the interfaces in the specifications)</span>
+<span class="sd">      replace any previous declarations.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">spec</span> <span class="o">=</span> <span class="n">implementedBy</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+    <span class="n">spec</span><span class="o">.</span><span class="n">declared</span> <span class="o">=</span> <span class="p">()</span>
+    <span class="n">spec</span><span class="o">.</span><span class="n">inherit</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">classImplements</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="classImplements"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.classImplements">[docs]</a><span class="k">def</span> <span class="nf">classImplements</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Declare additional interfaces implemented for instances of a class</span>
+
+<span class="sd">      The arguments after the class are one or more interfaces or</span>
+<span class="sd">      interface specifications (``IDeclaration`` objects).</span>
+
+<span class="sd">      The interfaces given (including the interfaces in the specifications)</span>
+<span class="sd">      are added to any interfaces previously declared.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">spec</span> <span class="o">=</span> <span class="n">implementedBy</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+    <span class="n">spec</span><span class="o">.</span><span class="n">declared</span> <span class="o">+=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">_normalizeargs</span><span class="p">(</span><span class="n">interfaces</span><span class="p">))</span>
+
+    <span class="c"># compute the bases</span>
+    <span class="n">bases</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">seen</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">spec</span><span class="o">.</span><span class="n">declared</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">b</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+            <span class="n">seen</span><span class="p">[</span><span class="n">b</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="n">bases</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">inherit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+
+        <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">spec</span><span class="o">.</span><span class="n">inherit</span><span class="o">.</span><span class="n">__bases__</span><span class="p">:</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="n">implementedBy</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">b</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                <span class="n">seen</span><span class="p">[</span><span class="n">b</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+                <span class="n">bases</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+
+    <span class="n">spec</span><span class="o">.</span><span class="n">__bases__</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">bases</span><span class="p">)</span>
+</div>
+<span class="k">def</span> <span class="nf">_implements_advice</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+    <span class="n">interfaces</span><span class="p">,</span> <span class="n">classImplements</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">__dict__</span><span class="p">[</span><span class="s">&#39;__implements_advice_data__&#39;</span><span class="p">]</span>
+    <span class="k">del</span> <span class="n">cls</span><span class="o">.</span><span class="n">__implements_advice_data__</span>
+    <span class="n">classImplements</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">cls</span>
+
+
+<div class="viewcode-block" id="implementer"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.implementer">[docs]</a><span class="k">class</span> <span class="nc">implementer</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Declare the interfaces implemented by instances of a class.</span>
+
+<span class="sd">      This function is called as a class decorator.</span>
+
+<span class="sd">      The arguments are one or more interfaces or interface</span>
+<span class="sd">      specifications (IDeclaration objects).</span>
+
+<span class="sd">      The interfaces given (including the interfaces in the</span>
+<span class="sd">      specifications) are added to any interfaces previously</span>
+<span class="sd">      declared.</span>
+
+<span class="sd">      Previous declarations include declarations for base classes</span>
+<span class="sd">      unless implementsOnly was used.</span>
+
+<span class="sd">      This function is provided for convenience. It provides a more</span>
+<span class="sd">      convenient way to call classImplements. For example::</span>
+
+<span class="sd">        @implementer(I1)</span>
+<span class="sd">        class C(object):</span>
+<span class="sd">            pass</span>
+
+<span class="sd">      is equivalent to calling::</span>
+
+<span class="sd">        classImplements(C, I1)</span>
+
+<span class="sd">      after the class has been created.</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span> <span class="o">=</span> <span class="n">interfaces</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ob</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ob</span><span class="p">,</span> <span class="n">DescriptorAwareMetaClasses</span><span class="p">):</span>
+            <span class="n">classImplements</span><span class="p">(</span><span class="n">ob</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">ob</span>
+
+        <span class="n">spec</span> <span class="o">=</span> <span class="n">Implements</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ob</span><span class="o">.</span><span class="n">__implemented__</span> <span class="o">=</span> <span class="n">spec</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Can&#39;t declare implements&quot;</span><span class="p">,</span> <span class="n">ob</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ob</span>
+</div>
+<div class="viewcode-block" id="implementer_only"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.implementer_only">[docs]</a><span class="k">class</span> <span class="nc">implementer_only</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Declare the only interfaces implemented by instances of a class</span>
+
+<span class="sd">      This function is called as a class decorator.</span>
+
+<span class="sd">      The arguments are one or more interfaces or interface</span>
+<span class="sd">      specifications (IDeclaration objects).</span>
+
+<span class="sd">      Previous declarations including declarations for base classes</span>
+<span class="sd">      are overridden.</span>
+
+<span class="sd">      This function is provided for convenience. It provides a more</span>
+<span class="sd">      convenient way to call classImplementsOnly. For example::</span>
+
+<span class="sd">        @implementer_only(I1)</span>
+<span class="sd">        class C(object): pass</span>
+
+<span class="sd">      is equivalent to calling::</span>
+
+<span class="sd">        classImplementsOnly(I1)</span>
+
+<span class="sd">      after the class has been created.</span>
+<span class="sd">      &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span> <span class="o">=</span> <span class="n">interfaces</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ob</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ob</span><span class="p">,</span> <span class="p">(</span><span class="n">FunctionType</span><span class="p">,</span> <span class="n">MethodType</span><span class="p">)):</span>
+            <span class="c"># XXX Does this decorator make sense for anything but classes?</span>
+            <span class="c"># I don&#39;t think so. There can be no inheritance of interfaces</span>
+            <span class="c"># on a method pr function....</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;The implementer_only decorator is not &#39;</span>
+                             <span class="s">&#39;supported for methods or functions.&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c"># Assume it&#39;s a class:</span>
+            <span class="n">classImplementsOnly</span><span class="p">(</span><span class="n">ob</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">ob</span>
+</div>
+<span class="k">def</span> <span class="nf">_implements</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">interfaces</span><span class="p">,</span> <span class="n">classImplements</span><span class="p">):</span>
+    <span class="c"># This entire approach is invalid under Py3K.  Don&#39;t even try to fix</span>
+    <span class="c"># the coverage for this block there. :(</span>
+    <span class="k">if</span> <span class="n">PYTHON3</span><span class="p">:</span> <span class="c">#pragma NO COVER</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&#39;Class advice impossible in Python3&#39;</span><span class="p">)</span>
+    <span class="n">frame</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">_getframe</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+    <span class="nb">locals</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">f_locals</span>
+
+    <span class="c"># Try to make sure we were called from a class def. In 2.2.0 we can&#39;t</span>
+    <span class="c"># check for __module__ since it doesn&#39;t seem to be added to the locals</span>
+    <span class="c"># until later on.</span>
+    <span class="k">if</span> <span class="nb">locals</span> <span class="ow">is</span> <span class="n">frame</span><span class="o">.</span><span class="n">f_globals</span> <span class="ow">or</span> <span class="s">&#39;__module__&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">locals</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">name</span><span class="o">+</span><span class="s">&quot; can be used only from a class definition.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="s">&#39;__implements_advice_data__&#39;</span> <span class="ow">in</span> <span class="nb">locals</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">name</span><span class="o">+</span><span class="s">&quot; can be used only once in a class definition.&quot;</span><span class="p">)</span>
+
+    <span class="nb">locals</span><span class="p">[</span><span class="s">&#39;__implements_advice_data__&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">interfaces</span><span class="p">,</span> <span class="n">classImplements</span>
+    <span class="n">addClassAdvisor</span><span class="p">(</span><span class="n">_implements_advice</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+<div class="viewcode-block" id="implements"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.implements">[docs]</a><span class="k">def</span> <span class="nf">implements</span><span class="p">(</span><span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Declare interfaces implemented by instances of a class</span>
+
+<span class="sd">      This function is called in a class definition.</span>
+
+<span class="sd">      The arguments are one or more interfaces or interface</span>
+<span class="sd">      specifications (IDeclaration objects).</span>
+
+<span class="sd">      The interfaces given (including the interfaces in the</span>
+<span class="sd">      specifications) are added to any interfaces previously</span>
+<span class="sd">      declared.</span>
+
+<span class="sd">      Previous declarations include declarations for base classes</span>
+<span class="sd">      unless implementsOnly was used.</span>
+
+<span class="sd">      This function is provided for convenience. It provides a more</span>
+<span class="sd">      convenient way to call classImplements. For example::</span>
+
+<span class="sd">        implements(I1)</span>
+
+<span class="sd">      is equivalent to calling::</span>
+
+<span class="sd">        classImplements(C, I1)</span>
+
+<span class="sd">      after the class has been created.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># This entire approach is invalid under Py3K.  Don&#39;t even try to fix</span>
+    <span class="c"># the coverage for this block there. :(</span>
+    <span class="k">if</span> <span class="n">PYTHON3</span><span class="p">:</span> <span class="c">#pragma NO COVER</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">_ADVICE_ERROR</span> <span class="o">%</span> <span class="s">&#39;implementer&#39;</span><span class="p">)</span>
+    <span class="n">_implements</span><span class="p">(</span><span class="s">&quot;implements&quot;</span><span class="p">,</span> <span class="n">interfaces</span><span class="p">,</span> <span class="n">classImplements</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="implementsOnly"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.implementsOnly">[docs]</a><span class="k">def</span> <span class="nf">implementsOnly</span><span class="p">(</span><span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Declare the only interfaces implemented by instances of a class</span>
+
+<span class="sd">      This function is called in a class definition.</span>
+
+<span class="sd">      The arguments are one or more interfaces or interface</span>
+<span class="sd">      specifications (IDeclaration objects).</span>
+
+<span class="sd">      Previous declarations including declarations for base classes</span>
+<span class="sd">      are overridden.</span>
+
+<span class="sd">      This function is provided for convenience. It provides a more</span>
+<span class="sd">      convenient way to call classImplementsOnly. For example::</span>
+
+<span class="sd">        implementsOnly(I1)</span>
+
+<span class="sd">      is equivalent to calling::</span>
+
+<span class="sd">        classImplementsOnly(I1)</span>
+
+<span class="sd">      after the class has been created.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># This entire approach is invalid under Py3K.  Don&#39;t even try to fix</span>
+    <span class="c"># the coverage for this block there. :(</span>
+    <span class="k">if</span> <span class="n">PYTHON3</span><span class="p">:</span> <span class="c">#pragma NO COVER</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">_ADVICE_ERROR</span> <span class="o">%</span> <span class="s">&#39;implementer_only&#39;</span><span class="p">)</span>
+    <span class="n">_implements</span><span class="p">(</span><span class="s">&quot;implementsOnly&quot;</span><span class="p">,</span> <span class="n">interfaces</span><span class="p">,</span> <span class="n">classImplementsOnly</span><span class="p">)</span>
+
+<span class="c">##############################################################################</span>
+<span class="c">#</span>
+<span class="c"># Instance declarations</span>
+</div>
+<span class="k">class</span> <span class="nc">Provides</span><span class="p">(</span><span class="n">Declaration</span><span class="p">):</span>  <span class="c"># Really named ProvidesClass</span>
+    <span class="sd">&quot;&quot;&quot;Implement __provides__, the instance-specific specification</span>
+
+<span class="sd">    When an object is pickled, we pickle the interfaces that it implements.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__args</span> <span class="o">=</span> <span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="p">)</span> <span class="o">+</span> <span class="n">interfaces</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cls</span> <span class="o">=</span> <span class="n">cls</span>
+        <span class="n">Declaration</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="n">interfaces</span> <span class="o">+</span> <span class="p">(</span><span class="n">implementedBy</span><span class="p">(</span><span class="n">cls</span><span class="p">),</span> <span class="p">)))</span>
+
+    <span class="k">def</span> <span class="nf">__reduce__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Provides</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">__args</span>
+
+    <span class="n">__module__</span> <span class="o">=</span> <span class="s">&#39;zope.interface&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__get__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inst</span><span class="p">,</span> <span class="n">cls</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Make sure that a class __provides__ doesn&#39;t leak to an instance</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">inst</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">cls</span> <span class="ow">is</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cls</span><span class="p">:</span>
+            <span class="c"># We were accessed through a class, so we are the class&#39;</span>
+            <span class="c"># provides spec. Just return this object, but only if we are</span>
+            <span class="c"># being called on the same class that we were defined for:</span>
+            <span class="k">return</span> <span class="bp">self</span>
+
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&#39;__provides__&#39;</span><span class="p">)</span>
+
+<span class="n">ProvidesClass</span> <span class="o">=</span> <span class="n">Provides</span>
+
+<span class="c"># Registry of instance declarations</span>
+<span class="c"># This is a memory optimization to allow objects to share specifications.</span>
+<span class="n">InstanceDeclarations</span> <span class="o">=</span> <span class="n">weakref</span><span class="o">.</span><span class="n">WeakValueDictionary</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Provides"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.Provides">[docs]</a><span class="k">def</span> <span class="nf">Provides</span><span class="p">(</span><span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Cache instance declarations</span>
+
+<span class="sd">      Instance declarations are shared among instances that have the same</span>
+<span class="sd">      declaration. The declarations are cached in a weak value dictionary.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">spec</span> <span class="o">=</span> <span class="n">InstanceDeclarations</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">interfaces</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="n">ProvidesClass</span><span class="p">(</span><span class="o">*</span><span class="n">interfaces</span><span class="p">)</span>
+        <span class="n">InstanceDeclarations</span><span class="p">[</span><span class="n">interfaces</span><span class="p">]</span> <span class="o">=</span> <span class="n">spec</span>
+
+    <span class="k">return</span> <span class="n">spec</span>
+</div>
+<span class="n">Provides</span><span class="o">.</span><span class="n">__safe_for_unpickling__</span> <span class="o">=</span> <span class="bp">True</span>
+
+
+<div class="viewcode-block" id="directlyProvides"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.directlyProvides">[docs]</a><span class="k">def</span> <span class="nf">directlyProvides</span><span class="p">(</span><span class="nb">object</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Declare interfaces declared directly for an object</span>
+
+<span class="sd">      The arguments after the object are one or more interfaces or interface</span>
+<span class="sd">      specifications (``IDeclaration`` objects).</span>
+
+<span class="sd">      The interfaces given (including the interfaces in the specifications)</span>
+<span class="sd">      replace interfaces previously declared for the object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cls</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">object</span><span class="p">,</span> <span class="s">&#39;__class__&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">cls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span>  <span class="s">&#39;__class__&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="n">cls</span><span class="p">:</span>
+        <span class="c"># It&#39;s a meta class (well, at least it it could be an extension class)</span>
+        <span class="c"># Note that we can&#39;t get here from Py3k tests:  there is no normal</span>
+        <span class="c"># class which isn&#39;t descriptor aware.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">object</span><span class="p">,</span>
+                          <span class="n">DescriptorAwareMetaClasses</span><span class="p">):</span> <span class="c">#pragma NO COVER Py3k</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Attempt to make an interface declaration on a &quot;</span>
+                            <span class="s">&quot;non-descriptor-aware class&quot;</span><span class="p">)</span>
+
+    <span class="n">interfaces</span> <span class="o">=</span> <span class="n">_normalizeargs</span><span class="p">(</span><span class="n">interfaces</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">cls</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">cls</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="nb">object</span><span class="p">)</span>
+
+    <span class="n">issub</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="k">for</span> <span class="n">damc</span> <span class="ow">in</span> <span class="n">DescriptorAwareMetaClasses</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">damc</span><span class="p">):</span>
+            <span class="n">issub</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">break</span>
+    <span class="k">if</span> <span class="n">issub</span><span class="p">:</span>
+        <span class="c"># we have a class or type.  We&#39;ll use a special descriptor</span>
+        <span class="c"># that provides some extra caching</span>
+        <span class="nb">object</span><span class="o">.</span><span class="n">__provides__</span> <span class="o">=</span> <span class="n">ClassProvides</span><span class="p">(</span><span class="nb">object</span><span class="p">,</span> <span class="n">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">object</span><span class="o">.</span><span class="n">__provides__</span> <span class="o">=</span> <span class="n">Provides</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="alsoProvides"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.alsoProvides">[docs]</a><span class="k">def</span> <span class="nf">alsoProvides</span><span class="p">(</span><span class="nb">object</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Declare interfaces declared directly for an object</span>
+
+<span class="sd">    The arguments after the object are one or more interfaces or interface</span>
+<span class="sd">    specifications (``IDeclaration`` objects).</span>
+
+<span class="sd">    The interfaces given (including the interfaces in the specifications) are</span>
+<span class="sd">    added to the interfaces previously declared for the object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">directlyProvides</span><span class="p">(</span><span class="nb">object</span><span class="p">,</span> <span class="n">directlyProvidedBy</span><span class="p">(</span><span class="nb">object</span><span class="p">),</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="noLongerProvides"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.noLongerProvides">[docs]</a><span class="k">def</span> <span class="nf">noLongerProvides</span><span class="p">(</span><span class="nb">object</span><span class="p">,</span> <span class="n">interface</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Removes a directly provided interface from an object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">directlyProvides</span><span class="p">(</span><span class="nb">object</span><span class="p">,</span> <span class="n">directlyProvidedBy</span><span class="p">(</span><span class="nb">object</span><span class="p">)</span> <span class="o">-</span> <span class="n">interface</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">interface</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Can only remove directly provided interfaces.&quot;</span><span class="p">)</span>
+</div>
+<span class="k">class</span> <span class="nc">ClassProvidesBaseFallback</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__get__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inst</span><span class="p">,</span> <span class="n">cls</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">cls</span> <span class="ow">is</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cls</span><span class="p">:</span>
+            <span class="c"># We only work if called on the class we were defined for</span>
+
+            <span class="k">if</span> <span class="n">inst</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="c"># We were accessed through a class, so we are the class&#39;</span>
+                <span class="c"># provides spec. Just return this object as is:</span>
+                <span class="k">return</span> <span class="bp">self</span>
+
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_implements</span>
+
+        <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&#39;__provides__&#39;</span><span class="p">)</span>
+
+<span class="n">ClassProvidesBasePy</span> <span class="o">=</span> <span class="n">ClassProvidesBaseFallback</span> <span class="c"># BBB</span>
+<span class="n">ClassProvidesBase</span> <span class="o">=</span> <span class="n">ClassProvidesBaseFallback</span>
+
+<span class="c"># Try to get C base:</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">_zope_interface_coptimizations</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>  <span class="c">#pragma NO COVERAGE</span>
+    <span class="k">pass</span>
+<span class="k">else</span><span class="p">:</span>  <span class="c">#pragma NO COVERAGE</span>
+    <span class="kn">from</span> <span class="nn">_zope_interface_coptimizations</span> <span class="kn">import</span> <span class="n">ClassProvidesBase</span>
+
+
+<span class="k">class</span> <span class="nc">ClassProvides</span><span class="p">(</span><span class="n">Declaration</span><span class="p">,</span> <span class="n">ClassProvidesBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Special descriptor for class __provides__</span>
+
+<span class="sd">    The descriptor caches the implementedBy info, so that</span>
+<span class="sd">    we can get declarations for objects without instance-specific</span>
+<span class="sd">    interfaces a bit quicker.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cls</span><span class="p">,</span> <span class="n">metacls</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cls</span> <span class="o">=</span> <span class="n">cls</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_implements</span> <span class="o">=</span> <span class="n">implementedBy</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__args</span> <span class="o">=</span> <span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">metacls</span><span class="p">,</span> <span class="p">)</span> <span class="o">+</span> <span class="n">interfaces</span>
+        <span class="n">Declaration</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="n">interfaces</span> <span class="o">+</span> <span class="p">(</span><span class="n">implementedBy</span><span class="p">(</span><span class="n">metacls</span><span class="p">),</span> <span class="p">)))</span>
+
+    <span class="k">def</span> <span class="nf">__reduce__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">__args</span>
+
+    <span class="c"># Copy base-class method for speed</span>
+    <span class="n">__get__</span> <span class="o">=</span> <span class="n">ClassProvidesBase</span><span class="o">.</span><span class="n">__get__</span>
+
+<div class="viewcode-block" id="directlyProvidedBy"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.directlyProvidedBy">[docs]</a><span class="k">def</span> <span class="nf">directlyProvidedBy</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the interfaces directly provided by the given object</span>
+
+<span class="sd">    The value returned is an ``IDeclaration``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">provides</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">object</span><span class="p">,</span> <span class="s">&quot;__provides__&quot;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">provides</span> <span class="ow">is</span> <span class="bp">None</span> <span class="c"># no spec</span>
+        <span class="ow">or</span>
+        <span class="c"># We might have gotten the implements spec, as an</span>
+        <span class="c"># optimization. If so, it&#39;s like having only one base, that we</span>
+        <span class="c"># lop off to exclude class-supplied declarations:</span>
+        <span class="nb">isinstance</span><span class="p">(</span><span class="n">provides</span><span class="p">,</span> <span class="n">Implements</span><span class="p">)</span>
+        <span class="p">):</span>
+        <span class="k">return</span> <span class="n">_empty</span>
+
+    <span class="c"># Strip off the class part of the spec:</span>
+    <span class="k">return</span> <span class="n">Declaration</span><span class="p">(</span><span class="n">provides</span><span class="o">.</span><span class="n">__bases__</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="classProvides"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.classProvides">[docs]</a><span class="k">def</span> <span class="nf">classProvides</span><span class="p">(</span><span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Declare interfaces provided directly by a class</span>
+
+<span class="sd">      This function is called in a class definition.</span>
+
+<span class="sd">      The arguments are one or more interfaces or interface specifications</span>
+<span class="sd">      (``IDeclaration`` objects).</span>
+
+<span class="sd">      The given interfaces (including the interfaces in the specifications)</span>
+<span class="sd">      are used to create the class&#39;s direct-object interface specification.</span>
+<span class="sd">      An error will be raised if the module class has an direct interface</span>
+<span class="sd">      specification. In other words, it is an error to call this function more</span>
+<span class="sd">      than once in a class definition.</span>
+
+<span class="sd">      Note that the given interfaces have nothing to do with the interfaces</span>
+<span class="sd">      implemented by instances of the class.</span>
+
+<span class="sd">      This function is provided for convenience. It provides a more convenient</span>
+<span class="sd">      way to call directlyProvides for a class. For example::</span>
+
+<span class="sd">        classProvides(I1)</span>
+
+<span class="sd">      is equivalent to calling::</span>
+
+<span class="sd">        directlyProvides(theclass, I1)</span>
+
+<span class="sd">      after the class has been created.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># This entire approach is invalid under Py3K.  Don&#39;t even try to fix</span>
+    <span class="c"># the coverage for this block there. :(</span>
+                       
+    <span class="k">if</span> <span class="n">PYTHON3</span><span class="p">:</span> <span class="c">#pragma NO COVER</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="n">_ADVICE_ERROR</span> <span class="o">%</span> <span class="s">&#39;provider&#39;</span><span class="p">)</span>
+
+    <span class="n">frame</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">_getframe</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="nb">locals</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">f_locals</span>
+
+    <span class="c"># Try to make sure we were called from a class def</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nb">locals</span> <span class="ow">is</span> <span class="n">frame</span><span class="o">.</span><span class="n">f_globals</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="s">&#39;__module__&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">locals</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;classProvides can be used only from a &quot;</span>
+                        <span class="s">&quot;class definition.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="s">&#39;__provides__&#39;</span> <span class="ow">in</span> <span class="nb">locals</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="s">&quot;classProvides can only be used once in a class definition.&quot;</span><span class="p">)</span>
+
+    <span class="nb">locals</span><span class="p">[</span><span class="s">&quot;__provides__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_normalizeargs</span><span class="p">(</span><span class="n">interfaces</span><span class="p">)</span>
+
+    <span class="n">addClassAdvisor</span><span class="p">(</span><span class="n">_classProvides_advice</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+</div>
+<span class="k">def</span> <span class="nf">_classProvides_advice</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+    <span class="c"># This entire approach is invalid under Py3K.  Don&#39;t even try to fix</span>
+    <span class="c"># the coverage for this block there. :(</span>
+    <span class="n">interfaces</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">__dict__</span><span class="p">[</span><span class="s">&#39;__provides__&#39;</span><span class="p">]</span>
+    <span class="k">del</span> <span class="n">cls</span><span class="o">.</span><span class="n">__provides__</span>
+    <span class="n">directlyProvides</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">cls</span>
+
+<div class="viewcode-block" id="provider"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.provider">[docs]</a><span class="k">class</span> <span class="nc">provider</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Class decorator version of classProvides&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span> <span class="o">=</span> <span class="n">interfaces</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ob</span><span class="p">):</span>
+        <span class="n">directlyProvides</span><span class="p">(</span><span class="n">ob</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">interfaces</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ob</span>
+</div>
+<div class="viewcode-block" id="moduleProvides"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.moduleProvides">[docs]</a><span class="k">def</span> <span class="nf">moduleProvides</span><span class="p">(</span><span class="o">*</span><span class="n">interfaces</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Declare interfaces provided by a module</span>
+
+<span class="sd">    This function is used in a module definition.</span>
+
+<span class="sd">    The arguments are one or more interfaces or interface specifications</span>
+<span class="sd">    (``IDeclaration`` objects).</span>
+
+<span class="sd">    The given interfaces (including the interfaces in the specifications) are</span>
+<span class="sd">    used to create the module&#39;s direct-object interface specification.  An</span>
+<span class="sd">    error will be raised if the module already has an interface specification.</span>
+<span class="sd">    In other words, it is an error to call this function more than once in a</span>
+<span class="sd">    module definition.</span>
+
+<span class="sd">    This function is provided for convenience. It provides a more convenient</span>
+<span class="sd">    way to call directlyProvides. For example::</span>
+
+<span class="sd">      moduleImplements(I1)</span>
+
+<span class="sd">    is equivalent to::</span>
+
+<span class="sd">      directlyProvides(sys.modules[__name__], I1)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">frame</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">_getframe</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="nb">locals</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">f_locals</span>
+
+    <span class="c"># Try to make sure we were called from a class def</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nb">locals</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">frame</span><span class="o">.</span><span class="n">f_globals</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="s">&#39;__name__&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">locals</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="s">&quot;moduleProvides can only be used from a module definition.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="s">&#39;__provides__&#39;</span> <span class="ow">in</span> <span class="nb">locals</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+            <span class="s">&quot;moduleProvides can only be used once in a module definition.&quot;</span><span class="p">)</span>
+
+    <span class="nb">locals</span><span class="p">[</span><span class="s">&quot;__provides__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Provides</span><span class="p">(</span><span class="n">ModuleType</span><span class="p">,</span>
+                                      <span class="o">*</span><span class="n">_normalizeargs</span><span class="p">(</span><span class="n">interfaces</span><span class="p">))</span>
+
+<span class="c">##############################################################################</span>
+<span class="c">#</span>
+<span class="c"># Declaration querying support</span>
+
+<span class="c"># XXX:  is this a fossil?  Nobody calls it, no unit tests exercise it, no</span>
+<span class="c">#       doctests import it, and the package __init__ doesn&#39;t import it.</span></div>
+<div class="viewcode-block" id="ObjectSpecification"><a class="viewcode-back" href="../../../api.html#zope.interface.declarations.ObjectSpecification">[docs]</a><span class="k">def</span> <span class="nf">ObjectSpecification</span><span class="p">(</span><span class="n">direct</span><span class="p">,</span> <span class="n">cls</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Provide object specifications</span>
+
+<span class="sd">    These combine information for the object and for it&#39;s classes.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Provides</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">direct</span><span class="p">)</span> <span class="c">#pragma NO COVER fossil</span>
+</div>
+<span class="k">def</span> <span class="nf">getObjectSpecificationFallback</span><span class="p">(</span><span class="n">ob</span><span class="p">):</span>
+
+    <span class="n">provides</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ob</span><span class="p">,</span> <span class="s">&#39;__provides__&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">provides</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">provides</span><span class="p">,</span> <span class="n">SpecificationBase</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">provides</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">cls</span> <span class="o">=</span> <span class="n">ob</span><span class="o">.</span><span class="n">__class__</span>
+    <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+        <span class="c"># We can&#39;t get the class, so just consider provides</span>
+        <span class="k">return</span> <span class="n">_empty</span>
+
+    <span class="k">return</span> <span class="n">implementedBy</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+
+<span class="n">getObjectSpecification</span> <span class="o">=</span> <span class="n">getObjectSpecificationFallback</span>
+
+<span class="k">def</span> <span class="nf">providedByFallback</span><span class="p">(</span><span class="n">ob</span><span class="p">):</span>
+
+    <span class="c"># Here we have either a special object, an old-style declaration</span>
+    <span class="c"># or a descriptor</span>
+
+    <span class="c"># Try to get __providedBy__</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="n">ob</span><span class="o">.</span><span class="n">__providedBy__</span>
+    <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+        <span class="c"># Not set yet. Fall back to lower-level thing that computes it</span>
+        <span class="k">return</span> <span class="n">getObjectSpecification</span><span class="p">(</span><span class="n">ob</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c"># We might have gotten a descriptor from an instance of a</span>
+        <span class="c"># class (like an ExtensionClass) that doesn&#39;t support</span>
+        <span class="c"># descriptors.  We&#39;ll make sure we got one by trying to get</span>
+        <span class="c"># the only attribute, which all specs have.</span>
+        <span class="n">r</span><span class="o">.</span><span class="n">extends</span>
+
+    <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+
+        <span class="c"># The object&#39;s class doesn&#39;t understand descriptors.</span>
+        <span class="c"># Sigh. We need to get an object descriptor, but we have to be</span>
+        <span class="c"># careful.  We want to use the instance&#39;s __provides__, if</span>
+        <span class="c"># there is one, but only if it didn&#39;t come from the class.</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">ob</span><span class="o">.</span><span class="n">__provides__</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="c"># No __provides__, so just fall back to implementedBy</span>
+            <span class="k">return</span> <span class="n">implementedBy</span><span class="p">(</span><span class="n">ob</span><span class="o">.</span><span class="n">__class__</span><span class="p">)</span>
+
+        <span class="c"># We need to make sure we got the __provides__ from the</span>
+        <span class="c"># instance. We&#39;ll do this by making sure we don&#39;t get the same</span>
+        <span class="c"># thing from the class:</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">cp</span> <span class="o">=</span> <span class="n">ob</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__provides__</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="c"># The ob doesn&#39;t have a class or the class has no</span>
+            <span class="c"># provides, assume we&#39;re done:</span>
+            <span class="k">return</span> <span class="n">r</span>
+
+        <span class="k">if</span> <span class="n">r</span> <span class="ow">is</span> <span class="n">cp</span><span class="p">:</span>
+            <span class="c"># Oops, we got the provides from the class. This means</span>
+            <span class="c"># the object doesn&#39;t have it&#39;s own. We should use implementedBy</span>
+            <span class="k">return</span> <span class="n">implementedBy</span><span class="p">(</span><span class="n">ob</span><span class="o">.</span><span class="n">__class__</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">r</span>
+<span class="n">providedBy</span> <span class="o">=</span> <span class="n">providedByFallback</span>
+
+<span class="k">class</span> <span class="nc">ObjectSpecificationDescriptorFallback</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Implement the `__providedBy__` attribute</span>
+
+<span class="sd">    The `__providedBy__` attribute computes the interfaces peovided by</span>
+<span class="sd">    an object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__get__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inst</span><span class="p">,</span> <span class="n">cls</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Get an object specification for an object</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">inst</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">getObjectSpecification</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+
+        <span class="n">provides</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">inst</span><span class="p">,</span> <span class="s">&#39;__provides__&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">provides</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">provides</span>
+
+        <span class="k">return</span> <span class="n">implementedBy</span><span class="p">(</span><span class="n">cls</span><span class="p">)</span>
+
+<span class="n">ObjectSpecificationDescriptor</span> <span class="o">=</span> <span class="n">ObjectSpecificationDescriptorFallback</span>
+
+<span class="c">##############################################################################</span>
+
+<span class="k">def</span> <span class="nf">_normalizeargs</span><span class="p">(</span><span class="n">sequence</span><span class="p">,</span> <span class="n">output</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Normalize declaration arguments</span>
+
+<span class="sd">    Normalization arguments might contain Declarions, tuples, or single</span>
+<span class="sd">    interfaces.</span>
+
+<span class="sd">    Anything but individial interfaces or implements specs will be expanded.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">output</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">cls</span> <span class="o">=</span> <span class="n">sequence</span><span class="o">.</span><span class="n">__class__</span>
+    <span class="k">if</span> <span class="n">InterfaceClass</span> <span class="ow">in</span> <span class="n">cls</span><span class="o">.</span><span class="n">__mro__</span> <span class="ow">or</span> <span class="n">Implements</span> <span class="ow">in</span> <span class="n">cls</span><span class="o">.</span><span class="n">__mro__</span><span class="p">:</span>
+        <span class="n">output</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sequence</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">sequence</span><span class="p">:</span>
+            <span class="n">_normalizeargs</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">output</span>
+
+<span class="n">_empty</span> <span class="o">=</span> <span class="n">Declaration</span><span class="p">()</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">_zope_interface_coptimizations</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span> <span class="c">#pragma NO COVER</span>
+    <span class="k">pass</span>
+<span class="k">else</span><span class="p">:</span> <span class="c">#pragma NO COVER PyPy</span>
+    <span class="kn">from</span> <span class="nn">_zope_interface_coptimizations</span> <span class="kn">import</span> <span class="n">implementedBy</span>
+    <span class="kn">from</span> <span class="nn">_zope_interface_coptimizations</span> <span class="kn">import</span> <span class="n">providedBy</span>
+    <span class="kn">from</span> <span class="nn">_zope_interface_coptimizations</span> <span class="kn">import</span> <span class="n">getObjectSpecification</span>
+    <span class="kn">from</span> <span class="nn">_zope_interface_coptimizations</span> <span class="kn">import</span> <span class="n">ObjectSpecificationDescriptor</span>
+
+<span class="n">objectSpecificationDescriptor</span> <span class="o">=</span> <span class="n">ObjectSpecificationDescriptor</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="../../../index.html">zope.interface 4.0.1 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation contributors.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,250 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Использование реестра адаптеров &mdash; zope.interface 4.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '4.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="zope.interface 4.0.1 documentation" href="index.html" />
+    <link rel="prev" title="Реестр адаптеров" href="adapter.ru.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="adapter.ru.html" title="Реестр адаптеров"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">zope.interface 4.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="id1">
+<h1>Использование реестра адаптеров<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h1>
+<p>Данный документ содержит небольшую демонстрацию пакета <tt class="docutils literal"><span class="pre">zope.interface</span></tt> и его
+реестра адаптеров. Документ рассчитывался как конкретный, но более узкий пример
+того как использовать интерфейсы и адаптеры вне Zope 3.</p>
+<p>Сначала нам необходимо импортировать пакет для работы с интерфейсами:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">zope.interface</span>
+</pre></div>
+</div>
+<p>Теперь мы разработаем интерфейс для нашего объекта - простого файла. Наш файл
+будет содержать всего один атрибут - body, в котором фактически будет сохранено
+содержимое файла:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IFile</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">...</span>
+<span class="gp">... </span>    <span class="n">body</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Attribute</span><span class="p">(</span><span class="s">u&#39;Содержимое файла.&#39;</span><span class="p">)</span>
+<span class="gp">...</span>
+</pre></div>
+</div>
+<p>Для статистики нам часто необходимо знать размер файла. Но было бы несколько
+топорно реализовывать определение размера прямо для объекта файла, т.к. размер
+больше относится к мета-данным. Таким образом мы создаем еще один интерфейс для
+представления размера какого-либо объекта:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">ISize</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">...</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">getSize</span><span class="p">():</span>
+<span class="gp">... </span>        <span class="s">&#39;Return the size of an object.&#39;</span>
+<span class="gp">...</span>
+</pre></div>
+</div>
+<p>Теперь мы должны создать класс реализующий наш файл. Необходимо что бы наш
+объект хранил информацию о том, что он реализует интерфейс <cite>IFile</cite>. Мы также
+создаем атрибут с содержимым файла по умолчанию (для упрощения нашего
+примера):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">File</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">...</span>
+<span class="gp">... </span>     <span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implements</span><span class="p">(</span><span class="n">IFile</span><span class="p">)</span>
+<span class="gp">... </span>     <span class="n">body</span> <span class="o">=</span> <span class="s">&#39;foo bar&#39;</span>
+<span class="gp">...</span>
+</pre></div>
+</div>
+<p>Дальше мы создаем адаптер, который будет предоставлять интерфейс <cite>ISize</cite>
+получая любой объект предоставляющий интерфейс <cite>IFile</cite>. По соглашению мы
+используем атрибут <cite>__used_for__</cite> для указания интерфейса который как мы
+ожидаем предоставляет адаптируемый объект, <cite>IFile</cite> в нашем случае. На самом
+деле этот атрибут используется только для документирования. В случае если
+адаптер используется для нескольких интерфейсов можно указать их все в виде
+кортежа.</p>
+<p>Опять же по соглашению конструктор адаптера получает один аргумент - context
+(контекст). В нашем случае контекст - это экземпляр <cite>IFile</cite> (объект,
+предоставляющий <cite>IFile</cite>) который используется для получения из него размера.
+Так же по соглашению контекст сохраняется а адаптере в атрибуте с именем
+<cite>context</cite>. Twisted комьюнити ссылается на контекст как на объект <cite>original</cite>.
+Таким образом можно также дать аргументу любое подходящее имя, например
+<cite>file</cite>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">FileSize</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">...</span>
+<span class="gp">... </span>     <span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implements</span><span class="p">(</span><span class="n">ISize</span><span class="p">)</span>
+<span class="gp">... </span>     <span class="n">__used_for__</span> <span class="o">=</span> <span class="n">IFile</span>
+<span class="gp">...</span>
+<span class="gp">... </span>     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+<span class="gp">... </span>         <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">context</span>
+<span class="gp">...</span>
+<span class="gp">... </span>     <span class="k">def</span> <span class="nf">getSize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="gp">... </span>         <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+<span class="gp">...</span>
+</pre></div>
+</div>
+<p>Теперь когда мы написали наш адаптер мы должны зарегистрировать его в реестре
+адаптеров, что бы его можно было запросить когда он понадобится. Здесь нет
+какого-либо глобального реестра адаптеров, таким образом мы должны
+самостоятельно создать для нашего примера реестр:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.interface.adapter</span> <span class="kn">import</span> <span class="n">AdapterRegistry</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span> <span class="o">=</span> <span class="n">AdapterRegistry</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Реестр содержит отображение того, что адаптер реализует на основе другого
+интерфейса который предоставляет объект. Поэтому дальше мы регистрируем адаптер
+который адаптирует интерфейс <cite>IFile</cite> к интерфейсу <cite>ISize</cite>. Первый аргумент к
+методу <cite>register()</cite> реестра - это список адаптируемых интерфейсов. В нашем
+случае мы имеем только один адаптируемый интерфейс - <cite>IFile</cite>. Список
+интерфейсов имеет смысл для использования концепции мульти-адаптеров, которые
+требуют нескольких оригинальных объектов для адаптации к новому интерфейсу. В
+этой ситуации конструктор адаптера будет требовать новый аргумент для каждого
+оригинального интерфейса.</p>
+<p>Второй аргумент метода <cite>register()</cite> - это интерфейс который предоставляет
+адаптер, в нашем случае <cite>ISize</cite>. Третий аргумент - имя адаптера. Сейчас нам не
+важно имя адаптера и мы передаем его как пустую строку. Обычно имена полезны
+если используются адаптеры для одинакового набора интерфейсов, но в различных
+ситуациях. Последний аргумент - это класс адаптера:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IFile</span><span class="p">],</span> <span class="n">ISize</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">FileSize</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Теперь мы можем использовать реестр для запроса адаптера:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup1</span><span class="p">(</span><span class="n">IFile</span><span class="p">,</span> <span class="n">ISize</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">&lt;class &#39;__main__.FileSize&#39;&gt;</span>
+</pre></div>
+</div>
+<p>Попробуем более практичный пример. Создадим экземпляр <cite>File</cite> и создадим адаптер
+использующий запрос реестра. Затем мы увидим возвращает ли адаптер корректный
+размер при вызове <cite>getSize()</cite>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">file</span> <span class="o">=</span> <span class="n">File</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">size</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">lookup1</span><span class="p">(</span><span class="n">IFile</span><span class="p">,</span> <span class="n">ISize</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)(</span><span class="nb">file</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">size</span><span class="o">.</span><span class="n">getSize</span><span class="p">()</span>
+<span class="go">7</span>
+</pre></div>
+</div>
+<p>На самом деле это не очень практично, т.к. нам нужно самим передавать все
+аргументы методу запроса. Существует некоторый синтаксический леденец который
+позволяет нам получить экземпляр адаптера просто вызвав <cite>ISize(file)</cite>. Что бы
+использовать эту функциональность нам понадобится добавить наш реестр к списку
+adapter_hooks, который находится в модуле с адаптерами. Этот список хранит
+коллекцию вызываемых объектов которые вызываются автоматически когда вызывается
+IFoo(obj); их предназначение - найти адаптеры которые реализуют интерфейс для
+определенного экземпляра контекста.</p>
+<p>Необходимо реализовать свою собственную функцию для поиска адаптера; данный
+пример описывает одну из простейших функций для использования с реестром, но
+также можно реализовать поисковые функции которые, например, используют
+кэширование, или адаптеры сохраняемые в базе. Функция поиска должна принимать
+желаемый на выходе интерфейс (в нашем случае <cite>ISize</cite>) как первый аргумент и
+контекст для адаптации (<cite>file</cite>) как второй. Функция должна вернуть адаптер,
+т.е. экземпляр <cite>FileSize</cite>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">hook</span><span class="p">(</span><span class="n">provided</span><span class="p">,</span> <span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">adapter</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">lookup1</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="nb">object</span><span class="p">),</span>
+<span class="gp">... </span>                               <span class="n">provided</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="n">adapter</span><span class="p">(</span><span class="nb">object</span><span class="p">)</span>
+<span class="gp">...</span>
+</pre></div>
+</div>
+<p>Теперь мы просто добавляем нашу функцию к списку <cite>adapter_hooks</cite>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.interface.interface</span> <span class="kn">import</span> <span class="n">adapter_hooks</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">adapter_hooks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">hook</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Как только функция зарегистрирована мы можем использовать желаемый синтаксис:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">size</span> <span class="o">=</span> <span class="n">ISize</span><span class="p">(</span><span class="nb">file</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">size</span><span class="o">.</span><span class="n">getSize</span><span class="p">()</span>
+<span class="go">7</span>
+</pre></div>
+</div>
+<p>После нам нужно прибраться за собой, что бы другие получили чистый список
+<cite>adaper_hooks</cite> после нас:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">adapter_hooks</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">hook</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Это все. Здесь намеренно отложена дискуссия об именованных и мульти-адаптерах,
+т.к. данный текст рассчитан как практическое и простое введение в интерфейсы и
+адаптеры Zope 3. Для более подробной информации имеет смысл прочитать
+<cite>adapter.txt</cite> из пакета <cite>zope.interface</cite>, что бы получить более формальное,
+справочное и полное трактование пакета. Внимание: многие жаловались, что
+<cite>adapter.txt</cite> приводит их мозг к расплавленному состоянию!</p>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="adapter.ru.html"
+                        title="previous chapter">Реестр адаптеров</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/human.ru.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="adapter.ru.html" title="Реестр адаптеров"
+             >previous</a> |</li>
+        <li><a href="index.html">zope.interface 4.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation contributors.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
