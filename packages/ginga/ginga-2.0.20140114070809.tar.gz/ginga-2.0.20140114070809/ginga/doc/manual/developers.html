@@ -1,0 +1,738 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Developing with Ginga &mdash; Ginga 2.0.20140104021059 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.0.20140104021059',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="Ginga 2.0.20140104021059 documentation" href="../index.html" />
+    <link rel="up" title="The Ginga Viewer and Toolkit Manual" href="index.html" />
+    <link rel="next" title="Ginga Internals" href="internals.html" />
+    <link rel="prev" title="Customizing Ginga" href="customizing.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="internals.html" title="Ginga Internals"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="customizing.html" title="Customizing Ginga"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Ginga 2.0.20140104021059 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">The Ginga Viewer and Toolkit Manual</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="developing-with-ginga">
+<span id="ch-programming-ginga"></span><h1>Developing with Ginga<a class="headerlink" href="#developing-with-ginga" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="../py-modindex.html"><em>Module Index</em></a></li>
+</ul>
+<p>Developers interested in using Ginga in their project will probably
+follow one of two logical development paths:</p>
+<ul class="simple">
+<li>using only the Ginga rendering class in a program of their own design, or</li>
+<li>starting with the full-featured reference viewer that comes with Ginga
+and customizing it for some special purpose, typically by modifying
+one of the plugins or writing a new plugin.</li>
+</ul>
+<p>The first approach is probably best for when the developer has a custom
+application in mind, needs a minimal but powerful viewer or wants to
+develop an entirely new full-featured viewer.  The second approach is
+probably best for end users or developers that are mostly satisfied with
+the reference viewer as a general purpose tool and want to add some specific
+enhancements or functionality.  Because the reference viewer is based on
+a flexible plugin architecture this is fairly easy to do.  We examine
+both approaches in this chapter.</p>
+<div class="section" id="using-the-basic-rendering-class-in-new-programs">
+<h2>Using the basic rendering class in new programs<a class="headerlink" href="#using-the-basic-rendering-class-in-new-programs" title="Permalink to this headline">¶</a></h2>
+<p>First, let&#8217;s take a look at how to use the &#8220;bare&#8221; Ginga rending class
+by itself.  Ginga basically follows the Model-View-Controller (MVC)
+design pattern, that is described in more detail in
+the <a class="reference external" href="ch-programming-internals">chapter on internals</a>.
+The &#8220;view&#8221; classes are rooted in the base class <tt class="docutils literal"><span class="pre">ImageView</span></tt>.
+Ginga supports backends for different widget sets through various
+subclasses of this class.</p>
+<p>Typically, a developer picks a GUI toolkit that has a supported backend
+(Gtk, Qt or Tk) and writes a GUI program using that widget set with the
+typical Python toolkit bindings and API.  Where they want a
+image view pane they instantiate the appropriate subclass of
+<tt class="docutils literal"><span class="pre">ImageView</span></tt>, and using the  <tt class="docutils literal"><span class="pre">get_widget()</span></tt> call extract the native
+widget and insert it into the GUI layout.  A reference should be kept to
+the view object.</p>
+<p>Ginga does not create any additional GUI components beyond the image
+pane itself, however it does provide a standard set of keyboard and
+mouse bindings on the widget that can be enabled, disabled or changed.
+The user interface bindings are configurable via a pluggable
+<tt class="docutils literal"><span class="pre">Bindings</span></tt> class which constitutes the &#8220;controller&#8221; part of the MVC
+design.  There are a plethora of callbacks that can be registered,
+allowing the user to create their own custom user interface for
+manipulating the view.</p>
+<div class="h figure" id="fig1">
+<a class="reference internal image-reference" href="../_images/barebonesviewer_qt.png"><img alt="../_images/barebonesviewer_qt.png" src="../_images/barebonesviewer_qt.png" style="width: 532.0px; height: 565.0px;" /></a>
+<p class="caption">A simple, &#8220;bare bones&#8221; FITS viewer written in Qt.</p>
+</div>
+<p>Listing 1 shows a code listing for a simple graphical FITS
+viewer built using the subclass <tt class="docutils literal"><span class="pre">ImageViewZoom</span></tt> from the module
+<tt class="docutils literal"><span class="pre">ginga.qtw</span></tt> (screenshot in Figure <a class="reference internal" href="#fig1"><em>A simple, &#8220;bare bones&#8221; FITS viewer written in Qt.</em></a>) written in around 100
+or so lines of Python.  It creates a window containing an image view and
+two buttons.  This example, included with the Ginga source (look in the
+<tt class="docutils literal"><span class="pre">examples</span></tt> directory), will open FITS files dragged and dropped on the
+image window or via a dialog popped up when clicking the &#8220;Open File&#8221;
+button.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c">#! /usr/bin/env python</span>
+<span class="c">#</span>
+<span class="c"># example1_qt.py -- Simple, configurable FITS viewer.</span>
+<span class="c">#</span>
+<span class="kn">import</span> <span class="nn">sys</span><span class="o">,</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">from</span> <span class="nn">ginga</span> <span class="kn">import</span> <span class="n">AstroImage</span>
+<span class="kn">from</span> <span class="nn">ginga.qtw.QtHelp</span> <span class="kn">import</span> <span class="n">QtGui</span><span class="p">,</span> <span class="n">QtCore</span>
+<span class="kn">from</span> <span class="nn">ginga.qtw.ImageViewQt</span> <span class="kn">import</span> <span class="n">ImageViewZoom</span>
+
+
+<span class="k">class</span> <span class="nc">FitsViewer</span><span class="p">(</span><span class="n">QtGui</span><span class="o">.</span><span class="n">QMainWindow</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">FitsViewer</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logger</span>
+
+        <span class="c"># Create the view object</span>
+        <span class="n">fi</span> <span class="o">=</span> <span class="n">ImageViewZoom</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="p">)</span>
+        <span class="n">fi</span><span class="o">.</span><span class="n">enable_autocuts</span><span class="p">(</span><span class="s">&#39;on&#39;</span><span class="p">)</span>
+        <span class="n">fi</span><span class="o">.</span><span class="n">set_autocut_params</span><span class="p">(</span><span class="s">&#39;zscale&#39;</span><span class="p">)</span>
+        <span class="n">fi</span><span class="o">.</span><span class="n">enable_autozoom</span><span class="p">(</span><span class="s">&#39;on&#39;</span><span class="p">)</span>
+        <span class="n">fi</span><span class="o">.</span><span class="n">set_callback</span><span class="p">(</span><span class="s">&#39;drag-drop&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">drop_file</span><span class="p">)</span>
+        <span class="n">fi</span><span class="o">.</span><span class="n">set_bg</span><span class="p">(</span><span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">)</span>
+        <span class="n">fi</span><span class="o">.</span><span class="n">ui_setActive</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fitsimage</span> <span class="o">=</span> <span class="n">fi</span>
+
+        <span class="c"># Get the control object</span>
+        <span class="n">bd</span> <span class="o">=</span> <span class="n">fi</span><span class="o">.</span><span class="n">get_bindings</span><span class="p">()</span>
+        <span class="n">bd</span><span class="o">.</span><span class="n">enable_all</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="n">w</span> <span class="o">=</span> <span class="n">fi</span><span class="o">.</span><span class="n">get_widget</span><span class="p">()</span>
+        <span class="n">w</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">)</span>
+
+        <span class="n">vbox</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QVBoxLayout</span><span class="p">()</span>
+        <span class="n">vbox</span><span class="o">.</span><span class="n">setContentsMargins</span><span class="p">(</span>
+            <span class="n">QtCore</span><span class="o">.</span><span class="n">QMargins</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+        <span class="n">vbox</span><span class="o">.</span><span class="n">setSpacing</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">vbox</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">stretch</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">hbox</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QHBoxLayout</span><span class="p">()</span>
+        <span class="n">hbox</span><span class="o">.</span><span class="n">setContentsMargins</span><span class="p">(</span>
+            <span class="n">QtCore</span><span class="o">.</span><span class="n">QMargins</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+
+        <span class="n">wopen</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QPushButton</span><span class="p">(</span><span class="s">&quot;Open File&quot;</span><span class="p">)</span>
+        <span class="n">wopen</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">open_file</span><span class="p">)</span>
+        <span class="n">wquit</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QPushButton</span><span class="p">(</span><span class="s">&quot;Quit&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">wquit</span><span class="p">,</span>
+                     <span class="n">QtCore</span><span class="o">.</span><span class="n">SIGNAL</span><span class="p">(</span><span class="s">&quot;clicked()&quot;</span><span class="p">),</span>
+                     <span class="bp">self</span><span class="p">,</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">SLOT</span><span class="p">(</span><span class="s">&quot;close()&quot;</span><span class="p">))</span>
+
+        <span class="n">hbox</span><span class="o">.</span><span class="n">addStretch</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="p">(</span><span class="n">wopen</span><span class="p">,</span> <span class="n">wquit</span><span class="p">):</span>
+            <span class="n">hbox</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">stretch</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="n">hw</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QWidget</span><span class="p">()</span>
+        <span class="n">hw</span><span class="o">.</span><span class="n">setLayout</span><span class="p">(</span><span class="n">hbox</span><span class="p">)</span>
+        <span class="n">vbox</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">hw</span><span class="p">,</span> <span class="n">stretch</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="n">vw</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QWidget</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setCentralWidget</span><span class="p">(</span><span class="n">vw</span><span class="p">)</span>
+        <span class="n">vw</span><span class="o">.</span><span class="n">setLayout</span><span class="p">(</span><span class="n">vbox</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">load_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filepath</span><span class="p">):</span>
+        <span class="c"># create a model object</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">AstroImage</span><span class="o">.</span><span class="n">AstroImage</span><span class="p">(</span><span class="n">logger</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="p">)</span>
+        <span class="n">image</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+
+        <span class="c"># load the model into the view</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fitsimage</span><span class="o">.</span><span class="n">set_image</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setWindowTitle</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">open_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QFileDialog</span><span class="o">.</span><span class="n">getOpenFileName</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                              <span class="s">&quot;Open FITS file&quot;</span><span class="p">,</span>
+                              <span class="s">&quot;.&quot;</span><span class="p">,</span>
+                              <span class="s">&quot;FITS files (*.fits)&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="n">fileName</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;ascii&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">fileName</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">res</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="n">fileName</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">drop_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fitsimage</span><span class="p">,</span> <span class="n">paths</span><span class="p">):</span>
+        <span class="n">fileName</span> <span class="o">=</span> <span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="n">fileName</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+
+    <span class="n">app</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QApplication</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">)</span>
+    <span class="n">app</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">app</span><span class="p">,</span>
+                <span class="n">QtCore</span><span class="o">.</span><span class="n">SIGNAL</span><span class="p">(</span><span class="s">&#39;lastWindowClosed()&#39;</span><span class="p">),</span>
+                <span class="n">app</span><span class="p">,</span> <span class="n">QtCore</span><span class="o">.</span><span class="n">SLOT</span><span class="p">(</span><span class="s">&#39;quit()&#39;</span><span class="p">))</span>
+
+    <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;example1&quot;</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+    <span class="n">stderrHdlr</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">StreamHandler</span><span class="p">()</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">addHandler</span><span class="p">(</span><span class="n">stderrHdlr</span><span class="p">)</span>
+
+    <span class="n">w</span> <span class="o">=</span> <span class="n">FitsViewer</span><span class="p">(</span><span class="n">logger</span><span class="p">)</span>
+    <span class="n">w</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="mi">524</span><span class="p">,</span> <span class="mi">540</span><span class="p">)</span>
+    <span class="n">w</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="n">app</span><span class="o">.</span><span class="n">setActiveWindow</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">w</span><span class="o">.</span><span class="n">load_file</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="n">app</span><span class="o">.</span><span class="n">exec_</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</pre></div>
+</div>
+<p>Looking at the constructor for this particular viewer, you can see where
+we create a <tt class="docutils literal"><span class="pre">ImageViewZoom</span></tt> object.  On this object we enable automatic
+cut levels (using the &#8216;zscale&#8217; algorithm), configure it to auto zoom the
+image to fit the window and set a callback function for files dropped on
+the window.  We extract the user-interface bindings with
+<tt class="docutils literal"><span class="pre">get_bindings()</span></tt>, and on this object enable standard user interactive
+controls for panning, zooming, cut levels, simple transformations (flip
+x/y and swap axes), rotation and color map warping.
+We then extract the platform-specific widget (Qt-based, in this case) using
+<tt class="docutils literal"><span class="pre">get_widget()</span></tt> and pack it into a Qt container along with a couple of
+buttons to complete the viewer.</p>
+<p>Scanning down the code a bit, we can see that whether by dragging and
+dropping or via the click to open, we ultimately call the load_file()
+method to get the data into the viewer.  As shown, load_file creates
+an AstroImage object (the &#8220;model&#8221; part of our MVC design).  It then
+passes this object to the viewer via the set_image() method.
+AstroImage objects have methods for ingesting data via a file path, an
+<tt class="docutils literal"><span class="pre">Astropy</span></tt>/<tt class="docutils literal"><span class="pre">pyfits</span></tt> HDU or a bare <tt class="docutils literal"><span class="pre">Numpy</span></tt> data array.</p>
+<p>Many of these sorts of examples are contained in the <tt class="docutils literal"><span class="pre">examples</span></tt>
+directory in the source distribution.  Look for files with names
+matching example*_*.py</p>
+<div class="section" id="graphics-plotting-with-ginga">
+<span id="sec-plotting"></span><h3>Graphics plotting with Ginga<a class="headerlink" href="#graphics-plotting-with-ginga" title="Permalink to this headline">¶</a></h3>
+<div class="h figure" id="fig2">
+<a class="reference internal image-reference" href="../_images/example2_screenshot.png"><img alt="../_images/example2_screenshot.png" src="../_images/example2_screenshot.png" style="width: 532.0px; height: 565.0px;" /></a>
+<p class="caption">An example of a <tt class="docutils literal"><span class="pre">ImageViewCanvas</span></tt> widget with graphical overlay.</p>
+</div>
+<p>For each supported widget set there is a subclass of ImageViewZoom called
+<tt class="docutils literal"><span class="pre">ImageViewCanvas</span></tt> (an example is shown in Figure <a class="reference internal" href="#fig2"><em>An example of a ImageViewCanvas widget with graphical overlay.</em></a>).
+This class adds scalable object plotting on top of the image view plane.
+A variety of simple graphical shapes are available,
+including lines, circles, rectangles, points, polygons, text, rulers,
+compasses, etc.  Plotted objects scale, transform and rotate seamlessly
+with the image.</p>
+<p>See the scripts prefaced with &#8220;example2&#8221; (under &#8220;examples&#8221;) in the
+package source for details.</p>
+</div>
+<div class="section" id="rendering-into-matplotlib-figures">
+<h3>Rendering into Matplotlib Figures<a class="headerlink" href="#rendering-into-matplotlib-figures" title="Permalink to this headline">¶</a></h3>
+<p>Ginga can also render directly into a Matplotlib Figure, which opens up
+interesting possibilities for overplotting beyond the limited
+capabilities of the <tt class="docutils literal"><span class="pre">ImageViewCanvas</span></tt> class.</p>
+</div>
+</div>
+<div class="section" id="writing-plugins-for-the-reference-viewer">
+<h2>Writing plugins for the reference viewer<a class="headerlink" href="#writing-plugins-for-the-reference-viewer" title="Permalink to this headline">¶</a></h2>
+<p>We now turn our attention to the other approach to developing with
+Ginga: modifying the reference viewer.
+The philosophy behind the design of the reference viewer distributed
+with the Ginga is that it is simply a flexible layout shell for
+instantiating instances of the viewing widget described in the earlier
+section.  All of the other important pieces of a modern FITS viewer&#8211;a
+panning widget, information panels, zoom widget, analysis panes&#8211;are
+implemented as plugins: encapsulated modules that interface with the
+viewing shell using a standardized API.  This makes it easy to customize
+and to add, change or remove functionality in a very modular, flexible way.</p>
+<p>The Ginga viewer divides the application window GUI into containers that
+hold either viewing widgets or plugins.  The view widgets are called
+&#8220;channels&#8221; in the viewer nomenclature, and are a means of organizing
+images in the viewer, functioning much like &#8220;frames&#8221; in other viewers.
+A channel has a name and maintains its own history of images that have
+cycled through it.  The user can create new channels as needed.  For
+example, they might use different channels for different kinds of
+images: camera vs. spectrograph, or channels organized by CCD, or by
+target, or raw data vs. quick look, etc.  In the default layout, shown
+in <a class="reference internal" href="#fig2"><em>An example of a ImageViewCanvas widget with graphical overlay.</em></a> the channel tabs are in the large middle pane, while the
+plugins occupy the left and right panes.  Other layouts are possible, by
+simply changing a table used in the startup script.</p>
+<p>Ginga distinguishes between two types of plugin: <em>global</em> and <em>local</em>.
+Global plugins are used where the functionality is generally enabled
+during the entire session with the viewer and where the plugin is active
+no matter which channel is currenly under interaction with the user.
+Examples of global plugins include a panning view (a small, bird&#8217;s-eye
+view of the image that shows a panning rectangle and allows graphical
+positioning of the pan region), a zoomed view (that shows an enlarged
+cutout of the area currently under the cursor), informational displays
+about world coordinates, FITS headers, thumbnails, etc.  Figure
+<a class="reference internal" href="#fig4"><em>Two global plugins: Pan (top) and Info (bottom), shown sharing a tab.</em></a> shows an example of two global plugins occupying a notebook tab.</p>
+<div class="h figure" id="fig4">
+<a class="reference internal image-reference" href="../_images/global_plugin1.png"><img alt="../_images/global_plugin1.png" src="../_images/global_plugin1.png" style="width: 359.0px; height: 846.0px;" /></a>
+<p class="caption">Two global plugins: <tt class="docutils literal"><span class="pre">Pan</span></tt> (top) and <tt class="docutils literal"><span class="pre">Info</span></tt> (bottom), shown sharing a tab.</p>
+</div>
+<p>Local plugins are used for modal operations with images in specific
+channels.  For example, the Pick plugin is used to perform stellar
+evaluation of objects, finding the center of the object and giving
+informational readings of the exact celestial coordinates, image
+quality, etc.  The Pick plugin is only visible while the user has it
+open, and does not capture the mouse actions unless the channel it is
+operating on is selected.  Thus one can have two different Pick
+operations going on concurrently on two different channels, for example,
+or a Pick operation in a camera channel, and a Cuts (line cuts)
+operation on a spectrograph channel.
+Figure <a class="reference internal" href="#fig5"><em>The Pick local plugin, shown occupying a tab.</em></a> shows an example of the Pick local plugin occupying a
+notebook tab.</p>
+<div class="thb figure" id="fig5">
+<a class="reference internal image-reference" href="../_images/local_plugin1.png"><img alt="../_images/local_plugin1.png" src="../_images/local_plugin1.png" style="width: 445.0px; height: 814.0px;" /></a>
+<p class="caption">The <tt class="docutils literal"><span class="pre">Pick</span></tt> local plugin, shown occupying a tab.</p>
+</div>
+<div class="section" id="anatomy-of-a-local-ginga-plugin">
+<span id="sec-writing-local-plugins"></span><h3>Anatomy of a Local Ginga Plugin<a class="headerlink" href="#anatomy-of-a-local-ginga-plugin" title="Permalink to this headline">¶</a></h3>
+<p>Let&#8217;s take a look at a local plugin to understand the API for
+interfacing to the Ginga shell.  In Listing 2, we show a stub for a
+local plugin.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">ginga</span> <span class="kn">import</span> <span class="n">GingaPlugin</span>
+
+<span class="k">class</span> <span class="nc">MyPlugin</span><span class="p">(</span><span class="n">GingaPlugin</span><span class="o">.</span><span class="n">LocalPlugin</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fv</span><span class="p">,</span> <span class="n">fitsimage</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">MyPlugin</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">fv</span><span class="p">,</span> <span class="n">fitsimage</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">build_gui</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">container</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">pause</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">resume</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">redo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;myplugin&#39;</span>
+</pre></div>
+</div>
+<p>The purpose of each method is as follows.</p>
+<p><tt class="docutils literal"><span class="pre">__init__(self,</span> <span class="pre">fv,</span> <span class="pre">fitsimage)</span></tt>:
+This method is called when the plugin is loaded for the  first time.
+<tt class="docutils literal"><span class="pre">fv</span></tt> is a reference to the Ginga shell and <tt class="docutils literal"><span class="pre">fitsimage</span></tt> is a reference to
+the ImageViewCanvas object associated with the channel on which the
+plugin is being invoked.  You need to call the superclass initializer
+and then do any local initialization.</p>
+<p><tt class="docutils literal"><span class="pre">build_gui(self,</span> <span class="pre">container)</span></tt>:
+This method is called when the plugin is invoked.  It builds the GUI
+used by the plugin into the widget layout passed as <tt class="docutils literal"><span class="pre">container</span></tt>.
+This method may be called many times as the plugin is opened and closed
+for modal operations.  The method may be omitted if there is no GUI for
+the plugin.</p>
+<p><tt class="docutils literal"><span class="pre">start(self)</span></tt>:
+This method is called just after <tt class="docutils literal"><span class="pre">build_gui()</span></tt> when the plugin is invoked.
+This method may be called many times as the plugin is opened and closed
+for modal operations.  This method may be omitted.</p>
+<p><tt class="docutils literal"><span class="pre">stop(self)</span></tt>: This method is called when the plugin is stopped.
+It should perform any special clean up necessary to terminate the
+operation.  The GUI will be destroyed by the plugin manager so there is
+no need for the stop method to do that.  This method may be called many
+times as the plugin is opened and closed for modal operations.
+This method may be omitted if there is no special cleanup required when
+stopping.</p>
+<p><tt class="docutils literal"><span class="pre">pause(self)</span></tt>: This method is called when the plugin loses focus.
+It should take any actions necessary to stop handling user interaction
+events that were initiated in <tt class="docutils literal"><span class="pre">start()</span></tt> or <tt class="docutils literal"><span class="pre">resume()</span></tt>.
+This method may be called many times as the plugin is focused or defocused.
+The method may be omitted if there is no user event handling to disable.</p>
+<p><tt class="docutils literal"><span class="pre">resume(self)</span></tt>: This method is called when the plugin gets focus.
+It should take any actions necessary to start handling user interaction
+events for the operations that it does.  This method may be called many
+times as the plugin is focused or defocused.  The method may be omitted
+if there is no user event handling to enable.</p>
+<p><tt class="docutils literal"><span class="pre">redo(self)</span></tt>: This method is called when the plugin is active and a new
+image is loaded into the associated channel.  It can optionally redo the
+current operation on the new image.  This method may be called many
+times as new images are loaded while the plugin is active.
+This method may be omitted.</p>
+</div>
+<div class="section" id="putting-it-all-together-the-ruler-plugin">
+<h3>Putting it All Together: The <tt class="docutils literal"><span class="pre">Ruler</span></tt> Plugin<a class="headerlink" href="#putting-it-all-together-the-ruler-plugin" title="Permalink to this headline">¶</a></h3>
+<p>Finally, in Listing 3 we show a completed plugin for <tt class="docutils literal"><span class="pre">Ruler</span></tt>.  The
+purpose of this plugin to draw triangulation (distance measurement)
+rulers on the image.  For reference, you may want to refer to the ruler
+shown on the canvas in Figure <a class="reference internal" href="#fig2"><em>An example of a ImageViewCanvas widget with graphical overlay.</em></a> and the plugin GUI shown in
+Figure <a class="reference internal" href="#fig6"><em>The Ruler local plugin GUI, shown occupying a tab.</em></a>.</p>
+<div class="thb figure" id="fig6">
+<a class="reference internal image-reference" href="../_images/ruler_plugin.png"><img alt="../_images/ruler_plugin.png" src="../_images/ruler_plugin.png" style="width: 446.0px; height: 231.0px;" /></a>
+<p class="caption">The <tt class="docutils literal"><span class="pre">Ruler</span></tt> local plugin GUI, shown occupying a tab.</p>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">ginga.qtw.QtHelp</span> <span class="kn">import</span> <span class="n">QtGui</span><span class="p">,</span> <span class="n">QtCore</span>
+<span class="kn">from</span> <span class="nn">ginga.qtw</span> <span class="kn">import</span> <span class="n">QtHelp</span>
+
+<span class="kn">from</span> <span class="nn">ginga</span> <span class="kn">import</span> <span class="n">GingaPlugin</span>
+
+<span class="k">class</span> <span class="nc">Ruler</span><span class="p">(</span><span class="n">GingaPlugin</span><span class="o">.</span><span class="n">LocalPlugin</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fv</span><span class="p">,</span> <span class="n">fitsimage</span><span class="p">):</span>
+        <span class="c"># superclass saves and defines some variables</span>
+        <span class="c"># for us, like logger</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Ruler</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">fv</span><span class="p">,</span> <span class="n">fitsimage</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">rulecolor</span> <span class="o">=</span> <span class="s">&#39;lightgreen&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layertag</span> <span class="o">=</span> <span class="s">&#39;ruler-canvas&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ruletag</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dc</span> <span class="o">=</span> <span class="n">fv</span><span class="o">.</span><span class="n">getDrawClasses</span><span class="p">()</span>
+        <span class="n">canvas</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dc</span><span class="o">.</span><span class="n">DrawingCanvas</span><span class="p">()</span>
+        <span class="n">canvas</span><span class="o">.</span><span class="n">enable_draw</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">canvas</span><span class="o">.</span><span class="n">set_drawtype</span><span class="p">(</span><span class="s">&#39;ruler&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;cyan&#39;</span><span class="p">)</span>
+        <span class="n">canvas</span><span class="o">.</span><span class="n">set_callback</span><span class="p">(</span><span class="s">&#39;draw-event&#39;</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">wcsruler</span><span class="p">)</span>
+        <span class="n">canvas</span><span class="o">.</span><span class="n">set_callback</span><span class="p">(</span><span class="s">&#39;draw-down&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">clear</span><span class="p">)</span>
+        <span class="n">canvas</span><span class="o">.</span><span class="n">setSurface</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fitsimage</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span> <span class="o">=</span> <span class="n">canvas</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">unittypes</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;arcmin&#39;</span><span class="p">,</span> <span class="s">&#39;pixels&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">units</span> <span class="o">=</span> <span class="s">&#39;arcmin&#39;</span>
+
+    <span class="k">def</span> <span class="nf">build_gui</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">container</span><span class="p">):</span>
+        <span class="n">sw</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QScrollArea</span><span class="p">()</span>
+
+        <span class="n">twidget</span> <span class="o">=</span> <span class="n">QtHelp</span><span class="o">.</span><span class="n">VBox</span><span class="p">()</span>
+        <span class="n">sp</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QSizePolicy</span><span class="p">(</span>
+                 <span class="n">QtGui</span><span class="o">.</span><span class="n">QSizePolicy</span><span class="o">.</span><span class="n">MinimumExpanding</span><span class="p">,</span>
+                 <span class="n">QtGui</span><span class="o">.</span><span class="n">QSizePolicy</span><span class="o">.</span><span class="n">Fixed</span><span class="p">)</span>
+        <span class="n">twidget</span><span class="o">.</span><span class="n">setSizePolicy</span><span class="p">(</span><span class="n">sp</span><span class="p">)</span>
+        <span class="n">vbox1</span> <span class="o">=</span> <span class="n">twidget</span><span class="o">.</span><span class="n">layout</span><span class="p">()</span>
+        <span class="n">vbox1</span><span class="o">.</span><span class="n">setContentsMargins</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+        <span class="n">vbox1</span><span class="o">.</span><span class="n">setSpacing</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="n">sw</span><span class="o">.</span><span class="n">setWidgetResizable</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">sw</span><span class="o">.</span><span class="n">setWidget</span><span class="p">(</span><span class="n">twidget</span><span class="p">)</span>
+
+        <span class="n">msgFont</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QFont</span><span class="p">(</span><span class="s">&quot;Sans&quot;</span><span class="p">,</span> <span class="mi">14</span><span class="p">)</span>
+        <span class="n">tw</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QLabel</span><span class="p">()</span>
+        <span class="n">tw</span><span class="o">.</span><span class="n">setFont</span><span class="p">(</span><span class="n">msgFont</span><span class="p">)</span>
+        <span class="n">tw</span><span class="o">.</span><span class="n">setWordWrap</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tw</span> <span class="o">=</span> <span class="n">tw</span>
+
+        <span class="n">fr</span> <span class="o">=</span> <span class="n">QtHelp</span><span class="o">.</span><span class="n">Frame</span><span class="p">(</span><span class="s">&quot;Instructions&quot;</span><span class="p">)</span>
+        <span class="n">fr</span><span class="o">.</span><span class="n">layout</span><span class="p">()</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">tw</span><span class="p">,</span> <span class="n">stretch</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                        <span class="n">alignment</span><span class="o">=</span><span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">AlignTop</span><span class="p">)</span>
+        <span class="n">vbox1</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">fr</span><span class="p">,</span> <span class="n">stretch</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                        <span class="n">alignment</span><span class="o">=</span><span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">AlignTop</span><span class="p">)</span>
+
+        <span class="n">fr</span> <span class="o">=</span> <span class="n">QtHelp</span><span class="o">.</span><span class="n">Frame</span><span class="p">(</span><span class="s">&quot;Ruler&quot;</span><span class="p">)</span>
+
+        <span class="n">captions</span> <span class="o">=</span> <span class="p">((</span><span class="s">&#39;Units&#39;</span><span class="p">,</span> <span class="s">&#39;combobox&#39;</span><span class="p">),)</span>
+        <span class="n">w</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">QtHelp</span><span class="o">.</span><span class="n">build_info</span><span class="p">(</span><span class="n">captions</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="n">b</span>
+
+        <span class="n">combobox</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">units</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">unittypes</span><span class="p">:</span>
+            <span class="n">combobox</span><span class="o">.</span><span class="n">addItem</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">unittypes</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">units</span><span class="p">)</span>
+        <span class="n">combobox</span><span class="o">.</span><span class="n">setCurrentIndex</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+        <span class="n">combobox</span><span class="o">.</span><span class="n">activated</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">set_units</span><span class="p">)</span>
+
+        <span class="n">fr</span><span class="o">.</span><span class="n">layout</span><span class="p">()</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">stretch</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                      <span class="n">alignment</span><span class="o">=</span><span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">AlignLeft</span><span class="p">)</span>
+        <span class="n">vbox1</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">fr</span><span class="p">,</span> <span class="n">stretch</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                      <span class="n">alignment</span><span class="o">=</span><span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">AlignTop</span><span class="p">)</span>
+
+        <span class="n">btns</span> <span class="o">=</span> <span class="n">QtHelp</span><span class="o">.</span><span class="n">HBox</span><span class="p">()</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="n">btns</span><span class="o">.</span><span class="n">layout</span><span class="p">()</span>
+        <span class="n">layout</span><span class="o">.</span><span class="n">setSpacing</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+        <span class="c">#btns.set_child_size(15, -1)</span>
+
+        <span class="n">btn</span> <span class="o">=</span> <span class="n">QtGui</span><span class="o">.</span><span class="n">QPushButton</span><span class="p">(</span><span class="s">&quot;Close&quot;</span><span class="p">)</span>
+        <span class="n">btn</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">)</span>
+        <span class="n">layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">btn</span><span class="p">,</span> <span class="n">stretch</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="n">alignment</span><span class="o">=</span><span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">AlignLeft</span><span class="p">)</span>
+        <span class="n">vbox1</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">btns</span><span class="p">,</span> <span class="n">stretch</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="n">alignment</span><span class="o">=</span><span class="n">QtCore</span><span class="o">.</span><span class="n">Qt</span><span class="o">.</span><span class="n">AlignLeft</span><span class="p">)</span>
+
+        <span class="n">container</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">sw</span><span class="p">,</span> <span class="n">stretch</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">set_units</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">currentIndex</span><span class="p">()</span>
+        <span class="n">units</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">unittypes</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">set_drawtype</span><span class="p">(</span><span class="s">&#39;ruler&#39;</span><span class="p">,</span>
+                                 <span class="n">color</span><span class="o">=</span><span class="s">&#39;cyan&#39;</span><span class="p">,</span>
+                                 <span class="n">units</span><span class="o">=</span><span class="n">units</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">redo</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">True</span>
+
+    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">chname</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fv</span><span class="o">.</span><span class="n">get_channelName</span><span class="p">(</span>
+                                 <span class="bp">self</span><span class="o">.</span><span class="n">fitsimage</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fv</span><span class="o">.</span><span class="n">stop_operation_channel</span><span class="p">(</span><span class="n">chname</span><span class="p">,</span>
+                                 <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">True</span>
+
+    <span class="k">def</span> <span class="nf">instructions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tw</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s">&quot;Draw (or redraw) a line &quot;</span>
+                        <span class="s">&quot;with the right mouse &quot;</span>
+                        <span class="s">&quot;button.  Display the &quot;</span>
+                        <span class="s">&quot;Zoom tab to precisely &quot;</span>
+                        <span class="s">&quot;see detail.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tw</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">instructions</span><span class="p">()</span>
+        <span class="c"># start ruler drawing operation</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fitsimage</span><span class="o">.</span><span class="n">getObjectByTag</span><span class="p">(</span>
+                             <span class="bp">self</span><span class="o">.</span><span class="n">layertag</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="c"># Add ruler layer</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fitsimage</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="p">,</span>
+                              <span class="n">tag</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">layertag</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">deleteAllObjects</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resume</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">pause</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">ui_setActive</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">resume</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">ui_setActive</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fv</span><span class="o">.</span><span class="n">showStatus</span><span class="p">(</span><span class="s">&quot;Draw a ruler with &quot;</span>
+                           <span class="s">&quot;the right mouse button&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># remove the canvas from the image,</span>
+        <span class="c"># this prevents us from getting draw events</span>
+        <span class="c"># when we are inactive</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fitsimage</span><span class="o">.</span><span class="n">deleteObjectByTag</span><span class="p">(</span>
+                                   <span class="bp">self</span><span class="o">.</span><span class="n">layertag</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fv</span><span class="o">.</span><span class="n">showStatus</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">redo</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># get the ruler object on the canvas</span>
+        <span class="n">obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">getObjectByTag</span><span class="p">(</span>
+                                    <span class="bp">self</span><span class="o">.</span><span class="n">ruletag</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">obj</span><span class="o">.</span><span class="n">kind</span> <span class="o">!=</span> <span class="s">&#39;ruler&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+
+        <span class="c"># calculate and assign distances</span>
+        <span class="n">text_x</span><span class="p">,</span> <span class="n">text_y</span><span class="p">,</span> <span class="n">text_h</span> <span class="o">=</span> \
+          <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">get_ruler_distances</span><span class="p">(</span><span class="n">obj</span><span class="o">.</span><span class="n">x1</span><span class="p">,</span>
+                                          <span class="n">obj</span><span class="o">.</span><span class="n">y1</span><span class="p">,</span>
+                                          <span class="n">obj</span><span class="o">.</span><span class="n">x2</span><span class="p">,</span>
+                                          <span class="n">obj</span><span class="o">.</span><span class="n">y2</span><span class="p">)</span>
+        <span class="n">obj</span><span class="o">.</span><span class="n">text_x</span> <span class="o">=</span> <span class="n">text_x</span>
+        <span class="n">obj</span><span class="o">.</span><span class="n">text_y</span> <span class="o">=</span> <span class="n">text_y</span>
+        <span class="n">obj</span><span class="o">.</span><span class="n">text_h</span> <span class="o">=</span> <span class="n">text_h</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">redraw</span><span class="p">(</span><span class="n">whence</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">canvas</span><span class="p">,</span> <span class="n">button</span><span class="p">,</span> <span class="n">data_x</span><span class="p">,</span> <span class="n">data_y</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">deleteAllObjects</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">False</span>
+
+    <span class="k">def</span> <span class="nf">wcsruler</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">surface</span><span class="p">,</span> <span class="n">tag</span><span class="p">):</span>
+        <span class="c"># drawing callback.  The newly drawn object</span>
+        <span class="c"># on the canvas is tagged</span>
+        <span class="n">obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">getObjectByTag</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">obj</span><span class="o">.</span><span class="n">kind</span> <span class="o">!=</span> <span class="s">&#39;ruler&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+
+        <span class="c"># remove the old ruler</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">deleteObjectByTag</span><span class="p">(</span>
+                                    <span class="bp">self</span><span class="o">.</span><span class="n">ruletag</span><span class="p">,</span>
+                                       <span class="n">redraw</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+        <span class="c"># change some characteristics of the</span>
+        <span class="c"># drawn image and save as the new ruler</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ruletag</span> <span class="o">=</span> <span class="n">tag</span>
+        <span class="n">obj</span><span class="o">.</span><span class="n">color</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rulecolor</span>
+        <span class="n">obj</span><span class="o">.</span><span class="n">cap</span> <span class="o">=</span> <span class="s">&#39;ball&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">redraw</span><span class="p">(</span><span class="n">whence</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;ruler&#39;</span>
+</pre></div>
+</div>
+<p>This plugin shows a standard design pattern typical to local plugins.
+Often one is wanting to draw or plot something on top of the image
+below.  The <tt class="docutils literal"><span class="pre">ImageViewCanvas</span></tt> widget used by Ginga allows this to be
+done very cleanly and conveniently by adding a <tt class="docutils literal"><span class="pre">DrawingCanvas</span></tt>
+object to the image and drawing on that.  Canvases can be layered on top
+of each other in a manner analogous to &#8220;layers&#8221; in an image editing
+program.  Since each local plugin maintains it&#8217;s own canvas, it is very
+easy to encapsulate the logic for drawing on and dealing with the
+objects associated with that plugin.  We use this technique in the Ruler
+plugin. When the plugin is loaded (refer to <tt class="docutils literal"><span class="pre">__init__()</span></tt> method), it
+creates a canvas, enables drawing on it, sets the draw type and registers a
+callback for drawing events.  When <tt class="docutils literal"><span class="pre">start()</span></tt> is called it adds that canvas
+to the widget.  When <tt class="docutils literal"><span class="pre">stop()</span></tt> is called it removes the canvas from the
+widget (but does not destroy the canvas).  <tt class="docutils literal"><span class="pre">pause()</span></tt> disables user
+interaction on the canvas and <tt class="docutils literal"><span class="pre">resume()</span></tt> reenables that interaction.
+<tt class="docutils literal"><span class="pre">redo()</span></tt> simply redraws the ruler with new measurements taken from any new
+image that may have been loaded.  In the <tt class="docutils literal"><span class="pre">__init__()</span></tt> method you will
+notice a <tt class="docutils literal"><span class="pre">setSurface()</span></tt> call that associates this canvas with a
+<tt class="docutils literal"><span class="pre">ImageView</span></tt>-based widget&#8211;this is the key for the canvas to utilize WCS
+information for correct plotting.
+All the other methods shown are support methods for doing the ruler
+drawing operation and interacting with the plugin GUI.</p>
+<p>The Ginga package includes a rich set of classes and there are also many
+methods that can be called in the shell or in the <tt class="docutils literal"><span class="pre">ImageViewCanvas</span></tt>
+object for plotting or manipulating the view.
+The best way to get a feel for these APIs is to look at the source of
+one of the many plugins distributed with Ginga.  Most of them are not
+very long or complex.  In general, a plugin can include any Python
+packages or modules that it wants and programming one is essentially
+similar to writing any other Python program.</p>
+</div>
+<div class="section" id="writing-a-global-plugin">
+<span id="sec-writing-global-plugins"></span><h3>Writing a Global Plugin<a class="headerlink" href="#writing-a-global-plugin" title="Permalink to this headline">¶</a></h3>
+<p>The last example was focused on writing a local plugin.  Global plugins
+employ a nearly identical API to that shown in Listing 2, except that
+the constructor does not take a <tt class="docutils literal"><span class="pre">fitsimage</span></tt> parameter, because the
+plugin is expected to be active across the entire session, and is not
+associated with any particular channel.  <tt class="docutils literal"><span class="pre">build_gui()</span></tt> and <tt class="docutils literal"><span class="pre">start()</span></tt> are
+called when the Ginga shell starts up, and <tt class="docutils literal"><span class="pre">stop()</span></tt> is never called until
+the program terminates <a class="footnote-reference" href="#f1" id="id1">[1]</a>.  <tt class="docutils literal"><span class="pre">pause()</span></tt> and <tt class="docutils literal"><span class="pre">resume()</span></tt> can safely be
+omitted because they should never be called.  Like local plugins,
+<tt class="docutils literal"><span class="pre">build_gui()</span></tt> can be omitted if there is no GUI associated with the plugin.
+Take a look at some of the global plugins distributed with the viewer
+for more information and further examples.  The <tt class="docutils literal"><span class="pre">IRAF</span></tt> plugin,
+which handles IRAF/ginga interaction similarly to IRAF/ds9, is an
+example of a plugin without a GUI.</p>
+<p class="rubric">Footnotes</p>
+<table class="docutils footnote" frame="void" id="f1" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>Unless the user reloads the plugin.  Most plugins in Ginga can be
+dynamically reloaded using the <tt class="docutils literal"><span class="pre">Debug</span></tt> plugin, which facilitates
+debugging tremendously, since Ginga itself does not have to be
+restarted, data does not have to be reloaded, etc.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Developing with Ginga</a><ul>
+<li><a class="reference internal" href="#using-the-basic-rendering-class-in-new-programs">Using the basic rendering class in new programs</a><ul>
+<li><a class="reference internal" href="#graphics-plotting-with-ginga">Graphics plotting with Ginga</a></li>
+<li><a class="reference internal" href="#rendering-into-matplotlib-figures">Rendering into Matplotlib Figures</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#writing-plugins-for-the-reference-viewer">Writing plugins for the reference viewer</a><ul>
+<li><a class="reference internal" href="#anatomy-of-a-local-ginga-plugin">Anatomy of a Local Ginga Plugin</a></li>
+<li><a class="reference internal" href="#putting-it-all-together-the-ruler-plugin">Putting it All Together: The <tt class="docutils literal"><span class="pre">Ruler</span></tt> Plugin</a></li>
+<li><a class="reference internal" href="#writing-a-global-plugin">Writing a Global Plugin</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="customizing.html"
+                        title="previous chapter">Customizing Ginga</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="internals.html"
+                        title="next chapter">Ginga Internals</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/manual/developers.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="internals.html" title="Ginga Internals"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="customizing.html" title="Customizing Ginga"
+             >previous</a> |</li>
+        <li><a href="../index.html">Ginga 2.0.20140104021059 documentation</a> &raquo;</li>
+          <li><a href="index.html" >The Ginga Viewer and Toolkit Manual</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Eric Jeschke.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
