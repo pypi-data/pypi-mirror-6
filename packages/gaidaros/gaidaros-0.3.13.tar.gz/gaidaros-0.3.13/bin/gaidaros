@@ -1,0 +1,138 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+if __name__ != '__main__':
+    raise RuntimeError('This script should only be run directly. It is not a library.')
+
+## imports
+import sys, ast
+from getopt import getopt
+from gaidaros import *
+from gaidaros import __version__
+conf = @configfile@
+usage_text = """\
+Usage: gaidaros [OPTIONS] [--] [config-file]
+
+OPTIONS:
+ -v    : Verbose output
+ -c [] : Config file to source (str: default = """ + conf + """)
+ -H [] : Host (str)
+ -p [] : Port (int)
+ -i [] : Ip version (4/6/0, 0 = 'both')
+ -4    : shortcut for "-i 4"
+ -6    : shortcut for "-i 6"
+ -b [] : Backlog queue size (int)
+ -t [] : poll Timeout in seconds (int)
+ -r [] : Recv size (int)
+ -z    : use SSL
+ -Z [] : SSL options (str) e.g. "{'ssl_certfile':'..','ssl_keyfile':'..','ssl_cert_reqs':n,'ssl_ca_certs':'..','ssl_version':n}"
+ -D    : let server Die on errors
+ -m [] : Module to load in order to find handler class (str)
+ -x [] : handler class name (str)
+ -a [] : handler class Args (str) e.g. "['localhost',42]"
+ -k [] : handler class Kwargs (str) e.g. "{'recv_size':1024,'name':'Bob'}"
+ -h [] : handler Handle-request method name or code (str)
+ -e [] : handler End-of-request method name or code (str)
+ -s [] : handler Split-request method name or code (str)
+ -d [] : handler Decode-request method name or code (str)
+ -E [] : handler Encode-response method name or code (str)
+ -u    : this usage message
+
+Commandline interface to the gaidaros lib. Values' defaults are set by the
+config file. For details of SSL options see the python "ssl" module's docs.
+
+VERSION:
+""" + """
+{}
+""".format(__version__)
+## defs
+def usage(ostream=sys.stderr):
+    ostream.write(usage_text)
+## preset vars
+verbose = host = port = ip_version = backlog = poll_timeout = recv_size = use_ssl = ssl_certfile = \
+ ssl_keyfile = ssl_cert_reqs = ssl_ca_certs = ssl_version = die_on_error = handler_module = \
+ handler_class = handler_class_args = handler_class_kwargs = handle_request = end_request = \
+ split_request = decode_request = encode_response = None
+## parse opts
+optlist, arguments = getopt(sys.argv[1:],'uvc:H:p:i:46b:t:r:zZ:Dm:x:a:k:h:e:s:d:E:')
+## getopts
+try:
+    for switch, val in optlist:
+        if switch == '-u':
+            usage(ostream = sys.stdout)
+            sys.exit(0)
+        elif switch == '-v':
+            verbose = True
+        elif switch == '-c':
+            conf = val
+        elif switch == '-H':
+            host = val
+        elif switch == '-p':
+            port = int(val)
+        elif switch == '-i':
+            ip_version = int(val)
+        elif switch == '-4':
+            ip_version = 4
+        elif switch == '-6':
+            ip_version = 6
+        elif switch == '-b':
+            backlog = int(val)
+        elif switch == '-t':
+            poll_timeout = int(val)
+        elif switch == '-r':
+            recv_size = int(val)
+        elif switch == '-z':
+            use_ssl = True
+        elif switch == '-Z':
+            _ssl_opts_dict = dict(ast.literal_eval(val))
+            for _arg in ('ssl_certfile', 'ssl_keyfile', 'ssl_ca_certs'):
+                if _arg in _ssl_opts_dict:
+                    globals()[_arg] = str(_ssl_opts_dict.pop(_arg))
+            for _arg in ('ssl_cert_reqs', 'ssl_version'):
+                if _arg in _ssl_opts_dict:
+                    globals()[_arg] = int(_ssl_opts_dict.pop(_arg))
+            if _ssl_opts_dict:
+                raise TypeError('unknown elements in parameter to -Z, {}'.format(_ssl_opts_dict))
+        elif switch == '-D':
+            die_on_error = True
+        elif switch == '-m':
+            handler_module = val
+        elif switch == '-x':
+            handler_class = val
+        elif switch == '-a':
+            handler_class_args = tuple(ast.literal_eval(val))
+        elif switch == '-k':
+            handler_class_kwargs = dict(ast.literal_eval(val))
+        elif switch == '-h':
+            handle_request = val
+        elif switch == '-e':
+            end_request = val
+        elif switch == '-s':
+            split_request = val
+        elif switch == '-d':
+            decode_request = val
+        elif switch == '-E':
+            encode_response = val
+except (StandardError,TypeError) as e:
+    die(warning='Problem setting values from options', stack=e)
+if arguments:
+    conf = arguments[0]
+## initiate server
+try:
+    server = Gaidaros(
+      verbose=verbose, conf=conf, host=host, port=port, ip_version=ip_version, \
+      backlog=backlog, poll_timeout=poll_timeout, recv_size=recv_size, \
+      use_ssl=use_ssl, ssl_certfile=ssl_certfile, ssl_keyfile=ssl_keyfile, \
+      ssl_cert_reqs=ssl_cert_reqs, ssl_ca_certs=ssl_ca_certs, ssl_version=ssl_version, \
+      die_on_error=die_on_error, \
+      handler_module=handler_module, handler_class=handler_class, handler_class_args=handler_class_args, \
+      handler_class_kwargs=handler_class_kwargs, \
+      handle_request=handle_request, end_request=end_request, split_request=split_request, \
+      decode_request=decode_request, encode_response=encode_response)
+except StandardError as e:
+    die(warning='Problem instantiating server', stack=e)
+## run server
+try:
+    server.serve()
+except StandardError as e:
+    die(warning='Problem running server', stack=e)
