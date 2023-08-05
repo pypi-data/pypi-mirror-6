@@ -1,0 +1,24 @@
+======
+dpaste
+======
+
+dpaste is a Django based pastebin. It's intended to run separately but its also
+possible to be installed into an existing Django project like a regular app.
+
+
+Contents:
+
+.. toctree::
+   :maxdepth: 2
+
+   testing
+   integration
+   settings
+
+..
+    Indices and tables
+    ==================
+    * :ref:`genindex`
+    * :ref:`modindex`
+    * :ref:`search`
+
