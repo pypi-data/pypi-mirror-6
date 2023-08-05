@@ -1,0 +1,176 @@
+{% extends "_view.jinja" %}
+
+{% from "_sidebar.jinja" import sidebar %}
+{% from "_list.jinja" import list %}
+
+{% block css %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ cdn_url_for('jquery.gridster.css') }}">
+{% endblock %}
+
+{% block script %}
+  {{ super() }}
+  <script src="{{ cdn_url_for('draggabilly.pkgd.js') }}"></script>
+  <script src="{{ cdn_url_for('packery.pkgd.min.js') }}"></script>
+  <script src="{{ cdn_url_for('jquery.gridster.js') }}"></script>
+  <script src="{{ cdn_url_for('polaris.js') }}"></script>
+  </script>
+  <script type="text/ng-template" id="crossfilter.html">
+    <div>
+      <div class="crossfilter">
+        <div class="filter-brush" style="line-height:0;"></div>
+        <div class="value-label" style="display:none;">
+          {% raw %}
+          <div class="start" style="top:{{labelTop}}px;left:{{startLabelLeft-45}}px;">
+          {% endraw %}
+            <div class="date-label" ng-bind="startValueLabel"></div>
+            <div class="cursor"></div>
+          </div>
+          {% raw %}
+          <div class="end" style="top:{{labelTop}}px;left:{{endLabelLeft-45}}px;">
+          {% endraw %}
+            <div class="date-label" ng-bind="endValueLabel"></div>
+            <div class="cursor"></div>
+          </div>
+        </div>
+      </div>
+      <div ng-hide="hideLoading" class="loading">
+        <div class="aligner"></div>
+        <div class="spinner">
+          <div class="rect1"></div>
+          <div class="rect2"></div>
+          <div class="rect3"></div>
+          <div class="rect4"></div>
+          <div class="rect5"></div>
+        </div>
+      <div>
+    </div>
+  </script>
+  <script type="text/ng-template" id="chart_widget.html">
+    <div>
+      <div class="container" style="width:81%;">
+        <div ng-controller="ChartCtrl">
+          {% with %}
+            {% set uuid = "{{chartId}}" %}
+            {% set cf = "{{currentChart.cf_column}}" %}
+            {% include "_chart.jinja" %}
+          {% endwith %}
+          <div class="add-chart" style="position:absolute;top:20px;right:20px;">
+            <button ng-hide="hideAdd" ng-click="saveChart(uuid, type, baseUrl)"
+              class="btn btn-info">Add</button>
+            <button ng-hide="hideUpdate" ng-click="updateChart(uuid, type, baseUrl)"
+              class="btn btn-info">Save</button>
+          </div>
+        </div>
+        <div class="chart-settings">
+          <div class="cf-column form-group">
+            <label style="float:left;padding:3px 0 0;" class="control-label">crossfilter column</label>
+            <div class="col-md-5">
+              <input ng-model="cfColumn" type="text" class="form-control"/>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </script>
+{% endblock %}
+
+{% block head %}
+  <style>
+    #chart-add .modal-dialog {
+      height: 91%;
+      overflow: scroll;
+    }
+    .panel-body {
+      text-align: center;
+    }
+    .chart-container {
+      height: 460px;
+    }
+    .preview-holder {
+      background-color: red!important;
+    }
+    .li-container {
+      width: 100%;
+      height: 100%;
+      padding-right: 20px;
+      padding-bottom: 20px;
+    }
+  </style>
+{% endblock %}
+
+{% block body %}
+  <body ng-controller="DashboardCtrl">
+    <div style="display:none;" id="uuid" data-uuid="{{uuid}}"></div>
+    {{
+      sidebar(actions={"fui-plus": "addChart()"}, user=user, href={
+        "fui-new": "/dashboard/edit/{}".format(uuid)
+      })
+    }}
+    <div class="content">
+      <div class="container" style="width:87%;">
+        <div>
+          <div class="title">
+            <span ng-bind="dashboardName"></span>
+          </div>
+          <div style="padding-left:0;padding-right:25px;">
+            <div class="polaris-well well" style="position:relative;">
+              <crossfilter></crossfilter>
+            </div>
+          </div>
+          <div class="clearfix"></div>
+        </div>
+        <div class="charts">
+          <gridster>
+            <ul id="for-gridster" style="list-style:none;padding:0;">
+              <li class="widget" style="padding-right:1px;"
+                {% raw %}id="{{chart.id+':'+chart.type}}"{% endraw %}
+                ng-repeat="chart in charts" add-to-gridster>
+                {% raw %}
+                <div class="li-container">
+                  <div class="resizer" style="position:relative;width:100%;height:100%;">
+                    <div class="well polaris-well" data-y="{{chart.sizey}}" style="margin:0;">
+                      <chart class="chart" base-url="{{chart.baseUrl}}" type="{{chart.type}}"
+                      uuid="{{chart.id}}" cf="{{chart.cf_column}}"
+                      brush="brush" brush-from="brushFrom"
+                      brush-to="brushTo"></chart>
+                    </div>
+                  </div>
+                </div>
+                {% endraw %}
+                <div ng-hide="hideEditable" class="editable-mode">
+                  <i ng-click="deleteChart($event, $index)" class="delete fa fa-times"></i>
+                  <i ng-click="viewChart($event, chart, $index)" class="show fa fa-arrows-alt"></i>
+                </div>
+                <div class="clearfix"></div>
+              </li>
+            </ul>
+          </gridster>
+        </div>
+        <div class="col-md-12 col12" style="padding:0;"></div>
+      </div>
+    </div>
+    <div class="modal fade" id="chart-add">
+      <div class="modal-dialog" style="width: 87%;">
+        <div class="modal-content">
+          <div class="modal-body" ng-controller="ChartListCtrl">
+            <button type="button" class="close" data-dismiss="modal" aria-hidden="true"
+              style="top:0;left:0;float:none;position:fixed;margin-left:4px;padding:10px;">
+              &times;
+            </button>
+            <div class="chart-list" style="padding-bottom:100px;">
+              <div class="container" style="width:50%;">
+                <div class="title">Chart Library</div>
+                {{ list("chart", btn=False, href='#',
+                        ng_click="showChart($event, item.id, true)") }}
+              </div>
+            </div>
+            <div class="chart-pane" style="display:none;">
+              <div class="pane-container"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+{% endblock %}
