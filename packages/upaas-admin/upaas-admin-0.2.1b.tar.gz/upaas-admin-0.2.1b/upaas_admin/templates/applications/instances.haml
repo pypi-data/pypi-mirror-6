@@ -1,0 +1,50 @@
+- extends 'applications/base.html'
+
+
+- load i18n
+
+
+- block app_content
+
+  #stats-container
+    %h1.text-center.text-muted
+      %i.fa.fa-refresh.fa-spin
+
+
+- block js_bottom
+  = block.super
+
+  :javascript
+    function instances_callback(data) {
+      var instances = new Array();
+      $.each(data.stats, function (i, item) {
+         instances.push(
+          haml.compileHaml('upaas-haml-template-instance')({
+            instance: item
+          })
+         );
+      });
+      if (instances.length == 0) {
+        instances.push(
+          haml.compileHaml('upaas-haml-template-stopped')()
+        );
+      }
+      $('#stats-container').html(instances.join('\n'));
+    }
+
+    function update_instances() {
+      Dajaxice.upaas_admin.apps.applications.instances(instances_callback, {
+        "app_id":"{{ app.safe_id }}"
+      });
+    }
+
+    $(document).ready(function(){
+      window.setTimeout(update_instances, 300);
+      window.setInterval(update_instances, 3000);
+    });
+
+
+- block haml_templates
+  = block.super
+  - include "applications/partials/instance.js.haml"
+  - include "applications/partials/stopped.js.haml"
