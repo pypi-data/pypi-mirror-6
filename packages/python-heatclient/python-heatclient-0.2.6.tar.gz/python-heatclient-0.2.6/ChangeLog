@@ -1,0 +1,2068 @@
+commit fd6e99793088aadbae86d4a5c17249f81b6806bb
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Dec 5 11:03:43 2013 +1300
+
+    Add back --token-only for invocation compatibility
+    
+    This unused option should remain so that scripts that
+    use it do not break. It is suppressed so it will not
+    appear in the help.
+    
+    Closes-Bug:1250731
+    
+    Change-Id: I1180d8797d1e4c79dba92952931311cce50a1d3f
+
+commit 6f3e0842e40c636ee6e99657fbf8f6162289d8b5
+Author: chenhaiq <chenhaiq@cn.ibm.com>
+Date:   Wed Nov 13 17:11:02 2013 +0800
+
+    Add --include-pass option for grizzly backwards compat
+    
+    Set X-Auth-User, X-Auth-Key on all stack commands to allow the
+    latest python-heatclient to work on grizzly heat.
+    
+    Partial-Bug:1250731
+    
+    Change-Id: I29d4785cf3520e809252b5aeab25cf471a88cde8
+
+commit fa084b50fa3240b418065f7939ea216780fc1dbc
+Merge: e259163 42a252d
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Dec 4 10:36:08 2013 +0000
+
+    Merge "Fix i18n error when resource-name is non-english"
+
+commit e259163d5632188065b2ad4bbb2065d4fd5fc91d
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Mon Dec 2 22:50:15 2013 +0000
+
+    Revert "Don't call credentials_headers() twice"
+    
+    When we create or update a stack, when deferred_auth_method=password
+    (which is the default in heat.conf), the client must pass the username
+    and password, even if they don't need to for authentication (ie
+    they're passing a token). Otherwise there's no username and password
+    in the context to store, and the engine validation in
+    heat/engine/service.py::_validate_deferred_auth_context fails.
+    
+    No such issue exists when deferred_auth_method=trusts, which is why
+    this problem was missed during testing of the patch being reverted.
+    
+    Note some fixup in addition to the revert was required to make the
+    tests pass, as ShellTestToken and ShellTestStandaloneToken now require
+    username/password set in the fake env.
+    
+    This reverts commit a7ba3c323b16227e0ba2527f21bc89625f125234
+    Change-Id: I0e7bc3f748022c2bf5ef7ef6dfe4d97953e3fcab
+
+commit b0b085dfb380d455470534dcee3c3e99c980df45
+Merge: afa6b7f 7429fa9
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Nov 28 10:31:03 2013 +0000
+
+    Merge "Honor endpoint_type when requesting keystone for a token"
+
+commit afa6b7fa6a47d5a29df234d8de0ef461263edc7c
+Merge: a46657a 2706b48
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Nov 28 08:58:52 2013 +0000
+
+    Merge "Make tokens work with --os-no-client-auth"
+
+commit a46657a3e088f1596d8592cd8a7a4c5a54e5632b
+Merge: 47a3234 fc9bee3
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Nov 28 08:58:51 2013 +0000
+
+    Merge "test_shell test current not deprecated options"
+
+commit 47a3234e4ec0225473850abeeca515fc7df91908
+Merge: ab3c9df fe3629f
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Nov 28 08:47:39 2013 +0000
+
+    Merge "Fix shell operation with --os-auth-token"
+
+commit ab3c9dfd9d1c46d089b051e209105a3fda6eb53a
+Merge: a7ba3c3 0707e33
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Nov 28 01:01:46 2013 +0000
+
+    Merge "use correct url on Windows platform"
+
+commit 2706b48159e8937b4ef266f194a158ba60e2f36d
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Wed Nov 20 13:22:44 2013 +0000
+
+    Make tokens work with --os-no-client-auth
+    
+    Currently --os-no-client-auth assumes you'll only ever want to pass
+    a username and password to the standalone auth_password middleware,
+    but it's also valid to pass a token and endpoint, which can then
+    be used to either connect to a normal (non-standalone) Heat without
+    needing the client to connect to keystone, or pass a token to custom
+    auth middleware in standalone mode where tokens are accepted.
+    
+    e.g:
+    
+    heat --os-no-client-auth
+          --heat-url http://127.0.0.1:8004/v1/<tenant ID>
+          --os-auth-token <a token> stack-list
+    
+    Change-Id: Ie22c85ba5b3b987505f4d6204b4dd6ff03e0d912
+    Closes-Bug: #1252248
+
+commit fc9bee3458ae86860d752d022d2e188246b9cfd9
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Tue Nov 19 16:50:31 2013 +0000
+
+    test_shell test current not deprecated options
+    
+    Several tests are testing the old deprecated options, update to the
+    current equivalents
+    
+    Change-Id: Ibc09ed44b72e07f94511a5dc4fc6c79a1ff6d400
+
+commit fe3629f1bab78664498192efcc9d782d061459f1
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Tue Nov 19 16:42:49 2013 +0000
+
+    Fix shell operation with --os-auth-token
+    
+    Currently the --os-auth-token/env[OS_AUTH_TOKEN] case doesn't
+    work, as we always expect a username/password to create the
+    connection to keystone.  This enables the client to be used
+    with only a token and tenant (which is required for keystoneclient
+    to retrieve the catalog) specified, e.g:
+    
+    heat --os-auth-url http://127.0.0.1:35357/v2.0/ \
+         --os-auth-token <a keystone token> \
+         --os-tenant-id <tenant ID> stack-list
+    
+    Change-Id: I478ce178f44e42c68153f1b347c6144f0a133f5b
+    Partial-Bug: #1252248
+
+commit a7ba3c323b16227e0ba2527f21bc89625f125234
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Tue Nov 19 16:06:18 2013 +0000
+
+    Don't call credentials_headers() twice
+    
+    We don't need to call credentials_headers in the stack create/update
+    code, as it's already called in the HTTPClient.  This has the side-
+    effect of simplifying the shell test, which currently has to mock
+    header arguments to json_request, which are incorrect anyway because
+    HTTPClient always sets X-Auth-Token if a token is passed in (as
+    evidenced by bug #1250731)
+    
+    Change-Id: I6212cf5a50f5a8d919f743e23ece4bd1d0e1ad1c
+    Partial-Bug: #1252248
+
+commit 456bad65bee372503e93f53e272d2e4b24ce9c9d
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Tue Nov 19 14:56:16 2013 +0000
+
+    Use fixtures for all shell environment variables
+    
+    Currently only the variables related to the test are set, so
+    any other OS_* variables in the local environment can affect
+    the test results leading to confusing results.  Setting all
+    variables not passed into fake_env to None will delete them
+    in the fixture, hence ensuring a consistent test environment.
+    
+    Change-Id: I24a07ef5fc89ca9fff121fe206b8e314f23c4402
+
+commit 3dfc40eeed19c9fcdd1a9029e9419e96b8c6c273
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Tue Nov 19 10:35:54 2013 +0000
+
+    Cleanup exc.verbose after tests
+    
+    A couple of tests override the (module level) exc.verbose flag,
+    but fail to reset it after the test, which leads to failures
+    if a test expecting non-verbose exception format happens after the
+    verbose test.
+    
+    Change-Id: Iac633707e74464f8d6509a0c5aa0cc62da00ce47
+
+commit be6852bf323e55354c70b7b1fdfd90d4554f9534
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Mon Nov 18 18:53:56 2013 +0000
+
+    Pass only tenant name or ID to keystoneclient
+    
+    When creating the keystoneclient, we only need to pass the tenant
+    ID or name, not both
+    
+    Change-Id: I0dd03759979026daba1be343f7194f9b7e15a589
+
+commit 0707e337d00bf32605ee5ee7f0e1ceb8bcece84d
+Author: chenhaiq <chenhaiq@cn.ibm.com>
+Date:   Mon Nov 25 18:12:06 2013 +0800
+
+    use correct url on Windows platform
+    
+    os.path.normpath is used to clean url. On windows platform, it
+    returns url with "\" instead of "/", which is required in heat api
+     in:
+    /heat/heat/api/middleware/version_negotiation.py,
+    path_info_peek method.
+    
+    Change-Id: Ic1a5fc5dd789a7996e08a85a9d8908267e203565
+    Closes-Bug: 1254657
+
+commit 42a252dbbea773c4f7185055acdd2c1d214d8c7b
+Author: chenxiao <chenxiao@cn.ibm.com>
+Date:   Thu Nov 21 16:16:02 2013 +0800
+
+    Fix i18n error when resource-name is non-english
+    
+    When executing commands about event and resource with
+    non-english resource-name, error "'ascii' codec can't
+    decode byte...." will occur.
+    
+    Root cause is that heatclient can not generate a correct
+    encoded url. This Patch will use quote and safe_encode
+    functions to implement a url-encode process.
+    
+    Closes-Bug: #1249234
+    Change-Id: I4261fdaf6ccc60aebdb9df236f4eedce0f9baa14
+
+commit 845018fbf3717d2758c8073d9da11a20882b31f9
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Mon Nov 18 15:38:13 2013 +0000
+
+    Remove --token-only option, it does nothing
+    
+    This option appears to do nothing at all, so remove it
+    
+    Change-Id: If0cd263403cd4786681a8642f7b2dba5a84358b5
+    Partial-Bug: #1252248
+
+commit 2e39c94ace08d6ff6bb45324c0465d70dd5fc534
+Merge: 03878de 1f38806
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Nov 25 05:39:42 2013 +0000
+
+    Merge "Revert "heatclient is not working with os-auth-token""
+
+commit 03878de42612ae4d8b7985a433dd0f606da055cc
+Merge: 2742b33 db5a5b6
+Author: OpenStack Jenkins <jenkins@openstack.org>
+Date:   Sun Nov 24 00:29:10 2013 +0000
+
+    Merge "Updated from global requirements"
+
+commit 7429fa965de8bad5325dfa64f6a633b618b0d2e7
+Author: JordanP <jordan.pittier-ext@cloudwatt.com>
+Date:   Mon Nov 18 18:50:30 2013 +0100
+
+    Honor endpoint_type when requesting keystone for a token
+    
+    The parameter 'endpoint_type' must be taken into account in case
+    one has different public and internal Heat endpoint
+    
+    Change-Id: I63ffbec321e187f42405e1e70781065a274004d2
+
+commit 1f388064fb0120c9614c8ea2684e4fae51a2587f
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Mon Nov 18 15:24:22 2013 +0000
+
+    Revert "heatclient is not working with os-auth-token"
+    
+    This reverts commit 4eab568f79bdbfe4ba0d31038bf3c253d0858c59.
+    
+    The commit breaks the unit tests (and for some reason still passed
+    the gate...?), and also doesn't fix the issues with auth_token, ref
+    bug #1252248.  So revert this patch, while I work on a more
+    comprehensive fix to the auth_token issues.
+    
+    Change-Id: I34b9e808928d091384c4c466f14260252a45fd2e
+    Closes-Bug: 1252313
+
+commit db5a5b6b08910a515d425e2033cd754979bf1598
+Author: OpenStack Jenkins <jenkins@openstack.org>
+Date:   Fri Nov 15 16:50:49 2013 +0000
+
+    Updated from global requirements
+    
+    Change-Id: Ie988d2828e70c88e4e378500c34964ec65c87f65
+
+commit 2742b330102f9135cefa17294bc7ac6e0618dcd5
+Author: chenxiao <chenxiao@cn.ibm.com>
+Date:   Tue Nov 12 15:58:37 2013 +0800
+
+    Encode output for fixing UnicodeDecodeError
+    
+    Current heatclient doesn't handle properly outgoing encode process.
+    For resolving it, this patch implements a process to encode everything
+    going out of the client, for example, prints.
+    
+    This patch used two new modules (gettextutils.py and strutils.py)
+    taken from oslo-incubator in order to use safe_encode() and
+    safe_decode().
+    
+    Closes-Bug: #1249233
+    
+    Change-Id: Ia8c955a80d68126cd9c1fd791bda3e331a2aa5c9
+
+commit 56f97606d83ce124eaee41891be043385a15e05c
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Tue Nov 12 16:15:28 2013 +1100
+
+    Add a basic man page for heat
+    
+    This shows a taste of commands and shows how to access the help
+    
+    Closes-bug: #1153824
+    Change-Id: Ia69072c224e8940927dce0c984040d4c81bcee45
+
+commit 6992cc5a66f1b5b88a7b63d94ab5a42c4f669449
+Merge: 72d6221 4eab568
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Nov 11 20:35:01 2013 +0000
+
+    Merge "heatclient is not working with os-auth-token"
+
+commit 72d62218ca2df4fea3431b647374f1d74042c8f6
+Author: Tim Schnell <tim.schnell@rackspace.com>
+Date:   Mon Nov 4 16:22:36 2013 -0600
+
+    Returning the json body after a stack-create or stack-update
+    
+    This allows the downstream service access to the data coming
+    back from the REST API, primarily the stack id.
+    
+    implements blueprint return-id-on-stack-create
+    
+    Change-Id: I24db9c28fca1f50f5ef1452679f444095d22d103
+
+commit 4eab568f79bdbfe4ba0d31038bf3c253d0858c59
+Author: Vijendar Komalla <vijendar.komalla@RACKSPACE.COM>
+Date:   Tue Nov 5 14:28:45 2013 -0600
+
+    heatclient is not working with os-auth-token
+    
+    heatclient is failing if os-auth-token (OS_AUTH_TOKEN) is
+    provided. With this change, user can provide either auth token
+    or password with heatclient command line tool (heat).
+    
+    Closes Bug: #1248265
+    
+    Change-Id: I22b6af351dd3a371443f432b04785c706eff8325
+
+commit b16b116210636f7a826517d17e76c8ae2b1b02f9
+Merge: 31ce456 ed81b3a
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Nov 1 18:30:47 2013 +0000
+
+    Merge "Add a top level introduction to the index"
+
+commit 31ce45649a5455ca7c3b810ff7c41c4a54f410c6
+Merge: 849f4d6 3204ead
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Oct 31 01:20:19 2013 +0000
+
+    Merge "Add a contibuting section to index.rst"
+
+commit 849f4d6e180ad794ef384b13d7cb57ef32c4d52a
+Merge: f8a1a1a ed6c24e
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Oct 31 01:20:18 2013 +0000
+
+    Merge "Remove the release notes as it is not maintained here"
+
+commit f8a1a1a7a6f900eeaa46ed63a5989b8b3bbd67e4
+Merge: c7c8633 da932c1
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Oct 31 01:19:18 2013 +0000
+
+    Merge "Resync doc/source/conf.py from heat for consistency"
+
+commit c7c863336aa859e3ed812c6d9b96446f9d774e67
+Merge: fce6777 6a5e8b7
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Oct 31 01:19:17 2013 +0000
+
+    Merge "Add doc/Makefile to help with building docs"
+
+commit ed81b3ad2429c87f9e71b6e7bed0193638d0a48c
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Tue Oct 29 20:37:50 2013 +1100
+
+    Add a top level introduction to the index
+    
+    Change-Id: Icfe152a2829c2cb82a0955b91052183d7c488510
+
+commit 3204ead19f7f9d7701e2223e609b1351407e19bf
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Tue Oct 29 17:34:13 2013 +1100
+
+    Add a contibuting section to index.rst
+    
+    This should make it look more consistent with the other
+    projects.
+    
+    Change-Id: I2a3dd716215e68e2bafed17d059010ccb70d6ccf
+
+commit ed6c24e0640f251356bd564844c43d5b2eb26ba3
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Tue Oct 29 17:14:16 2013 +1100
+
+    Remove the release notes as it is not maintained here
+    
+    Change-Id: I7e558c23df59cba3668e3f3bcf6ca2413b72e178
+
+commit da932c19c71919697e7de984f496b79a69e9680e
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Tue Oct 29 16:29:21 2013 +1100
+
+    Resync doc/source/conf.py from heat for consistency
+    
+    Change-Id: I77c5abbd22517ed99475b891d380583e06a04cf6
+    Partial-bug: #1153824
+
+commit 6a5e8b7e86d77c7eb34139372c8eaf0d6cf220bf
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Tue Oct 29 16:30:30 2013 +1100
+
+    Add doc/Makefile to help with building docs
+    
+    Change-Id: I8894705891a02c06919e1b1c816ceb5137609b81
+    Partial-bug: #1153824
+
+commit fce6777081506361add28e8e403c0db222b5c836
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Tue Oct 29 16:11:44 2013 +1100
+
+    Print a more correct error with event-show
+    
+    Just print out what the server sent us as the
+    error could be wrong:
+    - stack_name/id
+    - resource name
+    - event id
+    
+    Change-Id: Ie48a549538a9809c8433b115537394a791d60147
+    Closes-bug: #1242947
+
+commit 30032302f359985335d50e80abb03ba901143168
+Author: Kui Shi <skuicloud@gmail.com>
+Date:   Thu Oct 24 17:40:22 2013 +0800
+
+    Fix the testname of scenario
+    
+    Duplicated testname in scenarios will result duplicated testname
+    by testscenarios, they can not be sorted in PY33 env, and will
+    induce TypeError:
+    TypeError: unorderable types: StackManagerNoPaginationTest() <
+    StackManagerNoPaginationTest()
+    
+    Close-Bug #1243096
+    
+    Change-Id: I4c02c9f3868495ec4399f795e864f26afc3d26b7
+
+commit ca72a42ad940670bbcdfa850e386ef1982391ae3
+Merge: c27fc77 e169704
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Oct 23 18:52:48 2013 +0000
+
+    Merge "align the order of parameters for urlencode()"
+
+commit c27fc77fe247915d11547f482370e4e133962eee
+Author: Kui Shi <skuicloud@gmail.com>
+Date:   Tue Oct 22 15:46:02 2013 +0800
+
+    remove python 2.5 support for parse_sql
+    
+    Python 2.5 is not supported anymore, remove the obsolete code for parse_sql.
+    
+    Close-Bug #1243418
+    
+    Change-Id: Ib87bde26a9b44555a36e3831f6aa33a6b3a4ba21
+
+commit e169704084099091112097b72bb45859ad05ec4e
+Author: Kui Shi <skuicloud@gmail.com>
+Date:   Mon Oct 21 06:56:56 2013 +0800
+
+    align the order of parameters for urlencode()
+    
+    In Python 3.3, hash randomization is enabled by default. It causes the
+    iteration order of dicts and sets to be unpredictable and differ across
+    Python runs.
+    
+    In the test case, the fixed expecting string will not match the test
+    result, it is relying on the dict order.
+    
+    This change transforms the input dict to a sequence of two-element list,
+    with fixed order, and exchange the order of "limit" and "marker" for
+    expecting string.
+    
+    Partial implement: blueprint py33-support
+    
+    Change-Id: If9c25fb0d457b31034111e7e879f1f95a576a78f
+
+commit 6681e72d83bfed8f47218589c0dfc318e6f164d1
+Author: Kui Shi <skuicloud@gmail.com>
+Date:   Mon Oct 21 05:00:57 2013 +0800
+
+    Replace urllib/urllib2 with urlutils
+    
+    The update of urlutils is same as follows:
+    https://review.openstack.org/#/c/52875/
+    
+    Partial implement: blueprint py33-support
+    
+    Change-Id: Iac43acd616504ede12bcdb4df15e32bb636a09c6
+
+commit 6ae8c07d5c14ce19d73c51b378383f782e6a7a28
+Author: Kui Shi <skuicloud@gmail.com>
+Date:   Sun Oct 20 16:11:17 2013 +0800
+
+    Transform print statement to print function
+    
+    Partial implement: blueprint py33-support
+    
+    Change-Id: Ieed61447746bc5f598dcdfa89362aaa93f7c0dec
+
+commit d07ec04e193cb957929f0ab5761c9f080ad89ec2
+Author: Kui Shi <skuicloud@gmail.com>
+Date:   Sun Oct 20 16:04:21 2013 +0800
+
+    Use the six library for compatability
+    
+    Replace dict.iteritems() with six.iteritems(dict)
+    Import six for StringIO
+    Import urlutils for urlencode
+    
+    Partial implement: blueprint py33-support
+    
+    Change-Id: Ieae1299915168ef10ff54e0a9e9a346350e9d1fb
+
+commit e274a23dfcb1df7a67081eaa04c9d3aa142bf4d9
+Author: Kui Shi <skuicloud@gmail.com>
+Date:   Sat Oct 19 22:37:07 2013 +0800
+
+    Import urlutils from openstack common
+    
+    Import urlutils for compatability issue
+    Remove obsolete code of Python 2.5 support
+    
+    Partial implement: blueprint py33-support
+    
+    Change-Id: I53515aa0f6f5c936e0d1a4f44b0ebf4998c59492
+
+commit 5e145a5b1e27d328d1f6663bf0ed9b6b4ddb2031
+Author: OpenStack Jenkins <jenkins@openstack.org>
+Date:   Thu Oct 17 22:23:44 2013 +0000
+
+    Updated from global requirements
+    
+    Change-Id: Ib9080a3f924d23fe203d27cc23a4b8f666cbf5b4
+
+commit c39ce1f20c010dc08ea8e1fa0261163c4ec12a83
+Author: Kui Shi <skuicloud@gmail.com>
+Date:   Wed Oct 16 06:29:05 2013 +0800
+
+    Import httplib from six.moves
+    
+    Partial implement: blueprint py33-support
+    
+    Change-Id: I4e2a7020c726717fa1e28926a04d97066bdf79ec
+
+commit 8c61700fad3738796206c0b5a3bd0e3eba784ba0
+Author: Kui Shi <skuicloud@gmail.com>
+Date:   Wed Oct 16 06:24:44 2013 +0800
+
+    Replace mox with mox3
+    
+    Mox3 is an unofficial port of the Google mox framework
+    (http://code.google.com/p/pymox/) to Python 3.
+    https://pypi.python.org/pypi/mox3
+    
+    Align with global-requirement and update the importing clause.
+    
+    Partial implement: blueprint py33-support
+    
+    Change-Id: I5d46d30b72b8504977d8d1891b3b0c81714e9099
+
+commit ecec0b1ead019235dc6d12c38f80ba46b8117829
+Merge: 1051c27 8b35d09
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Sat Oct 12 08:20:10 2013 +0000
+
+    Merge "Allow env registry paths to be relative to env file"
+
+commit 8b35d094ba0f05d5921ab56531bb7bf50a75347f
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Oct 8 13:36:10 2013 +1300
+
+    Allow env registry paths to be relative to env file
+    
+    The default base_url is now derived from the location
+    of the environment file, so now resource registry paths
+    can be relative instead of absolute URLs.
+    
+    This change also includes the following:
+    * more complete test coverage
+    * refactor of _process_environment_and_files and
+      _get_file_contents to make test coverage easier
+    * use the full URL instead of just the file name in the
+      'files' field to avoid key clashes
+    * make _get_file_contents less specific to the resource registry
+      so it can be used for other inclusion tasks
+    * stop calling _get_file_contents recursively so that deep URLs
+      do not get loaded, instead call _get_file_contents on
+      resource_registry and resource_registry.resources.*
+    Closes-Bug: #1233912
+    
+    Change-Id: Ic729cbcd1711b89e91daf0d645f4f56bae2accf3
+
+commit 1051c27b5a5de2080cf3f1299b8a86fd0ecedc94
+Author: OpenStack Jenkins <jenkins@openstack.org>
+Date:   Tue Oct 1 16:14:44 2013 +0000
+
+    Updated from global requirements
+    
+    Change-Id: I3897837748e4fbcd23128b235079f8e73400a56d
+
+commit 96dbb0911c8d139a5b3fe64af82783cf81790ff8
+Merge: 455b1cb 795d52c
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Sep 27 04:27:41 2013 +0000
+
+    Merge "Allow -P to be invoked multiple times"
+
+commit 795d52c6418fa3beab2e3385da11ece8fca3db37
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Mon Sep 23 17:55:55 2013 +1200
+
+    Allow -P to be invoked multiple times
+    
+    If --parameters is specified more than once it is assumed
+    that each one contains only one parameter key=value.
+    
+    This means semicolons are ignored if there is more than one -P
+    specified.
+    
+    This should be fully backwared compatible, a single -P will
+    be assumed to be semicolon delimited.
+    
+    Change-Id: Ic202ff3e0596b786cd5b07c53509f97a95d41585
+    Closes-Bug: #1224825
+    Closes-Bug: #1229030
+
+commit 455b1cb4e88cff87787d69ecf196c64be0467ed4
+Author: ZhiQiang Fan <aji.zqfan@gmail.com>
+Date:   Fri Sep 20 04:21:21 2013 +0800
+
+    Replace OpenStack LLC with OpenStack Foundation
+    
+    Change-Id: I8f2697ca99192078d5db2adb4db98287520d9895
+    Fixes-Bug: #1214176
+
+commit 978e3f45423acc86b7836a4c07a42bbf878f31d4
+Merge: 120efdb ebb57f1
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Sep 11 20:48:34 2013 +0000
+
+    Merge "Add handler for heatclient.common.http"
+
+commit 120efdb9cf3e9ad04298b4750c2ce1e96edbab86
+Merge: 5cb3fc0 3146d22
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Sep 11 17:22:57 2013 +0000
+
+    Merge "Stack instance identifier property"
+
+commit ebb57f109517045d1d321b4fcb8b788e062ff079
+Author: ZhiQiang Fan <aji.zqfan@gmail.com>
+Date:   Wed Sep 4 14:38:49 2013 +0800
+
+    Add handler for heatclient.common.http
+    
+    If no handler is found, add StreamHandler to LOG
+    
+    Closes-Bug: #1220532
+    Change-Id: I32d541d242845b7311fd6810a5e87f07fafd8efd
+
+commit 5cb3fc07d50d76133565717659abc886d43fc2a2
+Author: ZhiQiang Fan <aji.zqfan@gmail.com>
+Date:   Wed Sep 4 14:10:55 2013 +0800
+
+    Support --version for heatclient
+    
+    Closes-Bug: #1220524
+    Change-Id: Id78f7c7c78d31c0126b43f7a846f02f2542b0b7c
+
+commit e2cbb450361893976316211cb1656d6cf8de686d
+Merge: a7ffcd7 b95657f
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Sep 4 03:35:34 2013 +0000
+
+    Merge "Be backward compatible after a renaming in API"
+
+commit a7ffcd76d08f52a928e7cae2b3f82ac4dba3cc37
+Merge: 9d19772 d48d358
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Sep 4 03:12:33 2013 +0000
+
+    Merge "Fix and enable Hacking H501 warning"
+
+commit 3146d22b70490c4f640fee01e23c2208667d382c
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Sep 4 11:33:29 2013 +1200
+
+    Stack instance identifier property
+    
+    The identifier property formats the stack name and ID for
+    REST API request paths.
+    
+    This has the following consequences for each action method:
+    - get, same behaviour but using the identifier property
+    - delete, using the full identifier avoids one http redirect
+    - update, this method was non-functional before this change, and is
+      now fixed
+    
+    Change-Id: Ib2b12826243e25772acccb8ca56039e54d3857d5
+
+commit 9d19772089bedeefd33d8a8cfef8aac00998f2c7
+Author: Alex Gaynor <alex.gaynor@gmail.com>
+Date:   Tue Sep 3 17:31:12 2013 -0700
+
+    Added support for running the tests under PyPy with tox
+    
+    This is a precursor to having them run under check and gate.
+    
+    This also fixes a single test which fails on PyPy, the test failes at
+    because it assumes a ``dict`` has a particular order for its keys when
+    it is printed out, on PyPy dicts have a different order sometimes, the
+    exact ordering is not a guarnteed property of Python.
+    
+    Change-Id: Ie86726a0221e5e9aa68f7303d8ca8c7acd878f65
+
+commit d48d3587bd9593eb03ecec556eea3772b9c89d04
+Author: Dirk Mueller <dirk@dmllr.de>
+Date:   Mon Sep 2 21:39:21 2013 +0200
+
+    Fix and enable Hacking H501 warning
+    
+    Enable Gating on H501. Fix the only two cases
+    that trigger.
+    
+    Change-Id: Ib309b989df6556d7436e718e1497ce4dcacc83d6
+
+commit b95657fd15e8e1880978a130c4faa45b290397a8
+Author: Swann Croiset <swann.croiset@bull.net>
+Date:   Thu Aug 29 15:47:22 2013 +0200
+
+    Be backward compatible after a renaming in API
+    
+    The need was introduced with the renaming of field logical_resource_id
+    to resource_name, so let heatclient display the good one for the two
+    Heat versions.
+    
+    Fixes bug #1216903
+    
+    Change-Id: I3e86f482a1b814a27b15be3c102727c44153221f
+
+commit a5d71080efc63a174d77614c9d816a7d86423971
+Merge: 6f99131 1426237
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Aug 27 15:35:58 2013 +0000
+
+    Merge "Add X-Region-Name parameter in HTTP request"
+
+commit 6f99131805eafa2965a08d498fd6816c60ed935f
+Author: Swann Croiset <swann.croiset@bull.net>
+Date:   Mon Aug 26 15:08:05 2013 +0200
+
+    Rename event logical_resource_id to resource_name
+    
+    Required by Heat change (https://review.openstack.org/#/c/43391/)
+    
+    fixe bug #1216903
+    
+    Change-Id: I77201348df401d5bafc7109bb4d032dd071468d8
+
+commit 0b2122eae144a046a8dce9ed944b8ccdd5e957c3
+Merge: e540b68 e81f590
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Sun Aug 25 23:21:18 2013 +0000
+
+    Merge "Do not obscure Unauthorized error messages"
+
+commit 1426237c38792bcf62521f959157501b9c6d50ea
+Author: Nachi Ueno <nachi@ntti3.com>
+Date:   Thu Aug 22 14:43:34 2013 -0700
+
+    Add X-Region-Name parameter in HTTP request
+    
+    In order to specify region_name, we let client send
+    the OS_REGION_NAME in header file
+    
+    Fixes bug 1213291
+    
+    Change-Id: Ie44f700ca7e412c2504b6b8faac3fd65d4fd744b
+
+commit e540b684166a9f7adfe862da5184517c87b3dcae
+Author: Nachi Ueno <nachi@ntti3.com>
+Date:   Thu Aug 22 11:54:05 2013 -0700
+
+    Apply OS_REGION_NAME for endpoint selection
+    
+    Even if we got OS_REGION_NAME on CLI, the value is not used.
+    In this commit, we apply OS_REGION_NAME for endpoint
+    selection.
+    
+    Fixes bug 1215588
+    
+    Change-Id: Ib2e2f655282b2730a9a3b7337e56993253972ce1
+
+commit e81f590ea92270f382583c01839e9882a375153c
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Aug 20 15:25:29 2013 +1200
+
+    Do not obscure Unauthorized error messages
+    
+    All Unauthorized exceptions are currently trapped and
+    the following message is printed:
+        Invalid OpenStack Identity credentials.
+    
+    This is unhelpful now that heat-api is providing structured
+    errors with (sometimes) helpful context for authorization failures.
+    
+    This change removes this error trapping and prints the intended
+    error message.
+    
+    Change-Id: Ibd943deb1f365e5f212225be1e675beb14accf97
+
+commit c0457ff0d4f7c603dfd60101a76797e9fae92dc4
+Merge: 2d1592e 68999ba
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Aug 13 20:57:02 2013 +0000
+
+    Merge "Generate a template from a resource"
+
+commit 2d1592e934b4313fb0582dba419fcca27819d7e4
+Author: JUN JIE NAN <nanjj@cn.ibm.com>
+Date:   Thu Aug 8 14:27:33 2013 +0800
+
+    Fix heat event list sorted order incorrect
+    
+    The order is correct already if python heat client does not recorder
+    it. Add option to make print_list not to reorder possible, and call it
+    in do_event_list.
+    
+    Change-Id: I3f0990aff27df39371c583d5aae3edd106542ad1
+    Fixes: bug #1209506
+
+commit cf4b5c82c4225af3c7439f8a03f928162d54a57f
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Wed Aug 7 19:02:44 2013 -0300
+
+    Updated from global requirements
+    
+    Change-Id: I1687d51bddb873549163dcf488fc40cdd9edcb29
+    
+    Change-Id: Ic4a43955526fcde313ad2f2afec8fafeb87f37a6
+    
+    Change-Id: Ic4a43955526fcde313ad2f2afec8fafeb87f37a6
+    
+    Change-Id: Ic4a43955526fcde313ad2f2afec8fafeb87f37a6
+    
+    Change-Id: If137689e5b9008c51cea16d41e648f0df490a247
+
+commit 68999ba81fc622ab9274d26725fddda83a631f53
+Author: Andrew Plunk <andrew.plunk@rackspace.com>
+Date:   Mon Aug 5 10:28:47 2013 -0500
+
+    Generate a template from a resource
+    
+    Setup the command line options and calls for generating
+    a template from an installed resource.
+    
+    blueprint resource-template
+    
+    Change-Id: If533bd90b1ec73bbe2603b55a0a7621879d355ec
+
+commit 2c05c73a6b7137a428111bb52b97087aac1c43a0
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Mon Aug 5 15:52:09 2013 +1200
+
+    Remove unused Stack data method
+    
+    Change-Id: Ia3fce29a58957b84f2eba33ac1b2ecfb04543939
+
+commit 79dea076dbd5f35c0572b51dfcceeb5112772091
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Mon Aug 5 15:29:16 2013 +1200
+
+    Do not paginate stack list unless page_size is set
+    
+    Pagination on the server has not yet been implemented, however
+    the client assumes it is, causing infinite recursion when paginate
+    is called.
+    
+    With this change, no pagination is attempted unless page_size is
+    specified. However the 'limit' parameter is still honored, so it
+    is still possible to cap the total number of results returned.
+    
+    heatclient users should not set page_size until pagination has been
+    implemented on the server. The stack list in Horizon currently
+    does not attempt to paginate, so is not affected.
+    
+    Fixes: bug #1207839
+    Change-Id: I4087d3a8af48206d6ebe3edc441469464e4a401a
+
+commit ea0e957978632b55ea48864f216e1b0b7181c6f7
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Mon Aug 5 09:02:40 2013 +1200
+
+    Custom Stack get method to avoid lookup redirects
+    
+    Change-Id: I15dd4e9168cba6fd05371fed097d52cbf33cb15d
+
+commit 6f7239f67bd189870186c71d6d3f66f6334f6133
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Mon Aug 5 08:55:52 2013 +1200
+
+    Fix Stack instance delete method
+    
+    The current instance delete method assumes that a Stack
+    instance can be passed to the manager delete method, however
+    the manager delete method only accepts a stack identifier.
+    
+    Change-Id: I87c30be1ea43695b7e13953531ea282fd8d386f8
+
+commit 18e110dbf0ae46730c08ea7d1898a89f14afda85
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Mon Aug 5 08:19:14 2013 +1200
+
+    Add mock as a test requirement
+    
+    A project-wide concensus is forming that mox should be phased
+    out and mock should be encouraged for writing new tests.
+    
+    This change allow mock to be used for new tests.
+    
+    Change-Id: I3cdf77bbeadd419b811bddcc31f048c1c6ec38bb
+
+commit 9104cb00a1a1e93ff35784a7e64a95d90b04a534
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Mon Aug 5 18:03:52 2013 -0300
+
+    Sync with global requirements
+    
+    Change-Id: Iad82b688da07f3aa83a9850b5ea9fe2beb51019e
+
+commit 529d429d49461c9ffa69bf8e90f3d00aded6603c
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Aug 2 14:20:36 2013 +1200
+
+    Implement Stack status and action properties
+    
+    This splits the stack_status back to an action and status,
+    as it is represented internally in heat-engine.
+    
+    It assumes there will not be an action which contains an _.
+    
+    This change is needed for code (such as tempest) which assumes a
+    convention of all openstack client resources having a status property.
+    
+    Change-Id: If00db5508bf8469b1106cac20b8fc10f7e1a854d
+
+commit cae2c0fd7b526f285b2d59f7321e9084aa9e4337
+Merge: e5d68a4 2b83260
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Jul 30 05:09:12 2013 +0000
+
+    Merge "Parse error object (in json format) returned by heat-api"
+
+commit 2b83260feb910a72bceed93db2f4ebd59c692022
+Author: Jianing YANG <jianingy@unitedstack.com>
+Date:   Mon Jul 22 15:15:57 2013 +0800
+
+    Parse error object (in json format) returned by heat-api
+    
+    With this fix, heatclient will display a clear error message when
+    encounter an server-side error. Additionally, the corresponding
+    traceback will be displayed when "--verbose" is set.
+    
+    Change-Id: I99b828465f61478a3c63fcf549d044a62523be1f
+
+commit e5d68a48af1642d7104429a7ca0d3063f5cfdd85
+Merge: 34993c6 78c98ee
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Jul 22 17:23:49 2013 +0000
+
+    Merge "Set credentials headers if there is no auth token."
+
+commit 34993c6b69c197041f6e21a9200758a94624eb9a
+Merge: a49cf4c 0254ad5
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Jul 22 17:22:48 2013 +0000
+
+    Merge "Validate heat url is supplied for --os-no-client-auth."
+
+commit 78c98ee91bf0daac2337fec4474d3300417c0d40
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Jul 19 14:09:34 2013 +1200
+
+    Set credentials headers if there is no auth token.
+    
+    Credentials will be set instead of a token for all invocations where
+    --os-no-client-auth is specified.
+    
+    Change-Id: I35a81a9518833ce9758228266deb36c8073f9fb8
+
+commit 0254ad50a25816b80c854ea74f6a9b61cdad0e1f
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Jul 19 13:15:49 2013 +1200
+
+    Validate heat url is supplied for --os-no-client-auth.
+    
+    Currently an obscure error is returned if --heat-url is not
+    specified.
+    
+    Change-Id: Ia9fbb694f38e583a0cf1898f576a894d1007f697
+
+commit a49cf4c148bfcb4cf878afc13325f2ffcf219992
+Merge: e147586 3f1b15c
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Jul 16 23:42:39 2013 +0000
+
+    Merge "Cleanup in preperation for release."
+
+commit 3f1b15cdce172e3d66720b4503eaae0d11a563f6
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Jul 17 10:42:28 2013 +1200
+
+    Cleanup in preperation for release.
+    
+    Change-Id: Iaeb926b929d4f8210ebbfa310134b1fb50dce276
+
+commit e14758686f71932c5fe5c884bdf7344a1f339d0a
+Author: JUN JIE NAN <nanjj@cn.ibm.com>
+Date:   Tue Jul 16 13:45:20 2013 +0800
+
+    Display yaml format for stack deployed via hot template
+    
+    Determine hot template and display yaml format for it, display json
+    format for others.
+    
+    Change-Id: Ie8d72c222a992ee0048897d040e8bc88fcf51760
+    Fixes: bug #1201482
+
+commit b417688d210b5efa22a97e8694c1e48c25f076e0
+Merge: 710f751 4259289
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Jul 16 03:22:00 2013 +0000
+
+    Merge "Only set X-Auth-User, X-Auth-Key on stack create/update."
+
+commit 710f7512bbb9074cc31219f8d02153d7e747476d
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Tue Jul 16 12:24:35 2013 +1000
+
+    Make the parameter checking consistent.
+    
+    Make format_parameters() raise CommandError with
+    the same message. Rather than raise MalformedRequestBody
+    and then catch that and raise CommandError. This just
+    simplifies things.
+    
+    Change-Id: Ic05af32dd916e953e6b162daccc4525cb4734a46
+
+commit ff2033a8c1e0b7cac722890424d3d8ac32952415
+Merge: 011fff3 43b6b0c
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Sun Jul 14 22:13:07 2013 +0000
+
+    Merge "Rename README.md to README.rst"
+
+commit 43b6b0cdc4efd54f122d91f654aced914686e34b
+Author: Dirk Mueller <dirk@dmllr.de>
+Date:   Sun Jul 14 18:27:12 2013 +0200
+
+    Rename README.md to README.rst
+    
+    The content looks more like restructured text to me,
+    and it seems to be more common amongst OpenStack projects.
+    
+    Change-Id: Iba8c21985c055f1712069a6e70d345bb920381bf
+
+commit 011fff3416eaeff7e573668e80cf48ce2224b080
+Author: Dirk Mueller <dirk@dmllr.de>
+Date:   Sun Jul 14 18:13:33 2013 +0200
+
+    Raise requirements to be in sync with OpenStack/Requirements
+    
+    Mainly due to the testing deps being outdated. Also
+    fixes client capping.
+    
+    Fixes LP Bug #1200214
+    
+    Change-Id: I39c18144bc19189513fc4c1f9712b8938bd719cf
+
+commit a4208dc54d9e23f1073e36fc906ae6a8c4603bbd
+Merge: cb5b027 2198a76
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Thu Jul 11 11:03:34 2013 +0000
+
+    Merge "Fix "heat validate" (add needed environment option)"
+
+commit cb5b027d762aae4aebf996697d296b217bf7b332
+Author: Lin Hua Cheng <lin-hua.cheng@hp.com>
+Date:   Wed Jul 10 14:35:29 2013 -0700
+
+    Update upper bound of keystoneclient version.
+    
+    This is the intermediate step so that we can update the the lower
+    bound of keystoneclient in openstack-requirements.
+    
+    Change-Id: I1b73bfaafdf404634fc321b4e536f65b6dd65a3a
+
+commit 2198a76839b68e4fde9c8cae64e10dd1519ecc61
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Mon Jul 8 14:58:14 2013 +1000
+
+    Fix "heat validate" (add needed environment option)
+    
+    since it calls template-validate it needs that same options.
+    
+    Change-Id: Ic024707240af59b862146d4f478e495a93b5cd7a
+
+commit 42592898c3b95f0f0b264809d485cb127c078fce
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Jul 5 10:10:20 2013 +1200
+
+    Only set X-Auth-User, X-Auth-Key on stack create/update.
+    
+    All heat operations can be performed with only a token.
+    
+    User credentials are required for stack create/update as they are
+    stored for later stack operations.
+    
+    This change prevents credentials unnecessarily being sent over the wire.
+    
+    Change-Id: I5ad18067c5db8ada9994d131e98f27af70a7ca06
+
+commit 9cba3dab020712e3d78d8e1e062cbd17ab43f893
+Merge: 8dd6074 5320a3a
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Jul 3 22:45:52 2013 +0000
+
+    Merge "Format resource required_by in resource-show."
+
+commit 8dd6074d88442ba0af9c316546e8f3bcba2cdeb7
+Merge: 0a23b8b f535cf9
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Jul 3 22:35:18 2013 +0000
+
+    Merge "Unit tests for pretty table special formatters."
+
+commit 5320a3a49ad15f129c420ffdbab66c3a0e5626c9
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Jun 28 14:42:16 2013 +1200
+
+    Format resource required_by in resource-show.
+    
+    This change has no effect if the resource details contains
+    no requires key (such as for older API versions).
+    
+    Change-Id: I5bce5cf6a7c7cd3f531453cd126fb7b7b3e227ef
+
+commit f535cf99d07731a12471e84b2efd05e238c2d954
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Jun 27 15:09:15 2013 +1200
+
+    Unit tests for pretty table special formatters.
+    
+    Change-Id: If07b4a5fc0c4ae2eecf486433134864270757945
+
+commit 0a23b8bd55a50f5ce4df67af6c89b880a552914b
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Thu Jun 13 17:59:32 2013 +0100
+
+    Add support for suspend/resume actions
+    
+    Adds support for action-suspend and action-resume
+    
+    blueprint stack-suspend-resume
+    
+    Change-Id: If82e6b19756d3eae8a379141ae1f25565895e262
+
+commit 7774ac321759f38d5bd2ac52ff8ade16d8fd2870
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Sat Jun 29 20:54:38 2013 +1000
+
+    Upload provider templates referenced in the environment.
+    
+    blueprint provider-upload
+    Change-Id: I3cbfe90dd8b4d152837666fa7f50b4b4a33bee27
+
+commit a77fd1348d39cbcc6484c165a098182597048d8c
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Thu Jun 27 13:22:07 2013 +1000
+
+    Fix all but H302 hacking rules.
+    
+    Change-Id: Iac329617428b851df42579d5bd0b299d2f6e2c0a
+
+commit 2fcd4570f35ed13981e8dc7b7eb7b6cc646e531a
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Thu Jun 27 13:13:14 2013 +1000
+
+    Fix all the pep8  E* and F* errors.
+    
+    Change-Id: I34bab949e4795073544c64c9796237c60ace4d65
+
+commit 61ce60358efc2154add617d78fc9010b9085276f
+Author: Dirk Mueller <dirk@dmllr.de>
+Date:   Thu Jun 20 20:43:19 2013 +0200
+
+    Fix various smaller pep8 issues
+    
+    Change-Id: Icc015418e0e231311ac0a0cc507fa3f8842d8811
+
+commit f524528770cffb859bea213c04b758c9c6b97d88
+Merge: dc91ee5 f75b0d9
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Sun Jun 16 23:59:48 2013 +0000
+
+    Merge "Stop passing path to VerifiedHTTPSConnection"
+
+commit dc91ee54f89f5e8744e3f69434a03529e3386cb0
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Jun 11 11:19:03 2013 +1200
+
+    flake8 ignore build directory.
+    
+    Change-Id: I5c1b436dac7bb558f2c2c02c0d7de51751305e91
+
+commit f75b0d94223da61a570778bdda4e29777eb3ee4b
+Author: Bryan D. Payne <bdpayne@acm.org>
+Date:   Thu Jun 13 12:01:04 2013 -0700
+
+    Stop passing path to VerifiedHTTPSConnection
+    
+    This class doesn't expect this argument.  Passing the argument causes the
+    client to break on all HTTPS connections.
+    
+    Change-Id: I56f02b3a8943ff9a8b9e7855796fd527683514f3
+    Fixes: bug #1190111
+
+commit 0e559f5e43199b690b1fdc566503ac3d55d203ec
+Merge: e8d3b3a 0697675
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Jun 12 03:14:57 2013 +0000
+
+    Merge "Include .testr.conf in source tarball"
+
+commit e8d3b3a59b0b3b4c3dfdbe2c970a68ac6462625b
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Tue Jun 11 11:32:13 2013 -0700
+
+    Remove explicit distribute depend.
+    
+    Causes issues with the recent re-merge with setuptools. Advice from
+    upstream is to stop doing explicit depends.
+    
+    Change-Id: Ie4c3eb42351f1ba5caa9b092db8f544d5a0cd7ba
+
+commit 0697675e127eaf42e10c19591013727d55434676
+Author: Dirk Mueller <dirk@dmllr.de>
+Date:   Tue Jun 11 09:02:29 2013 +0200
+
+    Include .testr.conf in source tarball
+    
+    In order to run tests in the release tarball,
+    include the .testr.conf
+    
+    Change-Id: Ibc931400684a9aff240c097f874ac9d8df0c46c8
+
+commit 5f3e7ef850a02d659d95fdc0ec32a1dd86922744
+Merge: b1eab17 798d62e
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Jun 11 00:13:16 2013 +0000
+
+    Merge "Use Python 3.x compatible except: construct"
+
+commit 798d62e9d3f0725f07cded6b6e41a436a5b54f54
+Author: Dirk Mueller <dirk@dmllr.de>
+Date:   Fri Jun 7 15:56:53 2013 +0200
+
+    Use Python 3.x compatible except: construct
+    
+    Per (propsed) Hacking H203 check, use the
+    non-deprecated except x as y: construct which
+    works with any Python version >= 2.6
+    
+    Change-Id: Ibe58125719ba7fccf68974555a4b93f9dcdad6ae
+
+commit b1eab178b1f5a92c3d22b068e711121223bd1058
+Merge: 6aeb099 44740d8
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Fri Jun 7 00:16:21 2013 +0000
+
+    Merge "Add support for environment files"
+
+commit 6aeb0993d951856a912103430aace2c94c8c0e19
+Merge: 9b1ce21 c4174d3
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Jun 3 22:43:19 2013 +0000
+
+    Merge "Migrate to testr from nose."
+
+commit 9b1ce2108189cdfd499e116500fad566670260bc
+Author: Sulochan Acharya <sulochan@gmail.com>
+Date:   Wed May 29 18:04:46 2013 -0500
+
+    Fixes text split for parameters
+    
+    Make text split only on the first "=" element, this will
+    allow for values to have multiple "=" in the string.
+    Also, ensure that key = value pair is honored in parameters,
+    exit otherwise with error message. Tests included.
+    Fixes bug #1183842
+    
+    Change-Id: Ic8897405c61dee49f5927b53f055b0d0686eea7d
+
+commit 44740d8ccb2678d9553e4770228a21f8246e2794
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Fri May 31 20:56:30 2013 +1000
+
+    Add support for environment files
+    
+    env.yaml:
+    "
+    parameters:
+     KeyName: heat_key
+    "
+    heat stack-create foo -e env.yaml -P "<more params here>" -f bla.yaml
+    
+    blueprint environments
+    Change-Id: If40d4b6396cc69452bb1e13654ca8bb3d61e24fb
+
+commit c4174d39ae460f3064ca7cfb1cb20ba9bd2d3e14
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Fri May 31 20:13:37 2013 +1000
+
+    Migrate to testr from nose.
+    
+    Change-Id: Ibe0c2eeee9aeb4cb1832456cdc0d080a5a9af175
+
+commit 2e6e49f7fa49c977fb9e406e1a49a99792e80775
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Sat May 25 09:08:25 2013 +0200
+
+    Migrate test base classes to testtools.
+    
+    This is in prep for testr changes, but also cleans up
+    several things in the tests where state could leak.
+    
+    Change-Id: I7f53dcee2f1fcffb622dd475ea8cf433ce43dbb2
+
+commit 56bfe7541d5fb61490623bc394ed02ffe3c94b6e
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Sat May 25 08:45:35 2013 +0200
+
+    Move tests into package dir.
+    
+    This keeps it consistent with the other heat projects, and gets us
+    away from having a global 'tests' package.
+    
+    Change-Id: Ic41b5fc235df0fce0feecfe678f743621e379aec
+
+commit 37684327070859c3d4a8ed47b43f18b9858bd436
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Sat May 25 08:41:07 2013 +0200
+
+    Move requirements files to standard names.
+    
+    Change-Id: Ia27def1cf04aae8fe6e9f19e965b0083638d2201
+
+commit 918c4d9d440940bf96d372e8b00d342734ae3eaf
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Sat May 25 08:39:47 2013 +0200
+
+    Add CONTRIBUTING file.
+    
+    Change-Id: I07519e58a8ee2b1dc01e9882e50c68db5fa6ebab
+
+commit 20bca18e179a069151172a3b32782ffbff3910a7
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Sat May 18 09:02:43 2013 -0700
+
+    Migrate to pbr.
+    
+    Fixes bug 1179007.
+    
+    Change-Id: Ic3b99d88cb9c82112f1e2b51867a0da7fb6ec691
+
+commit 2a08054f8ce5b1ed00085a269cd1a62a8a7164b7
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Mon May 20 14:08:03 2013 +1000
+
+    Fix some "H" pep errors
+    
+    And be more specific about which ones we ignore.
+    
+    Change-Id: I69fd6897957e3dcb5939cf48651a0f1b41b711dd
+
+commit b343c1c22d1caa426d0afac1255ca92dcc72fa4b
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Sat May 18 08:37:46 2013 -0700
+
+    Migrate to flake8.
+    
+    Fixes bug 1172444.
+    
+    Change-Id: Icd6c41f9f5b799ed0b121dc3a3af9d4304fa0eff
+
+commit fcf75cb48486ad2194fd59bb2042a9ad03e8d076
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Sat May 18 08:36:29 2013 -0700
+
+    Cleaned up code in anticipation of flake8.
+    
+    Change-Id: Id710edb1a82110653e783fed13cd589cab75f38a
+
+commit d057d6c2464eae9afd8a4a484cbdc31f2ea9a3fa
+Author: Dirk Mueller <dirk@dmllr.de>
+Date:   Mon Apr 29 11:28:39 2013 +0200
+
+    Restore compatibility with PrettyTable < 0.7.2
+    
+    PrettyTable 0.7.2 defaults to print a table even if
+    the resultset is empty. Restore previous behavior
+    to be in line with older prettytable releases.
+    
+    Change-Id: Iaa9e1cf5444c8daa229aad53e3a3c15038a7d57e
+
+commit 9354f84e59440e6a6eade085e964a7374c73509f
+Author: Simon Pasquier <pasquier.simon@gmail.com>
+Date:   Tue Apr 2 17:04:16 2013 +0200
+
+    "heat stack-create" doesn't return the error message from server
+    
+    Change-Id: Icef10df6547e5830abb17edf5ed8c622b3b021b5
+    Fixes: bug #1163335
+
+commit 8eaba001434d85f4b9125524ebf55aa8288aa12e
+Merge: f3a7dde 1f22278
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Apr 1 19:35:37 2013 +0000
+
+    Merge "Always pass username, even for --token-only"
+
+commit f3a7dde3c1b07113c483a6fecef5cc5a978f6573
+Merge: 11f24ff bcd0a35
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Apr 1 19:33:10 2013 +0000
+
+    Merge "Display resource metadata as indented json"
+
+commit 11f24ff4253d0acea7b1a7cd810b091be93b5478
+Merge: bbf58d1 58b96ef
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Apr 1 19:33:09 2013 +0000
+
+    Merge "Don't use human readable heading labels in tables"
+
+commit bbf58d1a41cf6f676e3522ea1054022c2c4aea35
+Merge: 3740ae9 a5d6df0
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Apr 1 17:56:12 2013 +0000
+
+    Merge "Return the body as a string instead of an iterable."
+
+commit bcd0a35ba067091d27e0f21e38e92a1ee61f406f
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Mar 27 16:07:56 2013 +1300
+
+    Display resource metadata as indented json
+    
+    displaying as a pretty table wasn't pretty.
+    
+    Change-Id: Ia25dd7d08b46b6b497f13707430664718f01d1cc
+    Fixes: bug #1160689
+
+commit 58b96efe9545d40ba33f85afbcac07995c52abc3
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Mar 27 15:59:48 2013 +1300
+
+    Don't use human readable heading labels in tables
+    
+    This is in line with what other OS clients do.
+    Fixes: bug #1160689
+    
+    Change-Id: Icbf053bd93ecdbeeb2ea791c32199225803d09be
+
+commit a5d6df0630f6df4c5881071a4deebc6f2e32af79
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Mar 27 16:09:18 2013 +1300
+
+    Return the body as a string instead of an iterable.
+    
+    Heat REST API will never return an application/octet-stream so
+    this removes some dead code.
+    
+    Change-Id: Ia0d35c898ba92924ba82d50f1cfde14b299569e5
+
+commit 1f2227807fb0cad314b00a9dd9a27e5dc21846f6
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Mar 27 16:12:55 2013 +1300
+
+    Always pass username, even for --token-only
+    
+    Change-Id: I3cf164a2d6573fe1f8d3e610c859bfa5ad19aaed
+    Fixes: bug #1160648
+
+commit 3740ae9fcb1ed4dc39796ceccbf0e7000be71002
+Author: Dirk Mueller <dirk@dmllr.de>
+Date:   Fri Mar 15 17:41:41 2013 +0100
+
+    Allow for prettytable 0.7.x as well
+    
+    Relax requirements to >= 0.6, < 0.8, as 0.7.x seems to
+    work as well. Lower has been raised to 0.6 to match openstack-common/requirements
+    
+    Change-Id: Ic8ce818016ae7d9fbfeb1548b612f8d9e8ae7c42
+
+commit 841ded0a5a1c0ed7ef07b7662381d623ded403c4
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Thu Mar 7 15:57:44 2013 +1100
+
+    Remove warlock from pip-requires as it is not used
+    
+    This is a hangover from copying from glanceclient
+    
+    Change-Id: Id81035b5432b65e776217f6b3e7e62c4447d4541
+    Signed-off-by: Angus Salkeld <asalkeld@redhat.com>
+
+commit b6ff6d2eecdaa6840ecadd8bb30a9de1d3dad92b
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Mon Mar 4 15:53:15 2013 +0000
+
+    Change --disable-rollback option to --enable-rollback
+    
+    Due to bug 1131303, the engine default is changing to disable
+    rollback by default, so we instead need an option to allow
+    users to enable this functionality
+    
+    fixes bug 1144630
+    
+    Change-Id: I509e616e20a3e4750ffcefe6e72c52e5f60445bc
+
+commit ec0a708c998656c1500897436cdcf3bb2a42f2b4
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Feb 27 10:28:30 2013 +1300
+
+    Don't add 'dev' to tag_build
+    
+    Change-Id: I3b37b4bf29fab29ffcb471b7f9f4707c8d5882fe
+
+commit f1baa757c38c21dfb4f6ac43670257729f958200
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Mon Feb 18 15:07:21 2013 +0000
+
+    heatclient : Add --disable-rollback option
+    
+    Adds -D/--disable-rollback option to align with new heat-cfn
+    option
+    
+    Change-Id: I4a997df0b63d19a25f2047710809a80520187f9f
+    Signed-off-by: Steven Hardy <shardy@redhat.com>
+
+commit 776f25099e90d31d05e28eb7f6fdc69b63d74478
+Author: Steven Hardy <shardy@redhat.com>
+Date:   Mon Feb 18 13:54:42 2013 +0000
+
+    heatclient : correct timeout parameter name
+    
+    The timeout parameter needs to be timeout_mins to match the
+    engine API or the parameter will not be recognized by the
+    engine.
+    
+    fixes bug 1129348
+    
+    Change-Id: I489364a2abed376f35bf2da24915db30c982e61b
+    Signed-off-by: Steven Hardy <shardy@redhat.com>
+
+commit 84b7969b72af218f948078eb8ee46a97783f24de
+Author: Dirk Mueller <dirk@dmllr.de>
+Date:   Mon Feb 11 18:01:27 2013 +0100
+
+    Return the exit code from tox to callers of run_tests.sh
+    
+    Invoking PIPESTATUS appears to be volatile in my environment,
+    after the if condition it is already again 0, even if it was
+    non-zero before. Capture the result permanently in a variable
+    and use that one consistently.
+    
+    Also handle the just-pep8 case correctly.
+    
+    Change-Id: Icca8c00c8d2189da1a133db277c9071c2d6c880b
+
+commit bcaf6c4d9327a221091302fea807860ae538994c
+Author: Ian Main <imain@redhat.com>
+Date:   Thu Jan 31 15:42:24 2013 -0800
+
+    Add switch to disable token authentication.
+    
+    This patch allows you to disable token authentication with keystone so
+    that the client can be used with other backends in heat.
+    
+    Change-Id: I4b35df82a782ddbc8532e85a7b9d532b327d010a
+    Signed-off-by: Ian Main <imain@redhat.com>
+
+commit 8f268e44cdc8b8a434aa510a1c389793a1ea2872
+Author: Angus Salkeld <asalkeld@redhat.com>
+Date:   Fri Jan 25 12:03:01 2013 +1100
+
+    Don't log at all if debugging is not turned on
+    
+    Else the http module prints this out on each command - yuk
+    
+    "INFO Starting new HTTP connection (1): 127.0.0.1"
+    
+    Change-Id: I6e8900106051914b7ddc0a216c6a7864f4ea38e0
+
+commit 7f50a72aacd9e48ef682037ab11f372a52cc838a
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Jan 10 11:07:06 2013 +1300
+
+    Fixes required for packaging
+    
+    - Add versioninfo to the data_files
+    - Excludes for MANIFEST.in
+    
+    Part of blueprint rpm-package
+    Change-Id: Ia629c9e08d070785d8ee0984913e62064e94ebb4
+
+commit 706cbdb57b2ed9cca29f04db0cc3700f7a04f985
+Merge: 15be62b bc972b2
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Jan 9 20:01:11 2013 +0000
+
+    Merge "Switch to using version.canonical_version_string"
+
+commit 15be62b7f78c70829edd464cb0d209572aa040ce
+Merge: b1b5455 712e172
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Wed Jan 9 20:00:28 2013 +0000
+
+    Merge "Update to latest oslo-incubator"
+
+commit b1b545581dc7bec76ffb5a23a0c6fac6111e492f
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Jan 9 10:51:40 2013 +1300
+
+    Relax the required version of prettytable.
+    
+    Also add httplib2, iso8601.
+    
+    Fixes bug 1090403
+    
+    Change-Id: Ibc2bb3391754907dae9a4c705a53634926739b5b
+
+commit bc972b214ee03d2b04ae9fe099e3ad59fd735b4b
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Jan 4 16:53:10 2013 +1300
+
+    Switch to using version.canonical_version_string
+    
+    Change-Id: Id095c61325b0d64bc77b742abf72958aeb4cde4d
+
+commit 712e1726adcf30f48df3f855c14c2a5e80657dbe
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Jan 4 16:58:11 2013 +1300
+
+    Update to latest oslo-incubator
+    
+    The included changes to version.py are required for
+    correctly generating the versioninfo file.
+    
+    Change-Id: I3534f4de099dc6d7462d896e9b18a8f776ee4daf
+
+commit c7130de0a979c8adb32fd52efd41ae05456d9d55
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Dec 11 13:48:55 2012 +1300
+
+    Display a better error message on HTTP exception
+    
+    Instead of just getting the HTTP code, the message from the actual
+    exception is printed to the console
+    
+    Change-Id: I43265e1e01e3e972e444778b3058637c0e1fd441
+
+commit e1ce4162e48c9de2e1b4edee2d66467e6c3793e6
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Dec 4 13:15:33 2012 +1300
+
+    Fix git repo url
+    
+    Change-Id: I81e02b80445b4a5a277f94e01478a156e56fd071
+
+commit 85b8a6e7524381a58a6b8610f8133b61825e970a
+Merge: 8179af9 03f9f84
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Dec 3 23:26:30 2012 +0000
+
+    Merge "Deprecate commands and add unified cli replacements."
+
+commit 8179af9b50ec2f82a6a28192bf756d2d3d231415
+Merge: 400553e 727d07e
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Mon Dec 3 23:26:04 2012 +0000
+
+    Merge "remove some glanceisms from the docs"
+
+commit 03f9f84abfa348bed08ee39d4d0ae1bc8ace5355
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Dec 4 11:47:02 2012 +1300
+
+    Deprecate commands and add unified cli replacements.
+    
+    This is to bring into line with
+    http://wiki.openstack.org/UnifiedCLI/Mapping
+    
+    Here is the mapping, as displayed by 'heat help'
+        create              DEPRECATED! Use stack-create instead
+        delete              DEPRECATED! Use stack-delete instead
+        describe            DEPRECATED! Use stack-show instead
+        event               DEPRECATED! Use event-show instead
+        event-list          List events for a stack
+        event-show          Describe the event
+        gettemplate         DEPRECATED! Use template-show instead
+        list                DEPRECATED! Use stack-list instead
+        resource            DEPRECATED! Use resource-show instead
+        resource-list       Show list of resources belonging to a stack
+        resource-metadata   List resource metadata
+        resource-show       Describe the resource
+        stack-create        Create the stack
+        stack-delete        Delete the stack
+        stack-list          List the user's stacks
+        stack-show          Describe the stack
+        stack-update        Update the stack
+        template-show       Get the template for the specified stack
+        template-validate   Validate a template with parameters
+        update              DEPRECATED! Use stack-update instead
+        validate            DEPRECATED! Use template-validate instead
+        help                Display help about this program or one of its
+                            subcommands.
+    
+    Change-Id: I1a296de2b935be6cc28fcc49ef8ee7ae333abf1a
+
+commit 727d07e667b371bc4a27fe1667c47e907b5d04c4
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Dec 4 11:46:40 2012 +1300
+
+    remove some glanceisms from the docs
+    
+    Change-Id: Iee3eb218086d3a9810d7f7e0e92500293b90a1f1
+
+commit 400553ead101c4de2666e7ab5476b35a5932bc61
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Dec 4 10:54:35 2012 +1300
+
+    add some pypi meta info
+    
+    Change-Id: I2a7c9e015ac7af35518c2303efcf0c40e9a0f3ee
+
+commit 95a0894a3827f06e946c536704b20249fd52cd95
+Author: Jeremy Stanley <fungi@yuggoth.org>
+Date:   Sun Dec 2 17:47:28 2012 +0000
+
+    Update .gitreview for org move.
+    
+    * .gitreview: The python-heatclient project moved from the heat-api
+    org to openstack, so this updates the gerrit remote URL accordingly.
+    
+    Change-Id: I97d8433ceb61cc227ca139ec26f5e30b8daa4052
+
+commit 224eafa18e51853eedb28a3a22fbc87bc9a6f330
+Merge: 2347814 3d122cf
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Nov 27 23:35:55 2012 +0000
+
+    Merge "Pass template as a string if it is not JSON."
+
+commit 23478147aa0c29d8c1bf86b76551b2bd6f3e108a
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Nov 28 11:55:23 2012 +1300
+
+    Support for events list and details
+    
+    This also replaces resource_id with resource_name in the
+    resources API.
+    
+    Change-Id: Ia5ccec5d94fb8106be2dfe89976db0fceeb73b58
+
+commit 97b24ccb279a4cb554b092589794e6b0902bccca
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Nov 28 11:57:23 2012 +1300
+
+    Use python-keystoneclient 0.2 series
+    
+    This is required to not clash with keystone git master
+    
+    Change-Id: I775e9f1b02d4ae15323db8930b1adeb4b8296970
+
+commit 3d122cfb54343ce717c70d67fc0d4701927bb8ee
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Mon Nov 26 13:50:38 2012 +1300
+
+    Pass template as a string if it is not JSON.
+    
+    Test for JSON is whether the first character is '{'
+    
+    Change-Id: I109d5f12d3874517561631eefac514342761714b
+
+commit 03e5e7e3c19ff6fb306dd97fc9d49d3924406a9a
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Mon Nov 26 13:45:13 2012 +1300
+
+    Ignore heatclient/versioninfo
+    
+    Change-Id: I862cbc8e6b37ea90d3e13bfba1e94a20819ccec6
+
+commit f5ffc5f254d58879686b3a48015c6788958b895e
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Nov 20 11:24:02 2012 +1300
+
+    Implement client resource support.
+    
+    CLI now supports commands:
+    resource-list
+    resource
+    resource-metadata
+    
+    Change-Id: I6c366279456f35e40928fc8f3654ab63ae0af6ca
+
+commit cfb2205a965c610abafe39ced35584be42e22717
+Author: Dan Radez <dradez@redhat.com>
+Date:   Tue Nov 13 18:24:12 2012 -0500
+
+    adding test coverage for common/http, improving the redirect handling
+
+commit 116e1afd36585b72dcfef7ff8e9298eb2a24b169
+Merge: b5aba71 c14e082
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Nov 13 19:53:20 2012 +0000
+
+    Merge "Support name or id for stack operations."
+
+commit b5aba716477be8083d94629cb3e759120f1afa25
+Merge: 2122bd1 c1dbaa9
+Author: Jenkins <jenkins@review.openstack.org>
+Date:   Tue Nov 13 19:49:09 2012 +0000
+
+    Merge "Pass username and password as well as token."
+
+commit c14e082d785d35a702e96249773e1c5ca74d28fd
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Nov 13 14:07:15 2012 +1300
+
+    Support name or id for stack operations.
+    
+    Includes the followig changes:
+    - move format_parameters to common/utils.py
+    - Separate columns for ID and Name in list pretty print table
+    - Accept ID or Name for all operations
+    - Fix from radaz to correctly respond to redirects
+    
+    Change-Id: Ie2d7c03f682d43454cb1348188fa56ad001e1bb1
+
+commit c1dbaa986dfaed0d0b98e047632dceb98563d2f0
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Nov 7 16:21:23 2012 +1300
+
+    Pass username and password as well as token.
+    
+    This matches the behaviour of heat-cfn.
+    One day Heat will support doing all operations with only a token. Today is not that day.
+    Also add a --token-only option to suppress sending username/password.
+    
+    Change-Id: Ib439d770e90d381ffc83babf7fca85c9f1e32e64
+
+commit 2122bd1753f7913464133d0e2ed4ba6f0c53bb61
+Author: Monty Taylor <mordred@inaugust.com>
+Date:   Tue Oct 30 12:08:34 2012 +0100
+
+    Add .gitreview file.
+
+commit 0d4f3565a89a042154bb8fdf9a85c7acea036f29
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Sat Oct 27 06:53:56 2012 +1300
+
+    pep8 and more tests
+
+commit 6499a9a834efe5a9f5b0d3f286039bc182cb2f22
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Oct 26 13:20:54 2012 +1300
+
+    - Comment out commands that don't yet have a REST API equivalent
+    - Use Name/ID when specifying a stack
+
+commit 7021e3055a97bccff6062d92b539a782d7dc3561
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Oct 25 16:47:39 2012 +1300
+
+    Feature parity with REST API
+    - Give a nice message for 404 for non-existent stack id
+    - implement delete, gettemplate, validate
+    - run do_list after create, delete
+    - don't encode the json template as a json string
+
+commit 801616330fcdc861be56c4c68a864dedf92fd919
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Oct 25 16:44:07 2012 +1300
+
+    set up default logging even when not debugging
+
+commit 73f153570be786ab7d9bff9bac7c28614e8d7509
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Oct 25 16:43:49 2012 +1300
+
+    Allow sort column to be specified
+
+commit 74a66ca04e382a21259aa2c397c1f7d1f99abfb0
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Oct 25 16:43:32 2012 +1300
+
+    An error response shouldn't be logged as an error, since it is part of the REST API
+
+commit 2462f281ab1def1d2492d5216dd887e9a6e781a1
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Oct 25 13:33:16 2012 +1300
+
+    Implement describe, and format the results
+
+commit 2a15eda5929fa2f43d4e8d23005c542788ce7a08
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Oct 25 13:32:52 2012 +1300
+
+    Allow pretty_dict to take optional formatters
+
+commit fe8fa481c6787e800ba107e4ba400ebc736a35ec
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Oct 23 16:52:23 2012 +1300
+
+    Shell unit tests, remove unused code, display real results from REST API
+
+commit 5ad7e90817f2d386eae705e6e6d157e3479f532e
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Oct 23 16:50:30 2012 +1300
+
+    Allow labels to be specified separately from field keys
+
+commit a66f891e1ece389ab5dab4abe63f52ce4661f346
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Oct 19 06:16:36 2012 +1000
+
+    resolve test template file path no matter where it is run from
+
+commit 675b8a4f71daba780efdaf6c800fb2cbc1b0ec1b
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Oct 18 13:50:22 2012 +1000
+
+    Some slightly more realistic mock responses.
+    Regexp asserts to check pretty print is printing something
+
+commit 231cfc4fbff2fe0f34be81fa892e742f2e9f2700
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Oct 18 13:46:05 2012 +1000
+
+    pass the dict to print_dict
+
+commit b6debe5cb0621220bfedf94b28acc13c90151406
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Oct 18 11:56:24 2012 +1000
+
+    Properly configure debug logging
+
+commit 317757c1646635de29b622f422432c1fc74dc6fb
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Tue Oct 16 06:51:23 2012 +1000
+
+    Mock at the json request level instead of the http connection level. Test create.
+
+commit b03183ce3fa1e7d0c505179e7cc7972b677ff36c
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Oct 12 16:54:06 2012 +1300
+
+    setup tweaks
+
+commit 3c9c859e817695d3833c522ef4fcb386f70ebe60
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Oct 12 16:50:43 2012 +1300
+
+    Get fakes and mox working so that any http request/response sequence can be
+    test scripted
+
+commit 70619f8945b48dcd2ef9c115e1f1aa9a8ee32f15
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Fri Oct 12 16:49:41 2012 +1300
+
+    pyc files should not have been committed
+
+commit 4ba8e466314d18717de63980ac05b5d000e8ef19
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Thu Oct 11 13:09:56 2012 +1300
+
+    Format parameters for create call
+
+commit 622719c144c0b64a5de6854af3f8b593e7d180f1
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Oct 10 12:53:05 2012 +1300
+
+    add some more non-functioning skeleton code
+
+commit afff6d66d85c30c291bfc85c91e3b69fafbb706e
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Oct 10 12:52:35 2012 +1300
+
+    fix readme path
+
+commit 7cbfd721d527de8f09a7795ae64461ed0aeb7469
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Oct 10 10:49:45 2012 +1300
+
+    Swap readme files
+
+commit 00cdfcb868686828ece8fe2e54d494d970e4d546
+Merge: dddbbd9 3e82cb6
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Oct 10 10:47:54 2012 +1300
+
+    Merge branch 'master' of https://github.com/steveb/python-heatclient
+
+commit dddbbd95ea588f11c2753be48111594758d48a4f
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Oct 10 10:46:53 2012 +1300
+
+    Define CLI commands and arguments for entire API.
+    
+    Should match the legacy client except for how resource id is specified for resource
+    subcommand
+
+commit 69d70c4426f2ea0e3b6edac824886f261d984717
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Oct 10 10:45:56 2012 +1300
+
+    initial version
+
+commit 1269bb20c770ca9869f54da9e1db9af7173b9809
+Author: Steve Baker <sbaker@redhat.com>
+Date:   Wed Oct 10 08:55:03 2012 +1300
+
+    Initial import
+
+commit 3e82cb6bbc39ff48e73bb55a0f00e8ef72599dd0
+Author: Steven Dake <sdake@redhat.com>
+Date:   Mon Oct 8 17:37:58 2012 -0700
+
+    first commit
