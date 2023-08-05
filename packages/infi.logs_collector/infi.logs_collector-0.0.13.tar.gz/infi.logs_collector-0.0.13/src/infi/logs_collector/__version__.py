@@ -1,0 +1,10 @@
+__version__ = "0.0.13"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.0.13)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '2aac9f756f45a05d96e682504902d05dc952f21a'
+__git_head_subject__ = 'Finished release v0.0.13.'
+__git_head_message__ = '* release/v0.0.13:\n  buildout.cfg: changed isolated python version to v2.7.5.5\n  HIP-844 Diagnostics failed to fetch result of MSinfo32, it took more than 120 seconds\n  HIP-842 Fetching diagnostics from GUI fails on Windows\n  HIP-835 removing /sys from diagnostics'
+__git_dirty_diff__ = ''
