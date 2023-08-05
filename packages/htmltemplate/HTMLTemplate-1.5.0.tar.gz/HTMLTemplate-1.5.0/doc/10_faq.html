@@ -1,0 +1,135 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+
+<title>HTMLTemplate | 10. Frequently asked questions</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+<style type="text/css" media="all"><!--@import url(full.css);--></style>
+
+</head>
+<body>
+
+<h1>10. Notes</h1>
+
+<!-- top navigation -->
+<div class="navbar">
+    <a href="09_designtips.html">Previous</a> | <a href="index.html">Up</a> | <a href="11_notes.html">Next</a>
+    
+</div>
+
+<!-- content -->
+<div id="content">
+
+
+<h2>Questions about HTML templates</h2>
+
+<h3>What types of markup does HTMLTemplate accept?</h3>
+
+<p>HTML - as long as elements are closed as-per XML/XHTML standards - and XHTML are both supported. XML templating is possible, but limited by Python's HTMLParser module to lowercase tag and attribute names; see the <code>doc/ISSUES</code> file.</p>
+
+
+<h3>Can HTMLTemplate be used for non-markup based templating?</h3>
+
+<p>It can, though it isn't designed for it; use texttemplate module instead.</p>
+
+
+<h3>Does HTMLTemplate modify a template's original HTML markup at all?</h3>
+
+<p>Slightly: all tag attributes will be double- or single-quoted (a side-effect of using Python's HTMLParser module to parse the template).</p>
+
+
+<h3>Do HTML templates need to be complete HTML documents with a single root element, or can HTMLTemplate handle arbitrary fragments of HTML too?</h3>
+
+<p>Both are fine. HTMLTemplate doesn't require a template be a complete HTML document, nor even that it has a single root element as some templating engines may do.</p>
+
+
+<h3>Does HTMLTemplate support caching and/or pickling of compiled templates?</h3>
+
+<p>No. The template parser is very fast and templates generally only need to be compiled once as Template objects are reusable, so no caching system is necessary.</p>
+
+
+<h3>Can HTMLTemplate use <code>id</code> attributes or namespace-based attributes to indicate template nodes, e.g. for compatibility with WYSIWYG HTML editors?</h3>
+
+<p>Yes, you can specify an alternate attribute name via the Template constructor; for example: <code>Template(callback, html, attribute='id')</code> or <code>Template(callback, html, attribute='tpl:node')</code>. If using an existing HTML attributes such as <code>id</code>, note that only <code>id</code> attributes containing compiler directives will be removed by HTMLTemplate; other <code>id</code> attributes will conveniently be left intact.</p>
+
+
+<h3>How does HTMLTemplate fit into the popular MVC (Model-View-Controller) application design pattern?</h3>
+
+<p>HTMLTemplate's design is strongly influenced by the MVC pattern commonly used in desktop application design, where the Controller is a bridge between Model and View. (Note this is Apple Computer's popular definition of the MVC pattern, as opposed to the original PARC/Smalltalk definition.) A directive-tagged HTML template and Python control code corresponds closely to the View and Controller layers of this pattern: the HTMLTemplate compiler performs a similar role to Apple's Interface Builder in constructing the View layer as a live object model, while the Python control code that manipulates this object model at rendering time forms the Controller layer.</p>
+
+
+<h2>Questions about manipulating Template object models</h2>
+
+<h3>Is it possible to modify just part of an element's content; for example, replacing only the 'XXXX' part of <code>&lt;title&gt;Hello XXXX&lt;/title&gt;</code>?</h3>
+
+<p>Yes. There's at least a couple of ways this can be done:</p>
+
+<ul>
+<li>Instead of converting the entire <code>&lt;title&gt;</code> tag into a template node, wrap the part of its content you want to modify in a <code>&lt;span node="-con:foo"&gt;...&lt;/span&gt;</code> element. (The resulting template may not always be valid HTML, but rendered pages will be.)</li>
+
+<li>Convert the <code>&lt;title&gt;</code> tag to a template node and have your script modify its existing content rather than replace it completely; for example: <code>node.title.content = node.title.content.replace('XXXX', s)</code></li>
+</ul>
+
+<h3>Can the <code>Repeater</code> class's <code>repeat</code> method only iterate over lists, or can it work with any kind of iterable object?</h3>
+
+<p>Any object that supports iteration is fine.</p>
+
+
+<h3>I'd like to use a <code>Repeater</code> without having to create a list of values to iterate over first. Is this possible?</h3>
+
+<p>Yes. If you know in advance how many times you want to repeat it, just use Python's built-in <code>xrange</code> function; for example: <code>node.foo.repeat(callback, xrange(n), *args)</code>. If you don't know, or want to stop repeating from within the callback function, this can be done as follows:
+
+<pre><code>class FakeIterator:    """Fake iterable object; passes itself as each 'item'. 
+       Call its stop() method to stop iteration.
+    """    def __init__(self):        self._stop = False        def stop(self):        self._stop = True        def __iter__(self):        return self        def next(self):        if self._stop:             raise StopIteration        else:            return self
+
+
+    def renderFoo(node, *args):
+        node.bar.repeat(renderBar, FakeIterator(), *args)
+	
+    def renderBar(node, item, *args):
+        ...
+        if shouldStop: 
+            item.stop()</code></pre>
+
+
+<h3>I'd like to render a table with alternately coloured rows. How can I do this?</h3>
+
+<p>Quite easily. See the <code>sample/Demo5_AlternatingRowColors.py</code> script for a sample solution.</p>
+
+
+<h3>I'd like to render a large number of pages, all sharing the same navigation bar. For efficiency, I'd like to render this navigation bar only once rather than re-generating it for every page. Is this possible?</h3>
+
+<p>Yes. There are various ways to do this:</p>
+
+<ul>
+<li>Construct the page from two separate templates. Create one template for the page and another for the navigation bar. Add a placeholder node in the page template to hold the rendered navigation bar,  e.g. <code>&lt;div node="-con:navbar"&gt;...&lt;/div&gt;</code>. Render the navigation bar template to HTML first, then pass the the result to the main template as an argument to each <code>render()</code> call for it to insert into the placeholder node as raw markup: <code>node.navbar.raw = navbarhtml</code>.</li>
+
+<li>Construct the page from a single template. Before calling the template's <code>render()</code> method to generate the finished pages, pre-generate the template's navbar section:
+
+<pre><code>template = Template(render_template, html)
+template.navbar.repeat(render_navbar, links) # pre-render navbar</code></pre>
+
+Note that calling the navbar node's <code>repeat</code> method will always replace any previously generated content for that node, so you don't need to compile a fresh template if you want to replace this pre-rendered navbar later; just call the navbar node's <code>repeat</code> method again. (See the <a href="http://py-templates.sourceforge.net/htmlcalendar">HTMLCalendar module</a> for a working demonstration of this technique.)</li>
+</ul>
+
+<h3>How can I dynamically add HTML comments/directives/processing instructions to a rendered page?</h3>
+
+<p>HTMLTemplate doesn't support these HTML constructs as first-class nodes as this is rarely useful, but the relevant markup can be inserted easily enough via placeholder elements such as <code>&lt;div node="-con:mycomment"&gt;&lt;/div&gt;</code> using code like: <code>node.mycomment.raw = '&lt;!-- %s --&gt;' % commentstr</code>. Remember to perform any necessary validation on the content being inserted yourself (e.g. checking that <code>commentstr</code> doesn't contain '--', which is invalid within a comment according to HTML/SGML rules).</p>
+
+
+
+
+</div>
+
+<!-- bottom navigation -->
+<div class="navbar">
+    <a href="09_designtips.html">Previous</a> | <a href="index.html">Up</a> | <a href="11_notes.html">Next</a>
+    
+</div>
+
+<!--footer-->
+<p class="footer">&copy; 2008 HAS</p>
+</body>
+</html>

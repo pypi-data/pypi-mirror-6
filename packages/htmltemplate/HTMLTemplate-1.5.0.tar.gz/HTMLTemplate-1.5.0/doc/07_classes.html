@@ -1,0 +1,165 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+
+<title>HTMLTemplate | 7. Classes</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+<style type="text/css" media="all"><!--@import url(full.css);--></style>
+
+</head>
+<body>
+
+<h1>7. Classes</h1>
+
+<!-- top navigation -->
+<div class="navbar">
+    <a href="06_compileandrender.html">Previous</a> | <a href="index.html">Up</a> | <a href="08_tutorial2.html">Next</a>
+    
+</div>
+
+<!-- content -->
+<div id="content">
+
+
+<h2><code>Node</code></h2>
+
+<p>This abstract base class is subclassed by the <code>Template</code>, <code>Container</code> and <code>Repeater</code> classes from which the template object model is constructed. Each node in the object model contains zero or more named properties corresponding to the node definitions in the original HTML template.</p>
+
+<pre><code>Node 
+    Properties:
+        <var>NAME</var> : Container | Repeater -- a (child) node defined by
+                the source HTML template (<var>NAME</var> = the node's name).
+                A template object may contain any number of these
+                properties.</code></pre>
+
+
+<h2><code>Attributes</code></h2>
+
+<p>Each <code>Container</code> and <code>Repeater</code> object contains an <code>Attributes</code> instance representing the HTML element's attributes This is a simple dict-like structure that supports getting, setting and deleting attributes by name.</p>
+
+<pre><code>Attributes
+    Methods:
+        __getattr__(self, name) -- get an attribute
+            name : string -- the attribute's name
+            Result : string -- the attribute's value
+
+        __setattr__(self, name, value) -- set an attribute
+            name : string -- the attribute's name
+            value : string -- the attribute's value
+
+        __delattr__(self, name) -- delete an attribute
+            name : string -- the attribute's name</code></pre>
+
+<p>For example, to set the <code>href</code> attribute of an <code>&lt;a&gt;</code> tag:</p>
+
+<pre><code>node.atts['href'] = 'foo.html'</code></pre>
+
+
+<h2><code>Container</code></h2>
+
+<p><code>Container</code> objects represent HTML elements whose content can be manipulated by controller code. A <code>Container</code> node is rendered once, unless its <code>omit</code> method is called, in which case it won't appear at all. The original HTML template defines a <code>Container</code> node using the <code>con</code> directive (e.g. <code>node="con:title"</code>).</p>
+
+<pre><code>Container(Node)
+    Properties:
+        atts : Attributes -- the tag's attributes
+
+        content : string -- the HTML element's content with &amp;&lt;&gt;&quot; 
+                characters automatically escaped (note: when 
+                inserting raw HTML, use the raw property instead)
+
+        raw : string -- the HTML element's raw content
+                (i.e. no automatic character escaping)
+
+    Methods:
+        omit(self) -- don't render this node
+
+        omittags(self) -- don't render this node's tags, only its
+            content</code></pre>
+
+<p>Note: if the <code>Container</code> object is derived from an empty HTML element (e.g. <code>&lt;br /&gt;</code>), setting its <code>content</code> or <code>raw</code> property has no effect.</p>
+
+
+<h2><code>Repeater</code></h2>
+
+<p><code>Repeater</code> objects are containers that can appear any number of times in the rendered output. The original HTML template defines a <code>Repeater</code> node using the <code>rep</code> directive (e.g. <code>node="rep:list_item"</code>).</p>
+
+<pre><code>Repeater(Container) -- A mutable, repeatable HTML element ('rep')
+    Methods:
+        repeat(self, callback, sequence, *args, **kwargs) -- render an 
+                instance of this node for each item in sequence
+            callback : function -- the function to call for each 
+                    item in the sequence
+            sequence : list -- a list, tuple, or other iterable
+                    collection
+            *args : anything -- any values to be passed directly 
+                    to this node's callback function 
+            **kwargs : anything -- any values to be passed directly 
+                    to this node's callback function </code></pre>
+
+<p>The <code>repeat</code> method's <code>callback</code> argument must be a function that accepts the following arguments: </p>
+<ul>
+<li><code>node</code> : instance -- a copy of the Repeater object</li>
+<li><code>item</code> : anything -- an item from the sequence being iterated</li>
+<li><code>*args</code> : anything -- zero or more additional parameters corresponding to any extra arguments passed by the template controller to the <code>repeat</code> method.</li>
+<li><code>**kwargs</code> : anything -- zero or more additional keyword parameters corresponding to any extra arguments passed by the template controller to the <code>repeat</code> method.</li>
+</ul>
+
+
+<h2><code>Template</code></h2>
+
+<p>The top-level node in the template object model is represented by a <code>Template</code> object. This represents the complete HTML template and may contain any number of <code>Container</code> and/or <code>Repeater</code> sub-nodes. The <code>Template</code> class's constructor takes a minimum of two arguments: a string representing the HTML template to be parsed, and a callback function containing the top-level controller code responsible for rendering the <code>Template</code> object when its <code>render</code> method is called.</p>
+
+<pre><code>Template(Node) -- The top-level template node
+    Methods:
+        __init__(self, callback, html, attribute='node', 
+                codecs=(defaultEncoder, defaultDecoder), 
+                warnings=False)
+            callback : function -- the main function controlling 
+                    template rendering
+            html : string or unicode -- the HTML template
+            [attribute : string or unicode] -- name of the tag 
+                    attribute used to hold compiler directives
+            [codecs : tuple] -- a tuple containing two functions 
+                    used by attribute values and the content 
+                    property to encode/decode HTML entities
+            [warnings : boolean] -- warn when non-directive 
+                    attribute is encountered
+
+        render(self, *args) -- render this template
+            *args : anything -- any values to be passed directly 
+                    to this template's callback function 
+        
+        structure(self) -- print the object model's structure 
+                for diagnostic use</code></pre>
+
+
+<p>The <code>__init__</code> method's <code>callback</code> argument must be a function that accepts the following arguments: </p>
+<ul>
+<li><code>node</code> : instance -- a copy of the Template object</li>
+<li><code>*args</code> : anything -- zero or more additional parameters corresponding to any extra arguments passed by the template controller to the <code>render</code> method.</li>
+</ul>
+
+<p>HTMLTemplate's default codecs encode/decode the following markup characters: <code>&amp;&lt;&gt;&quot;</code>. When supplying your own codecs functions via the <code>__init__</code> method's <code>codecs</code> argument, each function should accept and return a single string/unicode value. The first function should convert specified characters into HTML entities; the second should perform the reverse operation.</p>
+
+
+<h2><code>ParseError</code></h2>
+
+<p>In the event that the <code>Template</code> class's constructor is unable to parse the supplied HTML template string (e.g. due to badly formed HTML), a <code>ParseError</code> exception will be raised.</p>
+
+<pre><code>ParseError(Exception) -- A template parsing error</code></pre>
+
+
+
+</div>
+
+<!-- bottom navigation -->
+<div class="navbar">
+    <a href="06_compileandrender.html">Previous</a> | <a href="index.html">Up</a> | <a href="08_tutorial2.html">Next</a>
+    
+</div>
+
+<!--footer-->
+<p class="footer">&copy; 2008 HAS</p>
+</body>
+</html>
