@@ -1,0 +1,89 @@
+#!/usr/bin/env python
+
+import argparse
+import os
+import sys
+from tod import commands
+from tod.repo import parse_repo_mapping
+
+# currently unused
+CONFIG_LOCATIONS = [
+    '$TOD_CONFIG',
+    '$HOME/.tod',
+    '/etc/tod'
+]
+
+REPO_LOCATION = '$TOD_FILE_REPO'
+
+
+def find_config(locations):
+    for loc in locations:
+        loc = os.path.expanduser(os.path.expandvars(loc))
+        if os.path.isfile(loc):
+            return loc
+
+
+def valid_repo(path):
+    path = os.path.expanduser(os.path.expandvars(path))
+    if not path:
+        raise argparse.ArgumentTypeError("No configuration repo specified.")
+    if not os.path.isdir(path):
+        raise argparse.ArgumentTypeError("Repository location is not a directory")
+    return path
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.set_defaults(repo=REPO_LOCATION)
+    parser.add_argument('-r', '--repo')
+
+    subparsers = parser.add_subparsers()
+
+    cmd_status = subparsers.add_parser('status',
+        help='Show current link status of tracked items.')
+    cmd_status.add_argument('-s', '--sections', default=[], nargs='*')
+    cmd_status.set_defaults(func=commands.status)
+
+    cmd_edit = subparsers.add_parser('edit',
+        help='Edit the mapping.ini file.')
+    cmd_edit.set_defaults(func=commands.edit)
+
+    cmd_link = subparsers.add_parser('link',
+        help='Link the specified file/folder into the file system.')
+    cmd_link.add_argument('-s', '--section', default='default', nargs='?')
+    link_group = cmd_link.add_mutually_exclusive_group(required=True)
+    link_group.add_argument('-n', '--names', nargs='*')
+    link_group.add_argument('-a', '--all', action='store_true', default=False,
+        help="Link all in section, or all secions if section not specified.")
+    cmd_link.set_defaults(func=commands.link)
+
+    cmd_unlink = subparsers.add_parser('unlink',
+        help='Unlink the specified file/folder from the system.')
+    cmd_unlink.add_argument('-s', '--section', default='default', nargs='?')
+    unlink_group = cmd_unlink.add_mutually_exclusive_group(required=True)
+    unlink_group.add_argument('-n', '--names', nargs='*')
+    unlink_group.add_argument('-a', '--all', action='store_true', default=False,
+        help="Link all in section, or all secions if section not specified.")
+    cmd_unlink.set_defaults(func=commands.unlink)
+
+    cmd_git = subparsers.add_parser('git',
+        help='Pass arguments to git for execution in $TOD_FILE_REPO')
+    cmd_git.set_defaults(func=commands.git)
+
+    if sys.argv[1] in ['git']:
+        #XXX: This is a stupid hack to allow all arguments to pass to to
+        #     subcommands
+        args, git_args = parser.parse_known_args()
+        args.git_args = git_args
+    else:
+        args = parser.parse_args()
+
+    try:
+        args.repo = valid_repo(args.repo)
+    except argparse.ArgumentTypeError as e:
+        parser.error(e.message)
+
+    args.mapping_file = os.path.join(args.repo, 'mapping.ini')
+    args.mapping = parse_repo_mapping(args)
+
+    args.func(args)
