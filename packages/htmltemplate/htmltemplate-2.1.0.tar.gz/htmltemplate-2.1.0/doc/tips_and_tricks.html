@@ -1,0 +1,205 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+
+<title>htmltemplate | tips and tricks</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<style type="text/css" media="all"><!--@import url(full.css);--></style>
+
+<!--[if !IE 7]>
+	<style type="text/css">
+		#wrap {display:table;height:100%}
+	</style>
+<![endif]-->
+
+</head>
+<body>
+
+<div id="wrap">
+
+	<div id="main">
+
+		<h1>Tips and tricks</h1>
+
+		<div class="navbar">
+			<a href="tutorial_2.html">Prev</a> | <a href="index.html">TOC</a> | <a href="notes_and_credits.html">Next</a>
+		</div>
+
+		<h2>Avoid naming conflicts between nodes</h2>
+
+<p>If two or more nodes have the same name, as long as each has a different parent they will all appear within the template object model independent of one other. For example, the following template defines three different nodes all named 'link':</p>
+
+<pre><code>&lt;p&gt;&lt;a node="con:link"&gt;LINK&lt;/a&gt;&lt;/p&gt;
+
+&lt;ul node="-con:navbar"&gt;
+    &lt;li node="rep:link"&gt;&lt;a node="con:link"&gt;LINK&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</code></pre>
+
+<p>While this may result in some confusing-looking controller code, it is a valid HTML template and will parse without problem.</p>
+
+<p>However, if two or more identically named nodes have the same parent then a <code>ParseError</code> will occur as sibling nodes can never share the same name. For example, the following template markup will be rejected as it contains three sibling nodes all named 'item':</p>
+
+<pre><code>&lt;ul&gt;
+    &lt;li node="rep:item"&gt;ITEM&lt;/li&gt;
+    &lt;li node="rep:item"&gt;ITEM&lt;/li&gt;
+    &lt;li node="rep:item"&gt;ITEM&lt;/li&gt;
+&lt;/ul&gt;
+</code></pre>
+
+<p>If the duplicate elements have been included solely for preview purposes, just add Deleted (<code>del</code>) directives to each one to prevent them appearing in either the template object model or the rendered output:</p>
+
+<pre><code>&lt;ul&gt;
+    &lt;li node="rep:item"&gt;ITEM&lt;/li&gt;
+    &lt;li node="del:"&gt;ITEM&lt;/li&gt;
+    &lt;li node="del:"&gt;ITEM&lt;/li&gt;
+&lt;/ul&gt;
+</code></pre>
+
+<p>The following template will also be rejected as it contains two sibling nodes both named 'title':</p>
+
+<pre><code>&lt;html&gt;
+    &lt;head&gt;
+        ...
+        &lt;title node="con:title"&gt;TITLE&lt;/title&gt;
+
+    &lt;/head&gt;
+    &lt;body&gt;
+
+        &lt;h1 node="con:title"&gt;TITLE&lt;/title&gt;
+        ...
+    &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+
+<p>Since the <code>title</code> and <code>h1</code> elements should both appear in the rendered output, you will have to rename one or both to avoid confusion (remember to update the corresponding controller code as well):</p>
+
+<pre><code>&lt;html&gt;
+    &lt;head&gt;
+        ...
+        &lt;title node="con:title1"&gt;TITLE&lt;/title&gt;
+
+    &lt;/head&gt;
+    &lt;body&gt;
+
+        &lt;h1 node="con:title2"&gt;TITLE&lt;/title&gt;
+        ...
+    &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+
+<p>This restriction does not apply to Separators, of course, since a <code>sep</code> directive does not create a new node but merely indicates a section of markup that should appear between repeated instances of an existing Repeater node. In fact, a <code>ParseError</code> will occur if the Separator's name does <em>not</em> exactly match the name of a preceding Repeater node. For example, this Separator is valid:</p>
+
+<pre><code>&lt;a node="rep:link"&gt;LINK&lt;/a&gt; &lt;span node="-sep:link"&gt;/&lt;/a&gt;
+</code></pre>
+
+<p>but these are not:</p>
+
+<pre><code>&lt;a node="rep:link1"&gt;LINK&lt;/a&gt; &lt;span node="-sep:link2"&gt;/&lt;/a&gt;
+
+&lt;span node="-sep:link"&gt;/&lt;/a&gt; &lt;a node="rep:link"&gt;LINK&lt;/a&gt;
+</code></pre>
+
+<h2>Modifing part of a node's content</h2>
+
+<p>There may be times when you want modify only part of an element's content, for example, to replace just the <code>[NAME]</code> part of <code>&lt;title&gt;About [NAME]&lt;/title&gt;</code>. There are a couple of ways to do this.</p>
+
+<p>One solution is to wrap the part of the element's content you want to modify in a <code>span</code> element and add a <code>con</code> directive to that:</p>
+
+<pre><code>&lt;title&gt;About &lt;span node="-con:name"&gt;[NAME]&lt;/span&gt;&lt;/title&gt;
+</code></pre>
+
+<p>While this particular template may not be standards-compilant HTML, as long as the <code>con</code> directive is prefixed an 'omit tags' modifier (<code>-con:...</code>), the <code>&lt;span&gt;</code> and <code>&lt;/span&gt;</code> tags will be omitted when the template is rendered, ensuring valid output.</p>
+
+<p>The other option is to add a <code>con</code> directive to the <code>&lt;title&gt;</code> element, then modify the node's existing content using (e.g.) Python's standard string substitution mechanism: </p>
+
+<pre><code>&lt;title node="con:title"&gt;About {name}&lt;/title&gt;
+
+node.title.text = node.title.text.format(name=somevalue)
+</code></pre>
+
+<p>If you need to preserve existing HTML tags within the original and/or new content, you will have to use the <code>html</code> property instead of the <code>text</code> property, so take care to ensure any new data is properly sanitized before insertion. For example:</p>
+
+<pre><code>&lt;h1 node="con:title"&gt;&lt;em&gt;About&lt;/em&gt; {name}&lt;/h1&gt;
+
+name = 'Smith &amp; Jones'
+node.content.html = node.content.html.format(name=encodeentity(name))
+</code></pre>
+
+<p>will ensure any reserved characters (<code>&amp;</code>, <code>&lt;</code>, <code>&gt;</code>, <code>"</code>) are properly escaped as HTML entities:</p>
+
+<pre><code>&lt;h1&gt;&lt;em&gt;About&lt;/em&gt; Smith &amp;amp; Jones&lt;/h1&gt;
+</code></pre>
+
+<p>htmltemplate's <code>encodeentity</code> function is sufficient to replace reserved characters with their HTML entity equivalents, though if your data requires heavier sanitation (e.g. to remove ASCII control characters or to strip <code>&lt;script&gt;</code> tags from untrusted HTML strings) you will have to implement this yourself.</p>
+
+<h2>Modifying vs replacing nodes</h2>
+
+<p>When setting a node's content, take care to write:</p>
+
+<pre><code>node.foo.text = somevalue
+</code></pre>
+
+<p>or:</p>
+
+<pre><code>node.foo.html = somevalue
+</code></pre>
+
+<p>These assignments will replace the node's content to a new plain text or HTML string, which is usually what you want.</p>
+
+<p>If you omit the <code>text</code>/<code>html</code> property name and write the following instead, this does not replace the node's content but instead replaces the node itself:</p>
+
+<pre><code>node.foo = somevalue
+</code></pre>
+
+<p>This feature can be useful if you wish to reuse a previously rendered node or replace part of one template's object model with part or all of another (component-based templating). For example, the <code>docgen.py</code> script contains two navigation bars at the top and bottom of the page. Rather than render the same information twice, the template's controller function renders the <code>topnav</code> node then grafts it over the unrendered <code>bottomnav</code> node as well:</p>
+
+<pre><code>def render_page(node, title, heading, content, navlinks):
+    ...
+    node.topnav.link.repeat(page_navlink, navlinks)
+    node.bottomnav = node.topnav
+</code></pre>
+
+<p>Note that the new value <em>must</em> be a subclass of <code>Node</code> (i.e. <code>Container</code>, <code>Repeater</code>, <code>Template</code> or a third-party subclass), otherwise a <code>TypeError</code> will be raised. (This helps to catch errors where the <code>text</code>/<code>html</code> property name is omitted by accident.)</p>
+
+<h2>Customizing the rendering process</h2>
+
+<p>Copying a <code>Template</code> object before manipulating and rendering the copy allows the original object to be reused any number of times. While not essential, this is more efficient than re-compiling the template HTML every time. The simplest way to do this is by passing a callback function as the <code>Template.render()</code> method's first argument: the <code>render</code> method will automatically copy the original <code>Template</code> object and pass it to the controller function to manipulate before rendering the result. </p>
+
+<p>If greater flexibility is required, each of these steps – copy, manipulate, render – can be performed separately:</p>
+
+<ol>
+<li><p>Create a copy of the original template object:</p>
+
+<pre><code>node = template.copy()
+</code></pre></li>
+<li><p>Call the controller function, passing it the copied template object and values to insert:</p>
+
+<pre><code>render_template(node, title, links)
+</code></pre></li>
+<li><p>Render the copied template object:</p>
+
+<pre><code>print node.render()
+</code></pre></li>
+</ol>
+
+<p>See the <code>demo1alt_quote.py</code> and <code>demo8_multi_step_rendering.py</code> scripts in the <code>sample</code> folder for examples. In particular, the multi-step rendering script demonstrates how splitting these steps can improve efficiency when generating a series of pages that share some common elements such as navigation bars.</p>
+
+	
+	</div>
+
+</div>
+
+<div id="footer">
+
+	<div class="navbar">
+			<a href="tutorial_2.html">Prev</a> | <a href="index.html">TOC</a> | <a href="notes_and_credits.html">Next</a>
+		</div>
+
+	<p class="footer">© 2007-2013 HAS</p>
+
+</div>
+
+</body>
+</html>

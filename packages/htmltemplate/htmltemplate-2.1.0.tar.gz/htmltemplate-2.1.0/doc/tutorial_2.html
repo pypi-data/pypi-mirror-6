@@ -1,0 +1,185 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+
+<title>htmltemplate | tutorial 2: repeating groups of nodes</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<style type="text/css" media="all"><!--@import url(full.css);--></style>
+
+<!--[if !IE 7]>
+	<style type="text/css">
+		#wrap {display:table;height:100%}
+	</style>
+<![endif]-->
+
+</head>
+<body>
+
+<div id="wrap">
+
+	<div id="main">
+
+		<h1>Tutorial 2: Repeating groups of nodes</h1>
+
+		<div class="navbar">
+			<a href="class_definitions.html">Prev</a> | <a href="index.html">TOC</a> | <a href="tips_and_tricks.html">Next</a>
+		</div>
+
+		<h2>About this tutorial</h2>
+
+<p>When designing an HTML template, you'll sometimes need to insert additional HTML elements (typically <code>div</code> or <code>span</code>) to allow you to define template nodes in the proper locations. For example, given the data:</p>
+
+<pre><code>sections = [('title 1', 'description 1'), 
+            ('title 2', 'description 2'), 
+            ('title 3', 'description 3')]
+</code></pre>
+
+<p>to generate a page like the following, you need to repeat the <code>h2</code> and <code>p</code> elements for each tuple in the list:</p>
+
+<pre><code>&lt;h2&gt;title 1&lt;/h2&gt;
+&lt;p&gt;description 1&lt;/p&gt;
+
+&lt;h2&gt;title 2&lt;/h2&gt;
+&lt;p&gt;description 2&lt;/p&gt;
+
+&lt;h2&gt;title 3&lt;/h2&gt;
+&lt;p&gt;description 3&lt;/p&gt;
+</code></pre>
+
+<p>A common mistake for beginners is to write:</p>
+
+<pre><code>&lt;h2 node="rep:title"&gt;section title&lt;/h2&gt;
+&lt;p node="rep:desc"&gt;section description&lt;/p&gt;
+</code></pre>
+
+<p>but this template generates the following output, which is not what you want:</p>
+
+<pre><code>&lt;h2&gt;title 1&lt;/h2&gt;
+&lt;h2&gt;title 2&lt;/h2&gt;
+&lt;h2&gt;title 3&lt;/h2&gt;
+&lt;p&gt;description 1&lt;/p&gt;
+&lt;p&gt;description 2&lt;/p&gt;
+&lt;p&gt;description 3&lt;/p&gt;
+</code></pre>
+
+<p>The solution is to group the <code>h2</code> and <code>p</code> elements within a single Repeater node and repeat that.</p>
+
+<h2>1. Group the elements</h2>
+
+<p>Wrap the related <code>h2</code> and <code>p</code> elements in a generic <code>div</code> element:</p>
+
+<pre><code>&lt;div&gt;
+    &lt;h2&gt;section title&lt;/h2&gt;
+    &lt;p&gt;section description&lt;/p&gt;
+&lt;/div&gt;
+</code></pre>
+
+<h2>2. Add a Repeater directive</h2>
+
+<p>Mark the <code>div</code> element as a Repeater (<code>rep</code>) node named <code>section</code> and the <code>h2</code> and <code>p</code> elements as Container (<code>con</code>) nodes:</p>
+
+<pre><code>&lt;div node="rep:section"&gt;
+    &lt;h2 node="con:title"&gt;section title&lt;/h2&gt;
+    &lt;p node="con:desc"&gt;section description&lt;/p&gt;
+&lt;/div&gt;
+</code></pre>
+
+<p>Now wrap this HTML as a Python string and compile it into a <code>Template</code> object.</p>
+
+<h2>3. Implement the controller callback functions</h2>
+
+<p>Define a callback function named <code>render_section</code> that controls how the section information is inserted into the <code>rep:section</code> node's <code>con:title</code> and <code>con:desc</code> sub-nodes. This function should take a copy of the Repeater node as its first parameter and a <code>(title,description)</code> tuple as its second:</p>
+
+<pre><code>def render_section(node, section):
+    node.title.text, node.desc.text = section
+</code></pre>
+
+<p>Define a <code>render_template</code> function that takes a copy of the <code>Template</code> object as its first parameter and a list of <code>(title,description)</code> tuples as its second. It should then call the <code>rep:section</code> node's <code>repeat</code> method, passing it the <code>render_section</code> function and the list of section information tuples:</p>
+
+<pre><code>def render_template(node, sections):
+    node.section.repeat(render_section, sections)
+</code></pre>
+
+<p>Now add the code to call the <code>Template</code> object's <code>render</code> method, passing the <code>render_template</code> function and section data list as arguments, and print the result.</p>
+
+<h2>4. Render the template</h2>
+
+<p>Here is the completed tutorial script:</p>
+
+<pre><code>from htmltemplate import Template
+
+template  = Template("""
+&lt;div node="rep:section"&gt;
+    &lt;h2 node="con:title"&gt;section title&lt;/h2&gt;
+    &lt;p node="con:desc"&gt;section description&lt;/p&gt;
+&lt;/div&gt;
+""")
+
+def render_section(node, section):
+    node.title.text, node.desc.text = section
+
+def render_template(node, sections):
+    node.section.repeat(render_section, sections)
+
+
+sections = [('title 1', 'description 1'), 
+            ('title 2', 'description 2'), 
+            ('title 3', 'description 3')]
+print(template.render(render_template, sections))
+</code></pre>
+
+<p>When rendered, this template will generate the following HTML:</p>
+
+<pre><code>&lt;div&gt;
+    &lt;h2&gt;title 1&lt;/h2&gt;
+    &lt;p&gt;description 1&lt;/p&gt;
+&lt;/div&gt;
+&lt;div&gt;
+    &lt;h2&gt;title 2&lt;/h2&gt;
+    &lt;p&gt;description 2&lt;/p&gt;
+&lt;/div&gt;
+&lt;div&gt;
+    &lt;h2&gt;title 3&lt;/h2&gt;
+    &lt;p&gt;description 3&lt;/p&gt;
+&lt;div&gt;
+</code></pre>
+
+<h2>5. Tidy the output</h2>
+
+<p>If the <code>&lt;div&gt;</code> and <code>&lt;/div&gt;</code> tags serve no purpose in the rendered page, you can omit them by prefixing the <code>rep:section</code> directive with an 'omit tags' modifier (<code>-</code>):</p>
+
+<pre><code>&lt;div node="-rep:section"&gt;
+</code></pre>
+
+<p>Here's how the generated HTML now looks:</p>
+
+<pre><code>    &lt;h2&gt;title 1&lt;/h2&gt;
+    &lt;p&gt;description 1&lt;/p&gt;
+
+
+    &lt;h2&gt;title 2&lt;/h2&gt;
+    &lt;p&gt;description 2&lt;/p&gt;
+
+
+    &lt;h2&gt;title 3&lt;/h2&gt;
+    &lt;p&gt;description 3&lt;/p&gt;
+</code></pre>
+
+	
+	</div>
+
+</div>
+
+<div id="footer">
+
+	<div class="navbar">
+			<a href="class_definitions.html">Prev</a> | <a href="index.html">TOC</a> | <a href="tips_and_tricks.html">Next</a>
+		</div>
+
+	<p class="footer">© 2007-2013 HAS</p>
+
+</div>
+
+</body>
+</html>

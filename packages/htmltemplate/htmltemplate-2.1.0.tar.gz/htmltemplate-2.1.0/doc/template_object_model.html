@@ -1,0 +1,178 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+
+<title>htmltemplate | understanding the template object model</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<style type="text/css" media="all"><!--@import url(full.css);--></style>
+
+<!--[if !IE 7]>
+	<style type="text/css">
+		#wrap {display:table;height:100%}
+	</style>
+<![endif]-->
+
+</head>
+<body>
+
+<div id="wrap">
+
+	<div id="main">
+
+		<h1>Understanding the template object model</h1>
+
+		<div class="navbar">
+			<a href="html_templates.html">Prev</a> | <a href="index.html">TOC</a> | <a href="class_definitions.html">Next</a>
+		</div>
+
+		<h2>About the TOM</h2>
+
+<p>htmltemplate's  template object model ('TOM') is similar in concept to the Document Object Model found in web browsers, in that both parse an HTML document into a hierarchical tree structure which can then be manipulated via a programmatic API. However, while the DOM implements a large, complex API allowing general manipulation of every element in the document, the TOM provides a very small, simple, callback-based API for performing templating-specific operations on selected elements only.</p>
+
+<p>A template object model is constructed from three classes: <code>Template</code>, <code>Container</code> and <code>Repeater</code>. The <code>Template</code> object is the template object model's root node, representing the complete HTML document. Each Container and Repeater node describes an element within the template HTML whose content and/or attributes can be dynamically manipulated by Python code. </p>
+
+<p>Each Container node has a one-to-one relationship with its parent node, i.e. it will appear only once in a rendered document. Each Repeater node has a one-to-many relationship with its parent, i.e. it will appear zero or more times in the output. The Template node can contain any number of Container and/or Repeater sub-nodes, each of which may contain its own sub-nodes, and so on. </p>
+
+<h2>The <code>Template</code> node</h2>
+
+<p>As well as representing the template object model's root, the <code>Template</code> class is also responsible for parsing an HTML template whenever its <code>__init__</code> method is called. For example, <a href="tutorial_1.html">Tutorial 1</a> used the following code to create a template object model from an HTML template string:</p>
+
+<pre><code>template = Template("""
+&lt;html&gt;
+    &lt;head&gt;
+        &lt;title node="con:title"&gt;TITLE&lt;/title&gt;
+    &lt;/head&gt;
+    &lt;body&gt;
+        &lt;ul&gt;
+            &lt;li node="rep:item"&gt;
+                &lt;a href="#" node="con:link"&gt;LINK&lt;/a&gt;
+            &lt;/li&gt;
+        &lt;/ul&gt;
+    &lt;/body&gt;
+&lt;/html&gt;
+""")
+</code></pre>
+
+<p>Each time the template parser encounters a special 'node' attribute containing a <code>con</code> or <code>rep</code> directive, it creates the corresponding <code>Container</code> or <code>Repeater</code> object at the appropriate point in the template object model.</p>
+
+<p>Once the template HTML is successfully parsed, the resulting <code>Template</code> object can be used to generate any number of HTML documents. The simplest way to generate an HTML document is by calling <code>Template.render()</code>, passing a callback function as its first argument, followed by any data the function might need such as the values to be inserted:</p>
+
+<pre><code>title = "Site Map"
+links = [('index.html', 'Home'), ('products/index.html', 'Products'), ('about.html', 'About')]
+
+template.render(render_template, title, links)
+</code></pre>
+
+<p>This 'controller' function should contain the code responsible for manipulating the Template node's immediate sub-nodes – inserting content, setting tag attributes, deleting unwanted nodes, and so on. For example, the following <code>render_template</code> function sets the content of the Container sub-node named <code>title</code> and tells the Repeater sub-node named <code>item</code> to render copies of itself using the given list:</p>
+
+<pre><code>def render_template(node, pagetitle, linkinfos):
+    node.title.text = pagetitle
+    node.item.repeat(render_item, linkinfos)
+</code></pre>
+
+<p>Before calling the controller function, the <code>render</code> method first creates a full copy of the original template object model, and it is this copy which is passed to the function to manipulate. Since the original <code>Template</code> object is not modified, it can be reused as many times you like without the need to re-parse it each time.</p>
+
+<p>Once the controller function has finished its work, the <code>render</code> method converts the modified object model back to HTML and returns the result.</p>
+
+<p>(Note that while this all-in-one approach is the easiest way to generate documents, htmltemplate also allows you to perform each step separately should you need to customize the copy, manipulate, and/or render operations. See the 'Fine-tuning the rendering process' section in the Notes chapter for details.)</p>
+
+<h2><code>Container</code> nodes</h2>
+
+<p>A Container node represents a modifiable HTML element that will normally appear once in the finished page, e.g.:</p>
+
+<pre><code>&lt;title node="con:title"&gt;TITLE&lt;/title&gt;
+</code></pre>
+
+<p>The HTML element may be empty (e.g. <code>&lt;br/&gt;</code>) in which case it has no content and only its tag attributes are modifiable, or non-empty (e.g. <code>&lt;p&gt;...&lt;/p&gt;</code>) in which case it may contain either modifiable content (plain text/markup) or other Container and/or Repeater nodes.</p>
+
+<p>Container nodes can be manipulated in various ways:</p>
+
+<ul>
+<li>If the node contains one or more subnodes, these will appear as properties. For example, the above example defines a node named 'title' at the top level of the template which will appear as the <code>Template.title</code> property.</li>
+<li><p>If the node contains plain text and/or static markup only, this can be retrieved or replaced using the node's <code>text</code> and <code>html</code> properties. For example, the following line replaces the 'title' node's original content with new text:</p>
+
+<pre><code>node.title.text = pagetitle
+</code></pre></li>
+<li><p>The node's tag attributes can be accessed via its <code>atts</code> property, which contains a dict-like <code>Attributes</code> object. For example, following line sets the 'link' node's <code>href</code> attribute:</p>
+
+<pre><code>node.link.atts['href'] = url
+</code></pre></li>
+<li><p>If the node is no longer required, calling its <code>omit</code> method will prevent it appearing in the rendered output. If only the node's content is required, calling the node's <code>omittags</code> method will prevent its tags appearing in the rendered output.</p></li>
+</ul>
+
+<p>See the <a href="class_definitions.html">Class definitions</a> chapter for a full list of available properties and methods.</p>
+
+<h2><code>Repeater</code> nodes</h2>
+
+<p>A Repeater node is similar to a Container node, except that it can appear any number of times in the finished page:</p>
+
+<pre><code>&lt;li node="rep:item"&gt;...&lt;/li&gt;
+</code></pre>
+
+<p>Repeater objects support all of the properties and methods provided by Container nodes, plus two additional methods, <code>repeat</code> and <code>add</code>. Unlike a Container node, which appears by default in the rendered output, a Repeater node will not appear at all unless its <code>add</code> or <code>repeat</code> method is called. </p>
+
+<p>The <code>add</code> method works a lot like the main <code>render</code> method in that its first argument is a 'controller' callback function that is responsible for manipulating a copy of the original node: inserting content, modifying tag attributes, manipulating its sub-nodes, and so on. Any values to be used by the callback function can be passed as additional arguments. Unlike <code>render</code>, however, the <code>add</code> method does not return the rendered HTML but instead stores it within the original Repeater node. Each time <code>add</code> is called, another copy of the Repeater node is copied, manipulated, rendered and stored. For example, <a href="tutorial_1.html">Tutorial 1</a>'s main <code>render_template</code> controller function could be implemented like so:</p>
+
+<pre><code>def render_template(node, pagetitle, linkinfos):
+    node.title.text = pagetitle
+    for linkinfo in linkinfos:
+        node.item.add(render_item, linkinfo)
+</code></pre>
+
+<p>While the <code>add</code> method provides flexibility, the <code>repeat</code> method supports a more streamlined approach in the most common use case: iterating over a single list. As with <code>add</code>, the <code>repeat</code> method's first argument is a controller function. This should be followed by a second argument, which is the list to iterate over. Any subsequent arguments will be forwarded to the callback function as before. Thus the above <code>render_template</code> function can be more concisely written as:</p>
+
+<pre><code>def render_template(node, pagetitle, linkinfos):
+    node.title.text = pagetitle
+    node.item.repeat(render_item, linkinfos)
+</code></pre>
+
+<p>The <code>repeat</code> method will iterate over the given list, cloning the original Repeater node and passing the copy to the controller function to manipulate, once for each item in the list. If a particular iteration is not needed, the controller function can call the cloned node's <code>omit</code> method before it returns. The parent controller function can also call the original Repeater node's <code>omit</code> method to omit <em>all</em> iterations. The following example demonstrates how to do both:</p>
+
+<pre><code>&lt;ul&gt;
+    &lt;li node="rep:item"&gt;ITEM&lt;/li&gt;
+&lt;/ul&gt;
+
+def render_item(node, value):
+    if value:
+        node.text = value
+    else:
+        node.omit() # omit just this instance of the 'item' node
+
+def render_template(node, values, isvisible):
+    if isvisible:
+        node.item.repeat(render_item, values)
+    else:
+        node.item.omit() # omit all instances of the 'item' node
+</code></pre>
+
+<h2>Notes</h2>
+
+<p>Like the <code>Template</code> class, <code>Container</code> and <code>Repeater</code> classes also support a <code>render</code> method that renders either a copy or the original depending on whether or not a controller function is passed as an argument. While not often needed, this can be useful if you need to render just that portion of the template.</p>
+
+<p>Nodes support a number of introspection-related features:</p>
+
+<ul>
+<li>Each node provides read-only <code>nodetype</code> and <code>nodename</code> properties containing the directive type and node name specified in the original HTML template.</li>
+<li>Each node implements a <code>structure</code> method which returns a string describing the template object model's hierarchy for debugging purposes.</li>
+<li>All nodes implement the standard <code>__iter__</code> method, allowing their subnodes to be recursively iterated over for (e.g.) introspection purposes.</li>
+<li>Container and Repeater nodes also implement the standard <code>__len__</code> method which indicates how many times the node will appear in the rendered output.</li>
+</ul>
+
+	
+	</div>
+
+</div>
+
+<div id="footer">
+
+	<div class="navbar">
+			<a href="html_templates.html">Prev</a> | <a href="index.html">TOC</a> | <a href="class_definitions.html">Next</a>
+		</div>
+
+	<p class="footer">© 2007-2013 HAS</p>
+
+</div>
+
+</body>
+</html>
