@@ -1,0 +1,106 @@
+.TH ANSIBLE.GCE 3 "2013-12-18" "1.4.2" "ANSIBLE MODULES"
+.\" generated from library/cloud/gce
+.SH NAME
+gce \- create or terminate GCE instances
+.\" ------ DESCRIPTION
+.SH DESCRIPTION
+.PP
+Creates or terminates Google Compute Engine (GCE) instances.  See \fIhttps://cloud.google.com/products/compute-engine\fR for an overview. Full install/configuration instructions for the gce* modules can be found in the comments of ansible/test/gce_tests.py. 
+.\" ------ OPTIONS
+.\"
+.\"
+.SH OPTIONS
+   
+.IP image
+image string to use for the instance (default: debian-7)   
+.IP instance_names
+a comma-separated list of instance names to create or destroy   
+.IP machine_type
+machine type to use for the instance, use 'n1-standard-1' by default (default: n1-standard-1)   
+.IP metadata
+a hash/dictionary of custom data for the instance; '{"key":"value",...}'   
+.IP name
+identifier when working with a single instance   
+.IP network
+name of the network, 'default' will be used if not specified (default: default)   
+.IP persistent_boot_disk
+if set, create the instance with a persistent boot disk (default: false)   
+.IP state
+desired state of the resource
+.IR Choices :
+active,present,absent,deleted. (default: present)   
+.IP tags
+a comma-separated list of tags to associate with the instance   
+.IP zone
+the GCE zone to use
+.IR Choices :
+us-central1-a,us-central1-b,us-central2-a,europe-west1-a,europe-west1-b.(required) (default: us-central1-a).\"
+.\"
+.\" ------ NOTES
+.\"
+.\"
+.\" ------ EXAMPLES
+.\" ------ PLAINEXAMPLES
+.SH EXAMPLES
+.nf
+# Basic provisioning example.  Create a single Debian 7 instance in the
+# us-central1-a Zone of n1-standard-1 machine type.
+- local_action:
+    module: gce
+    name: test-instance
+    zone: us-central1-a
+    machine_type: n1-standard-1
+    image: debian-7
+
+# Example using defaults and with metadata to create a single 'foo' instance
+- local_action:
+    module: gce
+    name: foo
+    metadata: '{"db":"postgres", "group":"qa", "id":500}'
+
+
+# Launch instances from a control node, runs some tasks on the new instances,
+# and then terminate them
+- name: Create a sandbox instance
+  hosts: localhost
+  vars:
+    names: foo,bar
+    machine_type: n1-standard-1
+    image: debian-6
+    zone: us-central1-a
+  tasks:
+    - name: Launch instances
+      local_action: gce instance_names={{names}} machine_type={{machine_type}}
+                    image={{image}} zone={{zone}}
+      register: gce
+    - name: Wait for SSH to come up
+      local_action: wait_for host={{item.public_ip}} port=22 delay=10
+                    timeout=60 state=started
+      with_items: {{gce.instance_data}}
+
+- name: Configure instance(s)
+  hosts: launched
+  sudo: True
+  roles:
+    - my_awesome_role
+    - my_awesome_tasks
+
+- name: Terminate instances
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Terminate instances that were previously launched
+      local_action:
+        module: gce
+        state: 'absent'
+        instance_names: {{gce.instance_names}}
+
+
+.fi
+
+.\" ------- AUTHOR
+.SH AUTHOR
+Eric Johnson <erjohnso@google.com>
+.SH SEE ALSO
+.IR ansible (1),
+.I http://ansible.github.com/modules.html#gce
