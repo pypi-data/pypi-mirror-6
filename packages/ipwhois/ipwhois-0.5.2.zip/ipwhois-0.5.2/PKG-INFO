@@ -1,0 +1,325 @@
+Metadata-Version: 1.1
+Name: ipwhois
+Version: 0.5.2
+Summary: IP Whois Resolution and Parsing
+Home-page: https://github.com/secynic/ipwhois
+Author: Philip Hane
+Author-email: secynic AT gmail DOT com
+License: Copyright (c) 2013, Philip Hane
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met: 
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer. 
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution. 
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+Download-URL: https://github.com/secynic/ipwhois/tarball/master
+Description: =======
+        ipwhois
+        =======
+        
+        ipwhois is a simple package for retrieving and parsing whois data for IPv4 
+        and IPv6 addresses. 
+        
+        The various NICs are pretty inconsistent with formatting Whois results and the 
+        information contained within. I am still working through how to parse some of 
+        these fields in to standard dictionary keys.
+        
+        This version requires Python 3.3+ (for the ipaddress library) and dnspython3.
+        
+        Usage Examples
+        ==============
+        
+        Typical usage::
+        
+        	>>>> from ipwhois import IPWhois
+        	>>>> from pprint import pprint
+        	
+        	>>>> obj = IPWhois('74.125.225.229')
+        	>>>> results = obj.lookup()
+        	>>>> pprint(results)
+        	
+        	{
+        	'asn': '15169',
+        	'asn_cidr': '74.125.225.0/24',
+        	'asn_country_code': 'US',
+        	'asn_date': '2007-03-13',
+        	'asn_registry': 'arin',
+        	'nets': [{'abuse_emails': 'arin-contact@google.com',
+        	          'address': '1600 Amphitheatre Parkway',
+        	          'cidr': '74.125.0.0/16',
+        	          'city': 'Mountain View',
+        	          'country': 'US',
+        	          'created': '2007-03-13T00:00:00',
+        	          'description': 'Google Inc.',
+        	          'misc_emails': None,
+        	          'name': 'GOOGLE',
+        	          'postal_code': '94043',
+        	          'state': 'CA',
+        	          'tech_emails': 'arin-contact@google.com',
+        	          'updated': '2012-02-24T00:00:00'}],
+        	'query': '74.125.225.229',
+        	'raw': None
+        	}
+        	
+        REST (HTTP)::
+        
+        	>>>> from ipwhois import IPWhois
+        	>>>> from pprint import pprint
+        	
+        	>>>> obj = IPWhois('74.125.225.229')
+        	>>>> results = obj.lookup_rws()
+        	>>>> pprint(results)
+        	
+        	{
+        	'asn': '15169',
+        	'asn_cidr': '74.125.225.0/24',
+        	'asn_country_code': 'US',
+        	'asn_date': '2007-03-13',
+        	'asn_registry': 'arin',
+        	'nets': [{'abuse_emails': 'arin-contact@google.com',
+        	          'address': '1600 Amphitheatre Parkway',
+        	          'cidr': '74.125.0.0/16',
+        	          'city': 'Mountain View',
+        	          'country': 'US',
+        	          'created': '2007-03-13T12:09:54-04:00',
+        	          'description': 'Google Inc.',
+        	          'misc_emails': None,
+        	          'name': 'GOOGLE',
+        	          'postal_code': '94043',
+        	          'state': 'CA',
+        	          'tech_emails': 'arin-contact@google.com',
+        	          'updated': '2012-02-24T09:44:34-05:00'}],
+        	'query': '74.125.225.229',
+        	'raw': None
+        	}
+        
+        Proxy::
+        
+        	>>>> from urllib import request
+        	>>>> from ipwhois import IPWhois
+        	>>>> handler = request.ProxyHandler({'http': 'http://192.168.0.1:80/'})
+        	>>>> opener = request.build_opener(handler)
+        	>>>> obj = IPWhois('74.125.225.229', proxy_opener = opener)
+        
+        Hostname::
+        
+        	>>>> from ipwhois import IPWhois
+        	>>>> from pprint import pprint
+        	
+        	>>>> obj = IPWhois('74.125.225.229')
+        	>>>> results = obj.get_host()
+        	>>>> pprint(results)
+        	
+        	('dfw06s26-in-f5.1e100.net', [], ['74.125.225.229'])
+        		
+        Countries::
+        
+        	>>>> from ipwhois import IPWhois
+        	>>>> from ipwhois.utils import get_countries
+        	
+        	>>>> countries = get_countries()
+        	>>>> obj = IPWhois('74.125.225.229')
+        	>>>> results = obj.lookup(False)
+        	>>>> print(countries[results['nets'][0]['country']])
+        
+        	United States
+        
+        Installing
+        ==========
+        
+        Latest version from PyPi::
+        
+        	pip install ipwhois
+        
+        Latest version from GitHub::
+        
+        	pip install -e git+https://github.com/secynic/ipwhois@master#egg=ipwhois
+        	
+        Parsing
+        =======
+        
+        Parsing is currently limited to CIDR, country, name, description, state, city, 
+        address, postal_code, abuse_emails, tech_emails, misc_emails, created and 
+        updated fields. This is assuming that those fields are present.
+        
+        Some IPs have parent networks listed. The parser attempts to recognize this, 
+        and break the networks into individual dictionaries. If a single network has 
+        multiple CIDRs, they will be separated by ', '.
+        
+        Sometimes, you will see whois information with multiple consecutive same name 
+        fields, e.g., Description: some text\\nDescription: more text. The parser will 
+        recognize this and the returned result will have the values separated by '\\n'.
+        
+        REST (HTTP)
+        ===========
+        
+        IPWhois.lookup_rws() should be faster than IPWhois.lookup(), but may not be as 
+        reliable. APNIC, and AFRINIC do not have a Whois-RWS service yet. We 
+        have to rely on the Ripe RWS service, which does not contain all of the data 
+        we need. The LACNIC RWS service is supported, but is in beta v2. This may
+        result in availability or performance issues.
+        
+        Changelog
+        =========
+        
+        0.5.2 (2013-12-07)
+        ------------------
+        
+        - Fixed special character issue in countries XML file (Issue #23).
+        
+        0.5.1 (2013-12-03)
+        ------------------
+        
+        - Moved regex string literal declarations to NIC_WHOIS dict.
+        - Moved RWS parsing to own private functions.
+        - Moved base_net dict to global BASE_NET.
+        - More granular exception handling in lookup functions.
+        - Fixed email parsing for ARIN and RIPE RWS.
+        - Changed some 'if key in dict' statements to try/except for slight performance
+          increase in lookup functions.
+        - Removed generic exception handling (returned blank dict) on get_countries().
+        - More PEP 8 reformatting.
+        - Minor docstring modifications.
+        - Added some unit tests to test_lookup() and test_lookup_rws().
+        
+        0.5.0 (2013-11-20)
+        ------------------
+        
+        - Reformatting for PEP 8 compliance.
+        - Added LACNIC RWS (Beta v2) support for IPWhois.lookup_rws().
+        
+        0.4.0 (2013-10-17)
+        ------------------
+        
+        - Added support for network registered and updated time stamps (keys: created,
+          updated). Value in ISO 8601 format.
+        - Added value assertion to test_utils.py.
+        - Fixed IPWhois.lookup() handling of processed values. If processing throws
+          an exception, discard the value and not the net dictionary.
+        
+        0.3.0 (2013-09-30)
+        ------------------
+        
+        - Fixed get_countries() to work with frozen executables.
+        - Added dnspython3 rdtypes import to fix issue with frozen executables.
+        - Moved iso_3166-1_list_en.xml to /data.
+        - Added retry_count to IPWhois.lookup() and IPWhois.lookup_rws().
+        
+        0.2.1 (2013-09-27)
+        ------------------
+        
+        - Fixed LACNIC CIDR validation on IPWhois.lookup().
+        - Fixed bug in IPWhois.get_whois() for query rate limiting. This was discovered
+          via testing multiprocessing with 8+ processes running asynchronously.
+        
+        0.2.0 (2013-09-23)
+        ------------------
+        
+        - Added support for emails (keys: abuse_emails, tech_emails, misc_emails).
+        - Changed regex to use group naming for more complex searching.
+        - Added some missing exception handling in lookup_rws().
+        
+        0.1.9 (2013-09-18)
+        ------------------
+        
+        - Added exceptions to import in __init__.py.
+        - Added IPWhois.__repr__().
+        - Moved exceptions to get_*() functions.
+        - Added exception HostLookupError.
+        - Various optimizations.
+        - Added some unit tests.
+        
+        0.1.8 (2013-09-17)
+        ------------------
+        
+        - Removed set_proxy() in favor of having the user provide their own
+          urllib.request.OpenerDirector instance as a parameter to IPWhois().
+        - Restructured package in favor of modularity. get_countries() is now located
+          in ipwhois.utils.
+        - Added exception WhoisLookupError for IPWhois.lookup() and
+          IPWhois.lookup_rws().
+        
+        0.1.7 (2013-09-16)
+        ------------------
+        
+        - Fixed bug in set_proxy().
+        - Removed ARIN top level network entries from return dictionary of
+          IPWhois.lookup_rws().
+        - Fixed bug in ARIN RWS parsing when only one network.
+        
+        0.1.6 (2013-09-16)
+        ------------------
+        
+        - Added IPWhois.get_host() to resolve hostname information.
+        - Added address and postal_code fields to parsed results.
+        - Normalized single/double quote use.
+        
+        0.1.5 (2013-09-13)
+        ------------------
+        
+        - Added set_proxy() function for proxy support in Whois-RWS queries.
+        - Added IPWhois.lookup_rws() function for Whois-RWS queries.
+        
+        0.1.4 (2013-09-12)
+        ------------------
+        
+        - Added validity checks for the asn_registry value due to a bug in the Team
+          Cymru ASN lookup over night.
+        - Added timeout argument to IPWhois(). This is the default timeout in seconds
+          for socket connections.
+        - Fixed decoding issue in IPWhois.get_whois().
+        
+        0.1.3 (2013-09-11)
+        ------------------
+        
+        - Added exception handling with query retry support for socket errors,
+          timeouts, connection resets.
+        - Moved ASN queries to their own functions (IPWhois.get_asn_dns() and
+          IPWhois.get_asn_whois())
+        - Moved whois query to its own function (IPWhois.get_whois())
+        - Country codes are now forced as upper case in the return dictionary.
+        
+        0.1.2 (2013-09-10)
+        ------------------
+        
+        - Fixed file path for get_countries().
+        - Fixed variable names that conflicted with builtins.
+        - Added content to README.
+        - Moved CHANGES.txt to CHANGES.rst and added to setup.py.
+        - Download URL now points to GitHub master tarball.
+        
+        0.1.1 (2013-09-09)
+        ------------------
+        
+        - Fixed README issue.
+        
+        0.1.0 (2013-09-06)
+        ------------------
+        
+        - Initial release.
+Keywords: Python,WHOIS,ASN,IP Address,IP,IPv4,IPv6,IETF,REST,Arin,Ripe,Apnic,Lacnic,Afrinic,NIC
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Information Technology
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3.3
+Classifier: Topic :: Internet
+Classifier: Topic :: Software Development
