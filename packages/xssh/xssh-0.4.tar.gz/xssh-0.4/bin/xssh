@@ -1,0 +1,166 @@
+#!/usr/bin/env python
+# You can use this program to multiplex SSH connections. No sudo support yet.
+# Written 9-27-2013 by Syed Ali syed_a_ali@yahoo.com under Apache 2.0 License
+
+import socket
+import sys
+import getpass
+import paramiko
+import argparse
+import os
+import hostlist
+import pdb
+
+
+def CheckArgs():
+    """Ensure that we have the proper args"""
+    parser = argparse.ArgumentParser(
+        description="SSH Multiplexer",
+        formatter_class=argparse.RawDescriptionHelpFormatter, epilog='''
+        Examples: 
+        xssh -r host[1-10].domain.com -c "uname -a; uptime" -n 3
+        xssh -i infile -c "grep -i nameserver /etc/resolv.conf" -2 -o outfile
+        Beta software, use at your own risk''', version='0.4')
+    parser.add_argument('-n', action="store", type=int,
+                        help="number of processes to fork, defaults to 1")
+    parser.add_argument('-t', action="store", type=int,
+                        help="timeout value when attempting to connect to host, defaults 5")
+    parser.add_argument('-c', action="store",
+                        help="command to run on remote host", required=True)
+    parser.add_argument('-o', action="store", help="outfile to dump output in")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        '-i', action="store", help="filename for reading hosts from")
+    group.add_argument(
+        '-r', action="store", help="host or hostrange as in h[1-10].domain.com")
+
+    args = parser.parse_args()
+
+    sysargs = {'infile': None, 'hlist': None, 'command':
+               None, 'timeout': None, 'forks': None, 'outfile': None}
+
+    if args.r is not None:
+        try:
+            hlist = hostlist.expand_hostlist(args.r)
+            sysargs['hlist'] = hlist
+        except:
+            print 'ERROR: bad host list format'
+            sys.exit(1)
+
+    sysargs['command'] = args.c
+
+    if args.t:
+        sysargs['timeout'] = args.t
+    else:
+        sysargs['timeout'] = 3
+
+    if args.n:
+        sysargs['forks'] = args.n
+    else:
+        sysargs['forks'] = 1
+
+    if args.o:
+        sysargs['outfile'] = args.o
+
+    if args.i is not None:
+        if not os.path.isfile(args.i):
+            print "ERROR: file %s does not exist" % (args.i)
+            sys.exit(1)
+        else:
+            sysargs['infile'] = args.i
+    
+    return sysargs
+    
+
+def TryDns(hvlist):
+    """Check if DNS resolves."""
+    dns_ok = []
+    for host in hvlist:
+        try:
+            socket.setdefaulttimeout(2)
+            socket.getaddrinfo(host, 22)
+            dns_ok.append(host)
+        except:
+            print 'ERROR: host %s is not resolving' % (host)
+    return dns_ok
+
+
+def ReadFile(sysargs):
+    """Read from infile and check if host resolves in dns."""
+    dns_ok = []
+    if sysargs['outfile'] is not None:
+        stdout = sys.stdout
+        sys.stdout = open(sysargs['outfile'], 'a', 0)
+    with open(sysargs['infile'], 'r') as file:
+        hvlist = list(file.read().splitlines())
+        dns_ok = TryDns(hvlist)
+    return dns_ok
+
+
+def SshToHosts(hostlist, username, passwd, sysargs):
+    """Does an SSH to host using Paramiko, skips host key checking."""
+    #pdb.set_trace()
+    for host in hostlist:
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        if sysargs['outfile'] is not None:
+            stdout = sys.stdout
+            sys.stdout = open(outfile, 'a', 0)
+        try:
+            ssh.connect(host, username=username,
+                        password=passwd, timeout=sysargs['timeout'])
+            stdin, stdout, stderr = ssh.exec_command(sysargs['command'])
+            for line in stdout:
+                print line.strip('\n')
+                ssh.close()
+        except:
+            print 'ERROR:ssh failed on', host
+
+
+def MultiProcess(processestocreate, username, passwd, splithostlist,sysargs):
+    """Forks off different processes based on the number specified."""
+    childpid = []
+    for counter in range(processestocreate):
+        pid = os.fork()
+        if pid:
+            # in parent
+            childpid.append(pid)
+        else:
+            # in child
+            SshToHosts(splithostlist[counter], username, passwd, sysargs)
+            sys.exit(0)
+
+
+def main():
+    """ Start of program logic."""
+    childpid = []
+    sysargs = CheckArgs()
+
+    passwd = getpass.getpass('Enter password-> ')
+    username = getpass.getuser()
+
+    if sysargs['infile'] is not None:
+        dns_ok = ReadFile(sysargs)
+        
+    if sysargs['hlist'] is not None:
+        dns_ok = TryDns(sysargs['hlist'])
+
+    # Split the input hostlist in equal sizes
+    if sysargs['forks'] > 1:
+        hostlist = dns_ok
+        sizeofeachlist = len(hostlist) / sysargs['forks']
+        splithostlist = [hostlist[x:x + sizeofeachlist]
+                         for x in xrange(0, len(hostlist), sizeofeachlist)]
+        processestocreate = len(splithostlist)
+        MultiProcess(
+            processestocreate, username, passwd, splithostlist, sysargs)
+    else:
+        SshToHosts(dns_ok, username, passwd, sysargs)
+
+    for pid in childpid:
+        pid, status = os.waitpid(pid, 0)
+        if os.WIFEXITED(status):
+            os._exit(0)
+
+if __name__ == '__main__':
+    main()
