@@ -1,0 +1,82 @@
+#!/usr/bin/env python
+
+import argparse
+import yaml
+import sys
+import os
+from ebs_deploy import AwsCredentials, EbsHelper, get, out
+from ebs_deploy.commands import get_command_names, get_command
+
+# the commands
+def main():
+    """
+    the main
+    """
+    commands = get_command_names()
+
+    # bail if we don't have a command
+    if len(sys.argv)<2:
+        out("usage: ebs-deploy command [options | help]")
+        out("Where command is one of:")
+        for cmd in commands:
+            out("    "+cmd)
+        exit(-1)
+
+    # get the command
+    command_name = sys.argv[1]
+    command = get_command(command_name)
+
+    # setup arguments
+    parser = argparse.ArgumentParser(description='Deploy to Amazon Beanstalk', usage='%(prog)s '+command_name+' [options]')
+    parser.add_argument('-c', '--config-file', help='Configuration file', default='ebs.config')
+    parser.add_argument('-v', '--verbose', help='Enable debug logging', action='store_true')
+
+    # let commands add arguments
+    try:
+        command.add_arguments(parser)
+    except AttributeError:
+        pass
+
+    # check for help
+    if len(sys.argv) == 3 and sys.argv[2]=='help':
+        parser.print_help()
+        exit(-1)
+
+    # parse arguments
+    args = parser.parse_args(sys.argv[2:])
+
+    # make sure we have an archive or a directory
+    if not args.config_file or not os.path.exists(args.config_file):
+        out("Config file not found: "+args.config_file)
+    	parser.print_help()
+    	exit(-1)
+
+    # enable logging
+    if args.verbose:
+        from boto import set_stream_logger
+        set_stream_logger('boto')
+
+    # load config
+    f = open(args.config_file, 'r')
+    config = yaml.load(f)
+    f.close()
+
+    # create credentials
+    aws = AwsCredentials(
+        get(config, 'aws.access_key'),
+        get(config, 'aws.secret_key'),
+        get(config, 'aws.region'),
+        get(config, 'aws.bucket'),
+        get(config, 'aws.bucket_path'))
+
+    # create helper
+    helper = EbsHelper(aws, app_name=get(config, 'app.app_name'))
+
+    # execute the command
+    exit(command.execute(helper, config, args))
+    return
+
+
+# start the madness
+if __name__ == "__main__":
+    main()
