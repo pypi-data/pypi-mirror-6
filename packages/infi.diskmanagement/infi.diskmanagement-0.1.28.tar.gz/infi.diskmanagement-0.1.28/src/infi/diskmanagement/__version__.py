@@ -1,0 +1,10 @@
+__version__ = "0.1.28"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.1.28)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '10bf0fa6b43bda21140b8b25cdaa0d121a3ebc2f'
+__git_head_subject__ = 'Finished release v0.1.28.'
+__git_head_message__ = '* release/v0.1.28:\n  HIP-684 handling the unexpected size difference\n  HIP-684 ioctl_disk_update_properties\n  HIP-684 ioctl_disk_update_drive_size'
+__git_dirty_diff__ = ''
