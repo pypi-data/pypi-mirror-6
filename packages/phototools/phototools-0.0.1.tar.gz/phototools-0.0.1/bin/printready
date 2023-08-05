@@ -1,0 +1,58 @@
+#! /usr/bin/python
+import os
+import clint
+import envoy
+from phototools import PROFILE
+
+outputsize = clint.args.all[0]
+longedge, shortedge = map(int, outputsize.split("x"))
+density = 402
+
+
+if "--help" in clint.args.flags:
+    print """
+    process_pics [6x4] [*.jpg] [--norotate --help]
+
+    6x4: outputsize in inches
+    *.jpg: files to process
+    --norotate: don't rotate all images to portrait for printing (note default is for original images to be rotated in place if needed).
+"""
+
+norotate = bool("--norotate" in clint.args.flags)
+
+files = " ".join(clint.args.files) or "*.jpg"
+if not clint.args.files:
+    print "Defaulting to process all jpg files in this directory: " + files
+
+d = { 'outputsize': outputsize,
+    'longedge': longedge*density,
+    'shortedge': shortedge*density,
+    'density': density,
+    'files': files,
+    'colorprofile': PROFILE
+    }
+
+# make directory
+try:
+    os.makedirs(os.path.join("proam", outputsize))
+except os.error:
+    pass
+
+
+if norotate:
+    print "Not rotating images"
+else:
+    print "Rotating original images in-place if needs be..."
+    y = envoy.run("""mogrify -rotate '-90>' {files}""".format(**d))
+    #The '<' flag to rotate means to only rotate if it is wider than it is tall.
+    #The -90 means rotate anti-clockwaise, use 90 for clockwise.
+
+
+print "Rescaling to {outputsize}".format(**d)
+x = envoy.run("""mogrify -path "proam/{outputsize}" -density {density} -quality 100 -resize "{shortedge}x{longedge}^" -gravity center  -crop "{shortedge}x{longedge}+0+0" +repage -profile {colorprofile}  {files}""".format(**d))
+
+print "Images will be saved to: /proam/"+outputsize
+
+print x.std_err
+
+
