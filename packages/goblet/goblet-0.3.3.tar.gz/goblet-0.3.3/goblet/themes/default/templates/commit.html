@@ -1,0 +1,104 @@
+{#
+Goblet - Web based git repository browser
+Copyright (C) 2012-2014 Dennis Kaarsemaker
+See the LICENSE file for licensing details
+#}
+{% extends "repo_base.html" %}
+{% block subtitle %}{{ commit.message|shortmsg }} &middot; {{ commit.hex[:7] }}{% endblock %}
+{% block repo_content %}
+<div class="commitdate">{{ commit.commit_time|strftime("%b %d, %Y") }}
+    <span class="actions">
+    Download as <a rel="nofollow" href="{{ url_for('patch', repo=repo.name, ref=commit.hex) }}">patch</a>,
+    <a rel="nofollow" href="{{ url_for('snapshot', repo=repo.name, ref=commit.hex, format='xz') }}">tar.xz</a> or
+    <a rel="nofollow" href="{{ url_for('snapshot', repo=repo.name, ref=commit.hex, format='zip') }}">zip</a> file.
+    </span>
+</div>
+<div class="commit">
+<div class="commitmsg">
+<img class="gravatar" src="{{ commit.author.email|gravatar(36) }}" />
+<a href="{{ url_for('commit', repo=repo.name, ref=commit.hex) }}">{{ commit.message|shortmsg }}</a>
+{{ commit.message|longmsg }}
+<div class="commitdata">
+{% if commit.parents %}
+<table class="parents">
+<tr>
+<td>Parent&nbsp;commit{% if commit.parents|dlength > 1%}s{% endif %}</td>
+<td>
+{% for parent in commit.parents %}
+<a href="{{ url_for('commit', repo=repo.name, ref=parent.hex) }}">{{ parent.hex[:7] }}</a> {{ parent.message|shortmsg }}<br />
+{% endfor %}
+</td>
+</tr></table>
+{% endif %}
+<span class="author">Created by {{ commit.author.name }}, {{ commit.author.time|humantime }}</span>
+{% if commit.committer.email != commit.author.email %}
+<br /><span class="committer">Committed by {{ commit.committer.name }}, {{ commit.committer.time|humantime }}</span>
+{% for ack, who in commit.message|acks %}<br /><span class="committer">{{ ack }}: {{ who|join(", ") }}</span>{% endfor %}
+{% endif %}
+</div>
+</div>
+</div>
+<div class="diff">
+<h2>
+    Showing {{ diff|dlength }} changed file{% if diff|dlength != 1 %}s{% endif %}
+    ({{ stat[None]['+'] }} addition{% if stat[None]['+'] != 1 %}s{% endif %},
+    {{ stat[None]['-'] }} deletion{% if stat[None]['-'] != 1 %}s{% endif %})
+</h2>
+<table class="diffstat">
+{% for file in diff %}
+<tr>
+  <th>{{ decode(file.new_file_path) }}</th>
+  {% if file.hunks %}
+  <td>
+    {% if stat[file.new_file_path]['+'] %}+{{ stat[file.new_file_path]['+'] }}{% endif %}{% if stat[file.new_file_path]['-'] %}{% if stat[file.new_file_path]['+'] %}/{% endif %}-{{ stat[file.new_file_path]['-'] }}{% endif %}
+  </td>
+  <td>
+    <div class="statbar"><div style="width: {{ stat[file.new_file_path]['%'] }}%">&nbsp;</div></div>
+  </td>
+  {% else %}
+    <td colspan="2">(Binary file)</td>
+  {% endif %}
+</tr>
+{% endfor %}
+</table>
+{% for file in diff %}
+<div class="blob">
+{% set file_link = tree_link(repo, commit.hex, path, file.new_file_path) %}
+<h2><img src="{{ file_icon(file.new_file_path) }}" /> <a href="{{ file_link }}">{{ decode(file.new_file_path) }}</a>
+<span class="actions">
+{% if commit.parents %}
+{% set old_file_link = tree_link(repo, commit.parents[0].hex, path, file.old_file_path) %}
+{% endif %}
+<a href="{{ file_link }}">view</a> |
+<a rel="nofollow" href="{{ raw_link(repo, commit.hex, path, file.new_file_path) }}">raw</a> |
+<a rel="nofollow" href="{{ blame_link(repo, commit.hex, path, file.new_file_path) }}">blame</a> |
+<a rel="nofollow" href="{{ history_link(repo, commit.hex, path, file.new_file_path) }}">history</a>
+</span>
+</h2>
+<table class="blobdiff">
+{% if not file.hunks %}
+<tr><td class="lineno">&nbsp;</td><td class="lineno">&nbsp;</td><td><pre>Binary file change</pre></td></tr>
+{% endif %}
+{% for hunk in file.hunks %}
+{% set old = hunk.old_start %}
+{% set new = hunk.new_start %}
+<tr><td class="lineno">&hellip;</td><td class="lineno">&hellip;</td><td><pre>@@ -{{old}},{{hunk.old_lines}} + {{new}},{{hunk.new_lines}}</pre></td></tr>
+{% for status,line in hunk.lines %}
+{% if status == ' ' %}
+<tr class="context"><td class="lineno"><a href="{{ old_file_link }}#l-{{ old }}">{{ old }}</a></td><td class="lineno"><a href="{{ file_link }}#l-{{ new }}">{{ new }}</a></td><td class="diffcontent"><pre>{{ decode(line) }}</pre></td></tr>
+{% set old = old + 1 %}{% set new = new +1 %}
+{% elif status == '-' %}
+<tr class="deletion"><td class="lineno"><a href="{{ old_file_link }}#l-{{ old }}">{{ old }}</a></td><td class="lineno">&nbsp;</td><td class="diffcontent"><pre>{{ decode(line) }}</pre></td></tr>
+{% set old = old + 1 %}
+{% elif status == '+' %}
+<tr class="addition"><td class="lineno">&nbsp;</td><td class="lineno"><a href="{{ file_link }}#l-{{ new }}">{{ new }}</a></td><td class="diffcontent"><pre>{{ decode(line) }}</pre></td></tr>
+{% set new = new + 1 %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+</table>
+</div>
+
+{% endfor %}
+</div>
+{% endblock %}
