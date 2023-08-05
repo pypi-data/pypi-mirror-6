@@ -1,0 +1,125 @@
+"""This module provides SQL Server specific fields for Django models."""
+import datetime
+from django.db import models
+from django.forms import ValidationError
+from django.utils.translation import ugettext_lazy as _
+
+__all__ = (
+    'BigAutoField',
+    'BigForeignKey',
+    'BigIntegerField',
+    'DateField',
+    'DateTimeField',
+    'LegacyTimeField',
+    'LegacyDateField',
+    'LegacyDateTimeField',
+    'TimeField',
+)
+
+class BigAutoField(models.AutoField):
+    """A bigint IDENTITY field"""
+    def get_internal_type(self):
+        return "BigAutoField"
+
+    def to_python(self, value):
+        if value is None:
+            return value
+        try:
+            return long(value)
+        except (TypeError, ValueError):
+            raise ValidationError(
+                _("This value must be a long."))
+
+    def get_db_prep_value(self, value, connection=None, prepared=False):
+        if value is None:
+            return None
+        return long(value)
+
+class BigForeignKey(models.ForeignKey):
+    """A ForeignKey field that points to a BigAutoField or BigIntegerField"""
+    def db_type(self, connection=None):
+        try:
+            return models.BigIntegerField().db_type(connection=connection)
+        except AttributeError:
+            return models.BigIntegerField().db_type()
+
+BigIntegerField = models.BigIntegerField
+
+
+class DateField(models.DateField):
+    """
+    A DateField backed by a 'date' database field.
+    """
+    def get_internal_type(self):
+        return 'NewDateField'
+
+class DateTimeField(models.DateTimeField):
+    """
+    A DateTimeField backed by a 'datetime2' database field.
+    """
+    def get_internal_type(self):
+        return 'NewDateTimeField'
+
+    # def get_db_prep_value(self, value, connection, prepared=False):
+    #     """
+    #     Format as a string to ensure milliseconds are preserved thru ADO.
+    #     """
+    #     if not prepared:
+    #         value = self.get_prep_value(value)
+    #     if isinstance(value, datetime.datetime):
+    #         value = '%s %s' % (str(value.date()), str(value.time()))
+    #     return value
+
+class TimeField(models.TimeField):
+    """
+    A TimeField backed by a 'time' database field.
+    """
+    def get_internal_type(self):
+        return 'NewTimeField'
+
+    # def get_db_prep_value(self, value, connection, prepared=False):
+    #     """
+    #     Format as a string to ensure milliseconds are preserved thru ADO.
+    #     """
+    #     if not prepared:
+    #         value = self.get_prep_value(value)
+    #     if isinstance(value, datetime.datetime):
+    #         value = value.time()
+    #     if isinstance(value, datetime.time):
+    #         value = str(value)
+    #     return value
+
+class LegacyDateField(DateField):
+    """
+    A DateField that is backed by a 'datetime' database field.
+    """
+    def get_internal_type(self):
+        return 'LegacyDateTimeField'
+
+class LegacyDateTimeField(DateTimeField):
+    """
+    A DateTimeField that is backed by a 'datetime' database field.
+    """
+    def get_internal_type(self):
+        return 'LegacyDateTimeField'
+
+    # def get_db_prep_value(self, value, connection, prepared=False):
+    #     value = super(LegacyDateTimeField, self).get_db_prep_value(value, connection, prepared)
+    #     if isinstance(value, basestring):
+    #         # datetime only allows 3 digit precision
+    #         value = value[:-3]
+    #     return value
+
+class LegacyTimeField(TimeField):
+    """
+    A TimeField that is backed by a 'datetime' database field.
+    """
+    def get_internal_type(self):
+        return 'LegacyDateTimeField'
+
+    # def get_db_prep_value(self, value, connection, prepared=False):
+    #     value = super(LegacyTimeField, self).get_prep_value(value, connection, prepared)
+    #     if isinstance(value, basestring):
+    #         # datetime only allows 3 digit precision
+    #         value = value[:-3]
+    #     return value
