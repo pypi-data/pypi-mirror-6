@@ -1,0 +1,137 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import sys
+import os
+import traceback
+import shutil
+import re
+import argparse
+import time
+import json
+
+from os import path
+from subprocess import call, check_output
+
+VERSION = '0.1.2'
+BASEDIR = path.expanduser('~/.augploy')
+
+
+def is_scp_style(repo_url):
+    return re.match(r'(.*@|.*).*:.*', repo_url)
+
+
+def parse_repo_url(repo_url):
+    tmp = repo_url.split('#')
+    repo_url = tmp[0]
+    repo_revision = 'master'
+    if len(tmp) > 1:
+        repo_revision = str.join('#', tmp[1:])
+
+    repo_name = repo_url.split(':')[1].replace('.git', '').replace('/', '-')
+    return (repo_url, repo_name, repo_revision)
+
+
+def log(msg):
+    print(msg)
+
+
+def prepare_repo(repo_url, tmp_path):
+    # We take this repo_url as local file path if it doesn't matche scp style,
+    # else, we need to fetch it from remote, copy it to a tmp path, checkout specified revision.
+    if not is_scp_style(repo_url):
+        return repo_url
+
+    repos_path = path.join(BASEDIR, 'repos')
+    if not path.isdir(repos_path):
+        os.makedirs(repos_path)
+
+    (repo_url, repo_name, repo_revision) = parse_repo_url(repo_url)
+    repo_path = path.join(repos_path, repo_name)
+    tmp_repo_path = path.join(tmp_path, repo_name)
+
+    if not path.isdir(repo_path):
+        call('git clone %s %s' % (repo_url, repo_path), shell=True)
+
+    os.chdir(repo_path)
+    call('git fetch', shell=True)
+
+    shutil.copytree(repo_path, tmp_repo_path, symlinks=True)
+    os.chdir(tmp_repo_path)
+    log('Checkout %s %s ...' % (repo_url, repo_revision))
+    check_output('git checkout %s' % repo_revision, shell=True)
+    return tmp_repo_path
+
+
+def run_ansible_playbook(args, ansible_args, tmp_path):
+    repo_path = prepare_repo(args.repo, tmp_path)
+    ap_repo_path = prepare_repo(args.ap_repo, tmp_path)
+
+    # Compose inventory path.
+    if args.inventory:
+        inventory_path = '%s/augploy/%s' % (repo_path, args.inventory)
+    else:
+        inventory_path = '%s/hosts/%s' % (ap_repo_path, args.ap_inventory)
+
+    # Compose playbook path.
+    playbook_path = '%s/%s' % (ap_repo_path, args.playbook)
+
+    extra_vars = {'repo': {}}
+    extra_vars['repo']['path'] = repo_path
+
+    os.chdir(repo_path)
+    extra_vars['repo']['version'] = check_output('git log --pretty=format:%H -n 1', shell=True).strip('\n')
+
+    extra_vars = {'ap': extra_vars}
+    os.chdir(ap_repo_path)
+    ansible_cmd = 'ansible-playbook -i %s %s -e "%s" %s' % \
+                  (inventory_path, playbook_path, json.dumps(extra_vars), str.join(' ', ansible_args))
+    log('Run ansible playbook: %s' % ansible_cmd)
+    call(ansible_cmd, shell=True)
+
+
+def main(origin_args):
+    # Args parsing.
+    parser = argparse.ArgumentParser(
+        description='augploy - AUGmentum dePLOYment automation tool, powered by ansible',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument(
+        '-r', '--repo', default=os.getcwd(),
+        help='url of the repo to deploy, default is current working directory, for quick test')
+    parser.add_argument(
+        '-R', '--ap_repo', default='git@git.augmentum.com.cn:ops/augploy.git',
+        help='url of augploy repo in which ansible playbooks is stored, this option is for \
+              dev purpose, otherwise you should use the default value')
+
+    args_inventory_group = parser.add_mutually_exclusive_group(required=True)
+    args_inventory_group.add_argument(
+        '-i', '--inventory', help='inventory path in the repo to deploy, under augploy directory')
+    args_inventory_group.add_argument(
+        '-I', '--ap_inventory', help='inventory name in augploy repo, under root directory')
+
+    parser.add_argument('playbook', help='the playbook to run')
+    parser.add_argument('-V', action='version', version='%%(prog)s %s' % VERSION)
+
+    args, ansible_args = parser.parse_known_args(origin_args)
+
+    if 'V' in args:
+        log(VERSION)
+        sys.exit(0)
+
+    # Prepare tmp dir for cloning repos with scp style url.
+    tmp_path = path.join(BASEDIR, str(time.time()))
+    os.makedirs(tmp_path)
+    exit_code = 0
+
+    try:
+        run_ansible_playbook(args, ansible_args, tmp_path)
+    except Exception:
+        exit_code = 1
+        traceback.print_exc()
+    finally:
+        shutil.rmtree(tmp_path)
+        sys.exit(exit_code)
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
