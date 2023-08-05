@@ -1,0 +1,275 @@
+
+class RequestStats(object):
+    requests = {}
+    total_num_requests = 0
+    global_max_requests = None
+    global_last_request_timestamp = None
+    global_start_time = None
+    errors = {}
+
+    def __init__(self, method, name):
+        self.method = method
+        self.name = name
+        self.num_reqs_per_sec = {}
+        self.last_request_timestamp = 0
+        self.reset()
+
+    @classmethod
+    def clear_all(cls):
+        cls.total_num_requests = 0
+        cls.requests = {}
+        cls.errors = {}
+        cls.global_max_requests = None
+        cls.global_last_request_timestamp = None
+        cls.global_start_time = None
+
+    @classmethod
+    def reset_all(cls):
+        cls.global_start_time = time.time()
+        cls.total_num_requests = 0
+        for name, stats in cls.requests.iteritems():
+            stats.reset()
+        cls.errors = {}
+
+    def reset(self):
+        self.start_time = time.time()
+        self.num_reqs = 0
+        self.num_failures = 0
+        self.total_response_time = 0
+        self.response_times = {}
+        self.min_response_time = 0
+        self.max_response_time = 0
+        self.last_request_timestamp = int(time.time())
+        self.num_reqs_per_sec = {}
+        self.total_content_length = 0
+
+    def log(self, response_time, content_length):
+        RequestStats.total_num_requests += 1
+        self.num_reqs += 1
+
+        self.log_request_time()
+        self.log_response_time(response_time)
+
+        # increase total content-length
+        self.total_content_length += content_length
+
+    def log_request_time(self):
+        t = int(time.time())
+        self.num_reqs_per_sec[t] = self.num_reqs_per_sec.setdefault(t, 0) + 1
+        self.last_request_timestamp = t
+        RequestStats.global_last_request_timestamp = t
+
+    def log_response_time(self, response_time):
+        self.total_response_time += response_time
+
+        if self.min_response_time is None:
+            self.min_response_time = response_time
+
+        self.min_response_time = min(self.min_response_time, response_time)
+        self.max_response_time = max(self.max_response_time, response_time)
+
+        # to avoid to much data that has to be transfered to the master node when
+        # running in distributed mode, we save the response time rounded in a dict
+        # so that 147 becomes 150, 3432 becomes 3400 and 58760 becomes 59000
+        if response_time < 100:
+            rounded_response_time = response_time
+        elif response_time < 1000:
+            rounded_response_time = int(round(response_time, -1))
+        elif response_time < 10000:
+            rounded_response_time = int(round(response_time, -2))
+        else:
+            rounded_response_time = int(round(response_time, -3))
+
+        # increase request count for the rounded key in response time dict
+        self.response_times.setdefault(rounded_response_time, 0)
+        self.response_times[rounded_response_time] += 1
+
+    def log_error(self, error):
+        self.num_failures += 1
+        key = "%r: %s" % (error, repr(str(error)))
+        RequestStats.errors.setdefault(key, 0)
+        RequestStats.errors[key] += 1
+
+    @property
+    def fail_ratio(self):
+        try:
+            return float(self.num_failures) / (self.num_reqs + self.num_failures)
+        except ZeroDivisionError:
+            if self.num_failures > 0:
+                return 1.0
+            else:
+                return 0.0
+
+    @property
+    def avg_response_time(self):
+        try:
+            return float(self.total_response_time) / self.num_reqs
+        except ZeroDivisionError:
+            return 0
+
+    @property
+    def median_response_time(self):
+        if not self.response_times:
+            return 0
+
+        return median_from_dict(self.num_reqs, self.response_times)
+
+    @property
+    def current_rps(self):
+        if self.global_last_request_timestamp is None:
+            return 0
+        slice_start_time = max(self.global_last_request_timestamp - 12, int(self.global_start_time or 0))
+
+        reqs = [self.num_reqs_per_sec.get(t, 0) for t in range(slice_start_time, self.global_last_request_timestamp-2)]
+        return avg(reqs)
+
+    @property
+    def total_rps(self):
+        if not RequestStats.global_last_request_timestamp:
+            return 0.0
+
+        return self.num_reqs / max(RequestStats.global_last_request_timestamp - RequestStats.global_start_time, 1)
+
+    @property
+    def avg_content_length(self):
+        try:
+            return self.total_content_length / self.num_reqs
+        except ZeroDivisionError:
+            return 0
+
+    def __iadd__(self, other):
+        self.iadd_stats(other)
+        return self
+
+    def iadd_stats(self, other, full_request_history=False):
+        self.last_request_timestamp = max(self.last_request_timestamp, other.last_request_timestamp)
+        self.start_time = min(self.start_time, other.start_time)
+
+        self.num_reqs = self.num_reqs + other.num_reqs
+        self.num_failures = self.num_failures + other.num_failures
+        self.total_response_time = self.total_response_time + other.total_response_time
+        self.max_response_time = max(self.max_response_time, other.max_response_time)
+        self.min_response_time = min(self.min_response_time, other.min_response_time) or other.min_response_time
+        self.total_content_length = self.total_content_length + other.total_content_length
+
+        if full_request_history:
+            for key in other.response_times:
+                self.response_times[key] = self.response_times.get(key, 0) + other.response_times[key]
+            for key in other.num_reqs_per_sec:
+                self.num_reqs_per_sec[key] = self.num_reqs_per_sec.get(key, 0) +  other.num_reqs_per_sec[key]
+        else:
+            # still add the number of reqs per seconds the last 20 seconds
+            for i in xrange(other.last_request_timestamp-20, other.last_request_timestamp+1):
+                if i in other.num_reqs_per_sec:
+                    self.num_reqs_per_sec[i] = self.num_reqs_per_sec.get(i, 0) + other.num_reqs_per_sec[i]
+    
+    def serialize(self):
+        return {
+            "name": self.name,
+            "method": self.method,
+            "last_request_timestamp": self.last_request_timestamp,
+            "start_time": self.start_time,
+            "num_reqs": self.num_reqs,
+            "num_failures": self.num_failures,
+            "total_response_time": self.total_response_time,
+            "max_response_time": self.max_response_time,
+            "min_response_time": self.min_response_time,
+            "total_content_length": self.total_content_length,
+            "response_times": self.response_times,
+            "num_reqs_per_sec": self.num_reqs_per_sec,
+        }
+    
+    @classmethod
+    def unserialize(cls, data):
+        obj = RequestStats(data["method"], data["name"])
+        for key in [
+            "last_request_timestamp",
+            "start_time",
+            "num_reqs",
+            "num_failures",
+            "total_response_time",
+            "max_response_time",
+            "min_response_time",
+            "total_content_length",
+            "response_times",
+            "num_reqs_per_sec",
+        ]:
+            setattr(obj, key, data[key])
+        return obj
+
+    def get_stripped_report(self):
+        report = copy(self).serialize()
+        self.reset()
+        return report
+
+    def to_dict(self):
+        return {
+            'num_reqs': self.num_reqs,
+            'num_failures': self.num_failures,
+            'avg': self.avg_response_time,
+            'min': self.min_response_time,
+            'max': self.max_response_time,
+            'current_req_per_sec': self.current_rps
+        }
+
+    def __str__(self):
+        try:
+            fail_percent = (self.num_failures/float(self.num_reqs))*100
+        except ZeroDivisionError:
+            fail_percent = 0
+        
+        return (" %-" + str(STATS_NAME_WIDTH) + "s %7d %12s %7d %7d %7d  | %7d %7.2f") % (
+            self.method + " " + self.name,
+            self.num_reqs,
+            "%d(%.2f%%)" % (self.num_failures, fail_percent),
+            self.avg_response_time,
+            self.min_response_time,
+            self.max_response_time,
+            self.median_response_time or 0,
+            self.current_rps or 0
+        )
+
+    def get_response_time_percentile(self, percent):
+        """
+        Percent specified in range: 0.0 - 1.0
+        """
+        num_of_request = int((self.num_reqs * percent))
+
+        processed_count = 0
+        for response_time in sorted(self.response_times.iterkeys(), reverse=True):
+            processed_count += self.response_times[response_time]
+            if((self.num_reqs - processed_count) <= num_of_request):
+                return response_time
+
+    def percentile(self, tpl=" %-" + str(STATS_NAME_WIDTH) + "s %8d %6d %6d %6d %6d %6d %6d %6d %6d %6d"):
+        if not self.num_reqs:
+            raise ValueError("Can't calculate percentile on url with no successful requests")
+        
+        return tpl % (
+            self.name,
+            self.num_reqs,
+            self.get_response_time_percentile(0.5),
+            self.get_response_time_percentile(0.66),
+            self.get_response_time_percentile(0.75),
+            self.get_response_time_percentile(0.80),
+            self.get_response_time_percentile(0.90),
+            self.get_response_time_percentile(0.95),
+            self.get_response_time_percentile(0.98),
+            self.get_response_time_percentile(0.99),
+            self.max_response_time
+        )
+
+    @classmethod
+    def get(cls, method, name):
+        request = cls.requests.get((method, name), None)
+        if not request:
+            request = RequestStats(method, name)
+            cls.requests[(method, name)] = request
+        return request
+
+    @classmethod
+    def sum_stats(cls, name="Total", full_request_history=False):
+        stats = RequestStats(None, name)
+        for s in cls.requests.itervalues():
+            stats.iadd_stats(s, full_request_history)
+        return stats
