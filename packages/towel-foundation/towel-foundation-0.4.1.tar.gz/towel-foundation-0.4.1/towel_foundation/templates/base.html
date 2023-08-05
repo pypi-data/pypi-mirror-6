@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<!--[if IE 8]>          <html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+
+{% load i18n mark_current staticfiles towel_form_tags %}
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width" />
+  <title>{% block title %}myproject{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'myproject/stylesheets/app.css' %}" />
+  <link href="{% static 'chosen/chosen.css' %}" rel="stylesheet">
+  <link href="{% static 'towel_foundation/datepicker/datePicker.css' %}" rel="stylesheet">
+  <link href="{% static 'towel_foundation/towel_foundation.css' %}" rel="stylesheet">
+  <script>var onReady = [], onForm = [];</script>
+  <script src="{% static 'myproject/javascripts/vendor/custom.modernizr.js' %}"></script>
+</head>
+<body>
+
+  <nav class="top-bar">
+    <ul class="title-area">
+      <li class="name">
+        <h1><a id="logo" href="/">myproject</a></h1>
+      </li>
+      <li class="toggle-topbar menu-icon"><a href="#"><span></span></a></li>
+    </ul>
+
+    {% block navigation %}
+      {% if request.user.is_authenticated %}
+        <section class="top-bar-section">
+          <ul class="left">
+            <li class="divider"></li>
+            {% mark_current request.path %}
+            <li><a href="{% url 'contacts_contact_list' %}">
+              {% trans "Contacts" %}</a></li>
+            <li><a href="{% url 'projects_project_list' %}">
+              {% trans "Projects" %}</a></li>
+            <li><a href="{% url 'billing_bill_list' %}">
+              {% trans "Billing" %}</a></li>
+            <li><a href="{% url 'auth_user_list' %}">
+              {% trans "Team" %}</a></li>
+            <li><a href="{% url 'projects_renderedservice_list' %}">
+              {% trans "Logbook" %}</a></li>
+            {% endmark_current %}
+          </ul>
+
+          <ul class="right">
+            <li class="has-dropdown">
+              <a href="{{ user.get_absolute_url }}" class="dropdown-toggle"
+                  data-toggle="dropdown">
+                {{ user }} <span class="caret"></span></a>
+              </a>
+              <ul class="dropdown">
+                <li><a href="{{ user.get_absolute_url }}">
+                  <i class="fi-torso"></i> {% trans "Account" %}</a></li>
+                <li><a href="{% url 'password_change' %}">
+                  <i class="fi-lock"></i>
+                  {% trans "Change my password" %}</a></li>
+                {% if request.access.access >= MANAGEMENT %}
+                  <li class="divider"></li>
+                  <li><a href="{% url 'contacts_group_list' %}">
+                    <i class="fi-address-book"></i>
+                    {% trans "Contact groups" %}</a></li>
+                  <li><a href="{{ request.access.client.urls.detail }}">
+                    <i class="fi-widget"></i>
+                    {% trans "Configuration" %}</a></li>
+                {% endif %}
+                <li class="divider"></li>
+                <li><a href="{% url 'logout' %}">
+                  <i class="fi-power"></i>
+                  Sign Out</a></li>
+              </ul>
+            </li>
+          </ul>
+        </section>
+      {% endif %}
+    {% endblock %}
+  </nav>
+
+
+{% block main %}
+  <div class="row">
+    <div class="large-12 columns">
+      {% block page-header %}
+        {% if verbose_name_plural %}
+          <div class="page-header">
+            {% if search_form %}
+              <form method="get" action="{{ list_url|default:"." }}"
+                  class="form-search right">
+                <input type="hidden" name="s" value="1">
+                {% for field in search_form.fields_iterator %}
+                  {% if forloop.first %}
+                    <div class="panel">
+                  {% endif %}
+                      {% if field.is_hidden %}
+                        {{ field }}
+                      {% else %}
+                        {% form_item field %}
+                      {% endif %}
+                  {% if forloop.last %}
+                        {% if search_form.searching %}
+                          <a href="{{ list_url|default:"." }}?clear=1" class="button">
+                            {% trans "Reset" %}</a>
+                        {% endif %}
+                        <button type="submit" class="button right">
+                          {% trans "Search" %}</button>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+
+                <div class="row collapse">
+                  <div class="small-9 columns">{{ search_form.query }}</div>
+                  <div class="small-3 columns">
+                    <button type="button" data-toggle="form"
+                      class="button postfix radius secondary dropdown"></button>
+                  </div>
+                </div>
+                <input type="submit" style="margin-left:-4000em">
+              </form>
+            {% endif %}
+            <h1>
+              {{ verbose_name_plural|capfirst }}
+              {% if paginator %}
+              <small>
+                {{ page.start_index }} - {{ page.end_index }}
+                / {{ paginator.count }}
+
+                {% if search_form.searching %}
+                {% with total=view.get_queryset.count %}
+                {% if total and paginator.count != total %}
+                  (<a href="?clear=1">{% blocktrans %}{{ total }} total{% endblocktrans %}</a>)
+                {% endif %}
+                {% endwith %}
+                {% endif %}
+              </small>
+              {% endif %}
+            </h1>
+          </div>
+        {% endif %}
+      {% endblock page-header %}
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="large-9 columns">
+      {% block messages %}{% include "towel/_messages.html" %}{% endblock %}
+      {% block content %}{% endblock %}
+    </div><!--/span-->
+    <div class="large-3 columns" id="sidebar">
+      {% block sidebar %}
+        {% if verbose_name and add_url and adding_allowed or view.allow_add %}
+          <div class="panel">
+            <ul class="side-nav">
+              <li>{{ verbose_name_plural }}</li>
+
+              {% mark_current request.path %}
+              <li><a href="{{ add_url }}" class="add">
+                {% blocktrans %}New {{ verbose_name }}{% endblocktrans %}</a></li>
+              {% endmark_current %}
+            </ul>
+          </div>
+        {% endif %}
+      {% endblock %}
+    </div><!--/span-->
+  </div><!--/row-->
+{% endblock main %}
+
+  <script src="{% static 'myproject/javascripts/vendor/jquery.js' %}"></script>
+  <script src="{% static 'myproject/javascripts/foundation/foundation.js' %}"></script>
+  <script src="{% static 'myproject/javascripts/foundation/foundation.cookie.js' %}"></script>
+  <script src="{% static 'myproject/javascripts/foundation/foundation.dropdown.js' %}"></script>
+  <script src="{% static 'myproject/javascripts/foundation/foundation.placeholder.js' %}"></script>
+  <script src="{% static 'myproject/javascripts/foundation/foundation.section.js' %}"></script>
+  <script src="{% static 'myproject/javascripts/foundation/foundation.reveal.js' %}"></script>
+  <script src="{% static 'myproject/javascripts/foundation/foundation.tooltips.js' %}"></script>
+  <script src="{% static 'myproject/javascripts/foundation/foundation.topbar.js' %}"></script>
+  <!--
+  <script src="{% static 'myproject/javascripts/foundation/foundation.clearing.js' %}"></script>
+  <script src="{% static 'myproject/javascripts/foundation/foundation.magellan.js' %}"></script>
+  -->
+  <script src="{% static 'myproject/javascripts/foundation/foundation.forms.js' %}"></script>
+  <!--
+  <script src="{% static 'myproject/javascripts/foundation/foundation.joyride.js' %}"></script>
+  <script src="{% static 'myproject/javascripts/foundation/foundation.orbit.js' %}"></script>
+  -->
+  <script src="{% static 'myproject/javascripts/foundation/foundation.alerts.js' %}"></script>
+
+  <script src="{% static 'myproject/underscore-min.js' %}"></script>
+  <script src="{% static 'myproject/jquery.hotkeys-min.js' %}"></script>
+  <script src="{% static 'towel/towel.js' %}"></script>
+  <script src="{% static 'towel/towel_editlive.js' %}"></script>
+  <script src="{% static 'chosen/chosen.jquery.min.js' %}"></script>
+  <script src="{% static 'towel_foundation/jquery.elastic.min.js' %}"></script>
+  <script src="{% static 'towel_foundation/datepicker/date.js' %}"></script>
+  <script src="{% static 'towel_foundation/datepicker/jquery.datePicker.js' %}"></script>
+  <script src="{% static 'towel_foundation/towel_foundation.js' %}"></script>
+  <script src="{% static 'myproject/myproject.js' %}"></script>
+  <div id="spinner">Saving...</div>
+  <script>
+    (function($) {
+      $(document).foundation();
+      $(document).towelFoundation();
+
+      var spinner = $('#spinner');
+      spinner.bind('ajaxSend', function(evt, jqxhr, settings) {
+        if (settings.type == 'POST') {
+          spinner.html('Saving...').show();
+        } else {
+          spinner.html('Loading...').show();
+        }
+      }).bind('ajaxComplete', function() {
+        spinner.hide();
+      });
+    })(jQuery);
+  </script>
+  {% block js %}{% endblock %}
+</body>
+</html>
