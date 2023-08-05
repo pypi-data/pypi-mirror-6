@@ -1,0 +1,59 @@
+{% extends 'klaus/base.html' %}
+
+{% load klaus %}
+
+{% block title %}
+  {{ path }} - {{ block.super }}
+{% endblock %}
+
+{% block content %}
+
+{% include 'klaus/includes/tree.inc.html' %}
+
+{% url 'klaus:raw' repo=repo.name rev=rev path=path as raw_url %}
+
+<div class=blobview>
+  <h2>
+    {{ filename }}
+    <span>
+      @<a href="{% url 'klaus:commit' repo=repo.name rev=rev %}">{{ rev|shorten_sha1 }}</a>
+      &mdash;
+      {% if is_markup %}
+        {% if render_markup %}
+          <a href="?markup">view markup</a>
+        {% else %}
+          <a href="?">view rendered</a>
+        {% endif %}
+        &middot;
+      {% endif %}
+      <a href="{{ raw_url }}">raw</a>
+      &middot; <a href="{% url 'klaus:history' repo=repo.name rev=rev path=path %}">history</a>
+    </span>
+  </h2>
+  {% if is_binary %}
+    {% if is_image %}
+      <a href="{{ raw_url }}"><img src="{{ raw_url }}"></a>
+    {% else %}
+      {% include "klaus/includes/not_shown.html" with reason="Binary data" %}
+    {% endif %}
+  {% else %}
+    {% if too_large %}
+      {% include "klaus/includes/not_shown.html" with reason="Large file" %}
+    {% else %}
+        {% if is_markup and render_markup %}
+          <div class=markup>{{ rendered_code|safe }}</div>
+        {% else %}
+          {{ rendered_code|safe }}
+        {% endif %}
+    {% endif %}
+  {% endif %}
+</div>
+
+<script>
+  highlight_linenos({
+    linksSelector: '.highlighttable .linenos a',
+    getLineFromAnchor: function(anchor) { return anchor.nextSibling }
+  })
+</script>
+
+{% endblock %}
