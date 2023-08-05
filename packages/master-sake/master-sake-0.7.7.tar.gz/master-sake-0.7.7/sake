@@ -1,0 +1,224 @@
+#!/usr/bin/env python
+
+###########################################################
+##                                                       ##
+##   sake.py                                             ##
+##                                                       ##
+##                Author: Tony Fischetti                 ##
+##                        tony.fischetti@gmail.com       ##
+##                                                       ##
+###########################################################
+#
+##############################################################################
+#                                                                            #
+# Copyright (c) 2013, 2014, Tony Fischetti                                   #
+#                                                                            #
+# MIT License, http://www.opensource.org/licenses/mit-license.php            #
+#                                                                            #
+# Permission is hereby granted, free of charge, to any person obtaining a    #
+# copy of this software and associated documentation files (the "Software"), #
+# to deal in the Software without restriction, including without limitation  #
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,   #
+# and/or sell copies of the Software, and to permit persons to whom the      #
+# Software is furnished to do so, subject to the following conditions:       #
+#                                                                            #
+# The above copyright notice and this permission notice shall be included in #
+# all copies or substantial portions of the Software.                        #
+#                                                                            #
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR #
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   #
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    #
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER #
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    #
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        #
+# DEALINGS IN THE SOFTWARE.                                                  #
+#                                                                            #
+##############################################################################
+
+import argparse
+import networkx as nx
+import os.path
+import sys
+import yaml
+
+from sakelib import acts
+from sakelib import audit
+from sakelib import build
+from sakelib import constants
+
+parser = argparse.ArgumentParser(description='Build from a Sakefile')
+
+# mandatory arguments (but default is provided)
+parser.add_argument("target",
+                    help="targets to build (default=all)",
+                    metavar='target', type=str, nargs='?',
+                    default="all")
+
+# optional arguments
+parser.add_argument('-v', '--verbose', action='store_true',
+                    help="verbose output")
+parser.add_argument('-V', '--version', action='store_true',
+                    help="print out version")
+parser.add_argument('-q', '--quiet', action='store_true',
+                    help="suppress most output")
+parser.add_argument('-f', '--file', action="store", dest="outfile",
+                    help="filename to place visualization or " +
+                         "graphviz dotfile")
+parser.add_argument('-n', '--no-graphviz', action="store_true",
+                    help="Suppress command to graphviz and just" +
+                         " produce graphviz dot file (`sake visual' only)")
+parser.add_argument('-s', '--sakefile', action="store",
+                    dest="customsake",
+                    help="Path to specific sakefile")
+
+args = parser.parse_args()
+
+
+# print out version and exit (if specified)
+if args.version:
+    print("Sake -- version {}".format(constants.VERSION))
+    sys.exit(0)
+
+# you can't have it both ways
+if args.verbose and args.quiet:
+    print("You can't run in both verbose mode and quiet mode")
+    print("Choosing verbose")
+    args.quiet = False
+
+
+# find sakefile to read
+fname = ""
+if args.customsake:
+    if not os.path.isfile(args.customsake):
+        errmes = "Specified sakefile '{}' doesn't exist\n"
+        sys.stderr.write(errmes.format(args.customsake))
+        sys.exit(1)
+    fname = args.customsake
+else:
+    for name in ["Sakefile", "Sakefile.yaml", "Sakefile.yml"]:
+        if os.path.isfile(name):
+            fname = name
+            break
+    if not fname:
+        sys.stderr.write("Error: there is no Sakefile to read\n")
+        sys.exit(1)
+
+# expand macros
+fh = open(fname, "r")
+raw_text = fh.read()
+sake_text = acts.expand_macros(raw_text)
+fh.close()
+
+try:
+    sakefile = yaml.load(sake_text)
+except yaml.YAMLError as exc:
+    sys.stderr.write("Error: Sakefile failed to parse as valid YAML\n")
+    if hasattr(exc, 'problem_mark'):
+        mark = exc.problem_mark
+        sys.stderr.write("Error near line {}\n".format(str(mark.line+1)))
+        sys.exit(1)
+if not audit.check_integrity(sakefile, args.verbose):
+    sys.stderr.write("Error: Sakefile isn't written to specification\n")
+    sys.exit(1)
+if args.verbose:
+    print("Sakefile passes integrity test")
+
+
+# if target is "help"
+if args.target == "help":
+    ret_val = acts.print_help(sakefile)
+    sys.exit(ret_val)
+
+
+# get the graph representation
+G = nx.DiGraph()
+try:
+    G = acts.construct_graph(sakefile, args.verbose, G)
+except:
+    sys.stderr.write("Unspecified error constructing dependency graph\n")
+    sys.exit(1)
+
+# if target is "clean"
+if args.target == "clean":
+    retcode = acts.clean_all(G, args.verbose, args.quiet)
+    sys.exit(retcode)
+
+
+# if target is "visual"
+if args.target == 'visual':
+    if args.verbose:
+        print("Going to generate dependency graph image")
+    if args.outfile:
+        outfile = args.outfile
+    else:
+        outfile = "dependencies"
+    ret_val = acts.visualize(G, filename=outfile, no_graphviz=args.no_graphviz)
+    sys.exit(ret_val)
+
+
+# recursive function to get all predecessors
+# must be called with a list (even if its one element
+def all_preds(preds):
+    if isinstance(preds, list):
+        if len(preds) == 0:
+            return []
+        if len(preds) == 1:
+            if G.predecessors(preds[0]):
+                all_preds(G.predecessors(preds[0]))
+            else:
+                return preds
+        car, cdr = preds[0], preds[1:]
+        return all_preds(G.predecessors(car)) + all_preds(car) + all_preds(cdr)
+    else:
+        return [preds]
+
+
+# if target is "all"
+if args.target == 'all':
+    if args.verbose:
+        print("Going to build target all")
+    # if "all" isn't a target in the sakefile, we
+    # just run everything
+    if "all" not in sakefile:
+        retval = build.build_this_graph(G, args.verbose, args.quiet)
+        sys.exit(retval)
+    # ok, "all" is a listed target in the sakefile
+    # lets make a subgraph with only the targets in "all"
+    # ah! but wait! it needs to have all the predecessors of
+    # those targets, as well
+    nodes_in_subgraph = []
+    for node in G.nodes(data=True):
+        if node[0] in sakefile["all"]:
+            nodes_in_subgraph = nodes_in_subgraph + all_preds([node[0]])
+        elif "parent" in node[1] and node[1]["parent"] in sakefile["all"]:
+            nodes_in_subgraph = nodes_in_subgraph + all_preds([node[0]])
+    nodes_in_subgraph = list(set(nodes_in_subgraph))
+    subgraph = G.subgraph(nodes_in_subgraph)
+    retval = build.build_this_graph(subgraph, args.verbose, args.quiet)
+    sys.exit(retval)
+
+
+# for other target specified
+# it's easier to ask for forgiveness that permission
+try:
+    predecessors =  G.predecessors(args.target)
+except:
+    # maybe its a meta-target?
+    if args.target in sakefile:
+        nodes_in_subgraph = []
+        for node in G.nodes(data=True):
+            if "parent" in node[1] and node[1]["parent"] == args.target:
+                nodes_in_subgraph = nodes_in_subgraph + all_preds([node[0]])
+        nodes_in_subgraph = list(set(nodes_in_subgraph))
+        subgraph = G.subgraph(nodes_in_subgraph)
+        retval = build.build_this_graph(subgraph, args.verbose, args.quiet)
+        sys.exit(retval)
+    # I guess its not :(
+    err_mes = "Error: Couldn't find target '{}' in Sakefile\n"
+    sys.stderr.write(err_mes.format(args.target))
+    sys.exit(1)
+nodes_in_subgraph = list(set(all_preds([args.target])))
+subgraph = G.subgraph(nodes_in_subgraph)
+retval = build.build_this_graph(subgraph, args.verbose, args.quiet)
+sys.exit(retval)
+
