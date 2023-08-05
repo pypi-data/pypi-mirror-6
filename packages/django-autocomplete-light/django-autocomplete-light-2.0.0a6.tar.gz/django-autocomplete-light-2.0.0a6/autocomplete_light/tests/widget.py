@@ -1,0 +1,342 @@
+from __future__ import unicode_literals
+
+import os
+
+from django import VERSION
+from django.test import LiveServerTestCase
+
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.firefox.webdriver import WebDriver
+from selenium.webdriver.support import ui
+
+
+if VERSION[0] == 1 and VERSION[1] < 7:
+    # Patch for travis
+    from django.test.testcases import StoppableWSGIServer
+
+    def patient_shutdown(self):
+        """
+        Stops the serve_forever loop.
+
+        Blocks until the loop has finished. This must be called while
+        serve_forever() is running in another thread, or it will
+        deadlock.
+        """
+        self._StoppableWSGIServer__serving = False
+        if not self._StoppableWSGIServer__is_shut_down.wait(30 if os.environ.get('TRAVIS', False) else 2):
+            raise RuntimeError(
+                "Failed to shutdown the live test server in 2 seconds. The "
+                "server might be stuck or generating a slow response.")
+    StoppableWSGIServer.shutdown = patient_shutdown
+else:
+    # LiveServerTestCase doesn't serve static files in 1.7 anymore
+    from django.contrib.staticfiles.testing import StaticLiveServerCase as LiveServerTestCase
+
+
+WAIT_TIME = 300 if os.environ.get('TRAVIS', False) else 5
+
+
+class WidgetTestCase(LiveServerTestCase):
+    fixtures = ['basic_fk_model_test_case.json', 'initial_data.json']
+    test_case_setup_done = False
+
+    @classmethod
+    def setUpClass(cls):
+        cls.selenium = WebDriver()
+        cls.selenium.implicitly_wait(WAIT_TIME)
+        super(WidgetTestCase, cls).setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        super(WidgetTestCase, cls).tearDownClass()
+        cls.selenium.quit()
+        cls.test_case_setup_done = False
+
+    def setUp(self):
+        if self.__class__.test_case_setup_done is False:
+            self.setup_test_case()
+        self.__class__.test_case_setup_done = True
+
+    def wait_for_selector_change(self, selector):
+        self.wait_for_selector(selector)
+        initial = self.selenium.find_element_by_css_selector(selector)
+
+        def f(selenium):
+            try:
+                return selenium.find_element_by_css_selector(selector) != initial
+            except NoSuchElementException:
+                return False
+
+        self.wait.until(f)
+
+    def open_url(self, url):
+        self.selenium.get('%s%s' % (self.live_server_url, url))
+
+    def send_keys(self, keys, selector=None):
+        if selector is None and self.autocomplete_name:
+            selector = 'input[name=%s-autocomplete]' % self.autocomplete_name
+
+        for key in keys:
+            self.selenium.find_element_by_css_selector(selector).send_keys(key)
+
+    def submit(self, name=None):
+        selector = 'input[type=submit]'
+
+        if name:
+            selector += '[name=%s]' % name
+
+        self.selenium.find_element_by_css_selector(selector).click()
+
+    def login(self):
+        self.open_url('/admin/')
+        self.send_keys('test', 'input[name=username]')
+        self.send_keys('test', 'input[name=password]')
+        self.submit()
+
+    def deck_choice_elements(self):
+        return self.selenium.find_elements_by_css_selector(
+            '#id_%s-deck [data-value]' % self.autocomplete_name)
+
+    @property
+    def widget(self):
+        return self.selenium.find_element_by_css_selector(
+                '.autocomplete-light-widget.%s' % self.autocomplete_name)
+
+    @property
+    def autocomplete(self):
+        xpath = ''.join([
+            '//*[@id="id_%s-autocomplete"]/' % self.autocomplete_name,
+            'following-sibling::',
+            'span[contains(',
+                'concat(" ", normalize-space(@class), " "), ',
+                '" yourlabs-autocomplete ")',
+            ']'])
+        return self.selenium.find_element_by_xpath(xpath)
+
+    @property
+    def deck_choices(self):
+        xpath = ''.join([
+            '//*[@id="id_%s-autocomplete"]/' % self.autocomplete_name,
+            'preceding-sibling::',
+            'span[contains(',
+                'concat(" ", normalize-space(@class), " "), ',
+                '" deck ")',
+            ']/*[@data-value]'])
+
+        return self.selenium.find_elements_by_xpath(xpath)
+
+    @property
+    def autocomplete_hilighted_choice(self):
+        xpath = ''.join([
+            '//*[@id="id_%s-autocomplete"]/' % self.autocomplete_name,
+            'following-sibling::',
+            'span[contains(',
+                'concat(" ", normalize-space(@class), " "), ',
+                '" yourlabs-autocomplete ")',
+            ']',
+            '/*[contains(',
+                'concat(" ", normalize-space(@class), " "), ',
+                '" hilight ")',
+            ']'])
+
+        return self.selenium.find_elements_by_xpath(xpath)
+
+    @property
+    def autocomplete_choices(self):
+        xpath = ''.join([
+            '//*[@id="id_%s-autocomplete"]/' % self.autocomplete_name,
+            'following-sibling::',
+            'span[contains(',
+                'concat(" ", normalize-space(@class), " "), ',
+                '" yourlabs-autocomplete ")',
+            ']/*[@data-value]'])
+
+        return self.selenium.find_elements_by_xpath(xpath)
+
+    @property
+    def hilighted_choice(self):
+        return self.selenium.find_element_by_css_selector(
+                 '.autocomplete-light-widget.%s .yourlabs-autocomplete .hilight' %
+                 self.autocomplete_name)
+
+    @property
+    def input(self):
+        return self.selenium.find_element_by_css_selector(
+                'input[name=%s-autocomplete]' % self.autocomplete_name)
+
+    @property
+    def select(self):
+        xpath = ''.join([
+            '//*[@id="id_%s-autocomplete"]/' % self.autocomplete_name,
+            'following-sibling::',
+            'select'])
+
+        return self.selenium.find_element_by_xpath(xpath)
+
+    def set_implicit_wait(self):
+        self.selenium.implicitly_wait(300 if os.environ.get('TRAVIS', False) else 5)
+
+    def unset_implicit_wait(self):
+        self.selenium.implicitly_wait(0)
+
+    @property
+    def select_values(self):
+        self.select  # wait for select
+
+        # don't wait for options as there might be none
+        self.unset_implicit_wait()
+
+        ret = [o.get_attribute('value') for o in Select(self.select).options if
+                o.is_selected()]
+
+        # restore implicit wait
+        self.set_implicit_wait()
+
+        return ret
+
+    def assertSameChoice(self, autocomplete_choice, deck_choice):
+        if autocomplete_choice.get_attribute('data-value') != deck_choice.get_attribute('data-value'):
+            self.fail('Choices have different data-value')
+
+        if autocomplete_choice.text not in deck_choice.text:
+            # deck_choice has an additional span.remove
+            self.fail('Choices have different text')
+
+
+class FkRelationTestCase(WidgetTestCase):
+    autocomplete_name = 'relation'
+    prepare_send_keys = 'ja'
+
+    def setup_test_case(self):
+        self.login()
+        self.open_url(self.url)
+
+
+class FkRelationEditTestCase(FkRelationTestCase):
+    url = '/admin/basic/fkmodel/1/'
+
+
+class FkRelationCreateTestCase(FkRelationTestCase):
+    url = '/admin/basic/fkmodel/add/'
+
+    def setup_test_case(self, prepare_autocomplete=True):
+        super(FkRelationCreateTestCase, self).setup_test_case()
+
+        if prepare_autocomplete:
+            self.send_keys(self.prepare_send_keys)
+
+
+class ActivateAutocompleteInBlankFormTestCase(FkRelationCreateTestCase):
+    def test_autocomplete_shows_up(self):
+        self.assertTrue(self.autocomplete.is_displayed())
+
+    def test_autocomplete_has_four_choices(self):
+        self.assertEqual(4, len(self.autocomplete_choices))
+
+
+class SelectChoiceInEmptyFormTestCase(FkRelationCreateTestCase):
+    def setup_test_case(self, prepare_autocomplete=True):
+        super(SelectChoiceInEmptyFormTestCase,
+                self).setup_test_case(prepare_autocomplete)
+
+        if prepare_autocomplete:
+            self.autocomplete_choices[1].click()
+
+    def test_autocomplete_disappears(self):
+        self.assertFalse(self.autocomplete.is_displayed())
+
+    def test_input_disappears(self):
+        self.assertFalse(self.input.is_displayed())
+
+    def test_deck_choice_shows_up(self):
+        self.assertEqual(len(self.deck_choices), 1)
+
+    def test_deck_choice_same_as_selected(self):
+        self.assertSameChoice(self.autocomplete_choices[1], self.deck_choices[0])
+
+    def test_hidden_select_value(self):
+        self.assertEqual(self.select_values, ['4'])
+
+
+class WidgetInitialStatusInEditForm(FkRelationEditTestCase):
+    def test_hidden_select_values(self):
+        self.assertEqual(self.select_values, ['4'])
+
+    def test_input_is_hidden(self):
+        self.assertFalse(self.input.is_displayed())
+
+
+class RemoveChoiceInEditFormTestCase(FkRelationEditTestCase):
+    def setup_test_case(self, prepare_autocomplete=True):
+        super(RemoveChoiceInEditFormTestCase, self).setup_test_case()
+
+        if prepare_autocomplete:
+            self.deck_choices[0].find_element_by_css_selector('.remove').click()
+
+    def test_input_shows_up(self):
+        self.assertTrue(self.input.is_displayed())
+
+    def test_hidden_select_option_was_unselected(self):
+        self.unset_implicit_wait()
+        self.assertEqual(self.select_values, [])
+        self.set_implicit_wait()
+
+    def test_element_was_remove_from_deck(self):
+        self.unset_implicit_wait()
+        self.assertEqual(0, len(self.deck_choices))
+        self.set_implicit_wait()
+
+
+class KeyboardTestCase(FkRelationCreateTestCase):
+    prepare_send_keys = 'jac'
+
+    def assertHilightedChoiceNmber(self, n):
+        self.assertSameChoice(self.hilighted_choice, self.autocomplete_choices[n])
+
+    def send_keys_wait_assert_choice_number(self, key, choice):
+        old_hilight = self.autocomplete_hilighted_choice
+
+        self.send_keys([key])
+        ui.WebDriverWait(self.selenium, WAIT_TIME).until(
+            lambda x: old_hilight != self.autocomplete_hilighted_choice)
+
+        self.assertSameChoice(self.hilighted_choice, self.autocomplete_choices[choice])
+
+    def test_00_first_to_second_with_down(self):
+        self.send_keys_wait_assert_choice_number(Keys.ARROW_DOWN, 1)
+
+    def test_01_last_to_first_with_down(self):
+        self.send_keys_wait_assert_choice_number(Keys.ARROW_DOWN, 0)
+
+    def test_02_first_to_last_with_up(self):
+        self.send_keys_wait_assert_choice_number(Keys.ARROW_UP, -1)
+
+    def test_03_last_to_first_with_up(self):
+        self.send_keys_wait_assert_choice_number(Keys.ARROW_UP, 0)
+
+    def test_04_tab_to_select_choice(self):
+        self.send_keys([Keys.TAB])
+        self.assertSameChoice(self.autocomplete_choices[0], self.deck_choices[0])
+        self.assertEqual(self.select_values, ['4'])
+
+
+class InlineBlankTestCase(ActivateAutocompleteInBlankFormTestCase):
+    autocomplete_name = 'fkmodel_set-3-noise'
+
+    def setup_test_case(self):
+        super(InlineBlankTestCase, self).setup_test_case(False)
+
+        self.selenium.find_element_by_css_selector('.add-row a').click()
+        self.send_keys('ja')
+
+
+class InlineSelectChoiceTestCase(SelectChoiceInEmptyFormTestCase):
+    autocomplete_name = 'fkmodel_set-3-noise'
+
+    def setup_test_case(self):
+        super(InlineSelectChoiceTestCase, self).setup_test_case(False)
+
+        self.selenium.find_element_by_css_selector('.add-row a').click()
+        self.send_keys('ja')
+        self.autocomplete_choices[1].click()
