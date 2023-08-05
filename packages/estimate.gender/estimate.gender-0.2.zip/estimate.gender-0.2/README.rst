@@ -1,0 +1,187 @@
+======================================================================================
+ Within- and Cross- Database Evaluations for Gender Classification via BeFIT Protocols
+======================================================================================
+
+This package implements the grid-search for optimal LBP-based algorithm parameters for gender classification on BANCA and MOBIO databases and the generic algorithm that is used to test the final system on FERET, MORPH-II and LFW databases using the BeFIT protocols. It is possible to conduct both within- and cross- database gender classification experiments. The details can be found in the paper `Within- and Cross- Database Evaluations for Gender Classification via BeFIT Protocols`, by N. Erdogmus, M. Vanoni and S. Marcel.
+
+If you use this package and/or its results, please cite the following publications:
+
+1. The original paper with the gender classification algorithms explained in details::
+
+    ==TO BE UPDATED==
+ 
+2. Bob as the core framework used to run the experiments::
+
+    @inproceedings{Anjos_ACMMM_2012,
+        author = {A. Anjos AND L. El Shafey AND R. Wallace AND M. G\"unther AND C. McCool AND S. Marcel},
+        title = {Bob: a free signal processing and machine learning toolbox for researchers},
+        year = {2012},
+        month = oct,
+        booktitle = {20th ACM Conference on Multimedia Systems (ACMMM), Nara, Japan},
+        publisher = {ACM Press},
+    }
+
+If you wish to report problems or improvements concerning this code, please contact the authors of the above mentioned papers.
+
+Raw data
+--------
+
+The databases used in the paper is publicly available and should be downloaded and installed **prior** to try using the programs described in this package (except FERET for which the utilized subset is included in the package).
+
+BANCA: <http://www.ee.surrey.ac.uk/CVSSP/banca/>
+MOBIO: <http://www.idiap.ch/dataset/mobio>
+MORPH-II: <https://ebill.uncw.edu/C20231_ustores/web/store_main.jsp?STOREID=4>
+LFW:  <http://vis-www.cs.umass.edu/lfw/>
+
+Installation
+------------
+
+.. note:: 
+
+  If you are reading this page through our GitHub portal and not through PyPI, note **the development tip of the package may not be stable** or become unstable in a matter of moments.
+
+  Go to `http://pypi.python.org/pypi/estimate.gender  <http://pypi.python.org/pypi/estimate.gender>`_ to download the latest stable version of this package.
+
+There are 2 options you can follow to get this package installed and operational on your computer: you can use automatic installers like `pip <http://pypi.python.org/pypi/pip/>`_ (or `easy_install <http://pypi.python.org/pypi/setuptools>`_) or manually download, unpack and use `zc.buildout <http://pypi.python.org/pypi/zc.buildout>`_ to create a virtual work environment just for this package.
+
+Using an automatic installer
+============================
+
+Using ``pip`` is the easiest (shell commands are marked with a ``$`` signal)::
+
+  $ pip install estimate.gender
+
+You can also do the same with ``easy_install``::
+
+  $ easy_install estimate.gender
+
+This will download and install this package plus any other required dependencies. It will also verify if the version of Bob you have installed is compatible.
+
+This scheme works well with virtual environments by `virtualenv <http://pypi.python.org/pypi/virtualenv>`_ or if you have root access to your machine. Otherwise, we recommend you use the next option.
+
+Using ``zc.buildout``
+=====================
+
+Download the latest version of this package from `PyPI <http://pypi.python.org/pypi/estimate.gender>`_ and unpack it in your working area. The installation of the toolkit itself uses `buildout <http://www.buildout.org/>`_. You don't need to understand its inner workings to use this package. Here is a recipe to get you started::
+  
+  $ python bootstrap.py 
+  $ ./bin/buildout
+
+These 2 commands should download and install all non-installed dependencies and get you a fully operational test and development environment.
+
+.. note::
+
+  The python shell used in the first line of the previous command set determines the python interpreter that will be used for all scripts developed inside this package. Because this package makes use of `Bob <http://idiap.github.com/bob>`_, you must make sure that the ``bootstrap.py`` script is called with the **same** interpreter used to build Bob, or unexpected problems might occur.
+
+  If Bob is installed by the administrator of your system, it is safe to consider it uses the default python interpreter. In this case, the above 3 command lines should work as expected. If you have Bob installed somewhere else on a private directory, edit the file ``buildout.cfg`` **before** running ``./bin/buildout``. Find the section named ``external`` and edit the line ``egg-directories`` to point to the ``lib`` directory of the Bob installation you want to use. For example::
+
+    [external]
+    recipe = xbob.buildout:external
+    egg-directories=/Users/crazyfox/work/bob/build/lib
+
+User Guide
+----------
+
+This section explains how to use the package in order to: a) to run the grid search and analyze the results to find optimal algorithm parameters using BANCA and MOBIO databases b) to test the final system on FERET, MORPH-II and LFW databases with respect to the publicly available BeFIT protocol. <http://fipa.cs.kit.edu/431.php>
+
+It is assumed you have followed the installation instructions for the package, and got the required database downloaded and uncompressed in a directory. After running the ``buildout`` command, you should have all required utilities sitting inside the ``bin`` directory. We expect that the data files of the database are installed in a sub-directory called ``database`` at the root of the package. You can use a link to the location of the database files, if you don't want to have the database installed on the root of this package::
+
+  $ ln -s /path/where/you/installed/the/database database
+
+If you don't want to create a link, use the ``--inputdir`` flag (available in all the scripts) to specify the root directory containing the database files.
+
+Grid search and selection of the optimal configuration
+=======================================================
+
+The first stage of the process is run all possible configuration mentioned in the paper::
+  
+  $ bin/test_all.py -db mobio -i <MOBIO directory>/IMAGES_PNG
+  $ bin/test_all.py -db banca -i <BANCA directory>/english/images/images
+  
+These commands creates the HDF5 files that records the evaluated performance of each configuration in the /output/test_all/<database> folder (unless any other output folder is given using the ``--outputdir`` argument.)
+
+Once all tests are completed and performances are saved, the following command reads all available performance files and calculates the one with highest overall rank::
+
+  $ bin/rank_all.py
+
+
+This will print the resulting configuration and the performances achieved by it on both BANCA and MOBIO databases.
+
+Finally, the resulting system constructed with the optimized parameters are tested via within- and cross- database experiments using both original and gender-balanced training sets::
+
+  
+1) Run experiments witihn-database experiments on Feret, LFW and Morph databses and save PCA and SVM machines for cross-database experiments
+  1.1) Using original training sets
+  $ bin/estimateGender.py -db feret -i ./databases/feret                                 -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -sm
+  $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -sm
+  $ bin/estimateGender.py -db morph -i <morph directory>                                 -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -sm
+  1.1) Using gender-balanced training sets
+  $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -sm -gb
+  $ bin/estimateGender.py -db morph -i <morph directory>                                 -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -sm -gb
+
+2) Run cross-database experiments
+  2.1) Experiments on Feret
+    2.1.1) Using training partitions of LFW
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 0
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 1
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 2
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 3
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 4
+    2.1.2) Using training partitions of LFW (with balanced training set)
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 0 -gb
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 1 -gb
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 2 -gb
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 3 -gb
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 4 -gb
+    2.1.3) Using training partitions of Morph
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 0
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 1
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 2
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 3
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 4
+    2.1.4) Using training partitions of Morph (with balanced training set)
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 0 -gb
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 1 -gb
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 2 -gb
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 3 -gb
+      $ bin/estimateGender.py -db feret -i ./databases/feret -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 4 -gb
+
+  2.2) Experiments on LFW
+    2.2.1) Using training partition of Feret
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td feret -tf 0
+    2.2.2) Using training partitions of Morph
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 0
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 1
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 2
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 3
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 4
+    2.2.3) Using training partitions of Morph (with balanced training set)
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 0 -gb
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 1 -gb
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 2 -gb
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 3 -gb
+      $ bin/estimateGender.py -db lfw   -i <lfw directory>/all_images_aligned_with_funneling -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td morph -tf 4 -gb
+
+  2.3) Experiments on Morph
+    2.3.1) Using training partition of Feret
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td feret -tf 0
+    2.3.2) Using training partitions of LFW
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 0
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 1
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 2
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 3
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 4
+    2.3.3) Using training partitions of LFW (with balanced training set)
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 0 -gb
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 1 -gb
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 2 -gb
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 3 -gb
+      $ bin/estimateGender.py -db morph -i <morph directory> -d 30 -w 105 -r 0.6666666666666666 -l -nb 12 -lt mod -ls 8 2 -c svm -f -no -lm -td lfw   -tf 4 -gb
+  
+To see all the options for these scripts, just type ``--help`` at the command line.
+
+
+Problems
+--------
+
+In case of problems, please contact any of the authors of the paper.
