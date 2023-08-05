@@ -1,0 +1,132 @@
+# Copyright 2012 Hewlett-Packard Development Company, L.P.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+function unmount_image () {
+    # Calling sync before helps ensure the mount isn't busy when you unmount it.
+    # Previously observing having disk corruption issues; one possibility is
+    # qemu-nbd not flushing dirty pages on disconnect?
+    # https://bugs.launchpad.net/diskimage-builder/+bug/1214388
+    sync
+
+    # unmount from the chroot
+    # Don't use TMP_MOUNT_PATH here, it might not have been set.
+    local MOUNTS
+    MOUNTS=$(grep < /proc/mounts " $TMP_BUILD_DIR/mnt" | awk '{ print $2 }' | sort -r)
+    for M in $MOUNTS; do
+        sudo umount -fl $M || true
+    done
+    if [ -n "$EXTRA_UNMOUNT" ]; then
+        $EXTRA_UNMOUNT
+    fi
+}
+
+function cleanup () {
+    unmount_image
+    cleanup_dirs
+}
+
+function ensure_nbd () {
+    NBD=`which qemu-nbd` || true
+    if [ -z "$NBD" ];  then
+        echo "qemu-nbd is not found in your PATH"
+        echo "Please install it on your system"
+        exit 1
+    fi
+    # prep nbd for mounting
+    (lsmod | grep '^nbd ' >/dev/null) || sudo modprobe nbd max_part=16
+}
+
+function ensure_sudo () {
+    sudo echo "Ensuring sudo is available"
+}
+
+# Helper function to run a command inside the chroot
+function run_in_target () {
+    # Force the inclusion of /usr/local/bin in PATH, this is needed for some
+    # distros that does not include /usr/local/bin in the sudoers secure_path.
+    # Note that we're not expanding PATH during argument processing, the \$
+    # will preserve the PATH syntax until after the sh command runs
+    cmd="PATH=\$PATH:/usr/local/bin ; $@"
+    # -E to preserve http_proxy
+    ORIG_HOME=$HOME
+    export HOME=/root
+    sudo -E chroot $TMP_MOUNT_PATH sh -c "$cmd"
+    export HOME=$ORIG_HOME
+}
+
+# Helper function to run a directory of scripts inside the chroot
+function run_d_in_target () {
+    check_element
+    # If we can find a directory of hooks to run in the target filesystem, bind
+    # mount it into the target and then execute run-parts in a chroot
+    if [ -d ${TMP_HOOKS_PATH}/$1.d ] ; then
+      sudo mkdir $TMP_MOUNT_PATH/tmp/in_target.d
+      sudo mount --bind ${TMP_HOOKS_PATH} $TMP_MOUNT_PATH/tmp/in_target.d
+      sudo mount -o remount,ro,bind ${TMP_HOOKS_PATH} $TMP_MOUNT_PATH/tmp/in_target.d
+      check_break before-$1 run_in_target bash
+      trap "check_break after-error run_in_target bash" ERR
+      run_in_target dib-run-parts /tmp/in_target.d/$1.d
+      trap - ERR
+      check_break after-$1 run_in_target bash
+      sudo umount -f $TMP_MOUNT_PATH/tmp/in_target.d
+      sudo rmdir $TMP_MOUNT_PATH/tmp/in_target.d
+    fi
+}
+
+function prepare_first_boot () {
+    check_break before-first-boot run_in_target bash
+    if [ -d ${TMP_HOOKS_PATH}/first-boot.d ] ; then
+      sudo cp -t $TMP_MOUNT_PATH/etc/ -a $TMP_HOOKS_PATH/first-boot.d
+    fi
+    check_break after-first-boot run_in_target bash
+}
+
+function finalise_base () {
+    TARGET_ROOT=$TMP_MOUNT_PATH run_d cleanup
+    # Remove the resolv.conf we created above
+    sudo rm -f $TMP_MOUNT_PATH/etc/resolv.conf
+    # Move the original back
+    if [ -L $TMP_MOUNT_PATH/etc/resolv.conf.ORIG ] || [ -f $TMP_MOUNT_PATH/etc/resolv.conf.ORIG ] ; then
+        sudo mv $TMP_MOUNT_PATH/etc/resolv.conf.ORIG $TMP_MOUNT_PATH/etc/resolv.conf
+    fi
+}
+
+function compress_and_save_image () {
+    # Recreate our image to throw away unnecessary data
+    test $IMAGE_TYPE != qcow2 && COMPRESS_IMAGE=""
+    qemu-img convert ${COMPRESS_IMAGE:+-c} -f raw $TMP_IMAGE_PATH -O $IMAGE_TYPE $1-new
+    rm $TMP_IMAGE_PATH
+
+    TMP_IMAGE_PATH=$1-new
+    save_image $1
+    remove_image
+}
+
+function remove_image () {
+  echo "Removing $TMP_IMAGE_PATH"
+  rm $TMP_IMAGE_PATH
+}
+
+function do_extra_package_install () {
+  # Install any packages that were requested with the -p command line option
+  if [ "$INSTALL_PACKAGES" != "" ]; then
+    run_in_target install-packages ${INSTALL_PACKAGES[@]}
+  fi
+}
+
+function copy_elements_lib () {
+  sudo mkdir -p $TMP_MOUNT_PATH/lib/diskimage-builder
+  sudo cp -t $TMP_MOUNT_PATH/lib/diskimage-builder $_LIB/elements-functions
+}
