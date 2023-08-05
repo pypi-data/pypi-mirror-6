@@ -1,0 +1,142 @@
+Yubico Python Client
+====================
+
+.. image:: https://badge.fury.io/py/yubico-client.png
+    :target: https://badge.fury.io/py/yubico-client
+
+.. image:: https://secure.travis-ci.org/Kami/python-yubico-client.png?branch=master
+        :target: http://travis-ci.org/Kami/python-yubico-client
+
+.. image:: https://pypip.in/d/yubico-client/badge.png
+        :target: https://crate.io/packages/yubico-client
+
+Python class for verifying Yubico One Time Passwords (OTPs) based on the
+validation protocol version 2.0.
+
+* Yubico website: http://www.yubico.com
+* Yubico documentation: http://www.yubico.com/developers/intro/
+* Validation Protocol Version 2.0 FAQ: http://www.yubico.com/develop/open-source-software/web-api-clients/server/
+* Validation Protocol Version 2.0 description: https://github.com/Yubico/yubikey-val/wiki/ValidationProtocolV20
+
+For more information and usage examples, please see the.
+`documentation <https://yubico-client.readthedocs.org/en/latest/>`_.
+
+Documentation
+-------------
+
+Documentation is available at https://yubico-client.readthedocs.org/en/latest/
+
+Installation
+------------
+
+.. code-block:: bash
+
+    $ pip install yubico-client
+
+Note: Package has been recently renamed from `yubico` to `yubico-client` and
+the main module has been renamed from `yubico` to `yubico_client`. This
+was done to avoid naming conflicts and make creation of distribution specific
+packages easier.
+
+Running Tests
+-------------
+
+To run the tests use the tox command. This will automatically run the tests on
+all the supported Python versions.
+
+.. code-block:: bash
+
+    $ tox
+
+License
+-------
+
+Yubico Client is distributed under the `3-Clause BSD License`_.
+
+.. _`3-Clause BSD License`: http://opensource.org/licenses/BSD-3-Clause
+
+
+.. :changelog:
+
+Changelog
+=========
+
+1.9.0 - 2014-01-16
+------------------
+
+* To discourage bad practices, remove ``use_https`` argument from the `Yubico`
+  class constructor all together. Also update ``DEFAULT_API_URLS`` variable to
+  contain full URLs with a scheme (e.g.
+  ``https://api.yubico.com/wsapi/2.0/verify``).
+
+  If a user wants to use a custom non-https URL or URLs, they can still do that
+  by passing ``api_urls`` argument with custom non-https URLs to the
+  constructor.
+
+* Replace ``CA_CERTS_BUNDLE_PATH`` module level variable with a
+  ``ca_certs_bundle_path`` argument which can be passed to the Yubico class
+  constructor.
+
+* Update ``requests`` dependency from ``1.2`` to ``2.2``.
+
+1.8.0 - 2013-11-09
+------------------
+
+* Modify ``verify_multi`` method to throw if ``otp_list`` argument contains
+  less than two items
+* Modify ``max_time_window`` argument in the ``verify_multi`` method to be
+  in seconds (#19)
+* Modify ``verify_multi`` method to throw if delta between the first and last
+  OTP timestamp is smaller than zero
+
+* Allow user to pass ``api_urls`` argument to the ``Yubico`` class constructor.
+  This argument can contain a list of API urls which are used to validate the
+  token. https://github.com/Kami/python-yubico-client/pull/18
+
+  Contributed by Dain Nilsson
+* Depend on newer version (``1.2.3``) of the ``requests`` library.
+* Update code and tests so they also work under Python 3.3
+
+1.7.0 - 2013-04-06
+------------------
+
+* Change PyPi package name from ``yubico`` to ``yubico-client``.
+
+  This was done to prevent naming collisions and make creation of distribution
+  specific packages (e.g. debian packages) easier.
+
+1.6.2 - 2013-04-02
+------------------
+
+* If there are multiple interpretations for a given OTP, first try to find the one
+  which matches the input OTP. If the one is found, use the input OTP, otherwise
+  use random interpretation. - https://github.com/Kami/python-yubico-client/issues/14
+
+  Reported by Klas Lindfors
+
+1.6.1 - 2013-03-19
+------------------
+
+* Only run ``logging.basicConfig`` when running tests so logging config isn't initialised
+  on module import - https://github.com/Kami/python-yubico-client/pull/13
+
+1.6.0 - 2013-01-24
+------------------
+
+* Allow user to specify a path to the CA bundle which is used for verifying the
+  server SSL certificate by setting ``CA_CERTS_BUNDLE_PATH`` variable.
+* When selecting which CA bundle is used for verifying the server SSL
+  certificate look for the bundle in some common locations - https://github.com/Kami/python-yubico-client/pull/10
+* Drop support for Python 2.5
+* Use ``requests`` library for performing HTTP requests and turn SSL cert
+  verification on by default
+* Avoid busy-looping (add ``time.sleep``) when waiting for responses - https://github.com/Kami/python-yubico-client/pull/9
+* Allow user to pass in value ``0`` for ``sl`` argument in ``verify`` and
+  ``verify_multi`` method - https://github.com/Kami/python-yubico-client/pull/8
+* Throw an exception inside ``verify`` and ``verify_multi`` method if timeout has
+  occurred or invalid status code is returned - https://github.com/Kami/python-yubico-client/pull/7
+* Improve response validation and of included, verify that ``otp`` and ``nonce``
+  parameters in the response match one provided in the request - https://github.com/Kami/python-yubico-client/pull/7
+* Add logging
+
+
