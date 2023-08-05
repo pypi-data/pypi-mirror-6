@@ -1,0 +1,98 @@
+{% extends "pages/page.html" %}
+{% load mezzanine_tags formulation %}
+{% block main %}
+{% if request.GET.sent %}
+  {% editable page.donationpage.response %}
+  {{ page.donationpage.response|richtext_filters|safe }}
+  {% endeditable %}
+{% else %}
+{% block content %}
+  {% editable page.donationpage.content %}
+  {{ page.donationpage.content|richtext_filters|safe }}
+  {% endeditable %}
+{% endblock %}
+{% block form %}
+    <form id="donate-form" method="POST" class="form-horizontal">
+      {% csrf_token %}
+      {% form "forms/basic.form" %}
+        <div class="control-group">
+          <div class="controls">
+            {% field form.name "basic" %}
+            {% field form.amount "basic" classes="input-small" %}
+          </div>
+        </div>
+        <div class="control-group">
+          <div class="controls">
+            {% field form.email "basic" %}
+          </div>
+        </div>
+        <div class="control-group">
+          <div class="controls">
+            {% field form.phone "basic" %}
+          </div>
+        </div>
+        <div class="control-group">
+          <div class="controls">
+            {% field form.note "textarea" %}
+          </div>
+        </div>
+        <div class="control-group">
+          <div class="controls">
+            {% field form.card_number "inline" placeholder="Debet/Credit Card Number" classes="card-number" %}
+            {% field form.cvc "inline" classes="input-small card-cvc" placeholder="Security Code" %}
+          </div>
+        </div>
+        <div class="control-groups">
+          <div class="controls">
+            <span>Expiry Date</span>
+            {% field form.exp_month "select" type="select" classes="input-small card-expiry-month" %}
+            {% field form.exp_year "select" year="Year" classes="input-small card-expiry-year" %}
+          </div>
+        </div>
+        <div class="control-groups">
+          <div class="controls">
+            {% use "actions" submit="Donate" %}
+          </div>
+        </div>
+      {% endform %}
+    </form>
+  <div class="payment-errors"></div>
+{% endblock %}
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/jquery.payment/1.0.1/jquery.payment.min.js"></script>
+<script type="text/javascript" src="https://js.stripe.com/v2/"></script>
+<script>
+  $(document).ready(function() {
+    Stripe.setPublishableKey('pk_test_PfOL1Q9FRqWxItjAtbD0x3l2');
+
+    function stripeResponseHandler(status, response) {
+      if (response.error) {
+        $(".payment-errors").text(response.error.message);
+      } else {
+        var $form = $('#donate-form'),
+            token = response['id'],
+            sensitiveFields = ['.card-number', '.card-cvc',
+                               '.card-expiry-month', '.card-expiry-year']
+        $.each(sensitiveFields, function(index, value) {
+          $(value).val("");
+        });
+        $form.append("<input type='hidden' name='stripeToken' value='" + token + "'/>")
+        $form.get(0).submit();
+      }
+    }
+
+    $('#donate-form').submit(function(e) {
+      e.preventDefault();
+      Stripe.card.createToken({
+        number: $('.card-number').val(),
+        cvc: $('.card-cvc').val(),
+        exp_month: $('.card-expiry-month').val(),
+        exp_year: $('.card-expiry-year').val()
+      }, stripeResponseHandler);
+    });
+  });
+</script>
+{% endblock %}
