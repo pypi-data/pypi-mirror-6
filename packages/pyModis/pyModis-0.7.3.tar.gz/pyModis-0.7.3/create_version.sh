@@ -1,0 +1,30 @@
+#!/bin/bash
+
+echo "You should updated the following: CHANGES, setup.py, pymodis/__init__.py"
+echo "Could it \"procede\" (answer yes or no)?"
+read procede
+
+if [ $procede = "yes" ]; then
+
+  pymodis_version=`python setup.py -V`
+  curdir=`pwd`
+
+  cd docs/
+
+  make html
+
+  cd build/html/
+
+  find . -type f -name "*~" -exec rm -f {} \;
+
+  zip -r -9 $curdir/pymodis_${pymodis_version}_html.zip *
+
+  cd $curdir
+
+  rm -rf docs/build/
+
+  find . -type f -name "*~" -exec rm -f {} \;
+
+  python setup.py sdist upload
+
+fi
