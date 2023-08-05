@@ -1,0 +1,25 @@
+from distutils.core import setup
+
+setup(name='yamf',
+      version='0.7',
+      py_modules=['yamf'],
+      author='Mika Lackman',
+      author_email='mika.lackman@gmail.com',
+      license='LGPL',
+      platforms=['OS independent'],
+      description='A Python (yet another) mock framework',
+      url = 'http://code.google.com/p/pyamof/',
+      download_url = 'http://code.google.com/p/pyamof/downloads/detail?name=yamf-0.7.tar.gz&can=2&q=',
+      keywords = ['mock', 'tdd'],
+      classifiers = [
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 2.6',
+        'Development Status :: 4 - Beta',
+        'Environment :: Other Environment',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)',
+        'Operating System :: OS Independent',
+        'Topic :: Software Development :: Libraries :: Python Modules',
+        'Topic :: Software Development :: Testing',
+    ],
+      )
