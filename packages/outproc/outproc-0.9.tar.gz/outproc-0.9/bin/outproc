@@ -1,0 +1,202 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# Pluggable Output Processor (main module)
+#
+# Copyright (c) 2013 Alex Turbov <i.zaufi@gmail.com>
+#
+# Pluggable Output Processor is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Pluggable Output Processor is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+import argparse
+import fcntl
+import os
+import sys
+import select
+import subprocess
+import traceback
+
+# Project specific imports
+import outproc
+from outproc import log
+
+
+class Application(object):
+
+    def __init__(self):
+        self.abspath = os.path.abspath(sys.argv[0])
+        self.basename = os.path.basename(self.abspath)
+        self.dirname = os.path.dirname(self.abspath)
+        self.pipe_mode = False
+
+
+    def _handle_command_line(self):
+        parser = argparse.ArgumentParser(description='Pluggable Output Processor')
+        parser.add_argument(
+            '-m'
+          , '--module'
+          , metavar='NAME'
+          , help='Choose module to process input from STDIN'
+          )
+        args = parser.parse_args()
+        # Override module name if running as `outproc`. I.e. in a command like this:
+        #  $ /usr/bin/make 2>&1 | outproc -m make
+        if args.module:
+            self.basename = args.module
+        self.pipe_mode = True
+
+
+    def _find_wrapped_binary(self):
+        # Try to find a wrapped executable
+        self.binary = None
+        for path in os.environ['PATH'].split(os.pathsep):
+            binary = os.path.join(path, self.basename)
+            if not path.startswith(self.dirname) and os.path.isfile(binary):
+                self.binary = binary
+                break
+        if self.binary is None:
+            log.eerror('Command not found: {}'.format(self.basename))
+            sys.exit(1)
+
+
+    def _load_pp_module(self):
+        # Look for a plugin to post-process an output of the given command
+        try:
+            self.pp_mod = __import__(
+                'outproc.pp.{}'.format(self.basename)
+              , globals()
+              , locals()
+              , ['outproc.pp']
+              )
+        except:
+            outproc.report_error_with_backtrace('Failed to import module {}'.format(self.basename))
+            sys.exit(1)
+
+        # Make sure the module found has a Processor class
+        if not hasattr(self.pp_mod, 'Processor') or not issubclass(self.pp_mod.Processor, outproc.Processor):
+            log.eerror('Module {} does not provide class `Processor`'.format(self.pp_mod.__name__))
+            sys.exit(1)
+
+
+    def _load_config(self, config_file_name):
+        # Try to load configuration for selected plugin
+        try:
+            return outproc.Config(os.path.join(outproc.SYSCONFDIR, config_file_name))
+        except:
+            outproc.report_error_with_backtrace('Unable to load configuration data')
+            sys.exit(1)
+
+
+    def _create_output_processor(self, config):
+        try:
+            # Make an instance of an output processor
+            return self.pp_mod.Processor(config, self.binary)
+        except:
+            outproc.report_error_with_backtrace('Unable to make a preprocessor instance')
+            sys.exit(1)
+
+
+    def _make_async(self, fd):
+        '''Switch given file descriptor to asynchronous mode'''
+        fcntl.fcntl(fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_NONBLOCK)
+
+
+    def _start_wrapped_binary(self):
+        try:
+            # Execute wrapped (and found) binary
+            return subprocess.Popen(
+                [self.binary] + sys.argv[1:]
+              , bufsize=1                                   # Per line buffering
+              , stdin=sys.stdin                             # TODO Need to pass input to subprocess as well
+              , stdout=subprocess.PIPE
+              , stderr=subprocess.STDOUT                    # NOTE Redirect STDERR to STDOUT
+              , shell=False                                 # No shell needed
+              )
+        except:
+            outproc.report_error_with_backtrace('Unable to start wrapped executable ({})'.format(self.binary))
+            sys.exit(1)
+
+
+    def _out_lines_list(self, lines):
+        if lines:
+            sys.stdout.write('\n'.join(lines) + '\n')
+            sys.stdout.flush()
+
+
+    def run(self):
+        # Check the binary name
+        if self.basename == 'outproc':
+            self._handle_command_line()
+            if self.pipe_mode:
+                # TODO
+                log.eerror('Pipe mode not implemented')
+                sys.exit(1)
+
+        self._find_wrapped_binary()
+        self._load_pp_module()
+        if not self.pp_mod.Processor.want_to_handle_current_command():
+            # Ok, replace self w/ wrapped executable
+            os.execv(self.binary, [self.binary] + sys.argv[1:])
+            sys.exit(1)
+
+        config = self._load_config(self.pp_mod.Processor.config_file_name(self.basename))
+        processor = self._create_output_processor(config)
+        process = self._start_wrapped_binary()
+
+        po = select.epoll()                                 # Make a poll object
+        self._make_async(process.stdout)                    # Switch STDOUT descriptor to asynchronous mode
+        # Register descriptor for polling
+        po.register(process.stdout, select.EPOLLIN | select.EPOLLHUP)
+
+        eof = False
+        while not eof:
+            # Wait for data to become available
+            events = None
+            while events is None:
+                try:
+                    events = po.poll()
+                    break
+                except InterruptedError:                    # Handle EAGAIN:
+                    continue                                # just try to poll() once again ;)
+
+            # Analyze event
+            for fileno, event in events:
+                # Check if input available
+                if event & select.EPOLLIN:
+                    block = process.stdout.read()           # Read collected data
+                    while block is not None and block:
+                        self._out_lines_list(processor.handle_block(block))
+                        block = process.stdout.read()       # Try to read more data
+                elif event & select.EPOLLHUP:
+                    eof = True
+                    self._out_lines_list(processor.eof())   # Notify processor about EOF
+                else:
+                    assert(not 'Unexpected event {}'.format(event))
+
+        result = None
+        while result is None:
+            result = process.poll()                         # Try to get child exit status
+        sys.exit(result)
+
+
+if __name__ == "__main__":
+    try:
+        a = Application()
+        a.run()
+    except KeyboardInterrupt:
+        sys.exit(1)
+    except RuntimeError as ex:
+        log.eerror('Error: {}'.format(ex))
+        sys.exit(1)
+    sys.exit(0)
