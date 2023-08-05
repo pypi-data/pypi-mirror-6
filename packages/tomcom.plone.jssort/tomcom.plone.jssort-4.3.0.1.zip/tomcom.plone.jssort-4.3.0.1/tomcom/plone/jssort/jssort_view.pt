@@ -1,0 +1,266 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"
+      xmlns:tal="http://xml.zope.org/namespaces/tal"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+      lang="en"
+      metal:use-macro="here/tc_manage_main/macros/master"
+      i18n:domain="plone">
+
+    <metal:block metal:fill-slot="custom">
+        <script src="/++resource++jssort/js/js.js"></script>
+        <link href="/++resource++jssort/css/css.css" rel="stylesheet">
+    </metal:block>
+
+<body>
+
+<metal:main fill-slot="main"
+    tal:define="portal here/portal_url/getPortalObject;
+                portal_javascripts nocall:here/portal_javascripts">
+
+    <h1 i18n:translate="">
+        Sort java script
+        -
+        <tal:block tal:content="python:here.ZopeTime().strftime('%d.%m.%Y %H:%M:%S')"
+                   i18n:name="value"/>
+    </h1>
+
+    <ul class="nav nav-tabs">
+        <li>
+            <a tal:attributes="href portal/absolute_url"
+               i18n:translate="">Home</a>
+        </li>
+    </ul>
+
+    <form action="manage_saveScripts" id="save-css-form"
+          tal:attributes="action python:portal.absolute_url()+'/portal_javascripts/manage_saveScripts'"
+          method="post">
+
+        <div class="well">
+            <button class="btn btn-primary css-save" type="submit"
+                    i18n:translate="label_save">
+                Save
+            </button>
+            <a class="btn" target="_blank"
+               tal:attributes="href string:${here/portal_url}/@@jssort/export"
+               i18n:translate="">
+               Export
+            </a>
+        </div>
+
+        <table class="table table-bordered table-striped table-hover">
+        <thead>
+        <tr>
+            <th colspan="10">
+                <label for="debugmode" id="debugmodelabel" class="checkbox">
+                    <input type="checkbox" id="debugmode" name="debugmode:boolean"
+                           tal:attributes="checked portal_javascripts/getDebugMode" />
+                    <tal:block i18n:translate="">Development mode</tal:block>
+                </label>
+            </th>
+        </tr>
+        <tr>
+            <th>
+            </th>
+            <th>
+                <span title="Enable/Disable this Java script">Enabled?</span>
+            </th>
+            <th>
+                <span title="Path to the style sheet">Path</span>
+            </th>
+            <th>
+                <span title="Restrict to authenticated users? If yes, the condition will be ignored.">Restrict?</span>
+            </th>
+            <th>
+                <span title="TAL Condition for inclusion">Condition</span>
+            </th>
+            <th>
+                <span title="Merging allowed?">Merge</span>
+            </th>
+            <th>
+                <span title="Caching allowed?">Cache</span>
+            </th>
+            <th>
+                <span title="">Bundle</span>
+            </th>
+            <th>
+                <span title="">Compression type</span>
+            </th>
+            <th>
+                <span title="Conditional Comment (IE Only)">IE Only</span>
+            </th>
+            <th>
+            </th>
+        </tr>
+        </thead>
+        <tbody id="sortable">
+        <tal:block tal:repeat="script portal_javascripts/getResources">
+            <tr tal:define="resourceExists python:script.isExternalResource() or portal.restrictedTraverse(script.getId(), False) and True"
+                tal:attributes="class python:resourceExists and 'ok' or 'error'">
+                <td>
+                    <i class="icon-reorder"></i>
+                </td>
+                <td>
+                    <input class="sort-index"
+                           type="hidden" name="scripts.sort:records:int"
+                           tal:attributes="value repeat/script/index" />
+
+                    <input type="checkbox" name="scripts.enabled:records:boolean"
+                           title="Enabled?"
+                           tal:attributes="checked script/getEnabled" />
+                    <input type="hidden" name="scripts.enabled:records:boolean:default" value="False" />
+                </td>
+                <td>
+                    <!-- This is ugly the tooltip has any crappy max-width. So if the string is to long
+                        The string moves over the tooltyp layout. So split and join to get a string break
+                     -->
+                    <input type="text" name="scripts.id:records:string" size="80" class="tool-tip"
+                           tal:attributes="value script/getId;
+                                           title python:'.'.join(script.getId().split('.'))" />
+                </td>
+                <td>
+                    <input type="checkbox" name="scripts.authenticated:records:boolean" class="input-small"
+                           tal:attributes="checked script/getAuthenticated | default" />
+                    <input type="hidden" name="scripts.authenticated:records:boolean:default" value="False" />
+                </td>
+                <td>
+                    <input type="text" name="scripts.expression:records:string" class="input-small"
+                           tal:attributes="value script/getExpression" />
+                </td>
+                <td>
+                    <input type="checkbox" name="scripts.cookable:records:boolean"
+                           tal:attributes="checked script/getCookable | default;
+                                           disabled script/isExternalResource | nothing" />
+                    <input type="hidden" name="script.cookable:records:boolean:default" value="False" />
+                </td>
+                <td>
+                    <input type="checkbox" name="scripts.cacheable:records:boolean"
+                           tal:attributes="checked script/getCacheable | default;
+                                           disabled script/isExternalResource | nothing" />
+                    <input type="hidden" name="scripts.cacheable:records:boolean:default" value="False" />
+                </td>
+                <td>
+                     <input type="text" name="scripts.bundle:records" class="input-small-x"
+                           tal:attributes="value script/getBundle|nothing" />
+                </td>
+                <td>
+                    <select name="scripts.compression:records" class="input-small">
+                        <option tal:define="options python:script.isExternalResource() and portal_javascripts.getExternalCompressionOptions() or portal_javascripts.getCompressionOptions()"
+                                tal:repeat="r options"
+                                tal:attributes="value r;
+                                                selected python:r == script.getCompression()"
+                                tal:content="r">safe</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="text" name="scripts.conditionalcomment:records" class="input-small-x"
+                           tal:attributes="value script/getConditionalcomment" />
+                </td>
+                <td>
+
+                    <a title="Remove"
+                       class="remove"
+                       tal:attributes="href string:${portal/absolute_url}/portal_javascripts/manage_removeScript?id=${script/getQuotedId}"
+                       i18n:attributes="title label_delete">
+                        <i class="icon-remove"></i>
+                    </a>
+
+                </td>
+            </tr>
+        </tal:block>
+        </tbody>
+        </table>
+
+        <input class="btn btn-primary css-save"
+               type="submit" value="Save"
+               i18n:attributes="value label_save"/>
+
+    </form>
+
+    <form action="manage_addScript"
+          tal:attributes="action python:portal.absolute_url()+'/portal_javascripts/manage_addScript'"
+          method="post">
+
+        <div class="well">
+
+            <h3>Add a new java script</h3>
+
+        <div>
+            <label for="id">ID/URL</label>
+            <input type="text" name="id" size="50" />
+        </div>
+
+        <div>
+            <label>Bundle</label>
+            <input type="text" name="bundle" size="50" />
+        </div>
+
+        <div>
+            <label>Condition</label>
+            <input type="text" name="expression" size="50" />
+        </div>
+
+        <div>
+            <label>Conditional Comment (IE Only)</label>
+            <input type="text" name="conditionalcomment" size="50" />
+        </div>
+
+        <div>
+            <label>Compression type</label>
+            <select name="compression">
+                <option tal:repeat="r portal_javascripts/getCompressionOptions"
+                        tal:attributes="value r;
+                                        selected python:r=='safe'"
+                        tal:content="r">safe</option>
+            </select>
+        </div>
+
+        <div class="checkbox">
+            <label>
+                <input type="checkbox" name="authenticated" value="0" />
+                <tal:block i18n:translate="">Restrict to authenticated users? If yes, the condition will be ignored.</tal:block>
+            </label>
+        </div>
+
+        <div class="checkbox">
+            <label>
+                <input type="checkbox" name="inline" value="0" />
+                <tal:block i18n:translate="">Inline rendering?</tal:block>
+            </label>
+        </div>
+
+        <div class="checkbox">
+            <label>
+                <input type="checkbox" name="enabled" checked="1" />
+                <tal:block i18n:translate="">Enabled?</tal:block>
+            </label>
+        </div>
+
+        <div class="checkbox">
+            <label>
+                <input type="checkbox" name="cookable:boolean" checked="1" />
+                <input type="hidden" name="cookable:boolean:default" value="False" />
+                <tal:block i18n:translate="">Merging allowed?</tal:block>
+            </label>
+        </div>
+
+        <div class="checkbox">
+            <label>
+                <input type="checkbox" name="cacheable:boolean" checked="1" />
+                <input type="hidden" name="cacheable:boolean:default" value="False" />
+                <tal:block i18n:translate="">Caching allowed?</tal:block>
+            </label>
+        </div>
+
+          <input class="btn btn-primary"
+                 type="submit" value="Add"
+                 i18n:attributes="value"/>
+
+        </div>
+
+    </form>
+
+</metal:main>
+
+</body>
+
+</html>
