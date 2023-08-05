@@ -1,0 +1,84 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# ***** BEGIN LICENSE BLOCK *****
+# Copyright (C) 2012  Hayaki Saito <user@zuse.jp>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ***** END LICENSE BLOCK *****
+
+
+_rule = {
+    '\x00': u'@skk-cancel-pass',             # C-SP C-@
+    '\x01': u'@skk-cancel-pass',             # C-a
+    '\x02': u'@skk-move-next-clause',        # C-b
+    '\x03': u'@skk-cancel-pass',             # C-c
+    '\x04': u'@skk-cancel-pass',             # C-d
+    '\x05': u'@skk-cancel-pass',
+    '\x06': u'@skk-move-prev-clause',        # C-f
+    '\x07': u'@skk-cancel',                  # BEL C-g
+    '\x08': u'@skk-back',                    # BS C-h
+    '\x09': u'@skkmenu-next',                # TAB C-i
+    '\x0a': u'@skk-kakutei-key',
+    '\x0b': u'@skk-cancel-pass',
+    '\x0c': u'@skk-cancel-pass',
+    '\x0d': u'@skk-kakutei-key',             # CR C-m
+    '\x0e': u'@skkmenu-next',                # C-n
+    '\x0f': u'@skk-cancel-pass',
+    '\x10': u'@skkmenu-prev',                # C-p
+    '\x11': u'@skk-set-henkan-point-subr',   # C-q
+    '\x12': u'@skk-cancel-pass',
+    '\x13': u'@skk-cancel-pass',
+    '\x14': u'@skk-cancel-pass',
+    '\x15': u'@skk-cancel-pass',
+    '\x16': u'@skk-cancel-pass',
+    '\x17': u'@skkapp-wikipedia',            # C-w
+    '\x18': u'@skk-delete-candidate',        # C-x
+    '\x19': u'@skk-cancel-pass',
+    '\x1a': u'@skk-cancel-pass',
+    '\x1b': u'@skk-j-mode-off',
+    '\x1c': u'@skk-cancel-pass',
+    '\x1d': u'@skk-cancel-pass',
+    '\x1e': u'@skk-cancel-pass',
+    '\x1f': u'@skk-cancel-pass',
+    '\x20': u'@skk-henkan',
+    '\x7f': u'@skk-back',                    # DEL
+    '/'   : u'@skk-abbrev-mode',
+    'l'   : u'@skk-j-mode-off',
+    'q'   : u'@skk-toggle-kana',
+    'L'   : u'@skk-start-eisuu',
+    's1'  : u'@skkwm-switch',
+    'n1'  : u'@skkwm-next',
+    'p1'  : u'@skkwm-prev',
+    'd1'  : u'@skkwm-blur',
+    '4'   : u'@skksh-start',
+    '$'   : u'@skksh-start',
+    '@'   : u'@skkconf-start',
+}
+
+
+def get():
+    """
+    >>> name, rule = get()
+    """
+    return 'base', _rule
+
+
+def test():
+    import doctest
+    doctest.testmod()
+
+
+if __name__ == "__main__":
+    test()
