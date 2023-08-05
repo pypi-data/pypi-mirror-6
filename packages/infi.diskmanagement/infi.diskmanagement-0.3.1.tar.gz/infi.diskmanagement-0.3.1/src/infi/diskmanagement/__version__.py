@@ -1,0 +1,10 @@
+__version__ = "0.3.1"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.3.1)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '09d2f2a760b3de9d97c9737af1125aec5fdf68d3'
+__git_head_subject__ = 'Finished release v0.3.1.'
+__git_head_message__ = '* release/v0.3.1:\n  HIP-868 fixing lambda\n  HIP-868 handling VSS GPT partitions\n  HIP-868 handling VSS GPT partitions\n  HIP-863 fixing create_first_partition'
+__git_dirty_diff__ = ''
