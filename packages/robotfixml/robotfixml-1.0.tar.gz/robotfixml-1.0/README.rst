@@ -1,0 +1,51 @@
+=========================================================
+Fixml - A tool to fix broken Robot Framework output files
+=========================================================
+
+Fixml is a tool to fix `Robot Framework`_ output files that
+are not properly finished or are missing elements from the middle. It
+should be possible to generate reports and logs from the fixed output
+afterwards with the Rebot tool.
+
+Installation
+============
+
+This tool is installed with `pip`_ with command:
+
+.. sourcecode:: bash
+
+    $ pip install robotfixml
+
+Fixml uses `BeautifulSoup 3`__ which should be automatically installed by the
+above command.
+
+Alternatively you can download both Fixml__ and BeautifulSoup__ source distributions,
+extract them and install using:
+
+.. sourcecode:: bash
+
+    $ python setup.py install
+
+__ http://www.crummy.com/software/BeautifulSoup
+__ http://pypi.python.org/pypi/robotfixml
+__ http://pypi.python.org/pypi/BeautifulSoup
+.. _`Robot Framework`: http://www.robotframework.org
+.. _`pip`: http://www.pip-installer.org
+
+Command line usage
+==================
+.. sourcecode:: bash
+
+    $ python -m robotfixml example.xml fixed.xml
+
+Programmatic usage
+==================
+.. sourcecode:: python
+
+    from robotfixml import fixml
+
+    inpath = '/directory/example.xml'
+    outpath = '/directory/output/example-fixed.xml'
+
+    fixml(inpath, outpath)
+
