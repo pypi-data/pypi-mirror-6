@@ -1,0 +1,3 @@
+"""
+Graphical interface for Doorstop.
+"""
