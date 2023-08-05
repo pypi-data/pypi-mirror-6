@@ -1,0 +1,64 @@
+#!/usr/bin/env python2
+
+'''Hipshot - Simulate long-exposure photography
+
+Usage:
+    hipshot <file> [--weight <alpha>]
+    hipshot -h | --help
+    hipshot -v | --version
+
+Options:
+    -w, --weight    Sum frames with the specified weight.
+    -h, --help      Print this help.
+    -v, --version   Print version information.
+'''
+
+
+import cv
+try:
+    from os import EX_DATAERR as _EX_DATAERR
+    from os import EX_NOINPUT as _EX_NOINPUT
+    from os import EX_USAGE as _EX_USAGE
+except ImportError:
+    _EX_DATAERR, _EX_NOINPUT, _EX_USAGE = 1, 2, 3
+from docopt import docopt
+from os.path import exists
+from sys import exit as _exit, stderr as _stderr
+from sys import float_info as _float_info
+
+from hipshot import cvutils, hipshot
+
+
+_long_version = 'Hipshot ' + hipshot.__version__
+
+
+if '__main__' in __name__:
+
+    arguments = docopt(__doc__, version=_long_version)
+
+    file = arguments['<file>']
+    if not exists(file):
+        print>>_stderr, 'error: file does not exist:', file
+        _exit(_EX_NOINPUT)
+
+    if arguments['--weight']:
+        try:
+            alpha = float(arguments['<alpha>'])
+        except ValueError:
+            print>>_stderr, 'error: alpha value must be a float'
+            _exit(_EX_USAGE)
+    else:
+        alpha = 5e-3 / cvutils.num_frames(file)
+    if (alpha <= 10.0 * _float_info.epsilon or
+            alpha >= 1.0 - 10.0 * _float_info.epsilon):
+        print>>_stderr, 'error: alpha value must be between 0 and 1'
+        _exit(_EX_USAGE)
+
+    try:
+        frames = cvutils.get_frames(file, as_array=False)
+        cv.NamedWindow('Hipshot', flags=cv.CV_WINDOW_AUTOSIZE)
+        long_exp_img = hipshot.merge(frames, alpha, display='Hipshot')
+        print cvutils._save_image(long_exp_img, file, random=True)
+    except IOError:
+        print>>_stderr, 'error: could not read or write file(s)'
+        _exit(_EX_DATAERR)
