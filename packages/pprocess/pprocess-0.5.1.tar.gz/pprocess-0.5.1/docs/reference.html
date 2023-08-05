@@ -1,0 +1,457 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-gb">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+  <title>pprocess - Reference</title>
+  <link href="styles.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+
+<h1>pprocess - Reference</h1>
+
+<p>The <code>pprocess</code> module defines a simple parallel processing API
+for Python, inspired somewhat by the <code>thread</code> module, slightly less
+by <a href="http://datamining.anu.edu.au/~ole/pypar/">pypar</a>, and slightly
+less still by <a href="http://pypvm.sourceforge.net/">pypvm</a>.</p>
+
+<p>This document complements the <a href="tutorial.html">tutorial</a> by
+providing an overview of the different styles of parallel programming supported
+by the module. For an introduction and in order to get a clearer idea of the
+most suitable styles for your own programs, consult the
+<a href="tutorial.html">tutorial</a>.</p>
+
+<ul>
+<li><a href="#Thread">Thread-style Processing</a></li>
+<li><a href="#Fork">Fork-style Processing</a></li>
+<li><a href="#Exchanges">Message Exchanges</a></li>
+<li><a href="#Convenient">Convenient Message Exchanges</a></li>
+<li><a href="#Queues">Exchanges as Queues</a></li>
+<li><a href="#Maps">Exchanges as Maps</a></li>
+<li><a href="#Managed">Managed Callables</a></li>
+<li><a href="#MakeParallel">Making Existing Functions Parallel</a></li>
+<li><a href="#Map">Map-style Processing</a></li>
+<li><a href="#Reusing">Reusing Processes and Channels</a></li>
+<li><a href="#MakeReusable">Making Existing Functions Parallel and Reusable</a></li>
+<li><a href="#Continuous">Continuous Processes and Channels</a></li>
+<li><a href="#BackgroundCallable">Background Processes and Callables</a></li>
+<li><a href="#PersistentQueue">Background and Persistent Queues</a></li>
+<li><a href="#Implementation">Implementation Notes</a></li>
+</ul>
+
+<h2 id="Thread">Thread-style Processing</h2>
+
+<p>To create new processes to run a function or any callable object, specify the
+"callable" and any arguments as follows:</p>
+
+<pre>
+channel = pprocess.start(fn, arg1, arg2, named1=value1, named2=value2)
+</pre>
+
+<p>This returns a channel which can then be used to communicate with the created
+process. Meanwhile, in the created process, the given callable will be invoked
+with another channel as its first argument followed by the specified arguments:</p>
+
+<pre>
+def fn(channel, arg1, arg2, named1, named2):
+    # Read from and write to the channel.
+    # Return value is ignored.
+    ...
+</pre>
+
+<h2 id="Fork">Fork-style Processing</h2>
+
+<p>To create new processes in a similar way to that employed when using <code>os.fork</code>
+(ie. the <code>fork</code> system call on various operating systems), use the following
+method:</p>
+
+<pre>
+channel = pprocess.create()
+if channel.pid == 0:
+    # This code is run by the created process.
+    # Read from and write to the channel to communicate with the
+    # creating/calling process.
+    # An explicit exit of the process may be desirable to prevent the process
+    # from running code which is intended for the creating/calling process.
+    ...
+    pprocess.exit(channel)
+else:
+    # This code is run by the creating/calling process.
+    # Read from and write to the channel to communicate with the created
+    # process.
+    ...
+</pre>
+
+<h2 id="Exchanges">Message Exchanges</h2>
+
+<p>When creating many processes, each providing results for the consumption of the
+main process, the collection of those results in an efficient fashion can be
+problematic: if some processes take longer than others, and if we decide to read
+from those processes when they are not ready instead of other processes which
+are ready, the whole activity will take much longer than necessary.</p>
+
+<p>One solution to the problem of knowing when to read from channels is to create
+an <code>Exchange</code> object, optionally initialising it with a list of channels
+through which data is expected to arrive:</p>
+
+<pre>
+exchange = pprocess.Exchange()           # populate the exchange later
+exchange = pprocess.Exchange(channels)   # populate the exchange with channels
+</pre>
+
+<p>We can add channels to the exchange using the <code>add</code> method:</p>
+
+<pre>
+exchange.add(channel)
+</pre>
+
+<p>To test whether an exchange is active - that is, whether it is actually
+monitoring any channels - we can use the <code>active</code> method which
+returns all channels being monitored by the exchange:</p>
+
+<pre>
+channels = exchange.active()
+</pre>
+
+<p>We may then check the exchange to see whether any data is ready to be received;
+for example:</p>
+
+<pre>
+for channel in exchange.ready():
+    # Read from and write to the channel.
+    ...
+</pre>
+
+<p>If we do not wish to wait indefinitely for a list of channels, we can set a
+timeout value as an argument to the <code>ready</code> method (as a floating
+point number specifying the timeout in seconds, where <code>0</code> means a
+non-blocking poll as stated in the <code>select</code> module's <code>select</code>
+function documentation).</p>
+
+<h2 id="Convenient">Convenient Message Exchanges</h2>
+
+<p>A convenient form of message exchanges can be adopted by defining a subclass of
+the <code>Exchange</code> class and defining a particular method:</p>
+
+<pre>
+class MyExchange(pprocess.Exchange):
+    def store_data(self, channel):
+        data = channel.receive()
+        # Do something with data here.
+</pre>
+
+<p>The exact operations performed on the received data might be as simple as
+storing it on an instance attribute. To make use of the exchange, we would
+instantiate it as usual:</p>
+
+<pre>
+exchange = MyExchange()         # populate the exchange later
+exchange = MyExchange(limit=10) # set a limit for later population
+</pre>
+
+<p>The exchange can now be used in a simpler fashion than that shown above. We can
+add channels as before using the <code>add</code> method, or we can choose to only
+add channels if the specified limit of channels is not exceeded:</p>
+
+<pre>
+exchange.add(channel)           # add a channel as normal
+exchange.add_wait(channel)      # add a channel, waiting if the limit would be
+                                # exceeded
+</pre>
+
+<p>Or we can request that the exchange create a channel on our behalf:</p>
+
+<pre>
+channel = exchange.create()
+</pre>
+
+<p>We can even start processes and monitor channels without ever handling the
+channel ourselves:</p>
+
+<pre>
+exchange.start(fn, arg1, arg2, named1=value1, named2=value2)
+</pre>
+
+<p>We can explicitly wait for "free space" for channels by calling the
+<code>wait</code> method, although the <code>start</code> and <code>add_wait</code>
+methods make this less interesting:</p>
+
+<pre>
+exchange.wait()
+</pre>
+
+<p>Finally, when finishing the computation, we can choose to merely call the
+<code>finish</code> method and have the remaining data processed automatically:</p>
+
+<pre>
+exchange.finish()
+</pre>
+
+<p>Clearly, this approach is less flexible but more convenient than the raw message
+exchange API as described above. However, it permits much simpler and clearer
+code.</p>
+
+<h2 id="Queues">Exchanges as Queues</h2>
+
+<p>Instead of having to subclass the <code>pprocess.Exchange</code> class and
+to define the <code>store_data</code> method, it might be more desirable to let
+the exchange manage the communications between created and creating processes
+and to let the creating process just consume received data as it arrives,
+without particular regard for the order of the received data - perhaps the
+creating process has its own way of managing such issues.</p>
+
+<p>For such situations, the <code>Queue</code> class may be instantiated and
+channels added to the queue using the various methods provided:</p>
+
+<pre>
+queue = pprocess.Queue(limit=10)
+channel = queue.create()
+if channel:
+    # Do some computation.
+    pprocess.exit(channel)
+</pre>
+
+<p>The results can then be consumed by treating the queue like an iterator:</p>
+
+<pre>
+for result in queue:
+    # Capture each result.
+</pre>
+
+<p>This approach does not, of course, require the direct handling of channels.
+One could instead use the <code>start</code> method on the queue to create
+processes and to initiate computations (since a queue is merely an enhanced
+exchange with a specific implementation of the <code>store_data</code>
+method).</p>
+
+<h2 id="Maps">Exchanges as Maps</h2>
+
+<p>Where the above <code>Queue</code> class appears like an attractive solution
+for the management of the results of computations, but where the order of their
+consumption by the creating process remains important, the <code>Map</code>
+class may offer a suitable way of collecting and accessing results:</p>
+
+<pre>
+results = pprocess.Map(limit=10)
+for value in inputs:
+    results.start(fn, args)
+</pre>
+
+<p>The results can then be consumed in an order corresponding to the order of the
+computations which produced them:</p>
+
+<pre>
+for result in results:
+    # Process each result.
+</pre>
+
+<p>Internally, the <code>Map</code> object records a particular ordering of
+channels, ensuring that the received results can be mapped to this ordering,
+and that the results can be made available with this ordering preserved.</p>
+
+<h2 id="Managed">Managed Callables</h2>
+
+<p>A further simplification of the above convenient use of message exchanges
+involves the creation of callables (eg. functions) which are automatically
+monitored by an exchange. We create such a callable by calling the
+<code>manage</code> method on an exchange:</p>
+
+<pre>
+myfn = exchange.manage(fn)
+</pre>
+
+<p>This callable can then be invoked instead of using the exchange's
+<code>start</code> method:</p>
+
+<pre>
+myfn(arg1, arg2, named1=value1, named2=value2)
+</pre>
+
+<p>The exchange's <code>finish</code> method can be used as usual to process
+incoming data.</p>
+
+<h2 id="MakeParallel">Making Existing Functions Parallel</h2>
+
+<p>In making a program parallel, existing functions which only return results can
+be manually modified to accept and use channels to communicate results back to
+the main process. However, a simple alternative is to use the <code>MakeParallel</code>
+class to provide a wrapper around unmodified functions which will return the results
+from those functions in the channels provided. For example:</p>
+
+<pre>
+fn = pprocess.MakeParallel(originalfn)
+</pre>
+
+<h2 id="Map">Map-style Processing</h2>
+
+<p>In situations where a callable would normally be used in conjunction with the
+Python built-in <code>map</code> function, an alternative solution can be adopted by using
+the <code>pmap</code> function:</p>
+
+<pre>
+pprocess.pmap(fn, sequence)
+</pre>
+
+<p>Here, the sequence would have to contain elements that each contain the
+required parameters of the specified callable, <code>fn</code>. Note that the
+callable does not need to be a parallel-aware function which has a
+<code>channel</code> argument: the <code>pmap</code> function automatically
+wraps the given callable internally.</p>
+
+<h2 id="Reusing">Reusing Processes and Channels</h2>
+
+<p>So far, all parallel computations have been done with newly-created
+processes. However, this can seem somewhat inefficient, especially if processes
+are being continually created and destroyed (although if this happens too
+often, the amount of work done by each process may be too little, anyway). One
+solution is to retain processes after they have done their work and request
+that they perform more work for each new parallel task or invocation. To enable
+the reuse of processes in this way, a special keyword argument may be specified
+when creating <code>Exchange</code> instances (and instances of subclasses such
+as <code>Map</code> and <code>Queue</code>). For example:</p>
+
+<pre>
+exchange = MyExchange(limit=10, reuse=1) # reuse up to 10 processes
+</pre>
+
+<p>Code invoked through such exchanges must be aware of channels and be
+constructed in such a way that it does not terminate after sending a result
+back to the creating process. Instead, it should repeatedly wait for subsequent
+sets of parameters (compatible with those either in the signature of a callable
+or with the original values read from the channel). Reusable code is terminated
+when the special value of <code>None</code> is sent from the creating process
+to the created process, indicating that no more parameters will be sent; this
+should cause the code to terminate.</p>
+
+<h2 id="MakeReusable">Making Existing Functions Parallel and Reusable</h2>
+
+<p>An easier way of making reusable code sections for parallel use is to employ the
+<code>MakeReusable</code> class to wrap an existing callable:</p>
+
+<pre>
+fn = pprocess.MakeReusable(originalfn)
+</pre>
+
+<p>This wraps the callable in a similar fashion to <code>MakeParallel</code>, but
+provides the necessary mechanisms described above for reusable code.</p>
+
+<h2 id="Continuous">Continuous Processes and Channels</h2>
+
+<p>Much of the usage of exchanges so far has concentrated on processes which
+are created, whose callables are invoked, and then, once those callables have
+returned, either they are invoked again in the same process (when reused) or
+in a new process (when not reused). However, the underlying mechanisms
+actually support processes whose callables not only receive input at the start
+of their execution and send output at the end of their execution, but may
+provide output on a continuous basis (similar to iterator or generator
+objects).</p>
+
+<p>To enable support for continuous communications between processes, a
+keyword argument must be specified when creating an <code>Exchange</code>
+instance (or an instance of a subclass of <code>Exchange</code> such as
+<code>Map</code> or <code>Queue</code>):</p>
+
+<pre>
+exchange = MyExchange(limit=10, continuous=1) # support up to 10 processes
+</pre>
+
+<p>Code invoked in this mode of communication must be aware of channels, since
+it will need to explicitly send data via a channel to the creating process,
+instead of terminating and sending data only once (as would be done
+automatically using convenience classes such as
+<code>MakeParallel</code>).</p>
+
+<h2 id="BackgroundCallable">Background Processes and Callables</h2>
+
+<p>So far, all parallel computations have involved created processes which
+depend on the existence of the created process to collect results and to
+communicate with these created processes, preventing the created process from
+terminating, even if the created processes actually perform work and potentially
+create output which need not concern the process which created them. In order to
+separate creating and created processes, the concept of a background process
+(also known as a daemon process) is introduced.</p>
+
+<p>The <code>BackgroundCallable</code> class acts somewhat like the
+<code>manage</code> method on exchange-based objects, although no exchange is
+immediately involved, and instances of <code>BackgroundCallable</code> provide
+wrappers around existing parallel-aware callables which then be invoked in order
+to initiate a background computation in a created process. For example:</p>
+
+<pre>
+backgroundfn = pprocess.BackgroundCallable(address, fn)
+</pre>
+
+<p>This wraps the supplied callable (which can itself be the result of using
+<code>MakeParallel</code>), with the resulting wrapper lending itself to
+invocation like any other function. One distinguishing feature is that of the
+<code>address</code>: in order to contact the background process after
+invocation to (amongst other things) receive any result, a specific address
+must be given to define the contact point between the created process and any
+processes seeking to connect to it. Since these "persistent" communications
+employ special files (specifically UNIX-domain sockets), the address must be a
+suitable filename.</p>
+
+<h2 id="PersistentQueue">Background and Persistent Queues</h2>
+
+<p>Background processes employing persistent communications require adaptations
+of the facilities described in the sections above. For a single background
+process, the <code>BackgroundQueue</code> function is sufficient to create a
+queue-like object which can monitor the communications channel between the
+connecting process and a background process. For example:</p>
+
+<pre>
+queue = pprocess.BackgroundQueue(address)
+</pre>
+
+<p>This code will cause the process reachable via the given <code>address</code>
+to be contacted and any results made available via the created queue-like
+object.</p>
+
+<p>Where many background processes have been created, a single
+<code>PersistentQueue</code> object can monitor their communications by being
+connected to them all, as in the following example:</p>
+
+<pre>
+queue = pprocess.PersistentQueue()
+for address in addresses:
+    queue.connect(address)
+</pre>
+
+<p>Here, the queue monitors all previously created processes whose addresses
+reside in the <code>addresses</code> sequence. Upon iterating over the queue,
+results will be taken from whichever process happens to have data available in
+no particular pre-defined order.</p>
+
+<h2 id="Implementation">Implementation Notes</h2>
+
+<h3>Signals and Waiting</h3>
+
+<p>When created/child processes terminate, one would typically want to be informed
+of such conditions using a signal handler. Unfortunately, Python seems to have
+issues with restartable reads from file descriptors when interrupted by signals:</p>
+
+<ul>
+<li><a href="http://mail.python.org/pipermail/python-dev/2002-September/028572.html">http://mail.python.org/pipermail/python-dev/2002-September/028572.html</a></li>
+<li><a href="http://twistedmatrix.com/bugs/issue733">http://twistedmatrix.com/bugs/issue733</a></li>
+</ul>
+
+<h3>Select and Poll</h3>
+
+<p>The exact combination of conditions indicating closed pipes remains relatively
+obscure. Here is a message/thread describing them (in the context of another
+topic):</p>
+
+<ul>
+<li><a href="http://twistedmatrix.com/pipermail/twisted-python/2005-February/009666.html">http://twistedmatrix.com/pipermail/twisted-python/2005-February/009666.html</a></li>
+</ul>
+
+<p>It would seem, from using sockets and from studying the <code>asyncore</code>
+module, that sockets are more predictable than pipes.</p>
+
+<p>Notes about <code>poll</code> implementations can be found here:</p>
+
+<ul>
+<li><a href="http://www.greenend.org.uk/rjk/2001/06/poll.html">http://www.greenend.org.uk/rjk/2001/06/poll.html</a></li>
+</ul>
+
+</body>
+</html>
