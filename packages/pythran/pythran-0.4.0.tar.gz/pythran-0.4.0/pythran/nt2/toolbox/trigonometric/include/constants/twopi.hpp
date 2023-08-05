@@ -1,0 +1,6 @@
+#ifndef NT2_TOOLBOX_TRIGONOMETRIC_INCLUDE_CONSTANTS_TWOPI_HPP_INCLUDED
+#define NT2_TOOLBOX_TRIGONOMETRIC_INCLUDE_CONSTANTS_TWOPI_HPP_INCLUDED
+
+#include <nt2/toolbox/trigonometric/constants/twopi.hpp>
+
+#endif

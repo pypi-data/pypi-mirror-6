@@ -1,0 +1,6 @@
+#ifndef NT2_TOOLBOX_EXPONENTIAL_INCLUDE_CONSTANTS_EXP_1_HPP_INCLUDED
+#define NT2_TOOLBOX_EXPONENTIAL_INCLUDE_CONSTANTS_EXP_1_HPP_INCLUDED
+
+#include <nt2/toolbox/exponential/constants/exp_1.hpp>
+
+#endif

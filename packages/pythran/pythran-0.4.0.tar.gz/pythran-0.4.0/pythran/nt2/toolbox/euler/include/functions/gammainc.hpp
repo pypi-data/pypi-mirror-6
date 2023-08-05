@@ -1,0 +1,8 @@
+#ifndef NT2_TOOLBOX_EULER_INCLUDE_FUNCTIONS_GAMMAINC_HPP_INCLUDED
+#define NT2_TOOLBOX_EULER_INCLUDE_FUNCTIONS_GAMMAINC_HPP_INCLUDED
+
+#include <nt2/toolbox/euler/functions/gammainc.hpp>
+#include <nt2/toolbox/euler/functions/scalar/gammainc.hpp>
+#include <nt2/toolbox/euler/functions/simd/common/gammainc.hpp>
+
+#endif

@@ -1,0 +1,6 @@
+#ifndef BOOST_SIMD_INCLUDE_FUNCTIONS_SIMD_UNALIGNED_LOAD_HPP_INCLUDED
+#define BOOST_SIMD_INCLUDE_FUNCTIONS_SIMD_UNALIGNED_LOAD_HPP_INCLUDED
+
+#include <boost/simd/toolbox/operator/include/functions/simd/unaligned_load.hpp>
+
+#endif
