@@ -1,0 +1,218 @@
+#!/usr/bin/env python
+#
+#   YADT - an Augmented Deployment Tool
+#   Copyright (C) 2010-2013  Immobilien Scout GmbH
+#
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+The yadtshell
+
+Usage:
+yadtshell (status|info) [options]
+yadtshell (start|stop) SERVICE-URI ... [options]
+yadtshell update [HOST-URI...] [-y] [--reboot | --no-reboot] [options]
+yadtshell updateartefact ARTEFACT-URI ... [options]
+yadtshell lock -m MESSAGE HOST-URI ... [options] [--force]
+yadtshell unlock HOST-URI ... [options]
+yadtshell ignore -m MESSAGE SERVICE-URI ... [options] [--force]
+yadtshell unignore SERVICE-URI ... [options]
+yadtshell dump [URI-PATTERN...] [--attribute --show-pending-updates --show-current-artefacts]
+
+Options:
+-n --dryrun            do not alter the system
+-v --verbose           be more verbose
+--tracking-id STRING   lets user define a tracking id
+--no-final-status      do not fetch status of target after action
+
+-m --message MESSAGE   reason
+-p --parallel PSPEC    how to execute actions in parallel [default: 1]
+-y --forcedyes         say yes to all questions
+--force                force execution
+--reboot               reboot servers if needed during an update
+--no-reboot            do not reboot servers during an update, even if needed
+"""
+
+import logging
+import sys
+
+from twisted.internet import reactor
+from twisted.python import log
+from twisted.internet.task import deferLater
+from yadtshell.commandline import (EXIT_CODE_CANCELED_BY_USER,
+                                   determine_command_from_arguments,
+                                   infer_options_from_arguments)
+
+from yadtshell.settings import SettingsError
+
+from docopt import docopt
+arguments = docopt(__doc__)
+
+reactor.return_code = 127
+
+cmd = determine_command_from_arguments(arguments)
+uris = (arguments['ARTEFACT-URI'] + arguments['HOST-URI'] +
+        arguments['SERVICE-URI'] + arguments['URI-PATTERN'])
+opts = infer_options_from_arguments(arguments)
+
+observer = log.PythonLoggingObserver()
+observer.start()
+
+import yadtshell
+logger = logging.getLogger('yadtshell')
+
+try:
+    yadtshell.settings.load_settings(log_to_file=(cmd not in ['dump', 'info']))
+except SettingsError, e:
+    logger.critical(e)
+    sys.exit(1)
+
+if opts.get('tracking_id'):
+    yadtshell.settings.tracking_id = opts.get('tracking_id')
+
+logging.getLogger("twisted").setLevel(logging.WARN)
+logging.getLogger("broadcaster").setLevel(logging.WARN)
+
+if opts.get('verbose'):
+    yadtshell.settings.console_stdout_handler.setLevel(logging.DEBUG)
+
+if opts.get('dryrun'):
+    yadtshell.settings.ybc = yadtshell.settings.DummyBroadcaster()
+
+yadtshell.settings.reboot_enabled = opts.get('reboot')
+
+if uris:
+    components = yadtshell.util.restore_current_state()
+    uris = yadtshell.helper.expand_hosts(uris)
+    uris = yadtshell.helper.glob_hosts(components, uris)
+
+    def is_a_valid_host_uri_or_other_uri(uri):
+        if 'host://' not in uri:
+            return True
+        component = components[uri]
+        return component.is_reachable()
+    uris = filter(is_a_valid_host_uri_or_other_uri, uris)
+
+    if not uris:
+        logger.error(
+            'Could not resolve URIs. Check for typos or syntax issues.')
+        sys.exit(1)
+
+
+def create_simple_plan(cmd, uris):
+    action_set = set()
+    for component_name in uris:
+        component = components.get(component_name, None)
+        if not component:
+            component = components[
+                yadtshell.uri.change_version(component_name, 'current')]
+        if not component:
+            logger.warning('could not resolve uri %s' % component_name)
+            continue
+        action_set.add(
+            yadtshell.actions.Action(cmd, component.uri, kwargs=opts))
+    plan = yadtshell.actions.ActionPlan(cmd, action_set)
+    yadtshell.util.dump_action_plan(cmd, plan)
+    return plan
+
+
+def createDeferredFromPlan(plan):
+    plan = yadtshell.metalogic.apply_instructions(plan, opts.get('parallel'))
+    yadtshell.util.dump_action_plan(cmd, plan)
+    am = yadtshell.ActionManager()
+    return am.action(flavor=cmd, **opts)
+
+
+deferred = None
+
+if cmd == 'status':
+    deferred = yadtshell.status(hosts=uris, **opts)
+elif cmd == 'info':
+    yadtshell.info(**opts)
+    sys.exit(0)
+elif cmd == 'dump':
+    yadtshell.dump(uris, **opts)
+    sys.exit(0)
+elif cmd == 'update':
+    deferred = yadtshell.status()
+    deferred.addCallback(
+        yadtshell.update.compare_versions,
+        uris,
+        **opts
+    )
+    am = yadtshell.ActionManager()
+    deferred.addCallback(am.action, **opts)
+elif cmd in ['ignore', 'unignore', 'lock', 'unlock', 'updateartefact']:
+    plan = create_simple_plan(cmd, uris)
+    deferred = createDeferredFromPlan(plan)
+else:
+    try:
+        plan = yadtshell.metalogic.metalogic(cmd, uris)
+        deferred = createDeferredFromPlan(plan)
+    except Exception, e:
+        logger.critical('an error occured while trying to "%s %s"' %
+                        (cmd, ', '.join(uris)))
+        logger.debug(e)
+        # TODO event failed needed here
+        sys.exit(1)
+
+if cmd in ['stop', 'start', 'update', 'updateartefact', 'ignore', 'lock', 'unignore', 'unlock'] and not opts.get('no_final_status'):
+    deferred.addCallback(yadtshell.status)
+
+
+def publish_result():
+    if reactor.return_code == 0:
+        state = 'finished'
+    else:
+        state = 'failed'
+    yadtshell.settings.ybc.publish_cmd(
+        cmd=cmd, state=state, tracking_id=yadtshell.settings.tracking_id)
+    logger.debug('waiting for outstanding events to be delivered')
+    return deferLater(reactor, 2, lambda: None)
+
+
+def publish_start():
+    yadtshell.settings.ybc.publish_cmd(
+        cmd=cmd, state='started', tracking_id=yadtshell.settings.tracking_id)
+
+
+try:
+    deferred.addErrback(yadtshell.twisted.report_error, logger.debug)
+    deferred.addBoth(yadtshell.twisted.stop_and_return)
+
+    if not reactor.running:
+        yadtshell.settings.ybc.addOnSessionOpenHandler(publish_start)
+        reactor.addSystemEventTrigger('before', 'shutdown', publish_result)
+        reactor.run()
+
+except yadtshell.actions.ActionException, e:
+    reactor.return_code = e.exitcode
+    msg = e.message
+    if e.rootcause:
+        msg += ': ' + str(e.rootcause)
+    logger.critical(msg)
+except BaseException as e:
+    reactor.return_code = 2
+    logger.critical(str(e))
+
+if reactor.return_code == 0:
+    print yadtshell.settings.term.render('${GREEN}${BOLD}%s SUCCESSFUL${NORMAL}' % cmd.upper())
+
+elif reactor.return_code == EXIT_CODE_CANCELED_BY_USER:
+    print yadtshell.settings.term.render('${BG_YELLOW}${BOLD}%s CANCELLED BY USER${NORMAL}' % cmd.upper())
+
+else:
+    print yadtshell.settings.term.render('${RED}${BOLD}%s FAILED${NORMAL}' % cmd.upper())
+    logger.critical('exit code: %i' % reactor.return_code)
+    logger.info('For details see: "{0}"'.format(yadtshell.settings.log_file))
+sys.exit(reactor.return_code)
