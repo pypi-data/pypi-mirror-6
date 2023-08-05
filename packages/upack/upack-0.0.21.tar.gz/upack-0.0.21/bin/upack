@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+
+# Copyright (c) 2013, Robert Escriva
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright notice,
+#       this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of upack nor the names of its contributors may be used
+#       to endorse or promote products derived from this software without
+#       specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+from __future__ import absolute_import
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import with_statement
+
+
+import datetime
+import sys
+
+import argparse
+
+import upack
+import upack.context
+import upack.deb
+import upack.parse
+import upack.rpm
+import upack.write
+
+
+def main(argv):
+    ctx = upack.context.Context()
+    try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-t', '--tag',
+                            default=[],
+                            dest='tags',
+                            action='append')
+        parser.add_argument('-p', '--property',
+                            default=[],
+                            dest='properties',
+                            action='append')
+        parser.add_argument('--version-only',
+                            action='store_true')
+        parser.add_argument('format')
+        parser.add_argument('packfile')
+        args = parser.parse_args(argv)
+        writer = upack.write.Writer.get(args.format)
+        if writer is None:
+            raise RuntimeError('don\'t know how to make "%s"' % args.format)
+        pack = upack.parse.parse_manifest(args.packfile, tags=args.tags)
+        subst = {}
+        subst['user_name'] = 'Robert Escriva'
+        subst['user_email'] = 'robert@hyperdex.org'
+        subst['user_tz'] = '-0500'
+        for p in args.properties:
+            k, v = p.split('=', 1)
+            subst[k] = v
+        ctx.push(subst)
+        if args.version_only:
+            ctx.push(pack)
+            if ctx.get_from_ctx('epoch'):
+                print(ctx.format('{name}_{epoch}:{version}-{release}'))
+            else:
+                print(ctx.format('{name}_{version}-{release}'))
+            return
+        writer().write(ctx, pack)
+    except Exception as e:
+        print(e.message, file=sys.stderr)
+    finally:
+        ctx.clean()
+
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
