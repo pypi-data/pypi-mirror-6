@@ -1,0 +1,10 @@
+__version__ = "0.1.1"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.1.1)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '9d20aa933fe51ba70b93e4664de7ecebfe12384c'
+__git_head_subject__ = 'Finished release v0.1.1.'
+__git_head_message__ = '* release/v0.1.1:\n  buildout.cfg: changed isolated python version to v2.7.5.5\n  TRIVIAL fixing tests\n  TRIVIAL test_stop_twice\n  TRIVIAL close: handling invalid handle\n  TRIVIAL close: handling invalid handle\n  Revert "TRIVIAL tests"\n  TRIVIAL tests'
+__git_dirty_diff__ = ''
