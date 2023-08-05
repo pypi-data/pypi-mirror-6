@@ -1,0 +1,48 @@
+create:
+  fullname: Create Github repository
+  description: Creates Github repository (+ local git repository if not already created)
+               and optionally pushes sources there.
+               Works even for projects that weren't created by DevAssistant.
+
+  args:
+    path:
+      use: common_args
+
+    push:
+      flags: [-u, --push]
+      help: "Push sources after creating repo."
+      action: store_true
+
+    github-login:
+      flags: [-g, --github-login]
+      help: "Specify your github login, in case it's different from your system username."
+      default: ''
+      gui_hints:
+        default: $(pwd)
+
+  run:
+  - if $path:
+    - cl: cd "$path"
+  - if not $(test -e .git):
+    - log_i: "It seems that your project doesn't have local git repo initialized. Initializing..."
+    - use: git_init_add_commit
+  - $name: $(basename `pwd`)
+  # we will use github args repeteadly, so store them in a variable
+  - $gh_args:
+      login: $github_login
+      reponame: $name
+  # first create repo and add remote
+  - log_i: "Creating repo on Github ..."
+  - github:
+    - create_repo
+    - $gh_args
+  - log_i: "Adding Github as remote 'origin' ..."
+  - github:
+    - add_remote_origin
+    - $gh_args
+  - if $push: # push if requested
+    - log_i: "Pushing to Github ..."
+    - github:
+      - push
+      - $gh_args
+  - log_i: "Done successfully."

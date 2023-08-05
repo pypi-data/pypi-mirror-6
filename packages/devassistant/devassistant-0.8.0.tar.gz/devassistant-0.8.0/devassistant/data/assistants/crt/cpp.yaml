@@ -1,0 +1,91 @@
+cpp:
+  fullname: C++
+  description: C++ assistant will help you create a basic C++ project and install its dependencies.
+
+  dependencies:
+  - rpm: ['gcc-c++', 'glibc-devel', 'automake', 'autoconf', 'valgrind', 'gdb', 'ddd', 'strace', 'vim-enhanced', 'vim-X11']
+
+  dependencies_build:
+  - rpm: ['rpm-build','mock','eclipse-rpm-editor']
+
+  dependencies_eclipse:
+  - use: eclipse.dependencies_c
+
+  dependencies_vim:
+  - use: vim.dependencies
+
+  args:
+    name:
+      use: common_args
+
+    build:
+      flags:
+      - -b
+      - --build
+      help:
+        'This will create SRPM and RPM packages.'
+      action:
+        'store_true'
+    vim:
+      use: vim
+
+    eclipse:
+      use: eclipse
+
+    github:
+      use: common_args
+
+  files:
+    cppsources: &cppsources
+      source: .
+
+  run:
+  - $dirname: $(dirname "$name")
+  - $basename: $(basename "$name" | tr '[A-Z]' '[a-z]')
+  - log_i: "Project name will be converted to lowercase letters ($basename)"
+  - $lowername: $(echo "$dirname/$basename")
+  - if not $(ls "$lowername"):
+    - log_i: 'Copying c++ source tree to project destination'
+    - cl_f: cp -r *cppsources "$lowername"
+    - dda_c: "$lowername"
+    - cl: cd "$lowername"
+    - cl: sed -i "s|CDevelopmentTool|$basename|" configure.ac
+    - cl: mv cdevelopmenttool.spec "$basename.spec"
+    - cl: sed -i "s|cdevelopmenttool|$basename|" "$basename.spec"
+    - use: git_init_add_commit
+  - else:
+    - cl: cd "$lowername"
+    - log_i: 'Project already exists'  
+  - log_i: 'Run autoreconf'
+  - cl_f: autoreconf --install
+  - log_i: 'Run configure script'
+  - cl_f: ./configure
+  - cl_f: make clean
+  - log_i: 'Compiling sources'
+  - cl_f: make
+  - log_i: 'Run make distcheck to create tar ball'
+  - cl_f: make dist
+  - log_i: 'In $name/README file are described steps how to add and build'
+  - log_i: 'new C++ source file by autotools'
+  - log_i: 'More information about autotools can be found here:'
+  - log_i: 'automake: http://www.gnu.org/software/automake/manual/automake.html'
+  - log_i: 'autoconf: http://www.gnu.org/software/autoconf/manual/autoconf.html' 
+  - if defined $vim:
+    - use: vim.run
+  - if defined $build:
+    - log_i: 'Creating spec file'
+    - $dirname: $(pwd)
+    - cl: rpmdev-setuptree
+    - cl: rm -f "~/rpmbuild/SPECS/$basename.spec"
+    - cl: cp "$basename-0.0.tar.gz" ~/rpmbuild/SOURCES
+    - cl: cp "$basename.spec" ~/rpmbuild/SPECS
+    - cl: cd ~/rpmbuild/SPECS
+    - cl_f: pkexec yum-builddep "~/rpmbuild/SPECS/$basename.spec"
+    - log_i: 'Creating RPM from tarball'
+    - cl_f: rpmbuild -ba "$basename.spec"
+    - cl: cd "$dirname"
+  - if $eclipse:
+    - use: eclipse.run_cpp
+  - if defined $github:
+    - log_i: "Push to GitHub repository"
+    - github: create_and_push
