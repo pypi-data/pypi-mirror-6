@@ -1,0 +1,116 @@
+.. middleware:
+
+Middleware
+==========
+
+.. module:: swingers.middleware
+   :synopsis: Swingers' built-in middleware classes.
+
+Swingers' built-in middleware classes.
+
+Authentication middleware
+-------------------------
+
+.. currentmodule:: swingers.middleware.auth
+
+.. class:: AuthenticationMiddleware
+
+Adds functionality including:
+
+- setting the request on our thread local storage ``_locals``.
+- adds ``request.SITE_NAME`` and ``request.footer`` to the request object.
+- checks ``request.GET`` and the ``HTTP_ACCESS_TOKEN`` header for an access
+  token, and refreshes it if necessary.
+- redirects the user to ``settings.LOGIN_URL`` if they are unauthenticated and
+  the url is not in ``settings.LOGIN_EXEMPT_URLS`` and
+  ``settings.ALLOW_ANONYMOUS_ACCESS`` is false.
+- sets access control headers on the response for cross-site request forgery
+  protection, and allows content types other than JSONP to be served to the
+  client.
+
+To enable it in your application add it to
+:django:setting:`MIDDLEWARE_CLASSES`::
+
+    MIDDLEWARE_CLASSES = (
+        # previous middleware classes
+        'swingers.middleware.AuthenticationMiddleware',
+    )
+
+
+Transaction middleware
+----------------------
+
+.. currentmodule:: swingers.middleware.transaction
+
+.. class:: ResponseStatusTransactionMiddleware
+
+ResponseStatusTransactionMiddleware is almost exactly the same as Django's
+included :class:`~django.middleware.transaction.TransactionMiddleware`, except
+it will rollback the transaction when the HTTP response status is an error.
+Response status codes that result in a rollback: `>= 400, >=500`. Use this if
+you don't want to worry about transactions.
+
+    .. note:: This is going to be deprecated since django's transaction middleware
+              superseedes this in Django 1.6
+
+
+Caching middleware
+------------------
+
+.. currentmodule:: swingers.middleware.cache
+
+.. class:: UpdateCacheMiddleware
+
+UpdateCacheMiddleware is similar to Django's
+:class:`django.middleware.cache.UpdateCacheMiddleware` (in fact it is its
+extension),
+it adds functionality
+to invalidate cache entries based on what db tables were written to in the
+current request.
+
+Replace :class:`django.middleware.cache.UpdateCacheMiddleware` with this if
+you don't want to worry about caching too much.
+Think twice about using this if majority of your site is login protected and/or
+majority of requests are NOT read-only.
+
+This middleware extends django's UpdateCacheMiddleware and builds up
+an associative array of cache_key(request) to read db tables. It examines
+:class:`django.db.connection` to determine which db tables were written to and
+consequently deletes all cache_keys that read from those db tables. It uses
+django's caching middleware to determine the cache keys, fetch from cache,
+update cache, etc.
+
+
+HTML middleware
+------------------
+
+.. currentmodule:: swingers.middleware.html
+
+.. class:: HtmlMinifyMiddleware
+
+This is a customization of `django-htmlmin's
+<https://pypi.python.org/pypi/django-htmlmin>`_
+:class:`htmlmin.middleware.HtmlMinifyMiddleware` in that HTML is not minified
+when DEBUG toolbar is shown (uses `SHOW_TOOLBAR_CALLBACK` function in
+`settings`). If DEBUG toolbar is not used, default behaviour is preserved
+(minify when `not DEBUG`).
+
+
+.. class:: JsCssCompressMiddleware
+
+This is a piece of middleware has been made from a compressor filter
+based on the default JS and CSS filters from
+`django-compressor <http://pypi.python.org/pypi/django-compressor>`_. The
+features are:
+
+    * Compresses both JS and CSS at once.
+    * Skips non-CSS/non-JS HTML (unlike the default compressor that removes
+      it).
+    * It's a convenient piece of middleware so it can applied across the entire
+      application with very little effort.
+
+To enable this piece of middleware, put
+:class:`~swingers.middleware.html.JsCssCompressMiddleware` into your
+`settings.MIDDLEWARE_CLASSES` and configure `django-compressor` according to
+its installation instructions
+<http://django-compressor.readthedocs.org/en/latest/>.

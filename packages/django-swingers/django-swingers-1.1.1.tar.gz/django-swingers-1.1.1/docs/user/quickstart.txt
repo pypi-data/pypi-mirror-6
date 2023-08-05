@@ -1,0 +1,91 @@
+.. _quickstart:
+
+Quickstart
+==========
+
+.. module:: swingers.auth
+
+Permissions
+-----------
+
+To get started using permissions, ensure that ``django-guardian`` is installed
+and configured correctly. Instead of using ``GuardianBackend`` in
+:django:setting:`AUTHENTICATION_BACKENDS`, set it up like so::
+
+    AUTHENTICATION_BACKENDS = (
+        'django.contrib.auth.backends.ModelBackend',
+        'swingers.auth.backends.EmailBackend'
+    )
+
+Start assigning permissions to objects (see
+:ref:`assigning object permissions <assign-obj-perms>`)::
+
+    >>> from guardian.shortcuts import assign
+    >>> from django.contrib.auth.models import User
+    >>> joe = User.objects.create(username='joe')
+    >>> task = Task.objects.create(summary='Some job', content='')
+    >>> assign('view_task', joe, task)
+    >>> joe.has_perm('view_task', task)
+    True
+
+So long as you have ``EmailBackend`` configured in your ``settings.py``, you
+should be able to check object permissions on any of your models.
+
+Mozilla Persona (Browser ID)
+----------------------------
+
+django-swingers comes with an authentication backend to support BrowserID
+authentication. If you wish to enable this, add
+``swingers.auth.backends.PersonaBackend`` to the list of backends in your
+:django:setting:`AUTHENTICATION_BACKENDS`.
+
+Automatic model versioning
+--------------------------
+
+django-swingers implements an abstract model to transparently add auditing and
+versioning to any Django model that inherits from it.
+
+Access tokens
+-------------
+
+django-swingers includes methods to request access tokens and can be set up to
+serve tokens to client consumers.
+
+Serving access tokens
+---------------------
+
+Setting up a project using django-swingers to serve access tokens to clients is
+simple, just create a new django project::
+
+    $ swingers-admin.py startproject -e py,txt,hgignore project_name
+
+This will create a new project using DPaW's project template, which will take
+care of setting up some sane defaults for running within the DPaW django
+application stack.
+
+In ``settings.py``, add ``swingers`` to your :django:setting:`INSTALLED_APPS`.
+Also, ensure you have set ``SERVICE_NAME``. This is the name of your server.
+Make sure you have setup :django:setting:`DATABASES` to point to your database
+server.
+
+Run ``manage.py syncdb --migrate`` on your project::
+
+    $ manage.py syncdb --migrate
+
+In your ``urls.py`` add the following line::
+
+    urlpatterns = patterns('',
+        (r'service-endpoint/', include('swingers.urls')),
+    )
+
+Set up apache and point it to your project's apache.conf, and restart the
+server. Check you can access the views at ``service-endpoint/`` you set
+in ``urls.py``. Everything should work as expected.
+
+
+Requesting / retrieving access tokens
+-------------------------------------
+
+The process to request an access token and make requests for other services
+on the same server is a two-step process. It requires you to set up an
+:class:`ApplicationLink` from the admin before requesting a token for a user.

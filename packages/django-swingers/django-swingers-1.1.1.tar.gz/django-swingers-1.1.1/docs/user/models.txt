@@ -1,0 +1,219 @@
+.. _models:
+
+Models
+======
+
+.. module:: swingers.models
+   :synopsis: Swingers' custom models, abstract models, model managers, etc.
+
+Swingers' custom models, abstract models, model managers, etc.
+
+
+.. data:: GIS_ENABLED
+
+    A constant that indicates whether any of the currently defined databases is
+    GEO-enabled as well as :mod:`django.contrib.gis` being in
+    settings.INSTALLED_APPS.
+    
+    If `GIS_ENABLED`, then :mod:`swingers.base.models` imports \* from
+    :mod:`django.contrib.gis.db.models` as well as redefines
+    :class:`GeoManager` as
+    :class:`Manager`, :class:`ActiveGeoModel` as :class:`ActiveModel` and
+    :class:`ActiveModelManager` as :class:`ActiveModelManager`. All these
+    redefinitions can be overwritten by
+    importing from the base django/swingers modules. If not `GIS_ENABLED`, the
+    :mod:`swingers.base.models` imports \* from :mod:`django.db.models` and
+    exports :class:`ActiveModel` and :class:`ActiveManager`.
+
+
+Auth
+----
+
+.. class:: Audit
+
+    Audit is an abstract Django model that handles adding additional auditing
+    attributes to any model that inherits from it. It will automatically
+    version any changes and update the time it was modified and who it was
+    modified by. This makes it easy to see a list of changes and roll back
+    changes that were unintended.
+
+    .. attribute:: creator
+
+        The :class:`~django.contrib.auth.models.User` that created this model
+        instance.
+
+    .. attribute:: modifier
+
+        The :class:`~django.contrib.auth.models.User` who last modified this
+        model instance.
+
+    .. attribute:: created
+
+        The datetime that this model instance was created on.
+
+    .. attribute:: modified
+
+        The datetime that this model instance was last modified on.
+
+
+Fields
+------
+
+
+.. class:: ContentTypeRestrictedField
+
+    Extends :class:`~django.db.models.FileField` and adds validation for two
+    additional things:
+
+    **content types**
+        A list of allowed MIME types.
+
+    **maximum upload size**
+        The maximum upload size specified in bytes.
+
+    To specify either of these things, add them to the constructor of your
+    model field. Example usage::
+
+        from django.db import models
+
+        class Application(models.Model):
+            name = models.CharField(max_length=30)
+            approved = models.BooleanField()
+            passport_photo = ContentTypeRestrictedField(
+                content_types=['image/jpeg'], max_upload_size=10485760)
+
+    This will restrict the file uploaded to be a JPEG image of no more than
+    10MiB.* ContentTypeRestrictedFileField 
+
+
+Managers
+--------
+
+.. class:: ActiveModelManager
+    
+    Default model manager for the :class:`~swingers.base.models.ActiveModel`.
+    It excludes the inactive ("deleted") objects from the queryset.
+
+.. class:: ActiveGeoModelManager
+
+    Similar to :class:`~swingers.base.managers.ActiveModelManager` but for Geo
+    models.
+
+
+Generic
+-------
+
+.. class:: ActiveModel
+
+    A model mixin to allow objects to be saved as 'non-current' or 'inactive'.
+    This will preserve the instance in the database when it is deleted.
+    The standard ``delete()`` method is overridden and when an object is
+    removed, sets the models' ``effective_to`` as the current datetime.
+
+    .. attribute:: effective_from
+
+        The time from which this object is effective from. Allows 'past'
+        and/or 'future' objects to be saved.
+
+        **Default**
+            :func:`~django.utils.timezone.now`.
+
+    .. attribute:: effective_to
+
+        This is only set once the model has been deleted. When deleted,
+        ``effective_to`` is set to the datetime that the model was tagged
+        as deleted on.
+
+    .. attribute:: objects
+
+        A custom objects manager :class:`~swingers.models.ActiveManager`
+        that excludes the 'inactive' objects.
+
+    .. attribute:: objects_all
+
+        A default :class:`~django.db.models.Manager` class that includes all
+        objects (including the 'inactive/deleted' ones).
+
+    .. method:: is_active
+
+        Returns True if an object is not deleted.
+
+    .. method:: is_deleted
+
+        Returns True if an object is deleted.
+
+
+.. class:: ActiveGeoModel
+
+    Similar to :class:`~swingers.models.ActiveModel` but for Geo models.
+
+
+.. class:: DocumentAbstract
+
+    Generic class for supporting documents. It can be attached to any other
+    object via :class:`~django.contrib.contenttypes.generic.GenericForeignKey`.
+
+    .. attribute:: content_type
+    .. attribute:: object_id
+    .. attribute:: content_object
+    .. attribute:: uploaded_file
+    .. attribute:: description
+
+    .. method:: uploaded_file_name
+
+        Return the file name of the uploaded file, minus the server file path.
+
+    .. method:: uploaded_file_ext
+
+        Return the file extension of the uploaded file.
+
+    .. method:: filesize_str
+
+        Return the filesize as a nicely human-readable string
+        (kB, MB, GB, etc.).
+
+
+.. class:: RegionAbstract
+
+    Abstract model to represent DPaW regions and district areas, for use within
+    other DPaW corporate applications.
+
+    .. attribute:: name
+    .. attribute:: description
+    .. attribute:: slug
+
+
+Geometry models
+---------------
+
+.. class:: PolygonModelMixin
+
+    A model mixin to provide a polygon field called ``the_geom`` with a
+    default SRID of 4326 (`WGS84`_).
+
+    .. attribute:: the_geom
+
+        The :class:`~django.contrib.gis.db.models.PolygonField` for this
+        class.
+
+.. class:: LineStringModelMixin
+
+    A model mixin to provide a line string spatial field called ``the_geom``
+    with a default SRID of 4326 (`WGS84`_).
+
+    .. attribute:: the_geom
+
+        The :class:`~django.contrib.gis.db.models.LineStringField` for this
+        class.
+
+.. class:: PointModelMixin
+
+    A model mixin to provide a point spatial field called ``the_geom`` with a
+    default SRID of 4326 (`WGS84`_).
+
+    .. attribute:: the_geom
+
+        The :class:`~django.contrib.gis.db.models.PointField` for this class.
+
+.. _wgs84: http://spatialreference.org/ref/epsg/4326/
+

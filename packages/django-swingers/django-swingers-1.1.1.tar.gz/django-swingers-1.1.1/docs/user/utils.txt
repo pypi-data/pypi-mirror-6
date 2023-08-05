@@ -1,0 +1,290 @@
+.. _utils:
+
+Utils
+=====
+
+.. module:: swingers.utils
+   :synopsis: Swingers' utility methods.
+
+Swingers' utility methods.
+
+Common
+------
+
+.. function:: timedcall(function, \*args, \*\*kwargs)
+
+    Calls function with `*args` and `**kwargs`; returns the time in seconds and
+    result.
+
+.. function:: machine_id()
+
+    Generates a unique machines ID based on /proc/cpuinfo. The output is
+    suitable and intended for django's `settings.SECRET_KEY`.
+
+.. function:: breadcrumb_trail(links, sep=' > ')
+
+    ``links`` must be a list of two-item tuples in the format (URL, Text).
+    URL may be None, in which case the trail will contain the Text only.
+
+    Returns a string of HTML.
+
+.. function:: breadcrumbs_bootstrap(links, sep='>')
+
+    Creates a breadcrumb trail in much the same way as :func:`breadcrumb_trail`
+    but formats it in the expected way for twitter bootstrap.
+
+    Returns a string of HTML.
+
+.. function:: sanitise_filename(filename)
+
+    Take a `filename`, and return it without special characters (keep only
+    alphanumeric characters), and spaces replaced by underscores.
+
+.. function:: smart_truncate(content, length=100, suffix='...(more)')
+
+    Small function to truncate a string in a sensible way, sourced from:
+    http://stackoverflow.com/questions/250357/smart-truncate-in-python
+
+    The `content` is truncated after the last word that is within `length`
+    characters, and a `suffix` is added.
+
+.. function:: label_span(text, label_class=None)
+
+    Return a Bootstrap span class for inline-labelled `text`.
+    Pass in a valid Bootstrap label class as a string, if required.
+
+    Returns HTML.
+
+.. function:: content_filename(instance, filename)
+
+    Decode unicode characters in file uploaded to ASCII-equivalents, also
+    replace spaces with underscores.
+
+    This function is to be passed to
+    :class:`~django.db.models.FileField`.upload_to,
+    the `instance` parameter is unused.
+
+    Returns `uploads/{date}/{filename}` formatted string.
+
+.. function:: shorthash(obj)
+
+    Returns a 10-character hash of the object passed into the function. The
+    hash is binascii.b2a_base64 encoded and django slugified.
+
+.. function:: chomsky([times=1[, line_length=100]])
+
+    Generates random semi-legible blocks of nonsense text phrases. 
+    
+    :param times: number of generated sentences
+    :rtype: string
+
+.. function:: get_random_datetime([year])
+
+    Returns a random datetime object. Use `get_random_datetime().date()` to
+    get a random date object.
+
+    :param year: year, default value is a random year where the range is
+                 today - 5 years and today + 5 years
+
+
+Auth
+----
+
+.. function:: make_nonce()
+
+    Builds a 10-character unique nonce for use in token requests.
+
+.. function:: retrieve_access_token(request, service)
+
+    Takes care of retrieving an access token from a particular swingers
+    service. Will use ``request.user`` to authenticate as. This user must
+    exist on the target server also.
+
+.. function:: validate_request(data, expires=600)
+
+    Validates a dictionary of request data (`client_id`, 'client_secret` and
+    `user_id`) against the User base and Application links and returns a (User,
+    ApplicationLink and token expiry time).
+
+.. function:: get_or_create_local_user(user)
+
+    Create a local user if the username exists in the configured LDAP server.
+    Returns the updated or newly created local
+    :class:`~django.contrib.auth.models.User`.
+
+    .. note:: This is most likely going to be deprecated due to the upcoming
+              demerger work
+
+
+Decorators
+----------
+
+.. function:: workdir(remove=True)
+
+    Decorator to create a directory to work in whilst files are saved or
+    manipulated. The first argument to any workdir-decorated function is the
+    directory to work in. If no directory is specified, a temporary directory
+    is created. Usage::
+
+        from swingers.utils.decorators import workdir
+
+        @workdir()
+        def save_file(filename, data):
+            # do something with file and data
+            # ...
+            return filename
+
+        @workdir(remove=False)
+        def save_file(filename, data):
+            # do something with file and data
+            # ...
+            return filename
+
+
+    In the first example, after the function returns a value, the directory
+    that was created will be removed, and everything under that directory
+    will also get deleted. This is useful if you just need to do some
+    temporary processing, and don't care about the left over files.
+
+    The second example will not delete the directory if it was created, and
+    is useful for when you need to save files somewhere for future usage.
+
+
+GEO
+---
+
+.. function:: render_to_geojson(queryset, projection=None, simplify=None, extent=None, maxfeatures=None, priority_field=None, properties=None, prettyprint=False)
+
+    Shortcut to render a GeoJSON FeatureCollection from a Django queryset.
+    Computes a bounding box and adds a CRS member as a sr.org link.
+
+    Parameters:
+
+    **queryset**
+        The queryset containing geometry data.
+
+    **projection**
+        Projection used when geometry data should be transformed to another
+        projection.
+
+        **Default:** ``None``
+
+    **simplify**
+        Float value that specifies tolerance in Douglas-Peucker algorithm
+        for simplifying geometry.
+
+        **Default:** ``None``
+
+    **extent**
+        A :class:`~django.contrib.gis.geos.Polygon` instance that bounds
+        rendered features.
+
+        **Default:** ``None``
+
+    **max_features**
+        Limits the maximum number of rendered features based on priority field.
+
+        **Default:** ``None``
+
+    **priority_field**
+        Name of the priority field used for reducing features.
+
+        **Default:** ``None``
+
+    **properties**
+        List of non-geometry fields to be included in the GeoJSON.
+
+        **Default:** ``None``
+
+
+    **indent**
+        How much to indent the resultant GeoJSON.
+
+        **Default:** ``0``
+
+
+.. function:: find_geom_field(queryset)
+
+    Returns the name of the field containing geometry data in the queryset.
+    If none exist, raises ``ValueError``.
+
+.. function:: transform_geom(geom=None)
+    
+    Requires GDAL. Accepts a ``Polygon`` or ``MultiPolygon`` geometry, and
+    returns it transformed to a projection of GDA94/MGA zone 49 through 56,
+    depending on the centroid.
+
+    If the centroid lies outside of the appropriate X coordinates, returns
+    ``None`` instead.
+
+.. function:: direction_name(angle)
+
+    Returns a name for a direction given in degrees.
+
+    Example: ::
+
+        direction_name(0.0) returns "N"
+        direction_name(90.0) returns "E"
+        direction_name(152.0) returns "SSE".
+
+.. function:: text_location(geom)
+
+    Tries to use OSM Nominatim to generate a text location from a GEOS
+    geometry (uses centroid).
+
+.. function:: distance_bearing(point1, point2, epsg=3577)
+
+    Returns a text representation of the distance (in km) and bearing
+    from `point1` to `point2` in SI units using the given projection.
+    Defaults to GDA94 Albers. (`point1`, `point2`) are GEOS points
+
+    Returns for example *0.5 km NE*
+
+
+Query
+-----
+
+.. function:: queryset_iterator(queryset, chunksize=1000)
+
+    Iterate over a queryset ordered by the primary key.
+
+    This method loads a maximum of `chunksize` (default: 1000) rows in its
+    memory at the same time while django normally would load all rows in
+    it's memory. Using the iterator() method only causes it to not preload
+    all the classes.
+
+    .. note:: Note that the implementation of the iterator does not support
+              ordered querysets.
+
+
+.. function:: normalise_query(query_string, find_terms=None, normalise_spaces=None)
+
+    Splits the `query_string` in invidual keywords, getting rid of unecessary
+    spaces and grouping quoted words together.
+
+    Example: ::
+
+        >>> normalise_query('  some random  words "with   quotes  " and   spaces')
+        >>> ['some', 'random', 'words', 'with quotes', 'and', 'spaces']
+
+
+.. function:: get_query(query_string, search_fields)
+
+    Returns a query which is a combination of :class:`~django.db.models.Q`
+    objects. That combination aims to search keywords within a model by testing
+    each of its/the given search fields.
+
+    Example: ::
+        >>> q1 = get_query('  issapps    "admin"', ['email', 'username'])
+        >>> q2 = (
+                  (Q(email__icontains="issapps") | Q(username__icontains="issapps")) &
+                  (Q(email__icontains="admin") | Q(username__icontains="admin"))
+                 )
+        >>> assert q1 == q2
+
+
+.. function:: filter_queryset(search_string, model, queryset)
+
+   Function to dynamically filter a model queryset, based upon the
+   search_fields defined in admin.py for that model. If search_fields is not
+   defined, the queryset is returned unchanged.

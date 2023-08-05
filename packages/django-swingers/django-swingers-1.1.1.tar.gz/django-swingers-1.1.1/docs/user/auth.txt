@@ -1,0 +1,272 @@
+.. _auth:
+
+Auth
+====
+
+.. module:: swingers.sauth
+   :synopsis: Swingers' toolset for authentication, auditing and record-keeping.
+
+Swingers' toolset for authentication, auditing and record-keeping.
+
+Admin
+-----
+
+.. currentmodule:: swingers.sauth.admin
+
+.. class:: AuditAdmin
+
+    A ModelAdmin class for the :class:`swingers.sauth.models.Audit`.
+
+
+Backends
+--------
+
+.. currentmodule:: swingers.sauth.backends
+
+.. class:: EmailBackend
+
+Handles a variety of authentication functions within DEC. It enables
+authentication of users against Active Directory, and the ability for users to
+log in using their email addresses (instead of usernames). It also allows the
+checking of object-level permissions on any object using
+:ref:`django-guardian <index>`. Add this class to your
+:django:setting:`AUTHENTICATION_BACKENDS` when you require this functionality.
+
+.. class:: PersonaBackend
+
+Implements Mozilla's BrowserID, except using email addresses as the unique
+identifier instead of username. Include this class in your
+:django:setting:`AUTHENTICATION_BACKENDS` if you require BrowserID.
+
+
+Decorators
+----------
+
+.. currentmodule:: swingers.sauth.decorators
+
+.. decorator:: crossdomain
+
+    Decorator that wraps the view and returns HTTP headers to allow cross-site
+    requests from a domain. Usage::
+
+        from swingers.sauth.decorators import crossdomain
+
+        @crossdomain
+        def my_view(request):
+            # Anything I return from this view function can be requested via
+            # XMLHttpRequest from a browser.
+            return HttpResponse()
+
+    .. note::
+        For the decorator to work, it requires that the ``HTTP_ORIGIN`` header
+        is set in the request, otherwise :func:`crossdomain` will return the
+        response without setting any access-control headers.
+
+Models
+------
+
+.. class:: ApplicationLink
+
+    :class:`~swingers.sauth.models.ApplicationLink` objects have the following
+    fields:
+
+    .. attribute:: client_name
+
+        The project/host of the client application.
+
+    .. attribute:: server_name
+
+        The project/host of the server application.
+
+    .. attribute:: server_url
+
+        The url that requests should be made to.
+
+    .. attribute:: identifier
+
+        The IP or hostname, optional for added security.
+
+        .. warning::
+            This attribute is unused.
+
+    .. attribute:: secret
+
+        The shared secret of this link.
+
+    .. attribute:: timeout
+
+        The timeout of tokens created from this link. Default: 600 seconds.
+
+    .. attribute:: auth_method
+
+        The authentication method for this link. It should be one of:
+        ``basic``, ``md5``, ``sha1``, ``sha224``, ``sha256``, ``sha364``,
+        or ``sha512``. Default: ``sha256``.
+
+.. class:: Token
+
+    A token represents temporary permission to act and make requests as a
+    particular user, without needing any other authentication or
+    authorization. :class:`~swingers.sauth.models.Token` objects have the
+    following fields:
+
+    .. attribute:: link
+
+        The application link of this token.
+
+    .. attribute:: user
+
+        The user this token authenticates as.
+
+    .. attribute:: url
+
+        The url that this token is restricted to. Default: ``/``.
+
+    .. attribute:: secret
+
+        The token's secret. This needs to be included on requests using the
+        token.
+
+    .. attribute:: modified
+
+        The last time this token was accessed or modified. Usually represents
+        the last time a request was made with this token.
+
+    .. attribute:: timeout
+
+        The timeout of this token. Default: 600 seconds.
+
+.. class:: Job
+
+    Job represents a job that is either *queued*, *running* or *completed*.
+    :class:`~swingers.sauth.models.Job` objects have the following fields:
+
+    .. attribute:: name
+
+        Name of the job.
+
+    .. attribute:: args
+
+        Arguments of the job.
+
+    .. attribute:: output
+
+        Output of the job.
+
+    .. attribute:: state
+
+        One of *queued*, *running* or *completed*.
+
+
+Forms
+-----
+
+.. currentmodule:: swingers.sauth.forms
+
+.. class:: BaseAuditForm
+
+    :class:`BaseAuditForm` hides any base fields that are present on any model
+    that inherits from :class:`Audit`.
+
+    .. attribute:: helper
+
+        The ``crispy_forms`` form helper class. Adds buttons to the form.
+
+
+Sites
+-----
+
+.. currentmodule:: swingers.sauth.sites
+
+.. class:: AuditSite
+
+    Custom Admin site that automatically registers
+    :class:`~swingers.sauth.admin.AuditAdmin` as admin class
+    for any model class that inherits from
+    :class:`~swingers.sauth.models.Audit`.
+
+
+Urls
+----
+
+.. currentmodule:: swingers.sauth
+
+.. data:: urls
+
+    Adds *SERVICE_NAME*/request_token/, *SERVICE_NAME*/list_tokens/,
+    *SERVICE_NAME*/delete_token/, *SERVICE_NAME*/validate_token/,
+    validate_token/ and session/ url endpoints.
+
+
+Views
+-----
+
+.. currentmodule:: swingers.sauth.views
+
+.. function:: validate_token(request)
+
+    This function is a simple view that lets the
+    :class:`AuthenticationMiddleware` take care of refreshing the token if
+    needed, or expire it if it is outside of the expiry period. The view
+    returns ``true`` or ``false`` based on whether or not the user is
+    authenticated.
+
+.. function:: list_access_token(request)
+
+    Lists tokens for the a particular user. To successfully list tokens, you
+    must make a ``GET`` or ``POST`` request with the correct parameters.
+
+    **user_id**
+        The user id to list tokens for.
+
+    **client_id**
+        The client id for the request.
+
+    **client_secret**
+        The client secret for the ``ApplicationLink`` object.
+
+    **expires**
+        Expire time for the token refresh.
+
+    **nonce**
+        For requests that aren't basic auth, the nonce of the request.
+
+    To use within another view (with the ``requests`` library)::
+
+        from swingers.sauth.models import ApplicationLink
+        from swingers.utils.auth import make_nonce
+
+        import requests
+
+        def get_tokens(request):
+            url = '/url/to/list'
+            link = ApplicationLink.objects.get(pk=1)
+            user_id = 'admin'
+            nonce = make_nonce()
+            data = {
+                'user_id': 'admin',
+                'nonce': nonce,
+                'client_id': 'restless',
+                'client_secret': link.get_client_secret(user_id, nonce)
+            }
+            tokens = requests.get(url, data)
+            # rest of the view here.
+
+.. function:: request_access_token(request)
+
+    Like :func:`list_access_token`, :func:`request_access_token` requires
+    a request containing the correct parameters. It will return the secret
+    of a newly created token on success.
+
+.. function:: delete_access_token(request)
+
+    To delete a token, make a request to this view with the token's secret
+    set in ``request.REQUEST['access_token']`` and the view will take care
+    of deleting the token for you.
+
+.. function:: session(request)
+
+    :func:`session` allows the client to set arbitrary key-values on the
+    session. This allows storage of client-side configuration for uses such as
+    storing user's maps in the SSS. :func:`session` will return the current
+    list of key-values stored on the session after updating.
