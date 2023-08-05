@@ -1,0 +1,773 @@
+# -*- coding: utf-8 -*-
+"""
+    :copyright: Copyright 2013 by Łukasz Mierzwa
+    :contact: l.mierzwa@gmail.com
+"""
+
+import os
+import datetime
+import logging
+import tempfile
+import shutil
+import time
+import re
+from copy import deepcopy
+
+from mongoengine import (Document, EmbeddedDocument, EmbeddedDocumentField,
+                         DateTimeField, StringField, LongField, ReferenceField,
+                         ListField, QuerySetManager, BooleanField, NULLIFY,
+                         signals)
+
+from django.utils.translation import ugettext_lazy as _
+from django.core.urlresolvers import reverse
+from django.conf import settings
+
+from upaas import utils
+from upaas import tar
+from upaas.checksum import calculate_file_sha256, calculate_string_sha256
+from upaas.config.base import UPAAS_CONFIG_DIRS
+from upaas.config.metadata import MetadataConfig
+from upaas.storage.utils import find_storage_handler
+from upaas.storage.exceptions import StorageError
+from upaas import processes
+
+from upaas_admin.apps.servers.models import RouterServer
+from upaas_admin.apps.scheduler.models import ApplicationRunPlan
+from upaas_admin.apps.applications.exceptions import UnpackError
+from upaas_admin.apps.scheduler.base import select_best_backends
+from upaas_admin.apps.tasks.models import Task
+from upaas_admin.apps.tasks.base import VirtualTask
+from upaas_admin.apps.tasks.constants import TaskStatus, ACTIVE_TASK_STATUSES
+
+
+log = logging.getLogger(__name__)
+
+
+class Package(Document):
+    date_created = DateTimeField(required=True, default=datetime.datetime.now)
+    metadata = StringField(help_text=_('Application metadata'))
+    application = ReferenceField('Application', dbref=False, required=True)
+
+    interpreter_name = StringField(required=True)
+    interpreter_version = StringField(required=True)
+
+    parent = StringField()
+    filename = StringField()
+    bytes = LongField(required=True)
+    checksum = StringField(required=True)
+    builder = StringField(required=True)
+
+    distro_name = StringField(required=True)
+    distro_version = StringField(required=True)
+    distro_arch = StringField(required=True)
+
+    meta = {
+        'indexes': ['filename'],
+        'ordering': ['-date_created'],
+    }
+
+    _default_manager = QuerySetManager()
+
+    @classmethod
+    def pre_delete(cls, sender, document, **kwargs):
+        log.debug(_(u"Pre delete signal on package {id}").format(
+            id=document.safe_id))
+        document.delete_package_file(null_filename=False)
+
+    @property
+    def safe_id(self):
+        return str(self.id)
+
+    @property
+    def metadata_config(self):
+        if self.metadata:
+            return MetadataConfig.from_string(self.metadata)
+        return {}
+
+    @property
+    def upaas_config(self):
+        return settings.UPAAS_CONFIG
+
+    @property
+    def package_path(self):
+        """
+        Unpacked package directory path
+        """
+        return os.path.join(settings.UPAAS_CONFIG.paths.apps, self.safe_id)
+
+    def delete_package_file(self, null_filename=True):
+        log.debug(_(u"Deleting package file for {pkg}").format(
+            pkg=self.safe_id))
+        if not self.filename:
+            log.debug(_(u"Package {pkg} has no filename, skipping "
+                        u"delete").format(pkg=self.safe_id))
+            return
+
+        storage = find_storage_handler(self.upaas_config)
+        if not storage:
+            log.error(_(u"Storage handler '{handler}' not found, cannot "
+                        u"package file").format(
+                handler=self.upaas_config.storage.handler))
+            return
+
+        log.debug(_(u"Checking if package file {path} is stored").format(
+            path=self.filename))
+        if storage.exists(self.filename):
+            log.info(_(u"Removing package {pkg} file from storage").format(
+                pkg=self.safe_id))
+            storage.delete(self.filename)
+        if null_filename:
+            log.info(_(u"Clearing filename for package {pkg}").format(
+                pkg=self.safe_id))
+            del self.filename
+            self.save()
+
+    def uwsgi_options_from_metadata(self):
+        """
+        Parse uWSGI options in metadata (if any) and return only allowed.
+        """
+        options = []
+        compiled = []
+
+        for regexp in self.upaas_config.apps.uwsgi.safe_options:
+            compiled.append(re.compile(regexp))
+
+        for opt in self.metadata_config.uwsgi.settings:
+            if '=' in opt:
+                for regexp in compiled:
+                    opt_name = opt.split('=')[0].rstrip(' ')
+                    if regexp.match(opt_name):
+                        options.append(opt)
+                        log.info(_(u"Adding safe uWSGI option from metadata: "
+                                   u"{opt}").format(opt=opt))
+                        break
+
+        return options
+
+    def generate_uwsgi_config(self, backend_conf):
+        """
+        :param backend_conf: BackendRunPlanSettings instance for which we
+                             generate config
+        """
+
+        def _load_template(path):
+            log.info(u"Loading uWSGI template from: %s" % path)
+            for search_path in UPAAS_CONFIG_DIRS:
+                template_path = os.path.join(search_path, path)
+                if os.path.exists(template_path):
+                    f = open(template_path)
+                    ret = f.read().splitlines()
+                    f.close()
+                    return ret
+            return []
+
+        # so it won't change while generating configuration
+        config = deepcopy(self.upaas_config)
+
+        base_template = config.interpreters['uwsgi']['template']
+
+        template = None
+        try:
+            template = config.interpreters[self.interpreter_name]['any'][
+                'uwsgi']['template']
+        except (AttributeError, KeyError):
+            pass
+        try:
+            template = config.interpreters[self.interpreter_name][
+                self.interpreter_version]['uwsgi']['template']
+        except (AttributeError, KeyError):
+            pass
+
+        run_plan = self.application.run_plan
+
+        max_memory = backend_conf.workers_max
+        max_memory *= run_plan.memory_per_worker
+        max_memory *= 1024 * 1024
+
+        variables = {
+            'namespace': self.package_path,
+            'chdir': config.apps.home,
+            'socket': '%s:%d' % (backend_conf.backend.ip, backend_conf.socket),
+            'stats': '%s:%d' % (backend_conf.backend.ip, backend_conf.stats),
+            'uid': config.apps.uid,
+            'gid': config.apps.gid,
+            'app_name': self.application.name,
+            'app_id': self.application.safe_id,
+            'pkg_id': self.safe_id,
+            'max_workers': backend_conf.workers_max,
+            'max_memory': max_memory,
+            'memory_per_worker': run_plan.memory_per_worker,
+        }
+
+        if config.apps.graphite.carbon:
+            variables['carbon_servers'] = u' '.join(
+                config.apps.graphite.carbon)
+            variables['carbon_timeout'] = config.apps.graphite.timeout
+            variables['carbon_frequency'] = config.apps.graphite.frequency
+            variables['carbon_max_retry'] = config.apps.graphite.max_retry
+            variables['carbon_retry_delay'] = config.apps.graphite.retry_delay
+            variables['carbon_root'] = config.apps.graphite.root
+
+        try:
+            variables.update(config.interpreters[self.interpreter_name]['any'][
+                'uwsgi']['vars'])
+        except (AttributeError, KeyError):
+            pass
+        try:
+            variables.update(config.interpreters[self.interpreter_name][
+                self.interpreter_version]['uwsgi']['vars'])
+        except (AttributeError, KeyError):
+            pass
+
+        # interpretere default settings for any version
+        try:
+            for key, value in config.interpreters[self.interpreter_name][
+                    'any']['settings'].items():
+                var_name = "meta_%s_%s" % (self.interpreter_name, key)
+                variables[var_name] = value
+        except (AttributeError, KeyError):
+            pass
+        # interpretere default settings for current version
+        try:
+            for key, value in config.interpreters[self.interpreter_name][
+                    self.interpreter_version]['settings'].items():
+                var_name = "meta_%s_%s" % (self.interpreter_name, key)
+                variables[var_name] = value
+        except (AttributeError, KeyError):
+            pass
+        # interpreter settings from metadata
+        try:
+            for key, val in self.metadata_config.interpreter.settings.items():
+                var_name = "meta_%s_%s" % (self.interpreter_name, key)
+                variables[var_name] = val
+        except KeyError:
+            pass
+
+        envs = {}
+        try:
+            envs.update(config.interpreters[self.interpreter_name]['any'][
+                'env'])
+        except (AttributeError, KeyError):
+            pass
+        try:
+            envs.update(config.interpreters[self.interpreter_name][
+                self.interpreter_version]['env'])
+        except (AttributeError, KeyError):
+            pass
+        envs.update(self.metadata_config.env)
+
+        plugin = None
+        try:
+            plugin = config.interpreters[self.interpreter_name]['any'][
+                'uwsgi']['plugin']
+        except (AttributeError, KeyError):
+            pass
+        try:
+            plugin = config.interpreters[self.interpreter_name][
+                self.interpreter_version]['uwsgi']['plugin']
+        except (AttributeError, KeyError):
+            pass
+
+        options = ['[uwsgi]']
+
+        options.append('\n# starting uWSGI config variables list')
+        for key, value in variables.items():
+            options.append('var_%s = %s' % (key, value))
+
+        options.append('\n# starting ENV variables list')
+        for key, value in envs.items():
+            options.append('env = %s=%s' % (key, value))
+
+        options.append('\n# starting options from app metadata')
+        for opt in self.uwsgi_options_from_metadata():
+            options.append(opt)
+
+        # enable cheaper mode if we have multiple workers
+        if backend_conf.workers_max > backend_conf.workers_min:
+            options.append('\n# enabling cheaper mode')
+            options.append('cheaper = %d' % backend_conf.workers_min)
+
+        options.append('\n# starting base template')
+        options.extend(_load_template(base_template))
+
+        if config.apps.graphite.carbon:
+            options.append('\n# starting carbon servers block')
+            for carbon in config.apps.graphite.carbon:
+                options.append('carbon = %s' % carbon)
+
+        options.append('\n# starting interpreter plugin')
+        if plugin:
+            options.append('plugin = %s' % plugin)
+
+        options.append('\n# starting interpreter template')
+        options.extend(_load_template(template))
+
+        options.append('\n# starting subscriptions block')
+        for router in RouterServer.objects(is_enabled=True):
+            options.append('subscribe2 = server=%s:%d,key=%s' % (
+                router.private_ip, router.subscription_port,
+                self.application.system_domain))
+            for domain in self.application.domains:
+                options.append('subscribe2 = server=%s:%d,key=%s' % (
+                    router.private_ip, router.subscription_port, domain.name))
+
+        options.append('\n')
+        return options
+
+    def save_vassal_config(self, backend):
+        log.info(u"Generating uWSGI vassal configuration")
+        options = u"\n".join(self.generate_uwsgi_config(backend))
+
+        if os.path.exists(self.application.vassal_path):
+            current_hash = calculate_file_sha256(self.application.vassal_path)
+            new_hash = calculate_string_sha256(options)
+            if current_hash == new_hash:
+                log.info(u"Vassal is present and valid, skipping rewrite")
+                return
+
+        log.info(u"Saving vassal configuration to "
+                 u"'%s'" % self.application.vassal_path)
+        with open(self.application.vassal_path, 'w') as vassal:
+            vassal.write(options)
+        log.info(u"Vassal saved")
+
+    def unpack(self):
+        upaas_config = self.upaas_config
+
+        # directory is encoded into string to prevent unicode errors
+        directory = tempfile.mkdtemp(dir=upaas_config.paths.workdir,
+                                     prefix="upaas_package_").encode("utf-8")
+
+        storage = find_storage_handler(upaas_config)
+        if not storage:
+            log.error(u"Storage handler '%s' not "
+                      u"found" % upaas_config.storage.handler)
+
+        workdir = os.path.join(directory, "system")
+        pkg_path = os.path.join(directory, self.filename)
+
+        if os.path.exists(self.package_path):
+            log.error(u"Package directory already exists: "
+                      u"%s" % self.package_path)
+            raise UnpackError(u"Package directory already exists")
+
+        log.info(u"Fetching package '%s'" % self.filename)
+        try:
+            storage.get(self.filename, pkg_path)
+        except StorageError:
+            log.error(u"Storage error while fetching package "
+                      u"'%s'" % self.filename)
+            utils.rmdirs(directory)
+            raise StorageError(u"Can't fetch package '%s' from "
+                               u"storage" % self.filename)
+
+        log.info(u"Unpacking package")
+        os.mkdir(workdir, 0755)
+        if not tar.unpack_tar(pkg_path, workdir):
+            log.error(u"Error while unpacking package to '%s'" % workdir)
+            utils.rmdirs(directory)
+            raise UnpackError(u"Error during package unpack")
+
+        log.info(u"Package unpacked, moving into '%s'" % self.package_path)
+        try:
+            shutil.move(workdir, self.package_path)
+        except shutil.Error, e:
+            log.error(u"Error while moving unpacked package to final "
+                      u"destination: %s" % e)
+            utils.rmdirs(directory, self.package_path)
+            raise UnpackError(u"Can't move to final directory "
+                              u"'%s'" % self.package_path)
+        log.info(u"Package moved")
+        utils.rmdirs(directory)
+
+
+class ApplicationDomain(EmbeddedDocument):
+    date_created = DateTimeField(required=True, default=datetime.datetime.now)
+    # FIXME addining unique=True here doesn't work, fix it
+    name = StringField(required=True)
+    validated = BooleanField()
+
+
+class Application(Document):
+    date_created = DateTimeField(required=True, default=datetime.datetime.now)
+    name = StringField(required=True, min_length=2, max_length=60,
+                       unique_with='owner', verbose_name=_('name'))
+    # FIXME reverse_delete_rule=DENY for owner
+    owner = ReferenceField('User', dbref=False, required=True)
+    metadata = StringField(verbose_name=_('Application metadata'))
+    current_package = ReferenceField(Package, dbref=False, required=False)
+    packages = ListField(ReferenceField(Package, dbref=False,
+                                        reverse_delete_rule=NULLIFY))
+    domains = ListField(EmbeddedDocumentField(ApplicationDomain))
+
+    _default_manager = QuerySetManager()
+
+    meta = {
+        'indexes': [
+            {'fields': ['name', 'owner'], 'unique': True},
+            {'fields': ['packages']}
+        ],
+        'ordering': ['name'],
+    }
+
+    @property
+    def safe_id(self):
+        return str(self.id)
+
+    @property
+    def metadata_config(self):
+        if self.metadata:
+            return MetadataConfig.from_string(self.metadata)
+        return {}
+
+    @property
+    def upaas_config(self):
+        return settings.UPAAS_CONFIG
+
+    @property
+    def vassal_path(self):
+        """
+        Application vassal config file path.
+        """
+        return os.path.join(self.upaas_config.paths.vassals,
+                            '%s.ini' % self.safe_id)
+
+    @property
+    def interpreter_name(self):
+        """
+        Will return interpreter from current package metadata.
+        If no package was built interpreter will be fetched from app metadata.
+        If app has no metadata it will return None.
+        """
+        if self.current_package:
+            return self.current_package.interpreter_name
+        else:
+            try:
+                return self.metadata_config.interpreter.type
+            except KeyError:
+                return None
+
+    @property
+    def interpreter_version(self):
+        """
+        Will return interpreter version from current package metadata.
+        If no package was built interpreter will be fetched from app metadata.
+        If app has no metadata it will return None.
+        """
+        if self.current_package:
+            return self.current_package.interpreter_version
+        elif self.metadata:
+            return utils.select_best_version(self.upaas_config,
+                                             self.metadata_config)
+
+    @property
+    def system_domain(self):
+        """
+        Returns automatic system domain for this application.
+        """
+        return '%s.%s' % (self.safe_id, self.upaas_config.apps.domains.system)
+
+    @property
+    def run_plan(self):
+        """
+        Application run plan if it is present, None otherwise.
+        """
+        return ApplicationRunPlan.objects(application=self).first()
+
+    @property
+    def can_start(self):
+        """
+        Returns True only if package is not started but it can be.
+        """
+        return bool(self.current_package and self.run_plan is None)
+
+    @property
+    def tasks(self):
+        """
+        List of all tasks for this application.
+        """
+        return Task.find('ApplicationTask', application=self)
+
+    @property
+    def active_tasks(self):
+        """
+        List of all active (pending or running) application tasks.
+        """
+        return self.tasks.filter(status__in=ACTIVE_TASK_STATUSES)
+
+    @property
+    def pending_tasks(self):
+        """
+        List of all pending tasks for this application.
+        """
+        return self.tasks.filter(status=TaskStatus.pending)
+
+    @property
+    def running_tasks(self):
+        """
+        List of all running tasks for this application.
+        """
+        return self.tasks.filter(status=TaskStatus.running)
+
+    @property
+    def build_tasks(self):
+        """
+        List of all build tasks for this application.
+        """
+        return Task.find('BuildPackageTask', application=self)
+
+    @property
+    def active_build_tasks(self):
+        """
+        List of all active (pending or running) build tasks for this
+        application.
+        """
+        return self.build_tasks.filter(status__in=ACTIVE_TASK_STATUSES)
+
+    @property
+    def pending_build_tasks(self):
+        """
+        List of pending build tasks for this application.
+        """
+        return self.build_tasks.filter(status=TaskStatus.pending)
+
+    @property
+    def running_build_tasks(self):
+        """
+        Returns list of running build tasks for this application.
+        """
+        return self.build_tasks.filter(status=TaskStatus.running)
+
+    @property
+    def domain_validation_code(self):
+        """
+        String used for domain ownership validation.
+        """
+        return u"upaas-app-id=%s" % self.safe_id
+
+    @property
+    def router_ip_list(self):
+        return [r.public_ip for r in RouterServer.objects(is_enabled=True)]
+
+    def get_absolute_url(self):
+        return reverse('app_details', args=[self.safe_id])
+
+    def build_package(self, force_fresh=False):
+        if self.pending_build_tasks:
+            log.info(_(u"Application {name} is already queued for "
+                       u"building").format(name=self.name))
+        else:
+            task = Task.put('BuildPackageTask', application=self,
+                            metadata=self.metadata,
+                            force_fresh=force_fresh)
+            return task
+
+    def start_application(self):
+        #FIXME check if application can start (running apps limit)
+        if self.current_package:
+            run_plan = self.run_plan
+            if not run_plan:
+                log.error(u"Trying to start '%s' without run plan" % self.name)
+                return
+
+            backends = select_best_backends(run_plan,
+                                            package=self.current_package)
+            if not backends:
+                log.error(_(u"Can't start '{name}', no backend "
+                            u"available").format(name=self.name))
+                run_plan.delete()
+                return
+
+            kwargs = {}
+            vtask = None
+            if len(backends) > 1:
+                vtask = VirtualTask(
+                    title=_(u"Starting application {name}").format(
+                        name=self.name))
+                vtask.save()
+                kwargs['parent'] = vtask
+
+            run_plan.backends = backends
+            run_plan.save()
+
+            tasks = []
+            for backend_conf in backends:
+                log.info(_(u"Set backend '{backend}' in '{name}' run "
+                           u"plan").format(backend=backend_conf.backend.name,
+                                           name=self.name))
+                tasks.append(Task.put('StartApplicationTask',
+                                      backend=backend_conf.backend,
+                                      application=self, limit=1, **kwargs))
+            if vtask and len(filter(None, tasks)) == 0:
+                vtask.delete()
+
+    def stop_application(self):
+        if self.current_package:
+            if not self.run_plan:
+                return
+            if self.run_plan and not self.run_plan.backends:
+                # no backends in run plan, just delete it
+                self.run_plan.delete()
+                return
+
+            kwargs = {}
+            vtask = None
+            if len(self.run_plan.backends) > 1:
+                vtask = VirtualTask(
+                    title=_(u"Stopping application {name}").format(
+                        name=self.name))
+                vtask.save()
+                kwargs['parent'] = vtask
+
+            tasks = []
+            for backend_conf in self.run_plan.backends:
+                tasks.append(Task.put('StopApplicationTask',
+                                      backend=backend_conf.backend,
+                                      application=self, limit=1, **kwargs))
+            if vtask and len(filter(None, tasks)) == 0:
+                vtask.delete()
+
+    def upgrade_application(self):
+        if self.current_package:
+            if not self.run_plan:
+                return
+
+            kwargs = {}
+            vtask = None
+            if len(self.run_plan.backends) > 1:
+                vtask = VirtualTask(
+                    title=_(u"Upgrading application {name}").format(
+                        name=self.name))
+                vtask.save()
+                kwargs['parent'] = vtask
+
+            tasks = []
+            for backend_conf in self.run_plan.backends:
+                tasks.append(Task.put('UpgradeApplicationTask',
+                                      backend=backend_conf.backend,
+                                      application=self, limit=1, **kwargs))
+            if vtask and len(filter(None, tasks)) == 0:
+                vtask.delete()
+
+    def update_application(self):
+        if self.run_plan:
+
+            run_plan = self.run_plan
+
+            current_backends = [bc.backend for bc in run_plan.backends]
+            new_backends = select_best_backends(run_plan)
+            if not new_backends:
+                log.error(_(u"Can't update '{name}', no backend "
+                            u"available").format(name=self.name))
+                return
+
+            kwargs = {}
+            vtask = None
+            if len(current_backends) > 1 or len(new_backends) > 1:
+                vtask = VirtualTask(
+                    title=_(u"Updating application {name}").format(
+                        name=self.name))
+                vtask.save()
+                kwargs['parent'] = vtask
+
+            tasks = []
+            for backend_conf in new_backends:
+                if backend_conf.backend in current_backends:
+                    # replace backend settings with updated version
+                    run_plan.update(
+                        pull__backends__backend=backend_conf.backend)
+                    run_plan.update(push__backends=backend_conf)
+                    tasks.append(Task.put('UpdateVassalTask',
+                                          backend=backend_conf.backend,
+                                          application=self,
+                                          limit=1, **kwargs))
+                else:
+                    # add backend to run plan if not already there
+                    ApplicationRunPlan.objects(
+                        id=self.run_plan.id,
+                        backends__backend__nin=[
+                            backend_conf.backend]).update_one(
+                        push__backends=backend_conf)
+                    tasks.append(Task.put('StartApplicationTask',
+                                          backend=backend_conf.backend,
+                                          application=self, limit=1, **kwargs))
+
+            for backend in current_backends:
+                if backend not in [bc.backend for bc in new_backends]:
+                    log.info(_(u"Stopping {name} on old backend "
+                               u"{backend}").format(name=self.name,
+                                                    backend=backend.name))
+                    tasks.append(Task.put('StopApplicationTask',
+                                          backend=backend, application=self,
+                                          **kwargs))
+
+            if vtask and len(filter(None, tasks)) == 0:
+                vtask.delete()
+
+    def trim_package_files(self):
+        """
+        Removes over limit package files from database. Number of packages per
+        app that are kept in database for rollback feature are set in user
+        limits as 'packages_per_app'.
+        """
+        storage = find_storage_handler(self.upaas_config)
+        if not storage:
+            log.error(u"Storage handler '%s' not found, cannot trim "
+                      u"packages" % self.upaas_config.storage.handler)
+            return
+
+        removed = 0
+        for pkg in Package.objects(application=self, filename__exists=True)[
+                self.owner.limits['packages_per_app']:]:
+            if pkg.id == self.current_package.id:
+                continue
+            removed += 1
+            pkg.delete_package_file(null_filename=True)
+
+        if removed:
+            log.info(u"Removed %d package file(s) for app %s" % (removed,
+                                                                 self.name))
+
+    def remove_unpacked_packages(self, exclude=None, timeout=None):
+        """
+        Remove all but current unpacked packages
+        """
+        if timeout is None:
+            timeout = self.upaas_config.commands.timelimit
+        log.info(_(u"Cleaning packages for {name}").format(name=self.name))
+        for pkg in self.packages:
+            if exclude and pkg.id in exclude:
+                # skip current package!
+                continue
+            if os.path.isdir(pkg.package_path):
+                log.info(_(u"Removing package directory {path}").format(
+                    path=pkg.package_path))
+
+                # if there are running pids inside package dir we will need to
+                # wait this should only happen during upgrade, when we need to
+                # wait for app to reload into new package dir
+                started_at = datetime.datetime.now()
+                timeout_at = datetime.datetime.now() + datetime.timedelta(
+                    seconds=timeout)
+                pids = processes.directory_pids(pkg.package_path)
+                while pids:
+                    if datetime.datetime.now() > timeout_at:
+                        log.error(_(u"Timeout reached while waiting for pids "
+                                    u"in {path} to die, killing any remaining "
+                                    u"processes").format(
+                            path=pkg.package_path))
+                        break
+                    log.info(_(u"Waiting for {pids} pid(s) in {path} to "
+                               u"terminate").format(pids=len(pids),
+                                                    path=pkg.package_path))
+                    time.sleep(2)
+                    pids = processes.directory_pids(pkg.package_path)
+
+                try:
+                    processes.kill_and_remove_dir(pkg.package_path)
+                except OSError, e:
+                    log.error(_(u"Exception during package directory cleanup: "
+                                u"{e}").format(e=e))
+
+
+signals.pre_delete.connect(Package.pre_delete, sender=Package)

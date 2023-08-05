@@ -1,0 +1,102 @@
+- extends 'site.html'
+
+
+- load i18n
+- load django_bootstrap_breadcrumbs
+
+
+- block breadcrumbs
+  = block.super
+  - breadcrumb task.application.name "app_details" task.application.safe_id
+  - breadcrumb "Tasks" "app_tasks" task.application.safe_id
+  - breadcrumb task.title|truncatechars:"60" "task_details" task.safe_id
+
+
+- block content
+
+
+  .progress.upaas-task-details-progressbar.active.progress-striped
+    #task-progress.progress-bar{'role':'progressbar', 'aria-valuenow':'{{ task.progress }}', 'aria-valuemin':'0', 'aria-valuemax':'100', 'style':'width: {{ task.progress }}%;'}
+
+  .upaas-messages-table-area
+    %table#upaas-task-messages-table.table.table-striped.table-condensed
+      %thead
+        %tr
+          %th
+            - trans "Date"
+          %th
+            - trans "Message"
+      %tbody
+        - if task.is_pending
+          %tr
+            %td.text-center{'colspan':'2'}
+              %h1.text-muted
+                %i.upaas-help-tooltip{'class':'={ task.icon_class }', 'title':'{% trans "Task is waiting to be started" %}'}
+
+
+- block js_bottom
+
+  :javascript
+    var timer;
+    var offset = 0;
+    var progress = {{ task.progress }};
+    var pending = true;
+
+    function messages_callback(data) {
+      if (progress != data.progress) {
+        $('#task-progress').attr('aria-valuenow', data.progress).attr('style', 'width: ' + data.progress + '%;');;
+        progress = data.progress;
+      }
+      if (offset == 0 && data.messages.length > 0) {
+        $('#upaas-task-messages-table tbody').html('');
+      }
+
+      var tasks = new Array();
+      $.each(data.messages, function(i, task) {
+        offset++;
+        tasks.push(
+          haml.compileHaml('upaas-haml-template-task-messages')({
+            task: task
+          })
+        );
+      });
+      if (tasks.length > 0) {
+        $('#upaas-task-messages-table tbody').append(tasks.join('\n'));
+        $('.upaas-messages-table-area').animate({
+          scrollTop: $('.upaas-messages-table-area').get(0).scrollHeight
+          }, 300);
+      }
+
+      if (data.is_finished) {
+        window.clearInterval(timer);
+        $('.upaas-task-details-progressbar').removeClass('active progress-striped');
+        if (data.is_failed) {
+          $('#task-progress').addClass('progress-bar-danger');
+        }
+        if (data.is_successful) {
+          $('#task-progress').addClass('progress-bar-success');
+        }
+        if (tasks.length == 0) {
+          $('#upaas-task-messages-table tbody').append(
+            haml.compileHaml('upaas-haml-template-task-no-messages')()
+          );
+        }
+      }
+    }
+
+    function update_messages() {
+      Dajaxice.upaas_admin.apps.applications.task_messages(messages_callback, {
+        "task_id":"{{ task.safe_id }}",
+        "offset": offset
+      });
+    }
+
+    $(document).ready(function(){
+      window.setTimeout(update_messages, 1000);
+      timer = window.setInterval(update_messages, 3000);
+    });
+
+
+- block haml_templates
+  = block.super
+  - include "applications/partials/task_messages.js.haml"

@@ -1,0 +1,105 @@
+:plain
+  <script type="text/haml-template" id="upaas-haml-template-instance">
+
+  - var total_workers = 0;
+  - var total_rss = 0;
+  - var total_harakiri = 0;
+  - var total_requests = 0;
+  - var total_avg_rt = 0;
+  - var total_avg_rt_summary = '';
+  - var total_tx = 0;
+
+  .panel.panel-default
+    .panel-heading
+      %strong
+        = instance.backend.name
+      - if (instance.stats != null) {
+        %span.label.label-primary.pull-right
+          = instance.stats.version
+    .panel-body.upaas-instance-panel
+      - if (instance.stats != null) {
+        - var queue_style = 'width: ' + Math.round((instance.stats.listen_queue/instance.stats.listen_queue_max)*100) + '%;';
+        - var queue_progress_class = 'progress-bar-default';
+        - if (instance.stats.listen_queue > 80) {
+          - queue_progress_class = 'progress-bar-danger';
+        - else if (instance.stats.listen_queue > 50) {
+          - queue_progress_class = 'progress-bar-warning';
+        .progress.upaas-instance-queue-progressbar
+          .progress-bar{class: queue_progress_class, role: 'progressbar', 'aria-valuenow': Math.min(instance.stats.listen_queue, instance.stats.listen_queue_max), 'aria-valuemin': 0, 'aria-valuemax': instance.stats.listen_queue_max, style: queue_style}
+      %table.table.table-bordered.table-condensed.upaas-instance-table
+        %thead
+          %tr
+            %th
+              #
+            %th
+              = gettext("State")
+            %th
+              = gettext("Memory")
+            %th
+              = gettext("Restarts")
+            %th
+              = gettext("Harakiri")
+            %th
+              = gettext("Requests")
+            %th
+              = gettext("Avg response time")
+            %th
+              = gettext("Bytes out")
+          %tbody
+            - if (instance.stats != null) {
+              - _(instance.stats.workers).each(function(worker) {
+                - total_harakiri += worker.harakiri_count;
+                - total_requests += worker.requests;
+                - total_tx += worker.tx;
+                - if (worker.status != 'cheap') {
+                  - total_workers += 1;
+                  - total_rss += worker.rss;
+                  - total_avg_rt += worker.avg_rt;
+                  %tr{class: worker.status}
+                    %td
+                      = worker.id
+                    %td
+                      = worker.status
+                    %td
+                      = window.UPAAS.bytes_to_human(worker.rss);
+                    %td
+                      = worker.respawn_count
+                    %td
+                      = worker.harakiri_count
+                    %td
+                      = worker.requests
+                    %td
+                      = Math.round(worker.avg_rt / 1000);
+                      ms
+                    %td
+                      = window.UPAAS.bytes_to_human(worker.tx);
+              - if (total_workers == 0) {
+                %tr
+                  %td.text-center{colspan: 8}
+                    = gettext("All workers are stopped due to inactivity")
+              - else {
+                - total_avg_rt_summary = Math.round(total_avg_rt / total_workers / 1000) + ' ms';
+                %tr
+                  %td{'colspan':'2'}
+                    = total_workers
+                    :plain
+                      /
+                    = instance.stats.workers.length
+                  %td{'colspan':'2'}
+                    = window.UPAAS.bytes_to_human(total_rss);
+                    :plain
+                      /
+                    = window.UPAAS.bytes_to_human(instance.backend.limits.backend_memory_bytes);
+                  %td
+                    = total_harakiri
+                  %td
+                    = total_requests
+                  %td
+                    = total_avg_rt_summary
+                  %td
+                    = window.UPAAS.bytes_to_human(total_tx);
+            - else {
+              %tr.danger
+                %td.text-center{colspan: 8}
+                  = gettext("Instance is not running")
+  </script>
