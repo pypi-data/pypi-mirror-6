@@ -1,0 +1,84 @@
+#!/usr/bin/env python2.7
+"""Create a directory (ContainerNode) in the VOSpace repositotry"""
+
+
+import vos
+import time
+import os, sys, logging
+from optparse import OptionParser
+import signal
+from vos import vos, __version__
+
+def signal_handler(signum, frame):
+    raise KeyboardInterrupt, "SIGINT signal handler"
+
+def main():
+    signal.signal(signal.SIGINT, signal_handler)
+    usage = """
+    vmv vos:/root/node vos:/root/newNode   -- move node to newNode, if newNode is a container then moving node into newNode.
+
+Version: %s """ % (__version__.version)
+
+    parser = OptionParser(usage)
+    parser.add_option("-v", "--verbose", action="store_true")
+    parser.add_option("-d", "--debug", action="store_true")
+    parser.add_option("-w", "--warning", action="store_true")
+    parser.add_option("--version", action="store_true", help="VOS Version %s" % (__version__.version))
+    parser.add_option("--certfile", help="location of your CADC security certificate file", default=os.path.join(os.getenv("HOME", "."), ".ssl/cadcproxy.pem"))
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit()
+
+    (opt, args) = parser.parse_args()
+
+    if opt.version:
+        sys.stdout.write("vmv version %s \n\n" % (__version__.version)) 
+        sys.exit()
+
+
+    log_level = logging.ERROR
+    if opt.warning:
+        log_level = logging.WARNING
+    if opt.verbose:
+        log_level = logging.INFO
+    if opt.debug:
+        log_level = logging.DEBUG
+
+    logging.getLogger('vos').setLevel(log_level)
+    logging.getLogger('vos').addHandler(logging.StreamHandler())
+    logger = logging.getLogger('vos')
+
+
+    if len(args) != 2:
+        parser.error("You must supply a source and desitination")
+
+    try:
+        client = vos.Client(certFile=opt.certfile)
+    except Exception as e:
+        logger.error("Connection failed:  %s" % (str(e)))
+        sys.exit(e.__getattribute__('errno',-1))
+
+    source = args[0]
+    dest = args[1]
+
+    try:
+        logger.info("%s -> %s" % ( source, dest))
+        client.move(source, dest)
+    except KeyboardInterrupt:
+        logger.error("Received keyboard interrupt. Execution aborted...\n")
+        sys.exit(-1)
+    except Exception as e:
+        import re
+        if re.search('NodeLocked', str(e)) != None:
+            logger.error('Use vlock to unlock nodes before moving.')
+        logger.error(str(e))
+        sys.exit(-1)
+
+
+if __name__ == '__main__':
+
+    try:
+        main()
+    except:
+        sys.exit(-1)

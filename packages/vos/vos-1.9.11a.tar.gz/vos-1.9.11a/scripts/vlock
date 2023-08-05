@@ -1,0 +1,72 @@
+#!python
+
+"""set the islocked property of a node.
+
+A node is locked by setting the islocked property. When a node is
+locked, it cannot be copied to, moved or deleted. """
+
+
+from vos import Node 
+import logging
+import optparse
+import sys
+import vos
+import os
+import signal
+
+
+
+def signal_handler(signal, frame):
+    raise KeyboardInterrupt, "SIGINT signal handler"
+
+signal.signal(signal.SIGINT, signal_handler)
+
+parser = optparse.OptionParser(version=vos.__version__.version)
+
+parser.add_option('--verbose', '-v', action="store_true", help='run in verbose mode')
+parser.add_option('--debug', '-d', action="store_true", help='run in verbose mode')
+parser.add_option("--certfile",
+                    help="location of your CADC security certificate file",
+                    default=os.path.join(os.getenv("HOME", "."), ".ssl/cadcproxy.pem"))
+parser.add_option("--lock", action="store_true", help="Lock the node")
+parser.add_option("--unlock", action="store_true", help="unLock the node")
+
+(opt, args) = parser.parse_args()
+
+
+if opt.verbose:
+    log_level = logging.INFO
+elif opt.debug:
+    log_level = logging.DEBUG
+else:
+    log_level = logging.ERROR
+
+logging.getLogger('vos').setLevel(log_level)
+logging.getLogger('vos').addHandler(logging.StreamHandler())
+logger = logging.getLogger('vos')
+
+lock = None
+if opt.lock:
+   lock = 'true'
+elif opt.unlock:
+   lock = 'false'
+
+exit_code = 0
+
+try:
+    client = vos.Client(certFile=opt.certfile)
+    node = client.getNode(args[0])
+    if lock is not None:
+        if node.changeProp(Node.ISLOCKED, lock) > 0:
+            logger.info("setting lock to %s" % (lock))
+            client.update(node)
+    else:
+        exit_code = ( node.props.get(Node.ISLOCKED,'false') == 'true' and 0 ) or -1
+
+except KeyboardInterrupt:
+    exit_code = -1
+except Exception as e:
+    logger.error(str(e))
+    exit_code= -1
+
+sys.exit(exit_code)
