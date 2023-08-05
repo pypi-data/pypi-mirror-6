@@ -1,0 +1,156 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+#
+#  ezrss_gui.py
+#  
+#  Copyright 2014 Kaveen Rodrigo <kaveenr@kaveen-pc>
+#  
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#  MA 02110-1301, USA.
+#  
+#  
+import wx , os ,urllib2 , threading , webbrowser
+from bs4 import BeautifulSoup
+
+appz = wx.App(False)
+
+class MainFrame ( wx.Frame ):
+	
+	def __init__( self, parent ):
+		self.show_db = []
+		self.epis_db = []
+		self.current =[]
+		self.show_epis = []
+		self.searched = False
+		wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"FTW! Hulu", pos = wx.DefaultPosition, size = wx.Size( 641,537 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
+		
+		self.SetSizeHintsSz( wx.DefaultSize, wx.DefaultSize )
+		
+		bSizer1 = wx.BoxSizer( wx.VERTICAL )
+		
+		bSizer2 = wx.BoxSizer( wx.HORIZONTAL )
+		
+		self.m_button1 = wx.Button( self, wx.ID_ANY, u"< back", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer2.Add( self.m_button1, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5 )
+		
+		self.m_staticText1 = wx.StaticText( self, wx.ID_ANY, u"MyPirateTele By Kaveen Rodrigo", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText1.Wrap( -1 )
+		bSizer2.Add( self.m_staticText1, 0, wx.ALL|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL, 5 )
+		
+		bSizer1.Add( bSizer2, 0, wx.EXPAND, 5 )
+		
+		m_listBox1Choices = []
+		self.m_listBox1 = wx.ListBox( self, wx.ID_ANY, wx.DefaultPosition, wx.Size( 630,400 ), m_listBox1Choices, 0 )
+		bSizer1.Add( self.m_listBox1, 0, wx.ALL|wx.ALIGN_CENTER_HORIZONTAL|wx.EXPAND, 0 )
+		
+		bSizer3 = wx.BoxSizer( wx.HORIZONTAL )
+		
+		self.m_staticText2 = wx.StaticText( self, wx.ID_ANY, u"Search :", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText2.Wrap( -1 )
+		bSizer3.Add( self.m_staticText2, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5 )
+		
+		self.search_string = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer3.Add( self.search_string, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5 )
+		
+		self.m_button2 = wx.Button( self, wx.ID_ANY, u"Search", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer3.Add( self.m_button2, 0, wx.ALL|wx.ALIGN_CENTER_VERTICAL, 5 )
+		
+		bSizer1.Add( bSizer3, 1, wx.EXPAND, 5 )
+		
+		self.SetSizer( bSizer1 )
+		self.Layout()
+		self.m_statusBar1 = self.CreateStatusBar( 1, wx.ST_SIZEGRIP, wx.ID_ANY )
+		
+		self.Centre( wx.BOTH )
+		
+		# Connect Events
+		self.m_button1.Bind( wx.EVT_BUTTON, self.go_back )
+		self.m_listBox1.Bind( wx.EVT_LISTBOX_DCLICK, self.list_click )
+		self.m_button2.Bind( wx.EVT_BUTTON, self.do_search )
+	
+	def __del__( self ):
+		pass
+	def do_search(self,event):
+		self.m_listBox1.Clear()
+		self.matching = [s for s in self.current if self.search_string.GetValue() in s]
+		for i in self.matching:
+			self.m_listBox1.Append(i)
+	def get_show_list(self):
+		self.m_listBox1.Clear()
+		self.SetStatusText("Wait.....")
+		try:
+			self.m_button2.Enabled = False
+			show_html = urllib2.urlopen("http://ezrss.it/shows/").read()
+			self.current = []
+			soup = BeautifulSoup(show_html)
+			show_list = soup.find_all("ul",{ "class" : "con1"})
+			for shows in show_list:
+				show_alph = shows.find_all("li")
+				for show in show_alph:
+					self.show_db.append(dict(name = show.find("a").string , url = show.find("a").get("href")))
+					self.current.append(show.find("a").string)
+					self.m_listBox1.Append(show.find("a").string)
+			self.m_button2.Enabled = True
+			self.brow = True
+			self.SetStatusText("Done")
+			self.searched = True
+		except:
+			self.message = wx.MessageDialog(None, 'Try Again', 'Error', wx.OK | wx.ICON_ERROR)
+			self.message.ShowModal()
+			self.SetStatusText("Failed")
+
+	def go_back( self, event ):
+		self.brow = True
+		if (self.searched):
+			self.m_listBox1.Clear()
+			for i in self.current:
+				self.m_listBox1.Append(i)
+		else:
+			self.get_show_list();
+
+	def get_epis_list(self,url):
+		self.m_listBox1.Clear()
+		self.SetStatusText("Wait.....")
+		try:
+			epis_html = urllib2.urlopen("http://ezrss.it"+url).read()
+			soup = BeautifulSoup(epis_html)
+			epis_list = soup.find_all("tr", { "class" : "tc_inactive"})
+			for epis in epis_list:
+				self.epis_db.append(dict(name = (' '.join(epis.find("td" , { "class" : "tc1" }).get_text().split())) ,
+				 url = (epis.find("td" , { "class" : "tc2" }).find("a").get("href"))))
+				self.m_listBox1.Append(' '.join(epis.find("td" , { "class" : "tc1" }).get_text().split()))
+			self.SetStatusText("Done")
+			self.brow = False
+		except:
+			self.message = wx.MessageDialog(None, 'Try Again', 'Error', wx.OK | wx.ICON_ERROR)
+			self.message.ShowModal()
+			self.SetStatusText("Failed")
+			self.m_button2.Enabled = True
+
+	def list_click( self, event ):
+		if (self.brow):
+			self.name = self.m_listBox1.GetString(self.m_listBox1.GetSelection())
+			for i in self.show_db:
+				if self.name == i["name"]:
+					self.get_epis_list(i["url"])
+		else:
+			self.name = self.m_listBox1.GetString(self.m_listBox1.GetSelection())
+			for i in self.epis_db:
+				if self.name == i["name"]:
+					webbrowser.open(i["url"],True)
+main = MainFrame(None)
+main.Show(True)
+main.get_show_list()
+appz.MainLoop()
