@@ -1,0 +1,274 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Hooks &mdash; Pootle 2.5.1-rc1 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/basic.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/bootstrap.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/bootstrap-sphinx.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.5.1-rc1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/bootstrap.js"></script>
+    <script type="text/javascript" src="../_static/bootstrap-sphinx.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.ico"/>
+    <link rel="top" title="Pootle 2.5.1-rc1 documentation" href="../index.html" />
+    <link rel="up" title="Features" href="index.html" />
+    <link rel="next" title="Translation statistics" href="statistics.html" />
+    <link rel="prev" title="File formats" href="formats.html" /> 
+  </head>
+  <body>
+  <div id="navbar" class="navbar navbar-fixed-top">
+    <div class="navbar-inner">
+      <div class="container-fluid">
+        <a class="brand" href="../index.html">Pootle</a>
+        <span class="navbar-text pull-left"><b>2.5.1</b></span>
+          <ul class="nav">
+            <li class="divider-vertical"></li>
+            
+              <li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown">Site <b class="caret"></b></a>
+  <ul class="dropdown-menu globaltoc"><ul>
+<li class="toctree-l1"><a class="reference internal" href="../users/index.html">User&#8217;s guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="index.html">Features</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../server/index.html">Administering a server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developers/index.html">Developers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/index.html">Pootle API</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../releases/index.html">Release Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../external_docs.html">External documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+</ul>
+</ul>
+</li>
+              
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown">Page <b class="caret"></b></a>
+  <ul class="dropdown-menu localtoc"><ul>
+<li><a class="reference internal" href="#">Hooks</a><ul>
+<li><a class="reference internal" href="#implementing-a-hook">Implementing a hook</a></li>
+<li><a class="reference internal" href="#available-hooktypes">Available hooktypes</a></li>
+<li><a class="reference internal" href="#initialize">initialize</a></li>
+<li><a class="reference internal" href="#precommit">precommit</a></li>
+<li><a class="reference internal" href="#postcommit">postcommit</a></li>
+<li><a class="reference internal" href="#preupdate">preupdate</a></li>
+<li><a class="reference internal" href="#postupdate">postupdate</a></li>
+<li><a class="reference internal" href="#pretemplateupdate">pretemplateupdate</a></li>
+</ul>
+</li>
+</ul>
+</ul>
+</li>
+            
+            
+              
+  <li><a href="formats.html"
+         title="previous chapter">&laquo; File formats</a></li>
+  <li><a href="statistics.html"
+         title="next chapter">Translation statistics &raquo;</a></li>
+            
+          </ul>
+          <ul class="nav pull-right">
+            
+              
+            
+          
+            
+<form class="navbar-search pull-right" action="../search.html" method="get">
+  <input type="text" name="q" placeholder="Search" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+          
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<div class="container content">
+   
+  <div class="section" id="hooks">
+<span id="id1"></span><h1>Hooks<a class="headerlink" href="#hooks" title="Permalink to this headline">¶</a></h1>
+<p>Pootle supports hooks to customize its behavior at various points in its
+interaction with <a class="reference internal" href="version_control.html"><em>Version Control Systems</em></a>,
+translation update, and translation initialization.</p>
+<p>Hooks are Python scripts and can do things like checking or converting
+formats before commit.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="versionchanged">
+<span class="versionmodified">Changed in version 2.5.</span></p>
+<p class="last">Because VCS checkouts and commits are performed in a separate
+<a class="reference internal" href="../server/settings.html#std:setting-VCS_DIRECTORY"><tt class="xref std std-setting docutils literal"><span class="pre">VCS_DIRECTORY</span></tt></a>, hooks performing VCS operations themselves may
+need to use functions in <tt class="docutils literal"><span class="pre">apps.pootle_misc.versioncontrol</span></tt> to copy files
+between that directory and the <a class="reference internal" href="../server/settings.html#std:setting-PODIRECTORY"><tt class="xref std std-setting docutils literal"><span class="pre">PODIRECTORY</span></tt></a> containing translation
+files. As part of this change, pathnames passed to hooks are relative to
+<a class="reference internal" href="../server/settings.html#std:setting-PODIRECTORY"><tt class="xref std std-setting docutils literal"><span class="pre">PODIRECTORY</span></tt></a>, not absolute paths.</p>
+</div>
+<div class="section" id="implementing-a-hook">
+<span id="hooks-implementing"></span><h2>Implementing a hook<a class="headerlink" href="#implementing-a-hook" title="Permalink to this headline">¶</a></h2>
+<p>Hooks are Python scripts stored in the <em>pootle/scripts</em> directory with the
+same name as a project.  Thus, <tt class="docutils literal"><span class="pre">hello.py</span></tt> for a project called
+<strong>hello</strong>.</p>
+<p>The project hook should implement functions for each needed hooktype.</p>
+</div>
+<div class="section" id="available-hooktypes">
+<span id="hooks-hooktypes"></span><h2>Available hooktypes<a class="headerlink" href="#available-hooktypes" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="docutils">
+<colgroup>
+<col width="20%" />
+<col width="23%" />
+<col width="57%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Hooktype</th>
+<th class="head">Arguments</th>
+<th class="head">Return</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">initialize</span></tt></td>
+<td>projectdir, languagecode</td>
+<td><em>unused</em></td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">precommit</span></tt></td>
+<td>file, author, message</td>
+<td>array of strings indicating what files to commit</td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">postcommit</span></tt></td>
+<td>file, success</td>
+<td><em>unused</em></td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">preupdate</span></tt></td>
+<td>file</td>
+<td>pathname of file to update</td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">postupdate</span></tt></td>
+<td>file</td>
+<td><em>unused</em></td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">pretemplateupdate</span></tt></td>
+<td>file</td>
+<td>boolean indicating whether file should be updated from template</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="initialize">
+<span id="hooks-initialize"></span><h2>initialize<a class="headerlink" href="#initialize" title="Permalink to this headline">¶</a></h2>
+<p>This hook is called when a language is added to a project. It can be used to
+set up any additional files that may be needed (e.g. alternate formats) or
+even handle repositories with special directory layouts, by adding appropriate
+symlinks in the <a class="reference internal" href="../server/settings.html#std:setting-VCS_DIRECTORY"><tt class="xref std std-setting docutils literal"><span class="pre">VCS_DIRECTORY</span></tt></a>.</p>
+<p>The first parameter is the path to the project directory. It&#8217;s up to this
+script to know any internal structure of the directory (in particular whether
+standard, GNU, or a special
+<a class="reference internal" href="version_control.html#version-control-how-to-treat-special-directory-layouts"><em>tree style</em></a>
+is used).</p>
+<p>The second parameter is the code for the language (e.g. <tt class="docutils literal"><span class="pre">nl</span></tt>, <tt class="docutils literal"><span class="pre">pt-BR</span></tt>,
+<tt class="docutils literal"><span class="pre">sr_RS&#64;latin</span></tt> etc.) that is being added to the project.</p>
+</div>
+<div class="section" id="precommit">
+<span id="hooks-precommit"></span><h2>precommit<a class="headerlink" href="#precommit" title="Permalink to this headline">¶</a></h2>
+<p>This hook is called when a translation file for a project is
+<a class="reference internal" href="version_control.html#version-control-committing"><em>committed</em></a> to VCS (possibly as a result of
+an <a class="reference internal" href="templates.html#templates-updating-against-templates"><em>update against templates</em></a> that
+added a new file, in which case it is called after the <tt class="docutils literal"><span class="pre">pretemplateupdate</span></tt>
+hook). It can be used to perform conversion to another format and other
+pre-commit checks and fixups.</p>
+<p>The first parameter is the path to the file that will be committed. The second
+parameter is the author what will be used for the commit, and the third argument
+is the commit message.</p>
+<p>This hook should return an array (possibly empty) of filenames that should also
+be commmitted together with the translation file.</p>
+</div>
+<div class="section" id="postcommit">
+<span id="hooks-postcommit"></span><h2>postcommit<a class="headerlink" href="#postcommit" title="Permalink to this headline">¶</a></h2>
+<p>This hook is called under the same circumstances as the <tt class="docutils literal"><span class="pre">precommit</span></tt> hook,
+after the commit operation has been attempted.  It can be used to do logging
+or cleanup of resources created by the precommit hook.</p>
+<p>The first parameter is the path to the file that will be committed. The second
+parameter is a boolean indicating whether the commit was successful.</p>
+</div>
+<div class="section" id="preupdate">
+<span id="hooks-preupdate"></span><h2>preupdate<a class="headerlink" href="#preupdate" title="Permalink to this headline">¶</a></h2>
+<p>This hook is called when a translation file for a project is
+<a class="reference internal" href="version_control.html#version-control-updating"><em>updated</em></a> from VCS.  It can be used to
+set up for conversion from another format in the project source files.</p>
+<p>The first (and only) parameter is the path to the translation file that will be
+updated.</p>
+<p>This hook should return the filename that will be updated. Normally this
+should be identical to the filename parameter passed to the hook, but if format
+conversion is needed, this can be another (project source) file to be updated
+instead, so that the <tt class="docutils literal"><span class="pre">postupdate</span></tt> hook can use it to generate the Pootle
+translation file.</p>
+</div>
+<div class="section" id="postupdate">
+<span id="hooks-postupdate"></span><h2>postupdate<a class="headerlink" href="#postupdate" title="Permalink to this headline">¶</a></h2>
+<p>This hook is called under the same circumstances as the <tt class="docutils literal"><span class="pre">preupdate</span></tt> hook,
+after the update has been completed (if the update fails, a VersionControlError
+is raised and this hook is not called).  It can be used to do format conversion
+to generate Pootle translation files from project source formats as well as
+other logging.</p>
+<p>The first parameter is the path to the file that was updated.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">If a <tt class="docutils literal"><span class="pre">preupdate</span></tt> hook changes the file to be updated (by returning a string
+other than the filename it is passed) the original filename, not the modified
+one it returns, will be passed to the <tt class="docutils literal"><span class="pre">postupdate</span></tt> hook, if there is one.</p>
+</div>
+</div>
+<div class="section" id="pretemplateupdate">
+<span id="hooks-pretemplateupdate"></span><h2>pretemplateupdate<a class="headerlink" href="#pretemplateupdate" title="Permalink to this headline">¶</a></h2>
+<p class="versionadded">
+<span class="versionmodified">New in version 2.5.1.</span></p>
+<p>This hook is called when a translation file for a project is
+<a class="reference internal" href="templates.html#templates-updating-against-templates"><em>updated against templates</em></a> to
+get new source strings (and mark removed strings as obsolete). It can be used to
+customize the handling of new or obsolete strings or to prevent updating
+against templates for any reason.</p>
+<p>The first parameter is the path to the template file that will be used to update
+the translation file. If the hook returns false, that template file will not be
+used to generate updates for translation files</p>
+</div>
+</div>
+
+
+</div>
+<hr>
+
+<footer class="footer">
+  <div class="container">
+    <p class="pull-right"><a href="#">Back to top ↑</a></p>
+    <ul class="unstyled muted">
+      <li><small>
+        &copy; 2004-2013, Translate.<br/>
+      </small></li>
+      <li><small>
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+      </small></li>
+    </ul>
+  </div>
+</footer>
+  </body>
+</html>
