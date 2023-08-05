@@ -1,0 +1,189 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Using django-tenant-schemas &mdash; django-tenant-schema dev documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     'dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="django-tenant-schema dev documentation" href="index.html" />
+    <link rel="next" title="Examples" href="examples.html" />
+    <link rel="prev" title="Installation" href="install.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="examples.html" title="Examples"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="install.html" title="Installation"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">django-tenant-schema dev documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="using-django-tenant-schemas">
+<h1>Using django-tenant-schemas<a class="headerlink" href="#using-django-tenant-schemas" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="creating-a-tenant">
+<h2>Creating a Tenant<a class="headerlink" href="#creating-a-tenant" title="Permalink to this headline">¶</a></h2>
+<p>This works just like any other model in django. The first thing we should do is to create the <tt class="docutils literal"><span class="pre">public</span></tt> tenant to make our main website available. We&#8217;ll use the previous model we defined for <tt class="docutils literal"><span class="pre">Client</span></tt>.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">customers.models</span> <span class="kn">import</span> <span class="n">Client</span>
+
+<span class="c"># create your public tenant</span>
+<span class="n">tenant</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span><span class="n">domain_url</span><span class="o">=</span><span class="s">&#39;my-domain.com&#39;</span><span class="p">,</span> <span class="c"># don&#39;t add your port or www here! on a local server you&#39;ll want to use localhost here</span>
+                <span class="n">schema_name</span><span class="o">=</span><span class="s">&#39;public&#39;</span><span class="p">,</span>
+                <span class="n">name</span><span class="o">=</span><span class="s">&#39;Schemas Inc.&#39;</span><span class="p">,</span>
+                <span class="n">paid_until</span><span class="o">=</span><span class="s">&#39;2016-12-05&#39;</span><span class="p">,</span>
+                <span class="n">on_trial</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="n">tenant</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Now we can create our first real tenant.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">customers.models</span> <span class="kn">import</span> <span class="n">Client</span>
+
+<span class="c"># create your first real tenant</span>
+<span class="n">tenant</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span><span class="n">domain_url</span><span class="o">=</span><span class="s">&#39;tenant.my-domain.com&#39;</span><span class="p">,</span> <span class="c"># don&#39;t add your port or www here!</span>
+                <span class="n">schema_name</span><span class="o">=</span><span class="s">&#39;tenant1&#39;</span><span class="p">,</span>
+                <span class="n">name</span><span class="o">=</span><span class="s">&#39;Fonzy Tenant&#39;</span><span class="p">,</span>
+                <span class="n">paid_until</span><span class="o">=</span><span class="s">&#39;2014-12-05&#39;</span><span class="p">,</span>
+                <span class="n">on_trial</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">tenant</span><span class="o">.</span><span class="n">save</span><span class="p">()</span> <span class="c"># sync_schemas automatically called, your tenant is ready to be used!</span>
+</pre></div>
+</div>
+<p>Because you have the tenant middleware installed, any request made to <tt class="docutils literal"><span class="pre">tenant.my-domain.com</span></tt> will now automatically set your PostgreSQL&#8217;s <tt class="docutils literal"><span class="pre">search_path</span></tt> to <tt class="docutils literal"><span class="pre">tenant1</span></tt> and <tt class="docutils literal"><span class="pre">public</span></tt>, making shared apps available too. The tenant will be made available at <tt class="docutils literal"><span class="pre">request.tenant</span></tt>. By the way, the current schema is also available at <cite>connection.get_schema()</cite>, which is useful, for example, if you want to hook to any of django&#8217;s signals.</p>
+<p>Any call to the methods <tt class="docutils literal"><span class="pre">filter</span></tt>, <tt class="docutils literal"><span class="pre">get</span></tt>, <tt class="docutils literal"><span class="pre">save</span></tt>, <tt class="docutils literal"><span class="pre">delete</span></tt> or any other function involving a database connection will now be done at the tenant&#8217;s schema, so you shouldn&#8217;t need to change anything at your views.</p>
+</div>
+<div class="section" id="management-commands">
+<h2>Management commands<a class="headerlink" href="#management-commands" title="Permalink to this headline">¶</a></h2>
+<p>Every command except tenant_command runs by default on all tenants. You can also create your own commands that run on every tenant by inheriting <tt class="docutils literal"><span class="pre">BaseTenantCommand</span></tt>. To run only a particular schema, there is an optional argument called <tt class="docutils literal"><span class="pre">--schema</span></tt>.</p>
+<div class="highlight-bash"><div class="highlight"><pre>./manage.py sync_schemas --schema<span class="o">=</span>customer1
+</pre></div>
+</div>
+<p>The command <tt class="docutils literal"><span class="pre">sync_schemas</span></tt> is the most important command on this app. The way it works is that it calls Django&#8217;s <tt class="docutils literal"><span class="pre">syncdb</span></tt> in two different ways. First, it calls <tt class="docutils literal"><span class="pre">syncdb</span></tt> for the <tt class="docutils literal"><span class="pre">public</span></tt> schema, only syncing the shared apps. Then it runs <tt class="docutils literal"><span class="pre">syncdb</span></tt> for every tenant in the database, this time only syncing the tenant apps.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">You should never directly call <tt class="docutils literal"><span class="pre">syncdb</span></tt>. We perform some magic in order to make <tt class="docutils literal"><span class="pre">syncdb</span></tt> only sync the appropriate apps.</p>
+</div>
+<p>The options given to <tt class="docutils literal"><span class="pre">sync_schemas</span></tt> are passed to every <tt class="docutils literal"><span class="pre">syncdb</span></tt>. So if you use South, you may find this handy</p>
+<div class="highlight-bash"><div class="highlight"><pre>./manage.py sync_schemas --migrate
+</pre></div>
+</div>
+<p>You can also use the option <tt class="docutils literal"><span class="pre">--tenant</span></tt> to only sync tenant apps or <tt class="docutils literal"><span class="pre">--shared</span></tt> to only sync shared apps.</p>
+<div class="highlight-bash"><div class="highlight"><pre>./manage.py sync_schemas --shared <span class="c"># will only sync the public schema</span>
+</pre></div>
+</div>
+<p>We&#8217;ve also packed south&#8217;s migrate command in a compatible way with this app. It will also respect the <tt class="docutils literal"><span class="pre">SHARED_APPS</span></tt> and <tt class="docutils literal"><span class="pre">TENANT_APPS</span></tt> settings, so if you&#8217;re migrating the <tt class="docutils literal"><span class="pre">public</span></tt> schema it will only migrate <tt class="docutils literal"><span class="pre">SHARED_APPS</span></tt>. If you&#8217;re migrating tenants, it will only migrate <tt class="docutils literal"><span class="pre">TENANT_APPS</span></tt>.</p>
+<div class="highlight-bash"><div class="highlight"><pre>./manage.py migrate_schemas
+</pre></div>
+</div>
+<p>The options given to <tt class="docutils literal"><span class="pre">migrate_schemas</span></tt> are also passed to every <tt class="docutils literal"><span class="pre">migrate</span></tt>. Hence you may find handy</p>
+<div class="highlight-bash"><div class="highlight"><pre>./manage.py migrate_schemas --list
+</pre></div>
+</div>
+<p>Or</p>
+<div class="highlight-bash"><div class="highlight"><pre>./manage.py migrate_schemas myapp 0001_initial --fake
+</pre></div>
+</div>
+<p>in case you&#8217;re just switching your <tt class="docutils literal"><span class="pre">myapp</span></tt> application to use South migrations.</p>
+<p>To run any command on an individual schema, you can use the special <tt class="docutils literal"><span class="pre">tenant_command</span></tt>, which creates a wrapper around your command so that it only runs on the schema you specify. For example</p>
+<div class="highlight-bash"><div class="highlight"><pre>./manage.py tenant_command createsuperuser
+</pre></div>
+</div>
+<p>If you don&#8217;t specify a schema, you will be prompted to enter one. Otherwise, you may specify a schema preemptively</p>
+<div class="highlight-bash"><div class="highlight"><pre>./manage.py tenant_command createsuperuser --schema<span class="o">=</span>customer1
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Using django-tenant-schemas</a><ul>
+<li><a class="reference internal" href="#creating-a-tenant">Creating a Tenant</a></li>
+<li><a class="reference internal" href="#management-commands">Management commands</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="install.html"
+                        title="previous chapter">Installation</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="examples.html"
+                        title="next chapter">Examples</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/use.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="examples.html" title="Examples"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="install.html" title="Installation"
+             >previous</a> |</li>
+        <li><a href="index.html">django-tenant-schema dev documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Bernardo Pires Carneiro.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b3.
+    </div>
+  </body>
+</html>
