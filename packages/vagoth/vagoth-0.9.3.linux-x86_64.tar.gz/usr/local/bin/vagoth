@@ -1,0 +1,378 @@
+#!/usr/bin/python
+#
+# Vagoth Cluster Management Framework
+# Copyright (C) 2013  Robert Thomson
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
+
+#
+# This command line tool works with the virtualisation types, plugins,
+# and actions to let you control a single cluster of VM (Virtual Machine)
+# and HV (Hypervisor) nodes.  It also serves as an example of how to use
+# the Vagoth framework.
+#
+
+from vagoth.manager import get_manager
+from vagoth.transaction import Transaction
+from vagoth.exceptions import NodeNotFoundException, ProvisioningException
+import fnmatch
+import argparse
+import json
+import getpass
+import logging
+import sys
+
+# log to standard output
+ch = logging.StreamHandler()
+logging.getLogger().addHandler(ch)
+logging.getLogger().setLevel(logging.INFO)
+
+def pprint(dictionary, indent=0):
+    dump = json.dumps(dictionary, indent=2)
+    if indent > 0:
+        space = " "*indent
+        dump = space+dump.replace("\n", "\n"+space)
+    print(dump)
+
+manager = None
+
+p_global = argparse.ArgumentParser(add_help=True,
+    formatter_class=argparse.RawTextHelpFormatter)
+p_global.add_argument("-v", "--verbose", action='store_true')
+p_global_subs = p_global.add_subparsers(title="subcommands", description="""Commands to manage nodes in Vagoth
+
+A typical lifecycle of a VM would be:
+  * new <node_id> [--name=name] [--type=vm] [--tags a=b c=d] -- [k1=v1 ...] (make a new VM)
+  * start <vm_name> (allocator assigns VM to node and starts it)
+  * shutdown <vm_name> (polite shutdown of VM)
+  * undefine <vm_name> (unassign VM from current HV)
+  * deprovision <vm_name> (wipe VM data, and remove from current HV)
+  * delete <vm_name> (provisioner removes VM from cluster)
+""")
+
+# helper function to create a subcommand with argparse
+def make_subcommand(command, helptext, function):
+    global p_global_subs
+    epilog = function.__doc__
+    if epilog:
+        # FIXME: nicer way to strip but still support indenting?
+        epilog = epilog.strip().replace("\n    ","\n")
+    parser = p_global_subs.add_parser(command, help=helptext,
+                                      description=helptext, epilog=epilog,
+                                      formatter_class=argparse.RawTextHelpFormatter)
+    parser.set_defaults(func=function, _command=command)
+    # always add --verbose to subcommands too
+    parser.add_argument("-v", "--verbose", action='store_true')
+    return parser
+
+def _format_tags(tags):
+    """Given a dictionary of user tags, return them formatted for display"""
+    assert type(tags) == dict
+    out = []
+    for k,v in sorted(tags.items()):
+        if v in (True, None):
+            out.append(k)
+        else:
+            out.append("{0}=\"{1}\"".format(k,v.replace('"', '\\"')))
+    return " ".join(out)
+
+def cmd_list(args):
+    """List all VMs managed by Vagoth, with filtering.
+
+    eg. to list all nodes with a brief summary:
+        $ vagoth list
+    eg. to list all running VMs:
+        $ vagoth list --state running
+    eg. to only list nodes whose name starts with myprefix:
+        $ vagoth list myprefix
+    eg. to list all 'vm' type nodes with tags mytag1=x and mybooleantag exists, and
+        with a name prefix of 'myprefix'
+        $ vagoth list --type vm --tags mytag1=x mybooleantag -- myprefix
+    eg. list the VM with the uniquekey of ip_192.168.1.1
+        $ vagoth list --uniquekey ip_192.168.1.1
+    """
+    global manager
+    node_dict = dict([(node.node_id, node) for node in manager.get_nodes(tenant=args.tenant)])
+    for node in sorted(node_dict.values()):
+        if args.name_glob:
+            glob = args.name_glob
+            if not glob.endswith("*"): glob = glob + "*"
+            if not fnmatch.fnmatch(node.name, glob):
+                continue
+        if args.type and node.node_type != args.type:
+            continue
+        if args.tags:
+            tag_matches = {}
+            for tag in args.tags:
+                if "=" in tag:
+                    tag_name,tag_value = tag.split("=",1)
+                    tag_matches[tag_name] = tag_value
+                else:
+                    tag_matches[tag] = None
+            if not node.matches_tags(tag_matches):
+                continue
+        if args.uniquekey and args.uniquekey not in node.unique_keys:
+            continue
+        if args.state and node.state != args.state:
+            continue
+        parent_id = node.parent_id
+        assignment = parent_id and node_dict[parent_id].name or ""
+        nicetags = _format_tags(node.tags)
+        if nicetags:
+            nicetags = "  tags=("+nicetags+")"
+        print("{0:<15}  state={1:<10}  type={2:<2}  parent={3:<12}{4}".format(
+            node.name, node.state, node.node_type,
+            assignment, nicetags))
+p_list = make_subcommand("list", "List all VMs", cmd_list)
+p_list.add_argument("name_glob", type=str, help="Name glob/prefix", default=None, nargs='?')
+p_list.add_argument("--tenant", type=str, default=False, help="Limit to the specified tenant")
+p_list.add_argument("--tags", "-t", type=str, nargs="*", help="Limit by tag (key=value, or just key)", default=None)
+p_list.add_argument("--type", "-T", type=str, help="Limit by type", default=None)
+p_list.add_argument("--uniquekey", "-k", type=str, help="Limit by unique key", default=None)
+p_list.add_argument("--state", "-s", type=str, help="Limit by node state", default=None)
+
+def print_node_and_children(node, parents, indent=0):
+    global manager
+    print("  "*indent+"{0} [{1}] type={2}".format(node.name, node.state, node.node_type))
+    children = parents.get(node.node_id, [])
+    for child in children:
+        print_node_and_children(child, parents, indent+1)
+
+def cmd_tree(args):
+    global manager
+    roots = []
+    orphans = []
+    parents = {}
+    node_dict = dict([(node.node_id, node) for node in manager.get_nodes()])
+    for node in node_dict.values():
+        if node.parent_id is None:
+            if node.node_type == "hv":
+                roots.append(node)
+            else:
+                orphans.append(node)
+        else:
+            if node.parent_id in parents:
+                parents[node.parent_id].append(node)
+            else:
+                parents[node.parent_id] = [node,]
+    for node in sorted(roots, lambda x, y: cmp(x.name, y.name)):
+        print_node_and_children(node, parents, indent=0)
+    if len(orphans) > 0:
+        print("Orphans:")
+        for node in orphans:
+            print_node_and_children(node, {}, 1)
+p_tree = make_subcommand("tree", "List all VMs as a tree", cmd_tree)
+
+def status(command, node_name, msg):
+    print("{0}: {1} ({2})".format(command, msg, node_name))
+
+def fail(command, node_name, msg, exit_code=1):
+    status(command, node_name, msg)
+    sys.exit(exit_code)
+
+
+def cmd_start(args):
+    global manager
+    vm = manager.get_node_by_name(args.vm_name)
+    try:
+        vm.start()
+        status("start", args.vm_name, "OK")
+    except AttributeError:
+        fail("start", args.vm_name, "unsupported action")
+p_start = make_subcommand("start", "Start a VM (& allocate if required)", cmd_start)
+p_start.add_argument("vm_name", type=str, help="Name of VM")
+
+
+def cmd_stop(args):
+    global manager
+    vm = manager.get_node_by_name(args.vm_name)
+    try:
+        vm.stop()
+        status("stop", args.vm_name, "OK")
+    except AttributeError:
+        fail("stop", args.vm_name, "unsupported action")
+p_stop = make_subcommand("stop", "Stop a VM", cmd_stop)
+p_stop.add_argument("vm_name", type=str, help="Name of VM")
+
+
+def cmd_shutdown(args):
+    global manager
+    vm = manager.get_node_by_name(args.vm_name)
+    try:
+        vm.shutdown()
+        status("shutdown", args.vm_name, "OK")
+    except:
+        fail("shutdown", args.vm_name, "unsupported action")
+p_shutdown = make_subcommand("shutdown", "Politely stop a VM", cmd_shutdown)
+p_shutdown.add_argument("vm_name", type=str, help="Name of VM")
+
+
+def cmd_info(args):
+    global manager
+    vm = manager.get_node_by_name(args.vm_name)
+    print("id = {0}".format(json.dumps(vm.node_id)))
+    print("name = {0}".format(json.dumps(vm.name)))
+    print("tenant = {0}".format(json.dumps(vm.tenant)))
+    parent = vm.parent
+    print("parent = {0}".format(json.dumps(parent and parent.name or None)))
+    print("definition =")
+    pprint(vm.definition, 2)
+    print("metadata =")
+    pprint(vm.metadata, 2)
+    print("tags =")
+    pprint(vm.tags, 2)
+    print("unique keys =")
+    pprint(vm.unique_keys, 2)
+p_info = make_subcommand("info", "Display information about a VM", cmd_info)
+p_info.add_argument("vm_name", type=str, help="Name of VM")
+
+
+def cmd_undefine(args):
+    global manager
+    vm = manager.get_node_by_name(args.vm_name)
+    node = vm.parent
+    vm.state = 'unassigned'
+    if node:
+        try:
+            vm.undefine()
+            status("undefine", args.vm_name, "OK")
+        except AttributeError:
+            fail("undefine", args.vm_name, "unsupported action")
+    else:
+        fail("undefine", args.vm_name, "vm has no parent node")
+p_undefine = make_subcommand("undefine", "Undefine VM from a node", cmd_undefine)
+p_undefine.add_argument("vm_name", type=str, help="Name of VM")
+
+
+def cmd_define(args):
+    global manager
+    vm = manager.get_node_by_name(args.vm_name)
+    try:
+        vm.define()
+        status("define", args.vm_name, "OK")
+    except AttributeError:
+        fail("define", args.vm_name, "unsupported action")
+p_define = make_subcommand("define", "Define a VM on a node", cmd_define)
+p_define.add_argument("vm_name", type=str, help="Name of VM")
+p_define.add_argument("-H", "--hint", help="Optional hint for the VM allocation plugin")
+
+
+def cmd_provision(args):
+    global manager
+    vm = manager.get_node(args.vm_name)
+    try:
+        vm.provision()
+        status("provision", args.vm_name, "OK")
+    except AttributeError:
+        fail("provision", args.vm_name, "unsupported action")
+p_provision = make_subcommand("provision", "Provision a VM on a node (re-init first)", cmd_provision)
+p_provision.add_argument("vm_name", type=str, help="Name of VM")
+
+
+def cmd_deprovision(args):
+    global manager
+    vm = manager.get_node(args.vm_name)
+    if vm.parent:
+        try:
+            vm.deprovision()
+            status("deprovision", args.vm_name, "OK")
+        except AttributeError:
+            fail("deprovision", args.vm_name, "unsupported action")
+p_deprovision = make_subcommand("deprovision", "Deprovision a VM on a node", cmd_deprovision)
+p_deprovision.add_argument("vm_name", type=str, help="Name of VM")
+
+
+def cmd_new(args):
+    global manager
+    definition = {}
+    for arg in args.kwarg:
+        if "=" not in arg:
+            fail("new", args.node_id, "Invalid keyword argument: {0}".format(arg))
+        k,v = arg.split("=",1)
+        definition[k] = v
+    tags = {}
+    for tag in args.tags or []:
+        if "=" in tag:
+            k,v = tag.split("=",1)
+            tags[k] = v
+        else:
+            tags[tag] = True
+    try:
+        manager.provisioner.provision(args.node_id,
+            node_name=args.name or args.node_id,
+            node_type=args.type,
+            tenant=args.tenant,
+            definition=definition,
+            tags = tags)
+        status("new", args.node_id, "OK")
+    except ProvisioningException as e:
+        fail("new", args.node_id, e.message)
+p_new = make_subcommand("new", "Create a new VM in the cluster", cmd_new)
+p_new.add_argument("node_id", type=str, help="Node ID")
+p_new.add_argument("--name", type=str, help="Node name", default=None)
+p_new.add_argument("--tenant", type=str, help="Tenant identifier [None]", default=None)
+p_new.add_argument("--type", type=str, help="Node type [vm]", default="vm")
+p_new.add_argument("--tags", type=str, nargs="*", help="key=value format node tags", default=None)
+p_new.add_argument("kwarg", nargs="*", help="key=value arguments")
+
+
+def cmd_delete(args):
+    global manager
+    node = manager.get_node_by_name(args.node_name)
+    try:
+        manager.provisioner.deprovision(node.node_id)
+        status("delete", args.node_name, "OK")
+    except ProvisioningException as e:
+        fail("delete", args.node_name, e.message)
+p_delete = make_subcommand("delete", "Delete a node from the cluster (must not be assigned)", cmd_delete)
+p_delete.add_argument("node_name", type=str, help="Name of VM")
+
+
+def cmd_rename(args):
+    global manager
+    node = manager.get_node_by_name(args.old_name)
+    manager.registry.set_node(node.node_id, node_name=args.new_name)
+p_rename = make_subcommand("rename", "Rename a node (nice name only)", cmd_rename)
+p_rename.add_argument("old_name", type=str, help="Current name of VM")
+p_rename.add_argument("new_name", type=str, help="New name of VM")
+
+
+def cmd_poll(args):
+    global manager
+    manager.action("vm_poll")
+p_poll = make_subcommand("poll", "Poll cluster for status", cmd_poll)
+
+
+if __name__ == '__main__':
+    args = p_global.parse_args()
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    with Transaction(getpass.getuser()):
+        manager = None
+        try:
+            manager = get_manager()
+            try:
+                args.func(args)
+            except NodeNotFoundException as e:
+                if hasattr(args, "vm_name"):
+                    fail(args._command, args.vm_name, "node not found")
+                elif hasattr(args, "node_name"):
+                    fail(args._command, args.node_name, "node not found")
+                else:
+                    raise
+        finally:
+            if manager:
+                manager.cleanup()
