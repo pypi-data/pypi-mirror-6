@@ -1,0 +1,2 @@
+class NoneValueError(Exception):
+    pass
