@@ -1,0 +1,219 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+{% load staticfiles %}
+<head>
+    <title>Pygments</title>
+    <link rel="stylesheet" href="{% static "css/pygmentsplugin.css" %}">
+    <script type="text/javascript" src="{% static mce_popup_location %}"></script>
+<script src="{% static jquery_location %}"></script>
+    <script type="text/javascript">
+
+    function collect_data()
+    {
+            var csrftoken = getCookie('csrftoken');
+            // Insert the contents from the input into the document
+            var data = { lang: $('#lang').val(),code: $('#code').val(),
+                                   style: $('#style').val(),
+                                   linenos: $('#linenos').is(':checked'),
+                                   csrfmiddlewaretoken:  csrftoken};
+
+            if (data['linenos'] == true)
+            {
+                data['linenostart'] = $('#linenostart').val();
+                data['highlight'] = $('#highlight').val();
+            }            
+
+	    return data;
+    }
+
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie != '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = jQuery.trim(cookies[i]);
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                    cookieValue = decodeURIComponent(
+                        cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    tinyMCEPopup.requireLangPack();
+
+    var ExampleDialog = {
+        init : function() {
+            var f = document.forms[0];
+            // Get the selected contents as text and place it in the input
+            f.code.value = tinyMCEPopup.editor.selection.getContent(
+                                                         {format : 'text'});
+            },
+
+        insert : function() {
+         if($('#srcattach').is(':checked'))
+         {
+            if($('#srcattachname').val().trim() == "")
+            {
+                alert("You must specify a filename for the source code");
+                return;
+            }
+         }
+
+            // Insert the contents from the input into the document
+            var fdata = collect_data();
+            fdata['srcattach'] = $('#srcattach').is(':checked');
+            fdata['srcattachname'] = $('#srcattachname').val();
+            $.post(".", fdata,
+            function(data) {
+                $('#code').val(data);
+                tinyMCEPopup.editor.execCommand('mceInsertContent',
+                                     false, document.forms[0].code.value);
+                tinyMCEPopup.close();      
+            });
+        },
+
+        view_code : function() {
+                $( "#view_code" ).removeClass( "inactive");
+                $( "#preview" ).addClass( "inactive");
+		$('#previewtab').hide();
+		$('#codetab').show();
+
+	},
+        toggle_linenos : function() {
+
+             if(!$('#linenos').is(':checked'))
+             {
+                 $('#linenostart').attr('disabled', true);
+                 $('#highlight').attr('disabled', true);
+             }
+             else
+             {
+                 $('#linenostart').attr('disabled', false);
+                 $('#highlight').attr('disabled', false);
+             }
+
+        },
+        toggle_srcattach : function() {
+
+             if(!$('#srcattach').is(':checked'))
+             {
+                 $('#srcattachname').attr('disabled', true);
+             }
+             else
+             {
+                 $('#srcattachname').attr('disabled', false);
+             }
+
+        },
+
+	preview : function() {
+		$('#codetab').hide();
+		$('#previewtab').show();
+
+                $( "#view_code" ).addClass( "inactive");
+                $( "#preview" ).removeClass( "inactive");
+		var req_data = collect_data();
+                $.ajax({
+			url:'{% url 'pygments' %}',
+			type:'POST',
+			data : req_data,
+		}).done(function(msg)
+		{
+			$('#previewcontent').html(msg);
+		});
+
+	}
+    };
+
+    tinyMCEPopup.onInit.add(ExampleDialog.init, ExampleDialog);
+
+     $(document).ready(function()
+     {
+         if(!$('#linenos').is(':checked'))
+         {
+            $('#linenostart').attr('disabled', true);
+            $('#highlight').attr('disabled', true);
+         }
+         if(!$('#srcattach').is(':checked'))
+         {
+            $('#srcattachname').attr('disabled', true);
+         }
+
+     });
+    </script>
+</head>
+<body>
+
+    <form id="pygments_form" method="POST" action="{% url 'pygments' %}">
+        {% csrf_token %}
+        <div id="langcontrol" class="control">
+            <span class="controllabel"><label>Language:</label></span>
+            <select id="lang" name="lang" type="text" class="text">
+		{% for lang in langs %}
+                <option value="{{ lang.1 }}" >{{ lang.0 }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div id="stylecontrol" class="control">
+            <span class="controllabel"><label>Style:</label></span>
+            <select id="style" name="style" type="text" class="text">
+                {% for style in styles %}
+		<option value="{{ style }}">{{style}}</option>
+                {% endfor %}
+            </select>
+        </div>
+	<div id="linenoscontrol" class="control">
+            <span class="controllabel"><label>Show Line Numbers?:</label></span>
+		<input type="checkbox" id="linenos" name="linenos" value="linenos" onchange="ExampleDialog.toggle_linenos()"></input>
+	</div>
+
+	<div id="linenostartcontrol" class="control">
+            <span class="controllabel"><label>Line Numbers start at:</label></span>
+		<input type="number" id="linenostart" name="linenostart" value="1"></input>
+	</div>
+	<div id="highlightcontrol" class="control">
+            <span class="controllabel"><label>Highlight lines (comma seperated, e.g. 1,2,5):</label></span>
+		<input type="text" id="highlight" name="highlight" value=""></input>
+	</div>
+        <div class="clear"></div>
+
+
+                <input type="button" class="tabbutton " id="view_code" name="view_code" value="Code" onclick="ExampleDialog.view_code();" />
+                <input type="button" class="tabbutton inactive" id="preview" name="preview" value="Preview" onclick="ExampleDialog.preview();" />
+        <div class="clear"></div>
+        <div id="tab-container" class="tab-container">
+	        <div id="codetab">
+                    <textarea id="code" name="code" cols="80" rows="10"></textarea>
+	        </div>
+	        <div id="previewtab" style="display:none">
+		    <div id="previewcontent">
+
+		    </div>
+	        </div>
+	</div>
+        <div id="options">
+                <div id="sourceattachcontrol" class="control">
+		Include raw source code link: <input type="checkbox" id="srcattach" name="srcattach" value="srcattach" onchange="ExampleDialog.toggle_srcattach();"></input>
+                </div>
+                <div id="sourceattachnamecontrol" class="control">
+		Filename to use (e.g. mycode.py): <input type="text" id="srcattachname" name="srcattachname" value=""></input>
+                </div>
+        <div>
+        <div class="clear"></div>
+        <div class="mceActionPanel">
+            <div style="float: left">
+                <input type="button" id="insert" name="insert" value="{#insert}" onclick="ExampleDialog.insert();" />
+            </div>
+
+            <div style="float: right">
+                <input type="button" id="cancel" name="cancel" value="{#cancel}" onclick="tinyMCEPopup.close();" />
+            </div>
+        </div>
+    </form>
+
+</body>
+</html>
