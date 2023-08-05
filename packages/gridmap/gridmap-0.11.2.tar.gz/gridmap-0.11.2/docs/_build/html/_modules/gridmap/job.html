@@ -1,0 +1,922 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>gridmap.job &mdash; GridMap 0.10.3 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/nature.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.10.3',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="GridMap 0.10.3 documentation" href="../../index.html" />
+    <link rel="up" title="gridmap" href="../gridmap.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">GridMap 0.10.3 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../gridmap.html" accesskey="U">gridmap</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for gridmap.job</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="c"># Written (W) 2008-2012 Christian Widmer</span>
+<span class="c"># Written (W) 2008-2010 Cheng Soon Ong</span>
+<span class="c"># Written (W) 2012-2013 Daniel Blanchard, dblanchard@ets.org</span>
+<span class="c"># Copyright (C) 2008-2012 Max-Planck-Society, 2012-2013 ETS</span>
+
+<span class="c"># This file is part of GridMap.</span>
+
+<span class="c"># GridMap is free software: you can redistribute it and/or modify</span>
+<span class="c"># it under the terms of the GNU General Public License as published by</span>
+<span class="c"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c"># (at your option) any later version.</span>
+
+<span class="c"># GridMap is distributed in the hope that it will be useful,</span>
+<span class="c"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c"># GNU General Public License for more details.</span>
+
+<span class="c"># You should have received a copy of the GNU General Public License</span>
+<span class="c"># along with GridMap.  If not, see &lt;http://www.gnu.org/licenses/&gt;.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This module provides wrappers that simplify submission and collection of jobs,</span>
+<span class="sd">in a more &#39;pythonic&#39; fashion.</span>
+
+<span class="sd">We use pyZMQ to provide a heart beat feature that allows close monitoring</span>
+<span class="sd">of submitted jobs and take appropriate action in case of failure.</span>
+
+<span class="sd">:author: Christian Widmer</span>
+<span class="sd">:author: Cheng Soon Ong</span>
+<span class="sd">:author: Dan Blanchard (dblanchard@ets.org)</span>
+
+<span class="sd">:var REDIS_DB: The index of the database to select on the Redis server; can be</span>
+<span class="sd">               overriden by setting the GRID_MAP_REDIS_DB environment variable.</span>
+<span class="sd">:var REDIS_PORT: The port of the Redis server to use; can be overriden by</span>
+<span class="sd">                 setting the GRID_MAP_REDIS_PORT environment variable.</span>
+<span class="sd">:var USE_MEM_FREE: Does your cluster support specifying how much memory a job</span>
+<span class="sd">                   will use via mem_free? Can be overriden by setting the</span>
+<span class="sd">                   GRID_MAP_USE_MEM_FREE environment variable.</span>
+<span class="sd">:var DEFAULT_QUEUE: The default job scheduling queue to use; can be overriden</span>
+<span class="sd">                    via the GRID_MAP_DEFAULT_QUEUE environment variable.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="p">(</span><span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span>
+                        <span class="n">unicode_literals</span><span class="p">)</span>
+
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">multiprocessing</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">email.mime.multipart</span> <span class="kn">import</span> <span class="n">MIMEMultipart</span>
+<span class="kn">from</span> <span class="nn">email.mime.text</span> <span class="kn">import</span> <span class="n">MIMEText</span>
+<span class="kn">from</span> <span class="nn">email.mime.image</span> <span class="kn">import</span> <span class="n">MIMEImage</span>
+<span class="kn">from</span> <span class="nn">io</span> <span class="kn">import</span> <span class="nb">open</span>
+<span class="kn">from</span> <span class="nn">multiprocessing</span> <span class="kn">import</span> <span class="n">Pool</span>
+<span class="kn">from</span> <span class="nn">socket</span> <span class="kn">import</span> <span class="n">gethostbyname</span><span class="p">,</span> <span class="n">gethostname</span>
+<span class="kn">from</span> <span class="nn">subprocess</span> <span class="kn">import</span> <span class="n">Popen</span>
+
+<span class="kn">import</span> <span class="nn">zmq</span>
+
+<span class="kn">from</span> <span class="nn">gridmap.conf</span> <span class="kn">import</span> <span class="p">(</span><span class="n">CHECK_FREQUENCY</span><span class="p">,</span> <span class="n">CREATE_PLOTS</span><span class="p">,</span> <span class="n">DEFAULT_QUEUE</span><span class="p">,</span>
+                          <span class="n">DRMAA_PRESENT</span><span class="p">,</span> <span class="n">ERROR_MAIL_RECIPIENT</span><span class="p">,</span>
+                          <span class="n">ERROR_MAIL_SENDER</span><span class="p">,</span> <span class="n">MAX_MSG_LENGTH</span><span class="p">,</span>
+                          <span class="n">MAX_TIME_BETWEEN_HEARTBEATS</span><span class="p">,</span> <span class="n">NUM_RESUBMITS</span><span class="p">,</span>
+                          <span class="n">SEND_ERROR_MAILS</span><span class="p">,</span> <span class="n">SMTP_SERVER</span><span class="p">,</span> <span class="n">USE_CHERRYPY</span><span class="p">,</span>
+                          <span class="n">USE_MEM_FREE</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">gridmap.data</span> <span class="kn">import</span> <span class="n">clean_path</span><span class="p">,</span> <span class="n">zdumps</span><span class="p">,</span> <span class="n">zloads</span>
+<span class="kn">from</span> <span class="nn">gridmap.runner</span> <span class="kn">import</span> <span class="n">_heart_beat</span>
+
+<span class="k">if</span> <span class="n">DRMAA_PRESENT</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">drmaa</span> <span class="kn">import</span> <span class="n">JobControlAction</span><span class="p">,</span> <span class="n">Session</span>
+
+<span class="c"># Python 2.x backward compatibility</span>
+<span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+    <span class="nb">range</span> <span class="o">=</span> <span class="nb">xrange</span>
+
+
+<div class="viewcode-block" id="JobException"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.JobException">[docs]</a><span class="k">class</span> <span class="nc">JobException</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    New exception type for when one of the jobs crashed.</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">pass</span>
+
+</div>
+<div class="viewcode-block" id="Job"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.Job">[docs]</a><span class="k">class</span> <span class="nc">Job</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Central entity that wraps a function and its data. Basically, a job consists</span>
+<span class="sd">    of a function, its argument list, its keyword list and a field &quot;ret&quot; which</span>
+<span class="sd">    is filled, when the execute method gets called.</span>
+
+<span class="sd">    :note: This can only be used to wrap picklable functions (i.e., those that</span>
+<span class="sd">    are defined at the module or class level).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;_f&#39;</span><span class="p">,</span> <span class="s">&#39;args&#39;</span><span class="p">,</span> <span class="s">&#39;jobid&#39;</span><span class="p">,</span> <span class="s">&#39;kwlist&#39;</span><span class="p">,</span> <span class="s">&#39;cleanup&#39;</span><span class="p">,</span> <span class="s">&#39;ret&#39;</span><span class="p">,</span> <span class="s">&#39;exception&#39;</span><span class="p">,</span>
+                 <span class="s">&#39;num_slots&#39;</span><span class="p">,</span> <span class="s">&#39;mem_free&#39;</span><span class="p">,</span> <span class="s">&#39;white_list&#39;</span><span class="p">,</span> <span class="s">&#39;path&#39;</span><span class="p">,</span>
+                 <span class="s">&#39;uniq_id&#39;</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">,</span> <span class="s">&#39;queue&#39;</span><span class="p">,</span> <span class="s">&#39;environment&#39;</span><span class="p">,</span> <span class="s">&#39;working_dir&#39;</span><span class="p">,</span>
+                 <span class="s">&#39;cause_of_death&#39;</span><span class="p">,</span> <span class="s">&#39;num_resubmits&#39;</span><span class="p">,</span> <span class="s">&#39;home_address&#39;</span><span class="p">,</span>
+                 <span class="s">&#39;log_stderr_fn&#39;</span><span class="p">,</span> <span class="s">&#39;log_stdout_fn&#39;</span><span class="p">,</span> <span class="s">&#39;timestamp&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwlist</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">cleanup</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">mem_free</span><span class="o">=</span><span class="s">&quot;1G&quot;</span><span class="p">,</span>
+                 <span class="n">name</span><span class="o">=</span><span class="s">&#39;gridmap_job&#39;</span><span class="p">,</span> <span class="n">num_slots</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="n">DEFAULT_QUEUE</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initializes a new Job.</span>
+
+<span class="sd">        :param f: a function, which should be executed.</span>
+<span class="sd">        :type f: function</span>
+<span class="sd">        :param args: argument list of function f</span>
+<span class="sd">        :type args: list</span>
+<span class="sd">        :param kwlist: dictionary of keyword arguments for f</span>
+<span class="sd">        :type kwlist: dict</span>
+<span class="sd">        :param cleanup: flag that determines the cleanup of input and log file</span>
+<span class="sd">        :type cleanup: boolean</span>
+<span class="sd">        :param mem_free: Estimate of how much memory this job will need (for</span>
+<span class="sd">                         scheduling)</span>
+<span class="sd">        :type mem_free: str</span>
+<span class="sd">        :param name: Name to give this job</span>
+<span class="sd">        :type name: str</span>
+<span class="sd">        :param num_slots: Number of slots this job should use.</span>
+<span class="sd">        :type num_slots: int</span>
+<span class="sd">        :param queue: SGE queue to schedule job on.</span>
+<span class="sd">        :type queue: str</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_stdout_fn</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_stderr_fn</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">home_address</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_resubmits</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cause_of_death</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">path</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_f</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">function</span> <span class="o">=</span> <span class="n">f</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="n">args</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jobid</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kwlist</span> <span class="o">=</span> <span class="n">kwlist</span> <span class="k">if</span> <span class="n">kwlist</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cleanup</span> <span class="o">=</span> <span class="n">cleanup</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ret</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_slots</span> <span class="o">=</span> <span class="n">num_slots</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mem_free</span> <span class="o">=</span> <span class="n">mem_free</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">white_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="s">&#39;_&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span> <span class="o">=</span> <span class="n">queue</span>
+        <span class="c"># Save copy of environment variables</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">environment</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_var</span><span class="p">:</span> <span class="n">value</span> <span class="k">for</span> <span class="n">env_var</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span>
+                            <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">working_dir</span> <span class="o">=</span> <span class="n">clean_path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">())</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">function</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39; Function this job will execute. &#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_f</span>
+
+    <span class="nd">@function.setter</span>
+<div class="viewcode-block" id="Job.function"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.Job.function">[docs]</a>    <span class="k">def</span> <span class="nf">function</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        setter for function that carefully takes care of</span>
+<span class="sd">        namespace, avoiding __main__ as a module</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">m</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getmodule</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">path</span> <span class="o">=</span> <span class="n">clean_path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span>
+                <span class="n">inspect</span><span class="o">.</span><span class="n">getsourcefile</span><span class="p">(</span><span class="n">f</span><span class="p">))))</span>
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">path</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+
+        <span class="c"># if module is not __main__, all is good</span>
+        <span class="k">if</span> <span class="n">m</span><span class="o">.</span><span class="n">__name__</span> <span class="o">!=</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_f</span> <span class="o">=</span> <span class="n">f</span>
+
+        <span class="k">else</span><span class="p">:</span>
+
+            <span class="c"># determine real module name</span>
+            <span class="n">mn</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">__file__</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+
+            <span class="c"># make sure module is present</span>
+            <span class="nb">__import__</span><span class="p">(</span><span class="n">mn</span><span class="p">)</span>
+
+            <span class="c"># get module</span>
+            <span class="n">mod</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="n">mn</span><span class="p">]</span>
+
+            <span class="c"># set function from module</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_f</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Job.execute"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.Job.execute">[docs]</a>    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Executes function f with given arguments</span>
+<span class="sd">        and writes return value to field ret.</span>
+<span class="sd">        If an exception is encountered during execution, ret will</span>
+<span class="sd">        contain a pickled version of it.</span>
+<span class="sd">        Input data is removed after execution to save space.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ret</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">kwlist</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exception</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ret</span> <span class="o">=</span> <span class="n">exception</span>
+            <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+        <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">args</span>
+        <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">kwlist</span>
+</div>
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="Job.native_specification"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.Job.native_specification">[docs]</a>    <span class="k">def</span> <span class="nf">native_specification</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        define python-style getter</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">ret</span> <span class="o">=</span> <span class="s">&quot;-shell yes -b yes&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">+=</span> <span class="s">&quot; -N {0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mem_free</span> <span class="ow">and</span> <span class="n">USE_MEM_FREE</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">+=</span> <span class="s">&quot; -l mem_free={0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mem_free</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_slots</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_slots</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">+=</span> <span class="s">&quot; -pe smp {0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_slots</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">white_list</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">+=</span> <span class="s">&quot; -l h={0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s">&#39;|&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">white_list</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">+=</span> <span class="s">&quot; -q {0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">ret</span>
+
+
+<span class="c">###############################</span>
+<span class="c"># Job Submission and Monitoring</span>
+<span class="c">###############################</span>
+</div></div>
+<div class="viewcode-block" id="JobMonitor"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.JobMonitor">[docs]</a><span class="k">class</span> <span class="nc">JobMonitor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Job monitor that communicates with other nodes via 0MQ.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        set up socket</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+        <span class="n">context</span> <span class="o">=</span> <span class="n">zmq</span><span class="o">.</span><span class="n">Context</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">zmq</span><span class="o">.</span><span class="n">REP</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">host_name</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">gethostname</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ip_address</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">gethostbyname</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">interface</span> <span class="o">=</span> <span class="s">&quot;tcp://</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ip_address</span><span class="p">)</span>
+
+        <span class="c"># bind to random port and remember it</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">port</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">bind_to_random_port</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">interface</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">home_address</span> <span class="o">=</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s">:</span><span class="si">%i</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">interface</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;setting up connection on </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">home_address</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">USE_CHERRYPY</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;starting web interface&quot;</span><span class="p">)</span>
+            <span class="c"># TODO: Check that it isn&#39;t already running</span>
+            <span class="n">Popen</span><span class="p">([</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">,</span> <span class="s">&quot;-m&quot;</span><span class="p">,</span> <span class="s">&quot;gridmap.web&quot;</span><span class="p">])</span>
+
+        <span class="c"># uninitialized field (set in check method)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jobids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_id</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jobid_to_job</span> <span class="o">=</span> <span class="p">{}</span>
+
+
+    <span class="k">def</span> <span class="nf">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        clean up open socket</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="JobMonitor.check"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.JobMonitor.check">[docs]</a>    <span class="k">def</span> <span class="nf">check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session_id</span><span class="p">,</span> <span class="n">jobs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        serves input and output data</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+        <span class="c"># save list of jobs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span> <span class="o">=</span> <span class="n">jobs</span>
+
+        <span class="c"># keep track of DRMAA session_id (for resubmissions)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_id</span> <span class="o">=</span> <span class="n">session_id</span>
+
+        <span class="c"># save useful mapping</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jobid_to_job</span> <span class="o">=</span> <span class="p">{</span><span class="n">job</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">job</span> <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="n">jobs</span><span class="p">}</span>
+
+        <span class="c"># determines in which interval to check if jobs are alive</span>
+        <span class="n">local_heart</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">_heart_beat</span><span class="p">,</span>
+                                              <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">home_address</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+                                                    <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="n">CHECK_FREQUENCY</span><span class="p">))</span>
+        <span class="n">local_heart</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Using ZMQ layer to keep track of jobs&quot;</span><span class="p">)</span>
+        <span class="c"># main loop</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_jobs_done</span><span class="p">():</span>
+
+            <span class="n">msg_str</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">recv</span><span class="p">()</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="n">zloads</span><span class="p">(</span><span class="n">msg_str</span><span class="p">)</span>
+
+            <span class="n">return_msg</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+
+            <span class="n">job_id</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s">&quot;job_id&quot;</span><span class="p">]</span>
+
+            <span class="c"># only if its not the local beat</span>
+            <span class="k">if</span> <span class="n">job_id</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+
+                <span class="n">job</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobid_to_job</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Received message: </span><span class="si">%s</span><span class="s">&#39;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s">&quot;command&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;fetch_input&quot;</span><span class="p">:</span>
+                    <span class="n">return_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobid_to_job</span><span class="p">[</span><span class="n">job_id</span><span class="p">]</span>
+
+                <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s">&quot;command&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;store_output&quot;</span><span class="p">:</span>
+                    <span class="c"># be nice</span>
+                    <span class="n">return_msg</span> <span class="o">=</span> <span class="s">&quot;thanks&quot;</span>
+                    <span class="c"># store tmp job object</span>
+                    <span class="n">tmp_job</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s">&quot;data&quot;</span><span class="p">]</span>
+                    <span class="c"># copy relevant fields</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">ret</span> <span class="o">=</span> <span class="n">tmp_job</span><span class="o">.</span><span class="n">ret</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">exception</span> <span class="o">=</span> <span class="n">tmp_job</span><span class="o">.</span><span class="n">exception</span>
+                    <span class="c"># is assigned in submission process and not written back</span>
+                    <span class="c"># server-side</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+
+                <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s">&quot;command&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;heart_beat&quot;</span><span class="p">:</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">heart_beat</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s">&quot;data&quot;</span><span class="p">]</span>
+
+                    <span class="c"># keep track of mem and cpu</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">job</span><span class="o">.</span><span class="n">track_mem</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">heart_beat</span><span class="p">[</span><span class="s">&quot;memory&quot;</span><span class="p">]))</span>
+                        <span class="n">job</span><span class="o">.</span><span class="n">track_cpu</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">heart_beat</span><span class="p">[</span><span class="s">&quot;cpu_load&quot;</span><span class="p">]))</span>
+                    <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;error decoding heart-beat&quot;</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                    <span class="n">return_msg</span> <span class="o">=</span> <span class="s">&quot;all good&quot;</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+
+                <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s">&quot;command&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;get_job&quot;</span><span class="p">:</span>
+                    <span class="c"># serve job for display</span>
+                    <span class="n">return_msg</span> <span class="o">=</span> <span class="n">job</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c"># update host name</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">host_name</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s">&quot;host_name&quot;</span><span class="p">]</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c"># run check</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">check_if_alive</span><span class="p">()</span>
+
+                <span class="k">if</span> <span class="n">msg</span><span class="p">[</span><span class="s">&quot;command&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;get_jobs&quot;</span><span class="p">:</span>
+                    <span class="c"># serve list of jobs for display</span>
+                    <span class="n">return_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span>
+
+            <span class="c"># send back compressed response</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">zdumps</span><span class="p">(</span><span class="n">return_msg</span><span class="p">))</span>
+
+        <span class="n">local_heart</span><span class="o">.</span><span class="n">terminate</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="JobMonitor.check_if_alive"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.JobMonitor.check_if_alive">[docs]</a>    <span class="k">def</span> <span class="nf">check_if_alive</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        check if jobs are alive and determine cause of death if not</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">:</span>
+
+            <span class="c"># noting was returned yet</span>
+            <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">ret</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+
+                <span class="c"># exclude first-timers</span>
+                <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+
+                    <span class="c"># only check heart-beats if there was a long delay</span>
+                    <span class="n">current_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+                    <span class="n">time_delta</span> <span class="o">=</span> <span class="n">current_time</span> <span class="o">-</span> <span class="n">job</span><span class="o">.</span><span class="n">timestamp</span>
+
+                    <span class="k">if</span> <span class="n">time_delta</span><span class="o">.</span><span class="n">seconds</span> <span class="o">&gt;</span> <span class="n">MAX_TIME_BETWEEN_HEARTBEATS</span><span class="p">:</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;job died for unknown reason&quot;</span><span class="p">)</span>
+                        <span class="n">job</span><span class="o">.</span><span class="n">cause_of_death</span> <span class="o">=</span> <span class="s">&quot;unknown&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+
+                <span class="c"># could have been an exception, we check right away</span>
+                <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">is_out_of_memory</span><span class="p">():</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;job was out of memory&quot;</span><span class="p">)</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">cause_of_death</span> <span class="o">=</span> <span class="s">&quot;out_of_memory&quot;</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">ret</span> <span class="o">=</span> <span class="bp">None</span>
+
+                <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">ret</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">):</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;job encountered exception, will not resubmit&quot;</span><span class="p">)</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">cause_of_death</span> <span class="o">=</span> <span class="s">&quot;exception&quot;</span>
+                    <span class="n">send_error_mail</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">ret</span> <span class="o">=</span> <span class="s">&quot;job dead (with non-memory related exception)&quot;</span>
+
+
+            <span class="c"># attempt to resubmit</span>
+            <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">cause_of_death</span> <span class="ow">in</span> <span class="p">{</span><span class="s">&quot;out_of_memory&quot;</span><span class="p">,</span> <span class="s">&quot;unknown&quot;</span><span class="p">}:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;creating error report&quot;</span><span class="p">)</span>
+
+                <span class="c"># send report</span>
+                <span class="n">send_error_mail</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
+
+                <span class="c"># try to resubmit</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">handle_resubmit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_id</span><span class="p">,</span> <span class="n">job</span><span class="p">):</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;giving up on job&quot;</span><span class="p">)</span>
+                    <span class="n">job</span><span class="o">.</span><span class="n">ret</span> <span class="o">=</span> <span class="s">&quot;job dead&quot;</span>
+
+                <span class="c"># break out of loop to avoid too long delay</span>
+                <span class="k">break</span>
+
+</div>
+<div class="viewcode-block" id="JobMonitor.all_jobs_done"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.JobMonitor.all_jobs_done">[docs]</a>    <span class="k">def</span> <span class="nf">all_jobs_done</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        checks for all jobs if they are done</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobs</span><span class="p">:</span>
+            <span class="c"># exceptions will be handled in check_if_alive</span>
+            <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">ret</span> <span class="o">==</span> <span class="bp">None</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">ret</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="k">return</span> <span class="bp">True</span>
+
+</div></div>
+<div class="viewcode-block" id="send_error_mail"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.send_error_mail">[docs]</a><span class="k">def</span> <span class="nf">send_error_mail</span><span class="p">(</span><span class="n">job</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    send out diagnostic email</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+    <span class="c"># create message</span>
+    <span class="n">msg</span> <span class="o">=</span> <span class="n">MIMEMultipart</span><span class="p">()</span>
+    <span class="n">msg</span><span class="p">[</span><span class="s">&quot;subject&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;GridMap error {0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">msg</span><span class="p">[</span><span class="s">&quot;From&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ERROR_MAIL_SENDER</span>
+    <span class="n">msg</span><span class="p">[</span><span class="s">&quot;To&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ERROR_MAIL_RECIPIENT</span>
+
+    <span class="c"># compose error message</span>
+    <span class="n">body_text</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+    <span class="n">body_text</span> <span class="o">+=</span> <span class="s">&quot;job {0}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">body_text</span> <span class="o">+=</span> <span class="s">&quot;last timestamp: {0}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">timestamp</span><span class="p">)</span>
+    <span class="n">body_text</span> <span class="o">+=</span> <span class="s">&quot;num_resubmits: {0}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">num_resubmits</span><span class="p">)</span>
+    <span class="n">body_text</span> <span class="o">+=</span> <span class="s">&quot;cause_of_death: {0}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">cause_of_death</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">heart_beat</span><span class="p">:</span>
+        <span class="n">body_text</span> <span class="o">+=</span> <span class="s">&quot;last memory usage: {0}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">heart_beat</span><span class="p">[</span><span class="s">&quot;memory&quot;</span><span class="p">])</span>
+        <span class="n">body_text</span> <span class="o">+=</span> <span class="s">&quot;last cpu load: {0}</span><span class="se">\n\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">heart_beat</span><span class="p">[</span><span class="s">&quot;cpu_load&quot;</span><span class="p">])</span>
+
+    <span class="n">body_text</span> <span class="o">+=</span> <span class="s">&quot;host: {0}</span><span class="se">\n\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">host_name</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">ret</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">):</span>
+        <span class="n">body_text</span> <span class="o">+=</span> <span class="s">&quot;job encountered exception: {0}</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">ret</span><span class="p">)</span>
+        <span class="n">body_text</span> <span class="o">+=</span> <span class="s">&quot;stacktrace: {0}</span><span class="se">\n\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">exception</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Email body: </span><span class="si">%s</span><span class="s">&#39;</span><span class="p">,</span> <span class="n">body_text</span><span class="p">)</span>
+
+    <span class="n">body_msg</span> <span class="o">=</span> <span class="n">MIMEText</span><span class="p">(</span><span class="n">body_text</span><span class="p">)</span>
+    <span class="n">msg</span><span class="o">.</span><span class="n">attach</span><span class="p">(</span><span class="n">body_msg</span><span class="p">)</span>
+
+    <span class="c"># attach log file</span>
+    <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">heart_beat</span><span class="p">:</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">heart_beat</span><span class="p">[</span><span class="s">&quot;log_file&quot;</span><span class="p">],</span> <span class="s">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">log_file</span><span class="p">:</span>
+            <span class="n">log_file_attachement</span> <span class="o">=</span> <span class="n">MIMEText</span><span class="p">(</span><span class="n">log_file</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+        <span class="n">msg</span><span class="o">.</span><span class="n">attach</span><span class="p">(</span><span class="n">log_file_attachement</span><span class="p">)</span>
+
+    <span class="c"># if matplotlib is installed</span>
+    <span class="k">if</span> <span class="n">CREATE_PLOTS</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+        <span class="c">#TODO: plot to cstring directly (some code is there)</span>
+        <span class="c">#imgData = cStringIO.StringIO()</span>
+        <span class="c">#plt.savefig(imgData, format=&#39;png&#39;)</span>
+
+        <span class="c"># rewind the data</span>
+        <span class="c">#imgData.seek(0)</span>
+        <span class="c">#plt.savefig(imgData, format=&quot;png&quot;)</span>
+
+        <span class="c"># attack mem plot</span>
+        <span class="n">img_mem_fn</span> <span class="o">=</span> <span class="s">&quot;/tmp/&quot;</span> <span class="o">+</span> <span class="n">job</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot;_mem.png&quot;</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">track_mem</span><span class="p">,</span> <span class="s">&quot;-o&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;memory usage&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">img_mem_fn</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">img_mem_fn</span><span class="p">,</span> <span class="s">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">img_mem</span><span class="p">:</span>
+            <span class="n">img_mem_attachement</span> <span class="o">=</span> <span class="n">MIMEImage</span><span class="p">(</span><span class="n">img_mem</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+        <span class="n">msg</span><span class="o">.</span><span class="n">attach</span><span class="p">(</span><span class="n">img_mem_attachement</span><span class="p">)</span>
+
+        <span class="c"># attach cpu plot</span>
+        <span class="n">img_cpu_fn</span> <span class="o">=</span> <span class="s">&quot;/tmp/&quot;</span> <span class="o">+</span> <span class="n">job</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot;_cpu.png&quot;</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">track_cpu</span><span class="p">,</span> <span class="s">&quot;-o&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;cpu load&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">img_cpu_fn</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">img_cpu_fn</span><span class="p">,</span> <span class="s">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">img_cpu</span><span class="p">:</span>
+            <span class="n">img_cpu_attachement</span> <span class="o">=</span> <span class="n">MIMEImage</span><span class="p">(</span><span class="n">img_cpu</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+        <span class="n">msg</span><span class="o">.</span><span class="n">attach</span><span class="p">(</span><span class="n">img_cpu_attachement</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">SEND_ERROR_MAILS</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">smtplib</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">smtplib</span><span class="o">.</span><span class="n">SMTP</span><span class="p">(</span><span class="n">SMTP_SERVER</span><span class="p">)</span>
+        <span class="n">s</span><span class="o">.</span><span class="n">sendmail</span><span class="p">(</span><span class="n">ERROR_MAIL_SENDER</span><span class="p">,</span> <span class="n">ERROR_MAIL_RECIPIENT</span><span class="p">,</span>
+                   <span class="n">msg</span><span class="o">.</span><span class="n">as_string</span><span class="p">()[</span><span class="mi">0</span><span class="p">:</span><span class="n">MAX_MSG_LENGTH</span><span class="p">])</span>
+        <span class="n">s</span><span class="o">.</span><span class="n">quit</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="handle_resubmit"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.handle_resubmit">[docs]</a><span class="k">def</span> <span class="nf">handle_resubmit</span><span class="p">(</span><span class="n">session_id</span><span class="p">,</span> <span class="n">job</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    heuristic to determine if the job should be resubmitted</span>
+
+<span class="sd">    side-effect:</span>
+<span class="sd">    job.num_resubmits incremented</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># reset some fields</span>
+    <span class="n">job</span><span class="o">.</span><span class="n">timestamp</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">job</span><span class="o">.</span><span class="n">heart_beat</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">num_resubmits</span> <span class="o">&lt;</span> <span class="n">NUM_RESUBMITS</span><span class="p">:</span>
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&quot;Looks like job died an unnatural death, resubmitting&quot;</span> <span class="o">+</span>
+                       <span class="s">&quot;(previous resubmits = </span><span class="si">%i</span><span class="s">)&quot;</span><span class="p">,</span> <span class="n">job</span><span class="o">.</span><span class="n">num_resubmits</span><span class="p">)</span>
+
+        <span class="c"># remove node from white_list</span>
+        <span class="n">node_name</span> <span class="o">=</span> <span class="s">&#39;{0}@{1}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">queue</span><span class="p">,</span> <span class="n">job</span><span class="o">.</span><span class="n">host_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">white_list</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">node_name</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">job</span><span class="o">.</span><span class="n">white_list</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">node_name</span><span class="p">)</span>
+
+        <span class="c"># increment number of resubmits</span>
+        <span class="n">job</span><span class="o">.</span><span class="n">num_resubmits</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">job</span><span class="o">.</span><span class="n">cause_of_death</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+
+        <span class="n">_resubmit</span><span class="p">(</span><span class="n">session_id</span><span class="p">,</span> <span class="n">job</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">True</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">False</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_execute</span><span class="p">(</span><span class="n">job</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Cannot pickle method instances, so fake a function.</span>
+<span class="sd">    Used by _process_jobs_locally&quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">job</span><span class="o">.</span><span class="n">f</span><span class="p">(</span><span class="o">*</span><span class="n">job</span><span class="o">.</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">job</span><span class="o">.</span><span class="n">kwlist</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_process_jobs_locally</span><span class="p">(</span><span class="n">jobs</span><span class="p">,</span> <span class="n">max_processes</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Local execution using the package multiprocessing, if present</span>
+
+<span class="sd">    :param jobs: jobs to be executed</span>
+<span class="sd">    :type jobs: list of Job</span>
+<span class="sd">    :param max_processes: maximal number of processes</span>
+<span class="sd">    :type max_processes: int</span>
+
+<span class="sd">    :return: list of jobs, each with return in job.ret</span>
+<span class="sd">    :rtype: list of Job</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;using </span><span class="si">%i</span><span class="s"> processes&quot;</span><span class="p">,</span> <span class="n">max_processes</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">max_processes</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="c"># perform sequential computation</span>
+        <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="n">jobs</span><span class="p">:</span>
+            <span class="n">job</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">pool</span> <span class="o">=</span> <span class="n">Pool</span><span class="p">(</span><span class="n">max_processes</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">pool</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_execute</span><span class="p">,</span> <span class="n">jobs</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">ix</span><span class="p">,</span> <span class="n">job</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">jobs</span><span class="p">):</span>
+            <span class="n">job</span><span class="o">.</span><span class="n">ret</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="n">ix</span><span class="p">]</span>
+        <span class="n">pool</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="n">pool</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">jobs</span>
+
+
+<span class="k">def</span> <span class="nf">_submit_jobs</span><span class="p">(</span><span class="n">jobs</span><span class="p">,</span> <span class="n">home_address</span><span class="p">,</span> <span class="n">temp_dir</span><span class="o">=</span><span class="s">&#39;/scratch&#39;</span><span class="p">,</span> <span class="n">white_list</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">quiet</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Method used to send a list of jobs onto the cluster.</span>
+<span class="sd">    :param jobs: list of jobs to be executed</span>
+<span class="sd">    :type jobs: list of `Job`</span>
+<span class="sd">    :param home_address: IP address of submitting machine. Running jobs will</span>
+<span class="sd">                         communicate with the parent process at that IP via ZMQ.</span>
+<span class="sd">    :type home_address: str</span>
+<span class="sd">    :param temp_dir: Local temporary directory for storing output for an</span>
+<span class="sd">                     individual job.</span>
+<span class="sd">    :type temp_dir: str</span>
+<span class="sd">    :param white_list: List of acceptable nodes to use for scheduling job. If</span>
+<span class="sd">                       None, all are used.</span>
+<span class="sd">    :type white_list: list of str</span>
+<span class="sd">    :param quiet: When true, do not output information about the jobs that have</span>
+<span class="sd">                  been submitted.</span>
+<span class="sd">    :type quiet: bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">Session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+        <span class="n">jobids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="n">jobs</span><span class="p">:</span>
+            <span class="c"># set job white list</span>
+            <span class="n">job</span><span class="o">.</span><span class="n">white_list</span> <span class="o">=</span> <span class="n">white_list</span>
+
+            <span class="c"># remember address of submission host</span>
+            <span class="n">job</span><span class="o">.</span><span class="n">home_address</span> <span class="o">=</span> <span class="n">home_address</span>
+
+            <span class="c"># append jobs</span>
+            <span class="n">jobid</span> <span class="o">=</span> <span class="n">_append_job_to_session</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">job</span><span class="p">,</span> <span class="n">temp_dir</span><span class="o">=</span><span class="n">temp_dir</span><span class="p">,</span>
+                                           <span class="n">quiet</span><span class="o">=</span><span class="n">quiet</span><span class="p">)</span>
+            <span class="n">jobids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">jobid</span><span class="p">)</span>
+
+        <span class="n">sid</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">contact</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">sid</span><span class="p">,</span> <span class="n">jobids</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_append_job_to_session</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">job</span><span class="p">,</span> <span class="n">temp_dir</span><span class="o">=</span><span class="s">&#39;/scratch/&#39;</span><span class="p">,</span> <span class="n">quiet</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    For an active session, append new job based on information stored in job</span>
+<span class="sd">    object. Also sets job.job_id to the ID of the job on the grid.</span>
+
+<span class="sd">    :param session: The current DRMAA session with the grid engine.</span>
+<span class="sd">    :type session: Session</span>
+<span class="sd">    :param job: The Job to add to the queue.</span>
+<span class="sd">    :type job: `Job`</span>
+<span class="sd">    :param temp_dir: Local temporary directory for storing output for an</span>
+<span class="sd">                    individual job.</span>
+<span class="sd">    :type temp_dir: str</span>
+<span class="sd">    :param quiet: When true, do not output information about the jobs that have</span>
+<span class="sd">                  been submitted.</span>
+<span class="sd">    :type quiet: bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">jt</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">createJobTemplate</span><span class="p">()</span>
+    <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;{0}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">environment</span><span class="p">))</span>
+    <span class="n">jt</span><span class="o">.</span><span class="n">jobEnvironment</span> <span class="o">=</span> <span class="n">job</span><span class="o">.</span><span class="n">environment</span>
+
+    <span class="c"># Run module using python -m to avoid ImportErrors when unpickling jobs</span>
+    <span class="n">jt</span><span class="o">.</span><span class="n">remoteCommand</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">executable</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">gethostbyname</span><span class="p">(</span><span class="n">gethostname</span><span class="p">())</span>
+    <span class="n">jt</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;-m&#39;</span><span class="p">,</span> <span class="s">&#39;gridmap.runner&#39;</span><span class="p">,</span> <span class="s">&#39;{0}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="s">&#39;{0}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ip</span><span class="p">),</span>
+               <span class="n">job</span><span class="o">.</span><span class="n">path</span><span class="p">]</span>
+    <span class="n">jt</span><span class="o">.</span><span class="n">nativeSpecification</span> <span class="o">=</span> <span class="n">job</span><span class="o">.</span><span class="n">native_specification</span>
+    <span class="n">jt</span><span class="o">.</span><span class="n">workingDirectory</span> <span class="o">=</span> <span class="n">job</span><span class="o">.</span><span class="n">working_dir</span>
+    <span class="n">jt</span><span class="o">.</span><span class="n">outputPath</span> <span class="o">=</span> <span class="s">&quot;:{0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">temp_dir</span><span class="p">)</span>
+    <span class="n">jt</span><span class="o">.</span><span class="n">errorPath</span> <span class="o">=</span> <span class="s">&quot;:{0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">temp_dir</span><span class="p">)</span>
+
+    <span class="c"># Create temp directory if necessary</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">temp_dir</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">temp_dir</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">((</span><span class="s">&quot;Failed to create temporary directory &quot;</span> <span class="o">+</span>
+                            <span class="s">&quot;{0}.  Your jobs may not start &quot;</span> <span class="o">+</span>
+                            <span class="s">&quot;correctly.&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">temp_dir</span><span class="p">))</span>
+
+    <span class="n">jobid</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">runJob</span><span class="p">(</span><span class="n">jt</span><span class="p">)</span>
+
+    <span class="c"># set job fields that depend on the jobid assigned by grid engine</span>
+    <span class="n">job</span><span class="o">.</span><span class="n">jobid</span> <span class="o">=</span> <span class="n">jobid</span>
+    <span class="n">job</span><span class="o">.</span><span class="n">log_stdout_fn</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">temp_dir</span><span class="p">,</span> <span class="s">&#39;{}.o{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">jobid</span><span class="p">))</span>
+    <span class="n">job</span><span class="o">.</span><span class="n">log_stderr_fn</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">temp_dir</span><span class="p">,</span> <span class="s">&#39;{}.e{}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">jobid</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">quiet</span><span class="p">:</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&#39;Your job {0} has been submitted with id {1}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                                                                   <span class="n">jobid</span><span class="p">),</span>
+              <span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+
+    <span class="n">session</span><span class="o">.</span><span class="n">deleteJobTemplate</span><span class="p">(</span><span class="n">jt</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">jobid</span>
+
+
+<div class="viewcode-block" id="process_jobs"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.process_jobs">[docs]</a><span class="k">def</span> <span class="nf">process_jobs</span><span class="p">(</span><span class="n">jobs</span><span class="p">,</span> <span class="n">temp_dir</span><span class="o">=</span><span class="s">&#39;/scratch/&#39;</span><span class="p">,</span> <span class="n">white_list</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">quiet</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                 <span class="n">max_processes</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">local</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Take a list of jobs and process them on the cluster.</span>
+
+<span class="sd">    :param jobs: Jobs to run.</span>
+<span class="sd">    :type jobs: list of Job</span>
+<span class="sd">    :param temp_dir: Local temporary directory for storing output for an</span>
+<span class="sd">                     individual job.</span>
+<span class="sd">    :type temp_dir: str</span>
+<span class="sd">    :param white_list: If specified, limit nodes used to only those in list.</span>
+<span class="sd">    :type white_list: list of str</span>
+<span class="sd">    :param quiet: When true, do not output information about the jobs that have</span>
+<span class="sd">                  been submitted.</span>
+<span class="sd">    :type quiet: bool</span>
+<span class="sd">    :param max_processes: The maximum number of concurrent processes to use if</span>
+<span class="sd">                          processing jobs locally.</span>
+<span class="sd">    :type max_processes: int</span>
+<span class="sd">    :param local: Should we execute the jobs locally in separate processes</span>
+<span class="sd">                  instead of on the the cluster?</span>
+<span class="sd">    :type local: bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">local</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">DRMAA_PRESENT</span><span class="p">):</span>
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Could not import drmaa. Processing jobs locally.&#39;</span><span class="p">)</span>
+        <span class="n">local</span> <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">local</span><span class="p">:</span>
+        <span class="c"># initialize monitor to get port number</span>
+        <span class="n">monitor</span> <span class="o">=</span> <span class="n">JobMonitor</span><span class="p">()</span>
+
+        <span class="c"># get interface and port</span>
+        <span class="n">home_address</span> <span class="o">=</span> <span class="n">monitor</span><span class="o">.</span><span class="n">home_address</span>
+
+        <span class="c"># jobid field is attached to each job object</span>
+        <span class="n">sid</span> <span class="o">=</span> <span class="n">_submit_jobs</span><span class="p">(</span><span class="n">jobs</span><span class="p">,</span> <span class="n">home_address</span><span class="p">,</span> <span class="n">temp_dir</span><span class="o">=</span><span class="n">temp_dir</span><span class="p">,</span>
+                           <span class="n">white_list</span><span class="o">=</span><span class="n">white_list</span><span class="p">,</span> <span class="n">quiet</span><span class="o">=</span><span class="n">quiet</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="c"># handling of inputs, outputs and heartbeats</span>
+        <span class="n">monitor</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">sid</span><span class="p">,</span> <span class="n">jobs</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_process_jobs_locally</span><span class="p">(</span><span class="n">jobs</span><span class="p">,</span> <span class="n">max_processes</span><span class="o">=</span><span class="n">max_processes</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">[</span><span class="n">job</span><span class="o">.</span><span class="n">ret</span> <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="n">jobs</span><span class="p">]</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_resubmit</span><span class="p">(</span><span class="n">session_id</span><span class="p">,</span> <span class="n">job</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Resubmit a failed job.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;starting resubmission process&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">DRMAA_PRESENT</span><span class="p">:</span>
+        <span class="c"># append to session</span>
+        <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="n">session_id</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+            <span class="c"># try to kill off old job</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="c"># TODO: ask SGE more questions about job status etc</span>
+                <span class="c"># TODO: write unit test for this</span>
+                <span class="n">session</span><span class="o">.</span><span class="n">control</span><span class="p">(</span><span class="n">job</span><span class="o">.</span><span class="n">jobid</span><span class="p">,</span> <span class="n">JobControlAction</span><span class="o">.</span><span class="n">TERMINATE</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;zombie job killed&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Could not kill job with SGE id </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">job</span><span class="o">.</span><span class="n">jobid</span><span class="p">,</span>
+                             <span class="n">exc_info</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="c"># create new job</span>
+            <span class="n">_append_job_to_session</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">job</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Could not restart job because we&#39;re in local mode.&quot;</span><span class="p">)</span>
+
+
+<span class="c">#####################</span>
+<span class="c"># MapReduce Interface</span>
+<span class="c">#####################</span>
+<div class="viewcode-block" id="grid_map"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.grid_map">[docs]</a><span class="k">def</span> <span class="nf">grid_map</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">args_list</span><span class="p">,</span> <span class="n">cleanup</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">mem_free</span><span class="o">=</span><span class="s">&quot;1G&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;gridmap_job&#39;</span><span class="p">,</span>
+             <span class="n">num_slots</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">temp_dir</span><span class="o">=</span><span class="s">&#39;/scratch/&#39;</span><span class="p">,</span> <span class="n">white_list</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+             <span class="n">queue</span><span class="o">=</span><span class="n">DEFAULT_QUEUE</span><span class="p">,</span> <span class="n">quiet</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Maps a function onto the cluster.</span>
+<span class="sd">    :note: This can only be used with picklable functions (i.e., those that are</span>
+<span class="sd">           defined at the module or class level).</span>
+
+<span class="sd">    :param f: The function to map on args_list</span>
+<span class="sd">    :type f: function</span>
+<span class="sd">    :param args_list: List of arguments to pass to f</span>
+<span class="sd">    :type args_list: list</span>
+<span class="sd">    :param cleanup: Should we remove the stdout and stderr temporary files for</span>
+<span class="sd">                    each job when we&#39;re done? (They are left in place if there&#39;s</span>
+<span class="sd">                    an error.)</span>
+<span class="sd">    :type cleanup: bool</span>
+<span class="sd">    :param mem_free: Estimate of how much memory each job will need (for</span>
+<span class="sd">                     scheduling). (Not currently used, because our cluster does</span>
+<span class="sd">                     not have that setting enabled.)</span>
+<span class="sd">    :type mem_free: str</span>
+<span class="sd">    :param name: Base name to give each job (will have a number add to end)</span>
+<span class="sd">    :type name: str</span>
+<span class="sd">    :param num_slots: Number of slots each job should use.</span>
+<span class="sd">    :type num_slots: int</span>
+<span class="sd">    :param temp_dir: Local temporary directory for storing output for an</span>
+<span class="sd">                     individual job.</span>
+<span class="sd">    :type temp_dir: str</span>
+<span class="sd">    :param white_list: If specified, limit nodes used to only those in list.</span>
+<span class="sd">    :type white_list: list of str</span>
+<span class="sd">    :param queue: The SGE queue to use for scheduling.</span>
+<span class="sd">    :type queue: str</span>
+<span class="sd">    :param quiet: When true, do not output information about the jobs that have</span>
+<span class="sd">                  been submitted.</span>
+<span class="sd">    :type quiet: bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c"># construct jobs</span>
+    <span class="n">jobs</span> <span class="o">=</span> <span class="p">[</span><span class="n">Job</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="p">[</span><span class="n">args</span><span class="p">]</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="n">args</span><span class="p">,</span>
+                <span class="n">cleanup</span><span class="o">=</span><span class="n">cleanup</span><span class="p">,</span> <span class="n">mem_free</span><span class="o">=</span><span class="n">mem_free</span><span class="p">,</span>
+                <span class="n">name</span><span class="o">=</span><span class="s">&#39;{0}{1}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">job_num</span><span class="p">),</span> <span class="n">num_slots</span><span class="o">=</span><span class="n">num_slots</span><span class="p">,</span>
+                <span class="n">queue</span><span class="o">=</span><span class="n">queue</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">job_num</span><span class="p">,</span> <span class="n">args</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">args_list</span><span class="p">)]</span>
+
+    <span class="c"># process jobs</span>
+    <span class="n">job_results</span> <span class="o">=</span> <span class="n">process_jobs</span><span class="p">(</span><span class="n">jobs</span><span class="p">,</span> <span class="n">temp_dir</span><span class="o">=</span><span class="n">temp_dir</span><span class="p">,</span> <span class="n">white_list</span><span class="o">=</span><span class="n">white_list</span><span class="p">,</span>
+                               <span class="n">quiet</span><span class="o">=</span><span class="n">quiet</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">job_results</span>
+
+</div>
+<div class="viewcode-block" id="pg_map"><a class="viewcode-back" href="../../gridmap.html#gridmap.job.pg_map">[docs]</a><span class="k">def</span> <span class="nf">pg_map</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">args_list</span><span class="p">,</span> <span class="n">cleanup</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">mem_free</span><span class="o">=</span><span class="s">&quot;1G&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;gridmap_job&#39;</span><span class="p">,</span>
+           <span class="n">num_slots</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">temp_dir</span><span class="o">=</span><span class="s">&#39;/scratch/&#39;</span><span class="p">,</span> <span class="n">white_list</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+           <span class="n">queue</span><span class="o">=</span><span class="n">DEFAULT_QUEUE</span><span class="p">,</span> <span class="n">quiet</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :deprecated: This function has been renamed grid_map.</span>
+
+<span class="sd">    :param f: The function to map on args_list</span>
+<span class="sd">    :type f: function</span>
+<span class="sd">    :param args_list: List of arguments to pass to f</span>
+<span class="sd">    :type args_list: list</span>
+<span class="sd">    :param cleanup: Should we remove the stdout and stderr temporary files for</span>
+<span class="sd">                    each job when we&#39;re done? (They are left in place if there&#39;s</span>
+<span class="sd">                    an error.)</span>
+<span class="sd">    :type cleanup: bool</span>
+<span class="sd">    :param mem_free: Estimate of how much memory each job will need (for</span>
+<span class="sd">                     scheduling). (Not currently used, because our cluster does</span>
+<span class="sd">                     not have that setting enabled.)</span>
+<span class="sd">    :type mem_free: str</span>
+<span class="sd">    :param name: Base name to give each job (will have a number add to end)</span>
+<span class="sd">    :type name: str</span>
+<span class="sd">    :param num_slots: Number of slots each job should use.</span>
+<span class="sd">    :type num_slots: int</span>
+<span class="sd">    :param temp_dir: Local temporary directory for storing output for an</span>
+<span class="sd">                     individual job.</span>
+<span class="sd">    :type temp_dir: str</span>
+<span class="sd">    :param white_list: If specified, limit nodes used to only those in list.</span>
+<span class="sd">    :type white_list: list of str</span>
+<span class="sd">    :param queue: The SGE queue to use for scheduling.</span>
+<span class="sd">    :type queue: str</span>
+<span class="sd">    :param quiet: When true, do not output information about the jobs that have</span>
+<span class="sd">                  been submitted.</span>
+<span class="sd">    :type quiet: bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">grid_map</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">args_list</span><span class="p">,</span> <span class="n">cleanup</span><span class="o">=</span><span class="n">cleanup</span><span class="p">,</span> <span class="n">mem_free</span><span class="o">=</span><span class="n">mem_free</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">num_slots</span><span class="o">=</span><span class="n">num_slots</span><span class="p">,</span> <span class="n">temp_dir</span><span class="o">=</span><span class="n">temp_dir</span><span class="p">,</span>
+                    <span class="n">white_list</span><span class="o">=</span><span class="n">white_list</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="n">queue</span><span class="p">,</span> <span class="n">quiet</span><span class="o">=</span><span class="n">quiet</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">GridMap 0.10.3 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../gridmap.html" >gridmap</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2008-2012 Max-Planck-Society, 2012-2013 ETS.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
