@@ -1,0 +1,161 @@
+Kaoz
+====
+
+.. image:: https://travis-ci.org/BinetReseau/Kaoz.png?branch=master
+    :target: https://travis-ci.org/BinetReseau/Kaoz
+
+General purpose
+---------------
+
+Kaoz is a free notifier for IRC. It's purpose is to provide an easy to use way for System Administrators to send warnings and logs on any choosen IRC channel.
+It therefore uses a persistent daemon, which is called the *server* later on, that will listen on a given port, optionnaly with ssl enabled.
+The server expects lines to have the format ``password:channel:message``, like ``secret:#help:Hello``.
+``password`` is a global password required to use the service.
+``channel`` is an irc channel on the configured network. (Kaoz will join the channel to do so).
+A *client* is an application which connects to the server to send messages on IRC.
+Please note that, in case you whish to agregate many servers' notifications, you may have only one Kaoz server, but you should multiply clients.
+
+Licence
+-------
+
+Kaoz is provided under a MIT-like licence. See the licence file for more informations.
+
+Dependencies
+------------
+
+* python
+* python ssl module (if you whish to use SSL)
+* python irc library (https://bitbucket.org/jaraco/irc)
+
+Installation of the server
+--------------------------
+
+First, copy the config to the location of your choice, for example ``/etc/kaoz.conf``.
+Then edit the ``kaoz.conf`` file to provide correct values for the IRC Server and the listening socket.
+The daemon is started with the ``bin/kaoz`` program.
+There is a Gentoo ``init.d`` file in ``initd/kaoz`` for your interest.
+It should be easy to figure out how to adapt this file to your distribution.
+
+Known limitations
+-----------------
+
+* Kaoz does not support key-protected channels.
+
+Kaoz client examples
+--------------------
+
+Sending messages to IRC
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Here are some ways to send ``Hello`` to channel ``#help`` using a Kaoz server which is listenning on host ``myhost`` port ``4242``, protected with password ``secret``.
+For that purpose, a client needs to send ``secret:#help:Hello`` to the server (with an optional LF or CR+LF, as you want).
+
+* In Shell, for simple servers without SSL, use one of the following lines:
+
+.. code-block:: sh
+
+    echo "secret:#help:Hello" |netcat myhost 4242
+    echo "secret:#help:Hello" |socat - TCP:myhost:4242
+
+* In Shell, for servers which use SSL certificates:
+
+.. code-block:: sh
+
+    echo "secret:#help:Hello" |socat - OPENSSL:myhost:4242
+
+* In Shell, for servers which use SSL certificates and a trusted authority certificate file (CA file):
+
+.. code-block:: sh
+
+    echo "secret:#help:Hello" |socat - OPENSSL:myhost:4242,verify,cafile=myca.crt
+
+* In Python without SSL:
+
+.. code-block:: python
+
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(('myhost', 4242))
+    sock.sendall('%s:%s:%s' % ('secret', '#help', 'Hello'))
+    sock.close()
+
+* In Python with SSL:
+
+.. code-block:: python
+
+    import socket
+    import ssl
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(('myhost', 4242))
+    # use these options to check CA: cert_reqs=ssl.CERT_REQUIRED, certfile='myca.crt'
+    sock = ssl.wrap_socket(self.sock)
+    sock.sendall('%s:%s:%s' % ('secret', '#help', 'Hello'))
+    sock.close()
+
+Kaoz server support multi-lined messages, so long as each lines begins with the password and a channel.
+
+Sending commands to Koaz
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+A Kaoz server also accepts basic commands which enable its monitoring.
+When a client wants to run ``command`` on the server, she needs to send ``secret::command`` and the server replies directly in the socket.
+The double colon that it is a command, rather than a message to send to IRC.
+
+The following commands are supported (there is only one for the time being):
+
+* ``channels``: get the list of channels the server has joined.
+
+
+About IRC style and colors
+--------------------------
+
+Some control sequences allow IRC users to write messages with style and colors (``^X`` means ``Ctrl+X``):
+
+* ``^B`` (= x02) Bold text
+* ``^C`` (= x03) Colored text
+* ``^O`` (= x0F) Back to original plain text
+* ``^R`` (= x16) Reversed text
+* ``^_`` (= x1F) Underlined text
+
+There are 16 colors:
+
+1. Black
+2. Navy Blue
+3. Green
+4. Red
+5. Brown
+6. Purple
+7. Olive
+8. Yellow
+9. Lime Green
+10. Teal
+11. Aqua Light
+12. Royal Blue
+13. Hot Pink
+14. Dark Gray
+15. Light Gray
+16. White
+
+For example ``^C2Hello`` writes Hello in blue.
+
+Contact
+-------
+
+Kaoz is provided by *Binet Réseau*, a student association from France's École polytechnique.
+If you have inquiries, comments or suggestions, you may contact us at br@eleves.polytechnique.fr
+
+::
+
+                 ________________
+               _/ ______________ \_
+             _/ _/              \_ \
+            / _/   ____    ____   \ \
+           / /    / __ \  / __ \   | |
+          / /    / /_/ / / /_/ /   | |
+          | |   / _, <  / _, _/    | |
+          | |  / /_/ / / / | |     | |
+          | | /_____/ /_/  | |    / /
+           \ \              \ \__/ /
+            \ \_             \____/
+             \_ \________________
+               \________________/
