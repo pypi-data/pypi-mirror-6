@@ -1,0 +1,1 @@
+# nicnames package for whois and DNS
