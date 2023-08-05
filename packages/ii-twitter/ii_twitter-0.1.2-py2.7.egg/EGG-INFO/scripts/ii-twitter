@@ -1,0 +1,68 @@
+#!python
+# encoding: utf-8
+
+import re
+import sys
+import argh
+import tweepy
+from os import path
+from sh import tail
+
+
+def api(access_token, access_secret):
+    auth = tweepy.OAuthHandler("KwayVtavdRYPKmnSuZO2w", "vvhA31BhosJdcpjmQJk8ORqp7M0whIDBlIAGqwAQ")
+    auth.set_access_token(access_token, access_secret)
+    return tweepy.API(auth)
+
+
+def send_tweet(twitter, tweet):
+    tweet_size = len(re.sub("https://\S*", "X" * 23, re.sub("http://\S*", "X" * 22, tweet)))
+    if tweet_size < 141:
+        twitter.update_status(tweet)
+        return "Grand succès!"
+
+    return "Too long: %s chars" % tweet_size
+
+
+def handle_twitter(twitter, message, in_file):
+    tweet = message.split(" ", 1)[1].strip()
+
+    with open(in_file, "a") as write_on_irc:
+        write_on_irc.write(send_tweet(twitter, tweet))
+        write_on_irc.write("\n")
+        write_on_irc.flush()
+
+
+def handle_count(message, in_file):
+    message = message.split(" ", 1)[1].strip()
+    size = len(re.sub("https://\S*", "X" * 23, re.sub("http://\S*", "X" * 22, message)))
+
+    with open(in_file, "a") as write_on_irc:
+        write_on_irc.write("%s chars\n" % size)
+        write_on_irc.flush()
+
+
+def main(access_token, access_secret, out_file):
+    in_file = path.join(path.split(out_file)[0], "in")
+    twitter = api(access_token, access_secret)
+    for line in tail(out_file, f=True, _iter=True, n=0):
+        date, time, nick, message = line.split(" ", 3)
+        if not nick.startswith("<"):
+            continue
+
+        nick = nick[1:-1]
+        sys.stdout.write("%s %s %s: %s" % (date, time, nick, message))
+        sys.stdout.flush()
+
+        if message.startswith("!twitter "):
+            sys.stdout.write("twitter: %s\n", message.split(" ", 1)[1])
+            sys.stdout.flush()
+            handle_twitter(twitter, message, in_file)
+        elif message.startswith("!count "):
+            sys.stdout.write("count: %s\n", message.split(" ", 1)[1])
+            sys.stdout.flush()
+            handle_count(message, in_file)
+
+
+if __name__ == '__main__':
+    argh.dispatch_command(main)
