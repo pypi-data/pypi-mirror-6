@@ -1,0 +1,244 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+
+<title>htmltemplate | class definitions</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<style type="text/css" media="all"><!--@import url(full.css);--></style>
+
+<!--[if !IE 7]>
+	<style type="text/css">
+		#wrap {display:table;height:100%}
+	</style>
+<![endif]-->
+
+</head>
+<body>
+
+<div id="wrap">
+
+	<div id="main">
+
+		<h1>Class definitions</h1>
+
+		<div class="navbar">
+			<a href="template_object_model.html">Prev</a> | <a href="index.html">TOC</a> | <a href="tutorial_2.html">Next</a>
+		</div>
+
+		<h2>Overview</h2>
+
+<p>htmltemplate defines the following class hierarchy:</p>
+
+<pre><code>Node
+ |
+ |- Container
+ |   |
+ |   |- Repeater
+ |
+ |- Template
+
+Attributes
+
+ParseError
+</code></pre>
+
+<p>These classes are documented below.</p>
+
+<h2><code>Node</code></h2>
+
+<p>This abstract base class is subclassed by the <code>Template</code>, <code>Container</code> and <code>Repeater</code> classes from which the template object model is constructed. Each node in the object model contains zero or more named properties corresponding to the node directives declared in the original HTML template.</p>
+
+<pre><code>Node -- Abstract base class
+
+    nodetype : str (r/o) -- the node's type ('con', 'rep' or 'tem')
+
+    nodename : str (r/o) -- the node's name
+
+    «NAME» : Node -- a sub-node, as declared by a compiler directive in the 
+                     template HTML, where «NAME» is the sub-node's name. 
+                     A node may contain zero or more Container and/or
+                     Repeater sub-nodes.
+
+    __iter__() -- can be used to iterate over a node's sub-nodes (e.g. for
+                  introspection purposes) [1]
+        Result : generator
+
+    structure() -- output the hierarchical structure of this node and
+                   its sub-nodes for diagnostic purposes
+        Result : str
+
+    copy() -- duplicate this node (including any sub-nodes)
+        Result : Node -- a new Container/Repeater/Template object
+
+    render(fn, *args, **kwargs) -- render this node as HTML
+        fn : function | None -- the controller function responsible for
+                                inserting content into the node [2]
+        *args : any -- extra values to pass to the controller function
+        **kwargs : any -- extra values to pass to the controller function
+        Result : str -- the generated HTML
+</code></pre>
+
+<p><code>[1]</code> See the <code>demo7_simple_interpolation.py</code> script in the <code>sample</code> folder for a demonstration of use.</p>
+
+<p><code>[2]</code> The <code>render</code> method's first argument is normally a controller function that takes the following arguments:</p>
+
+<pre><code>node : Node -- a copy of this node to manipulate
+*args : any -- extra  values that were passed to the 'render' method
+**kwargs : any -- extra  values that were passed to the 'render' method
+</code></pre>
+
+<p>If given, the <code>render</code> method will pass a <em>copy</em> of the node to the function to manipulate, then render it as an HTML string. Otherwise, if <code>None</code>, the <code>render</code> method will render the original node as HTML.</p>
+
+<h2><code>Container</code></h2>
+
+<p><code>Container</code> objects represent HTML elements whose content can be manipulated by controller code. A Container node is rendered once, unless its <code>omit</code> method is called, in which case it won't appear at all. The HTML template can declare a Container node using the <code>con</code> directive (e.g. <code>&lt;h1 node="con:title"&gt;</code>).</p>
+
+<pre><code>Container(Node) -- A mutable HTML element ('con')
+
+    atts : Attributes -- a dict-like object representing the element's 
+                         tag attributes
+
+    text : str -- the element's content as plain text. HTML entities are
+                  automatically encoded/decoded. [1][2]
+
+    html : str -- the element's content as raw HTML. Unlike the `text`
+                  property, HTML entities are not encoded/decoded 
+                  automatically. [1][3]
+
+    __len__() -- returns 0 if this node is omitted, else 1
+        Result : int
+
+    omit() -- don't render this node
+
+    omittags() -- don't render this node's tags, only its content
+</code></pre>
+
+<p><code>[1]</code> If the node is derived from an empty HTML element (e.g. <code>&lt;hr node="..."/&gt;</code>), setting its <code>text</code> or <code>html</code> property has no effect. If the node is derived from an non-empty HTML element (e.g. <code>&lt;p node="..."&gt;...&lt;/p&gt;</code>), setting these properties replaces any existing content with the given text or HTML (if the node contains any sub-nodes, these will be deleted). Note that non-string values will be automatically cast to <code>str</code>.</p>
+
+<p><code>[2]</code> By default, HTML entities are encoded using the <code>htmltemplate</code> module's <code>encodeentity</code> function which encodes the <code>&amp;</code>, <code>&lt;</code>, <code>&gt;</code> and <code>"</code> characters only, unless an alternate encoder function was specified in <code>Template.__init__()</code>.</p>
+
+<p><code>[3]</code> The <code>html</code> property should only be used when getting/setting the node's content as raw HTML markup, otherwise the <code>text</code> property should be used. When setting the <code>html</code> property, it is the user's responsibility to sanitize the new content as appropriate (escaping reserved <code>&amp;</code>, <code>&lt;</code>, <code>&gt;</code>, <code>"</code> characters, stripping inappropriate tags, checking for malicious code, etc.) to ensure injection attacks, malform HTML output, etc. are avoided.</p>
+
+<h2><code>Repeater</code></h2>
+
+<p><code>Repeater</code> objects are containers that can appear any number of times in the rendered output. The HTML template can declare a Repeater node using the <code>rep</code> directive (e.g. <code>node="rep:list_item"</code>).</p>
+
+<pre><code>Repeater(Container) -- A mutable, repeatable HTML element ('rep')
+
+    __len__() -- the number of times this node has already been repeated
+                 (omitted instances are ignored)
+        Result : int
+
+    add(fn, *args, **kwargs) -- render a copy of this node
+        fn : function -- the controller function responsible for inserting
+                         content into the node [1]
+        *args : any -- extra values to pass to the controller function
+        **kwargs : any -- extra values to pass to the controller function
+
+    repeat(fn, sequence, *args, **kwargs) -- render a copy of this node for 
+                                             each item in the given list
+        fn : function -- the controller function responsible for inserting
+                         content into a copy of this node [2]
+        sequence : any -- a list, generator, or other iterable collection
+        *args : any -- extra values to pass to the controller function
+        **kwargs : any -- extra values to pass to the controller function
+</code></pre>
+
+<p><code>[1]</code> The <code>add</code> method's first argument is a controller function that accepts the following arguments:</p>
+
+<pre><code>node : Repeater -- a copy of this node to manipulate
+*args : any -- extra  values that were passed to the 'add' method
+**kwargs : any -- extra  values that were passed to the 'add' method
+</code></pre>
+
+<p><code>[2]</code> The <code>repeat</code> method's first argument is a controller function that accepts the following arguments:</p>
+
+<pre><code>node : Repeater -- a copy of this node to manipulate
+item : any -- an item from the sequence being iterated
+*args : any -- extra  values that were passed to the 'repeat' method
+**kwargs : any -- extra  values that were passed to the 'repeat' method
+</code></pre>
+
+<h2><code>Template</code></h2>
+
+<p>The <code>Template</code> object is the top-level node in a template object model. This represents the complete HTML template document and can contain any number of <code>Container</code> and/or <code>Repeater</code> sub-nodes.</p>
+
+<pre><code>Template(Node) -- The top-level template node ('tem')
+
+    __init__(html, isxhtml=True, attribute='node', encodefn=encodeentity)
+        html : str -- the HTML template
+        isxhtml : bool -- if True, trailing slash will be preserved in 
+                          empty tags (e.g. '&lt;br /&gt;'); if False, it will 
+                          be removed (e.g. '&lt;br&gt;')
+        attribute : str -- the name of the attribute used to hold
+                           compiler directives
+        encodefn : function -- the function used to encode HTML entities 
+                               when setting sub-nodes' text content and 
+                               attribute values [1]
+</code></pre>
+
+<p><code>[1]</code> The default <code>encodeentity</code> function is suitable for use in generating UTF8-encoded HTML documents. If generating HTML documents in other encodings (e.g. ISO-8859-1), client should pass a suitable encoder function that takes a string as input and returns a string with reserved and unsupported characters encoded as HTML entities. Note that this function <em>must</em> at the very least encode the reserved <code>&amp;</code>, <code>&lt;</code> and <code>"</code> characters, otherwise the generated HTML will be susceptible to injection attacks and almost certainly malformed or invalid.</p>
+
+<h2><code>Attributes</code></h2>
+
+<p><code>Attributes</code> instances are used by <code>Container</code> and <code>Repeater</code> objects to represent their tag attributes. The <code>Attributes</code> class defines a simple dict-like interface that supports getting, setting and deleting attributes by name. For example, to set the <code>href</code> attribute of an <code>&lt;a&gt;</code> tag:</p>
+
+<pre><code>node.atts["href"] = "foo.html"
+</code></pre>
+
+<p>Note that any HTML entities in the attribute's value will be encoded/decoded automatically.</p>
+
+<pre><code>Attributes -- A dict-like object containing an HTML tag's attributes
+
+    __getitem__(name) -- get an attribute
+        name : str -- the attribute's name
+        Result : str | None -- the attribute's value, if it has one
+
+    __setitem__(name, value) -- set an attribute
+        name : str -- the attribute's name [1]
+        value : str | None -- the attribute's value, if it has one [2][3]
+
+    __delitem__(name) -- delete an attribute
+        name : str -- the attribute's name
+
+    keys() -- get all attribute names
+        Result : generator
+
+    values() -- get all attribute values
+        Result : generator
+
+    items() -- get all attributes as (name,value) tuples
+        Result : generator
+</code></pre>
+
+<p><code>[1]</code> The attribute's name must match the pattern <code>^[a-zA-Z_][-.:a-zA-Z_0-9]*$</code>. While this does not detect all invalid attribute names, it will prevent obviously incorrect or possibly malicious strings being inserted.</p>
+
+<p><code>[2]</code> Any reserved characters in the attribute's new value will be automatically encoded as HTML entities. (By default, this is performed by the <code>htmltemplate</code> module's <code>encodeentity</code> function which encodes the <code>&amp;</code>, <code>&lt;</code>, <code>&gt;</code> and <code>"</code> characters only, unless an alternate encoder function was specified in <code>Template.__init__()</code>.) The user is responsible for performing any additional escaping/encoding that attribute values might require; for example, to URL-encode strings before inserting them into <code>src</code> and <code>href</code> attributes.</p>
+
+<p><code>[3]</code> If the attribute's value is <code>None</code>, only the attribute's name is inserted into the tag, allowing the miminized form of Boolean attributes – for example, <code>&lt;option selected&gt;</code> instead of <code>&lt;option selected="selected"&gt;</code> – to be used if required for (e.g.) compatibility with older browsers.</p>
+
+<h2><code>ParseError</code></h2>
+
+<p>In the event that <code>Template.__init__()</code> is unable to parse the supplied HTML template string (e.g. due to malformed markup), a <code>ParseError</code> exception will be raised.</p>
+
+<pre><code>ParseError(Exception) -- A template parsing error
+</code></pre>
+
+	
+	</div>
+
+</div>
+
+<div id="footer">
+
+	<div class="navbar">
+			<a href="template_object_model.html">Prev</a> | <a href="index.html">TOC</a> | <a href="tutorial_2.html">Next</a>
+		</div>
+
+	<p class="footer">© 2007-2013 HAS</p>
+
+</div>
+
+</body>
+</html>

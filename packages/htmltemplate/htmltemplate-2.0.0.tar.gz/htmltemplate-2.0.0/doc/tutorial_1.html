@@ -1,0 +1,215 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+
+<title>htmltemplate | tutorial 1: generating a simple links page</title>
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<style type="text/css" media="all"><!--@import url(full.css);--></style>
+
+<!--[if !IE 7]>
+	<style type="text/css">
+		#wrap {display:table;height:100%}
+	</style>
+<![endif]-->
+
+</head>
+<body>
+
+<div id="wrap">
+
+	<div id="main">
+
+		<h1>Tutorial 1: Generating a simple links page</h1>
+
+		<div class="navbar">
+			<a href="getting_started.html">Prev</a> | <a href="index.html">TOC</a> | <a href="html_templates.html">Next</a>
+		</div>
+
+		<h2>About this tutorial</h2>
+
+<p>This tutorial shows how to create a simple links page that'll look something like this:</p>
+
+<pre><code>  Site Map
+
+  • Home
+  • Products
+  • About
+</code></pre>
+
+<h2>1. Define the static HTML document</h2>
+
+<p>Here is a simple, static HTML document:</p>
+
+<pre><code>&lt;html&gt;
+    &lt;head&gt;
+        &lt;title&gt;TITLE&lt;/title&gt;
+    &lt;/head&gt;
+    &lt;body&gt;
+        &lt;ul&gt;
+            &lt;li&gt;
+                &lt;a href="#"&gt;LINK&lt;/a&gt;
+            &lt;/li&gt;
+        &lt;/ul&gt;
+    &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+
+<p>The document contains two elements, <code>title</code> and <code>a</code>, whose content and/or attributes need to be modified, plus a third element, <code>li</code>, which needs to be repeated over a list of links.</p>
+
+<h2>2. Add compiler directives to the HTML</h2>
+
+<p>The <code>title</code>, <code>li</code>, and <code>a</code> elements need to be declared as dynamic nodes within the template object model. This is done by adding a custom <code>node</code> attribute to each element's opening tag. Each <code>node</code> attribute contains a simple <code>TYPE:NAME</code> directive that indicates how htmltemplate should parse it:</p>
+
+<ul>
+<li>An element that appears once should contain a Container (<code>con:NAME</code>) directive.</li>
+<li>An element that appears any number of times should contain a Repeater (<code>rep:NAME</code>) directive. </li>
+<li>The <code>NAME</code> portion of the directive should be a valid Python identifier. This will be used to identify the node within its parent.</li>
+</ul>
+
+<p>To declare the <code>title</code> element as a dynamic Container node named <code>title</code>, add a <code>node="con:title"</code> attribute to its tag. Similarly, to declare the <code>li</code> element as a dynamic Repeater node, add a <code>node="rep:item"</code> attribute. Declaring the <code>a</code> element as a Container node named <code>link</code> is left as an exercise.</p>
+
+<p>Once the compiler directives have been added, the HTML document should look like this:</p>
+
+<pre><code>&lt;html&gt;
+    &lt;head&gt;
+        &lt;title node="con:title"&gt;TITLE&lt;/title&gt;
+    &lt;/head&gt;
+    &lt;body&gt;
+        &lt;ul&gt;
+            &lt;li node="rep:item"&gt;
+                &lt;a href="#" node="con:link"&gt;LINK&lt;/a&gt;
+            &lt;/li&gt;
+        &lt;/ul&gt;
+    &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+
+<h2>3. Create the template object model</h2>
+
+<p>Compiling the template is simple. Just create a new <code>Template</code> instance, passing it the HTML string:</p>
+
+<pre><code>from htmltemplate import Template
+
+template = Template("""
+&lt;html&gt;
+    &lt;head&gt;
+        &lt;title node="con:title"&gt;TITLE&lt;/title&gt;
+    &lt;/head&gt;
+    &lt;body&gt;
+        &lt;ul&gt;
+            &lt;li node="rep:item"&gt;
+                &lt;a href="#" node="con:link"&gt;LINK&lt;/a&gt;
+            &lt;/li&gt;
+        &lt;/ul&gt;
+    &lt;/body&gt;
+&lt;/html&gt;
+""")
+</code></pre>
+
+<p>htmltemplate will compile this HTML to the following template object model:</p>
+
+<pre><code>template
+ |
+ |- con:title
+ |
+ |- rep:item
+ |   |
+ |   |- con:link
+</code></pre>
+
+<h2>4. Check the template object model</h2>
+
+<p>The structure of the template object model can be checked during development and debugging by calling the <code>Template</code> object's <code>structure</code> method and printing its output:</p>
+
+<pre><code>print(template.structure())
+</code></pre>
+
+<p>In this case, the <code>structure</code> method should return the following:</p>
+
+<pre><code>tem:
+    con:title
+    rep:item
+        con:link
+</code></pre>
+
+<p>Once the template's object model is confirmed correct, the <code>print</code> command can be removed or commented out.</p>
+
+<h2>4. Define the template controller functions</h2>
+
+<p>Both the Template and Repeater (<code>rep:item</code>) nodes require callback functions to control their rendering.</p>
+
+<p>The main <code>render_template</code> callback function inserts text into the <code>title</code> element and generates a list of <code>li</code> items:</p>
+
+<pre><code>def render_template(node, pagetitle, linkinfos):
+    node.title.text = pagetitle
+    node.item.repeat(render_item, linkinfos)
+</code></pre>
+
+<p>This function takes a <em>copy</em> of the <code>Template</code> object as its first argument, followed by two user-supplied arguments containing the data to be inserted into the template:</p>
+
+<pre><code>pagetitle : string -- the page title
+linkinfos : list of tuple -- a list of form [(URI, name),...]
+</code></pre>
+
+<p>The <code>repeat</code> method call in the <code>render_template</code> function takes a second callback function, <code>render_item</code>, to control the rendering of each <code>li</code> list item and its <code>a</code> element:</p>
+
+<pre><code>def render_item(node, linkinfo):
+    url, name = linkinfo
+    node.link.atts['href'] = url
+    node.link.text = name
+</code></pre>
+
+<h2>5. Render the template</h2>
+
+<p>To render a page, call the <code>Template</code> object's <code>render</code> method, passing it the <code>render_template</code> callback function along with any data to be passed as additional arguments to <code>render_template</code>:</p>
+
+<pre><code>title = "Site Map"
+links = [('index.html', 'Home'), 
+         ('products/index.html', 'Products'), 
+         ('about.html', 'About')]
+
+template.render(render_template, title, links)
+</code></pre>
+
+<p>When called with a controller callback function as its first argument, the <code>render</code> method automatically creates a <em>copy</em> of the original <code>Template</code> object and all of its sub-nodes, then passes it to the callback function for manipulation. Once the callback function returns, the <code>render</code> method converts the modified template object model to HTML and returns the result.</p>
+
+<p>Here's the result:</p>
+
+<pre><code>&lt;html&gt;
+    &lt;head&gt;
+        &lt;title&gt;Site Map&lt;/title&gt;
+    &lt;/head&gt;
+    &lt;body&gt;
+        &lt;ul&gt;
+            &lt;li&gt;
+                &lt;a href="index.html"&gt;Home&lt;/a&gt;
+            &lt;/li&gt;
+&lt;li&gt;
+                &lt;a href="products/index.html"&gt;Products&lt;/a&gt;
+            &lt;/li&gt;
+&lt;li&gt;
+                &lt;a href="about.html"&gt;About&lt;/a&gt;
+            &lt;/li&gt;
+        &lt;/ul&gt;
+    &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+
+	
+	</div>
+
+</div>
+
+<div id="footer">
+
+	<div class="navbar">
+			<a href="getting_started.html">Prev</a> | <a href="index.html">TOC</a> | <a href="html_templates.html">Next</a>
+		</div>
+
+	<p class="footer">© 2007-2013 HAS</p>
+
+</div>
+
+</body>
+</html>
