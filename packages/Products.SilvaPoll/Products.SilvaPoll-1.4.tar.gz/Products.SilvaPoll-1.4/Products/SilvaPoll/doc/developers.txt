@@ -1,0 +1,85 @@
+================================
+Development issues for SilvaPoll
+================================
+
+Meta
+----
+
+Copyright (c) 2006-2010 Infrae. All rights reserved.
+See also LICENSE.txt
+
+Valid for:  SilvaPoll 0.3.x
+Author:     Guido Wesdorp
+Email:      guido@infrae.com
+CVS:        $Revision: 1.1 $
+
+SilvaPoll/PollQuestion maintenance
+----------------------------------
+
+This document describes the main problems for maintaining SilvaPoll. SilvaPoll
+is an extension of Silva to display Poll questions (and results), and since
+it (basically) overrides some of the core Silva workflow functionality in
+a somewhat 'hackish' (read: crude) way, some extra care needs to be taken when
+updating the product to work with other Silva versions than the one it's
+written for (Silva 1.5).
+
+'Overridden' functionality description
+--------------------------------------
+
+In order to support (the perception of) an alternative workflow in Silva Poll
+Questions (the main content object of SilvaPoll), the original workflow-related
+dates are hidden from the user interface, and new dates, that control an
+additional workflow *on top of the current one* were added.
+
+The dates hidden are the original workflow related dates 'publication datetime'
+and 'expiration datetime', instead of having them configurable by users of
+the CMS they are now always set to the current datetime for the 'publication
+datetime' and None for the 'expiration datetime' (meaning the document is
+published rightaway, and publication will not expire in the future). 
+
+The new dates, 'start question datetime', 'end question datetime', 'start
+result datetime' and 'end result datetime', are used to determine what is
+actually shown in the public views of the Poll questions when those are
+published. When 'start question datetime' is in the past, and 'end question
+datetime' is not set or in the future, a question is displayed clients can vote
+on (unless the client has already voted: there's a cookie-based mechanism to
+detect that), when 'start result time' is in the past and 'end result time' is
+not set or in the future, the results of the poll are displayed. When start
+dates are in the future, or end dates in the past, appropriate messages are
+displayed.
+
+How is this a maintenance problem?
+----------------------------------
+
+To implement this, some standard Silva views had to be copied and modified,
+most notably parts of 'tab_status', a complex and large Silva core view. If
+anything in, or related to, tab_status changes in the Silva core, all the 
+copied tab_status related views in views/edit/VersionedContent/SilvaPoll need
+to be examined and updated. This is a tedious and error-prone task, and needs
+to be done with care to avoid bugs, since they can lead to inconsistencies in 
+the publication information of Silva data, which can be hard to track and fix
+and can break Silva in subtle and unexpected ways.
+
+List of views to examine
+------------------------
+
+The copies of core views that require extra attention during upgrades are:
+
+views/edit/VersionedContent/PollQuestion/tab_status_approve.py
+views/edit/VersionedContent/PollQuestion/tab_status_form_author.form
+views/edit/VersionedContent/PollQuestion/tab_status_form_editor.form
+views/edit/VersionedContent/PollQuestion/tab_status_macros.pt
+views/edit/VersionedContent/PollQuestion/tab_status_request.py
+views/edit/VersionedContent/PollQuestion/tab_status_set_dates.py
+
+Additional 'hacks'
+------------------
+
+In addition to the described problem with the copied view, another 'hack' was
+added to the SilvaPoll 'Product' (filesystem-based) code: the 
+'approve_version()' method was overloaded from Silva.IVersioning, to set
+the 'publication datetime' and 'expiration datetime' hard-coded to the current
+date/time and None, respectively. This is most probably quite safe, as it calls
+it's parent class' 'approve_version()' method itself and doesn't have much
+logic that can break the workflow, but might lead to unforeseen breakage in
+the workflow.
