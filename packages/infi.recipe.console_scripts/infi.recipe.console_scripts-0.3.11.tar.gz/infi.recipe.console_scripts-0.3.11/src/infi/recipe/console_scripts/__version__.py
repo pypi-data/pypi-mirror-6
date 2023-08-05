@@ -1,0 +1,10 @@
+__version__ = "0.3.11"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.3.11)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '25a38c4d6750ccd2e55970be31bc0a59700024d1'
+__git_head_subject__ = 'Finished release v0.3.11.'
+__git_head_message__ = '* release/v0.3.11:\n  TRIVIAL a more suitable approach for Windows\n  TRIVIAL a more suitable approach for Windows\n  TRIVIAL fixing previous commit\n  TRIVIAL fixing previous commit\n  TRIVIAL replace_console_script and replace_gui_scripts\n  TRIVIAL fixing previous commit\n  TRIVIAL write_manifest_script\n  HIP-798 add windows-8.1 target to the console-script recipe manifest\n  HIP-798 add windows-8.1 target to the console-script recipe manifest'
+__git_dirty_diff__ = ''
