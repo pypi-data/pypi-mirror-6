@@ -1,0 +1,57 @@
+#!/usr/bin/env python
+
+##
+## Launch a slave Tor by first making a TorConfig object.
+##
+
+import sys
+import types
+
+from twisted.internet import reactor
+from zope.interface import implements
+
+import txtorcon
+
+def finished(answer):
+    print "ANSWER",answer
+    print "We could now do any sort of exciting thing we wanted..."
+    print "...but instead, we'll just exit."
+    reactor.stop()
+
+def query(state):
+    print "QUERY", state
+    state.protocol.queue_command("GETCONF ORPort").addCallback(finished)
+
+def state_complete(state):
+    print "We've completely booted up a TorState to a Tor version %s at PID %d" % (state.protocol.version, state.tor_pid)
+
+    print "This Tor has the following %d Circuits:" % len(state.circuits)
+    for c in state.circuits.values():
+        print c
+
+    global config
+    config.ORPort = 9090
+    config.save().addCallback(query, state)
+
+def setup_complete(proto):
+    print "setup complete:",proto
+    print "Building a TorState"
+    state = txtorcon.TorState(proto.tor_protocol)
+    state.post_bootstrap.addCallback(state_complete)
+    state.post_bootstrap.addErrback(setup_failed)
+
+def setup_failed(arg):
+    print "SETUP FAILED",arg
+    reactor.stop()
+
+config = txtorcon.TorConfig()
+config.OrPort = 1234
+config.SocksPort = 9999
+
+def updates(prog, tag, summary):
+    print "%d%%: %s" % (prog, summary)
+
+d = txtorcon.launch_tor(config, reactor, progress_updates=updates)
+d.addCallback(setup_complete)
+d.addErrback(setup_failed)
+reactor.run()
