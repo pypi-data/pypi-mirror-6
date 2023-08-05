@@ -1,0 +1,170 @@
+ContentType LookUp
+==================
+LookUp for container in portal_relations ContenTypes:
+  - eea.relations.component.queryContentType
+
+Set up
+------
+
+    >>> self.loginAsPortalOwner()
+    >>> from Products.CMFCore.utils import getToolByName
+    >>> rtool = getToolByName(portal, 'portal_relations')
+
+Cleanup default relations to avoid surprises
+
+    >>> rtool.manage_delObjects(rtool.objectIds())
+
+Setup sandbox
+
+    >>> fid = folder.invokeFactory('Folder', 'sandbox')
+    >>> sandbox = folder._getOb(fid)
+
+Let's do some queries
+---------------------
+
+Add a document
+
+    >>> did = sandbox.invokeFactory('Document', 'my-document')
+    >>> doc = sandbox._getOb(did)
+
+Lookup
+
+    >>> from zope.component import queryAdapter
+    >>> from eea.relations.component import queryContentType
+
+    >>> ctype = queryContentType(doc)
+    >>> print ctype
+    None
+
+There is no content-type define for Document in portal_relations, let's add one
+
+    >>> rtool = portal.portal_relations
+    >>> rid = rtool.invokeFactory('EEARelationsContentType', 'simple-document')
+    >>> rtype = rtool._getOb(rid)
+    >>> rtype.processForm(values={
+    ...   'title': 'Simple Document',
+    ...   'ct_type': 'Document',
+    ...   'ct_interface': '',
+    ... })
+
+Let's try now
+
+    >>> queryContentType(doc)
+    <EEARelationsContentType at /plone/portal_relations/simple-document>
+
+    >>> from eea.relations.interfaces import IBaseObject
+    >>> rid = rtool.invokeFactory('EEARelationsContentType', 'generic')
+    >>> rtype = rtool._getOb(rid)
+    >>> rtype.processForm(values={
+    ...   'title': 'Generic',
+    ...   'ct_type': '',
+    ...   'ct_interface': IBaseObject.__identifier__,
+    ... })
+
+    >>> nid = sandbox.invokeFactory('News Item', 'my-news')
+    >>> newz = sandbox._getOb(nid)
+    >>> queryContentType(newz)
+    <EEARelationsContentType at /plone/portal_relations/generic>
+
+
+Relations LookUp
+================
+Lookup for context possible relations:
+  - eea.relations.component.queryForwardRelations
+  - eea.relations.component.queryBackwardRelations
+
+    >>> from eea.relations.component import queryForwardRelations
+    >>> from eea.relations.component import queryBackwardRelations
+
+Let's add some possible relations
+
+    >>> rid = rtool.invokeFactory('EEAPossibleRelation', 'generic-simple-document')
+    >>> rel = rtool._getOb(rid)
+    >>> rel.processForm(values={
+    ...   'from': 'generic',
+    ...   'to': 'simple-document',
+    ...   'forward_label': 'Similar Documents',
+    ...   'backward_label': 'See also'
+    ... })
+
+
+    >>> rid = rtool.invokeFactory('EEAPossibleRelation', 'generic-generic')
+    >>> rel = rtool._getOb(rid)
+    >>> rel.processForm(values={
+    ...   'from': 'generic',
+    ...   'to': 'generic',
+    ...   'forward_label': 'See also',
+    ...   'backward_label': 'See also'
+    ... })
+
+    >>> [r for r in queryBackwardRelations(doc)]
+    [<EEAPossibleRelation at /plone/portal_relations/generic-simple-document>]
+
+
+Let's add some relations to our content types
+
+    >>> doc.processForm(values={
+    ...  'relatedItems': [sandbox.UID(),],
+    ... }, data=1, metadata=1)
+
+Our Folder has no defined EEARelationsContentType therefore it is going to use
+the generic relation content type.
+
+Therefore checking the forward and backward relation will reveal the relations
+defined for the generic EEARelationsContentType
+
+    >>> [r for r in queryForwardRelations(sandbox)]
+    [<EEAPossibleRelation at /plone/portal_relations/generic-simple-document>,
+    <EEAPossibleRelation at /plone/portal_relations/generic-generic>]
+
+    >>> [r for r in queryBackwardRelations(sandbox)]
+    [<EEAPossibleRelation at /plone/portal_relations/generic-generic>]
+
+    >>> another_newz_id = sandbox.invokeFactory('News Item', 'another_news')
+    >>> another_newz = sandbox._getOb(another_newz_id)
+
+Our Folder has two possible relations at this time:
+    1. the generic->simple-document
+    2. the generic->generic relation
+
+Let's add to our Folder a relation of each kind of relations that our Folder supports
+
+    >>> sandbox.processForm(values={
+    ...  'relatedItems': [doc.UID(), another_newz.UID()],
+    ... }, data=1, metadata=1)
+
+If we add to a News Item a relation back to our Folder this relation will appear
+on our Folder as a backward relation
+
+    >>> newz.processForm(values={
+    ...  'relatedItems': [sandbox.UID(),],
+    ... }, data=1, metadata=1)
+
+    >>> categorization_view = sandbox.unrestrictedTraverse('@@eea.relations.macro')
+
+    >>> backward_relations = categorization_view.backward()
+    >>> backward_relations
+    [('See also', [<ATNewsItem at /plone/Members/test_user_1_/sandbox/my-news>])]
+
+Likewise because of our relations added on the Folder itself we can see that now
+we have two forward relations
+
+    >>> forward_relations = categorization_view.forward()
+    >>> forward_relations
+    [('See also', [<ATNewsItem at /plone/Members/test_user_1_/sandbox/another_news>]),
+    ('Similar Documents', [<ATDocument at /plone/Members/test_user_1_/sandbox/my-document>])]
+
+Because both our forward and backward relations contain generic relations we
+have the 'See also' label duplicated.
+
+In order to avoid this 'eea_relateditems.pt' now uses a new method from
+'eea.relations.macro' BrowserView called 'forward_backward'.
+
+Calling this method will result in the merging of results between the forward
+and backward relations if they have the same title as demonstrated below:
+
+    >>> forward_backward_relations = categorization_view.forward_backward_auto()
+    >>> forward_backward_relations
+    [('See also', [<ATNewsItem at /plone/Members/test_user_1_/sandbox/another_news>,
+                   <ATNewsItem at /plone/Members/test_user_1_/sandbox/my-news>]),
+    ('Similar Documents', [<ATDocument at /plone/Members/test_user_1_/sandbox/my-document>])]
