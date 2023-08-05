@@ -1,0 +1,63 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:browser="http://namespaces.zope.org/browser"
+    xmlns:genericsetup="http://namespaces.zope.org/genericsetup"
+    xmlns:monkey="http://namespaces.plone.org/monkey">
+
+  <include package="collective.monkeypatcher" />
+  <include package="z3c.jbot" file="meta.zcml" />
+
+  <genericsetup:registerProfile
+      name="default"
+      title="collective.portletmetadata"
+      directory="profiles/default"
+      description="Installs the collective.portletmetadata package"
+      provides="Products.GenericSetup.interfaces.EXTENSION"
+      />
+
+  <!-- Core functionality -->
+
+  <adapter factory=".metadata.PortletMetadataAdapter"/>
+
+  <browser:page
+      name="edit-portlet-metadata"
+      class=".metadata.PortletMetadataEditForm"
+      for="plone.portlets.interfaces.IPortletAssignment"
+      permission="plone.app.portlets.ManageOwnPortlets"
+      />
+
+  <browser:page
+      name="portletmetadata-controlpanel"
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      class=".controlpanel.ControlPanel"
+      permission="cmf.ManagePortal"
+      layer=".interfaces.IBrowserLayer"
+      />
+
+  <utility
+      factory=".vocabularies.CssClassesVocabulary"
+      name="collective.portletmetadata.CssClasses"
+      provides="zope.schema.interfaces.IVocabularyFactory"
+      />
+
+  <!-- Overrides and patches -->
+
+  <browser:jbot
+      directory="overrides"
+      layer=".interfaces.IBrowserLayer" />
+
+  <monkey:patch
+        description="Adds metadata url to editmanager"
+        class="plone.app.portlets.browser.editmanager.EditPortletManagerRenderer"
+        original="portlets_for_assignments"
+        replacement=".patches.portlets_for_assignments"
+        />
+
+  <monkey:patch
+        description="Propagate portlet assignment settings to the column renderer"
+        class="plone.app.portlets.manager.PortletManagerRenderer"
+        original="_lazyLoadPortlets"
+        replacement=".patches._lazyLoadPortlets"
+        />
+
+</configure>
