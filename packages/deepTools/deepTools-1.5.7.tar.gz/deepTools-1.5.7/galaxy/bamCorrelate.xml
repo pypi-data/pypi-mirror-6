@@ -1,0 +1,167 @@
+<tool id="deeptools_bamCorrelate" name="bamCorrelate" version="1.0.4">
+    <description>correlates pairs of BAM files</description>
+    <expand macro="requirements" />
+    <expand macro="stdio" />
+    <macros>
+        <token name="@BINARY@">bamCorrelate</token>
+        <import>deepTools_macros.xml</import>
+    </macros>
+    <command>
+        #set files=[]
+        #set labels=[]
+
+        @multiple_input_bams@
+
+        bamCorrelate
+
+        $mode.modeOpt
+
+        @THREADS@
+
+        --bamfiles #echo " ".join($files)
+        --labels #echo " ".join($labels)
+        --fragmentLength $fragmentLength
+        --corMethod $corMethod
+
+        --plotFile $outFileName
+
+        #if $output.showOutputSettings == "yes"
+            --outRawCounts '$outFileRawCounts' 
+            --outFileCorMatrix '$outFileCorMatrix'
+            --plotFileFormat $output.outFileFormat
+        #else:
+            --plotFileFormat 'png'
+        #end if
+
+        #if $mode.modeOpt == "bins":
+            --binSize '$mode.binSize'
+            --numberOfSamples '$mode.numberOfSamples'
+        #else:
+            --BED $mode.region_file
+        #end if
+
+        #### options available in both modes
+        #if str($mode.region.value) != '':
+            --region '$mode.region'
+        #end if
+
+        #if $mode.advancedOpt.showAdvancedOpt == "yes":
+
+            $mode.advancedOpt.doNotExtendPairedEnds
+            $mode.advancedOpt.ignoreDuplicates
+            $mode.advancedOpt.includeZeros
+
+            #if $mode.advancedOpt.minMappingQuality:
+                --minMappingQuality '$mode.advancedOpt.minMappingQuality'
+            #end if
+
+            #if $mode.advancedOpt.zMin:
+                --zMin $mode.advancedOpt.zMin
+            #end if
+            #if $mode.advancedOpt.zMax:
+                --zMax $mode.advancedOpt.zMax
+            #end if
+            --colorMap '$mode.advancedOpt.colorMap'
+
+        #end if
+    </command>
+
+    <inputs>
+        <expand macro="multiple_input_bams" />
+
+        <param name="fragmentLength" type="integer" value="300" min="1"
+            label="Length of the average fragment size"
+            help ="Reads will be extended to match this length unless they are paired-end, in which case they will be extended to match the fragment length. *NOTE*: If the BAM files contain mated and unmated paired-end reads, unmated reads will be extended to match the fragment length."/>
+
+        <param name="corMethod" type="select" label="Correlation method">
+            <option value="pearson">Pearson</option>
+            <option value="spearman">Spearman</option>
+        </param>
+
+        <conditional name="mode">
+            <param name="modeOpt" type="select" label="Choose computation mode" 
+                help="In the bins mode, the correlation is computed based on equal length bins. In the BED file mode, as list of genomic regions in BED format has to be given. For each region in the BED file the number of overlapping reads is counted in each of the BAM files. Then the correlation is computed.">
+                <option value="bins" selected="true">Bins</option>
+                <option value="BED-file">Limit correlation to certain regions (BED file)</option>
+            </param>
+            <when value="bins">
+                <param name="binSize" type="integer" value="10000" min="1" 
+                    label="Bin size in bp"
+                    help="Length in base pairs for a window used to sample the genome."/>
+
+                <param name="numberOfSamples" type="integer" value="100000" min="1" 
+                    label="Number of samples"
+                    help="Number of samples taken from the genome to compute the scaling factors"/>
+                <expand macro="bamCorrelate_mode_actions" />
+            </when>
+            <when value="BED-file">
+                <param name="region_file" type="data" format="bed" label="Region file in BED format" help="Correlation is computed for the number of reads that overlap such regions."/>
+                <expand macro="bamCorrelate_mode_actions" />
+            </when>
+
+        </conditional>
+
+        <conditional name="output">
+            <param name="showOutputSettings" type="select" label="Show advanced output settings" >
+                <option value="no" selected="true">no</option>
+                <option value="yes">yes</option>
+            </param>
+            <when value="no" />
+            <when value="yes">
+                <expand macro="input_image_file_format"/>
+                <param name="saveRawCounts" type="boolean" label="Save the bin counts"/>
+                <param name="saveCorMatrix" type="boolean" label="Save the correlation matrix"/>
+            </when>
+        </conditional>
+
+    </inputs>
+    <outputs>
+        <expand macro="output_image_file_format" />
+        <data format="tabular" name="outFileRawCounts" label="${tool.name} on ${on_string}: bin counts">
+            <filter>
+            ((
+                output['showOutputSettings'] == 'yes' and 
+                output['saveRawCounts'] is True
+            ))
+            </filter>
+        </data>
+        <data format="tabular" name="outFileCorMatrix" label="${tool.name} on ${on_string}: correlation matrix">
+            <filter>
+            ((
+                output['showOutputSettings'] == 'yes' and 
+                output['saveCorMatrix'] is True
+            ))
+            </filter>
+        </data>
+    </outputs>
+    <help>
+
+**What it does**
+
+This tool is useful to assess the overall similarity of different BAM files. A typical application
+is to check the correlation between replicates or published data sets.
+
+The tool splits the genomes into bins of given length. For each bin, the number of reads
+found in each BAM file is counted and a correlation (either Pearson or Spearman) is computed for all
+pairs of BAM files. Finally, a heatmap is drawn based on the similarity of the samples.
+
+
+.. image:: $PATH_TO_IMAGES/QC_bamCorrelate_humanSamples.png
+   :alt: Heatmap of RNA Polymerase II ChIP-seq
+
+
+You can find more details on the bamCorrelate wiki page: https://github.com/fidelram/deepTools/wiki/QC#wiki-bamCorrelate
+
+
+**Output files**:
+
+- **diagnostic plot**: clustered heatmap displaying the values for each pair-wise correlation, see below for an example
+- data matrix (optional): if you want to plot the correlation values using a different program, e.g. R, this matrix can be used
+
+
+-----
+
+@REFERENCES@
+
+    </help>
+</tool>
