@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="generator" content="Docutils 0.5: http://docutils.sourceforge.net/">
+<title>Genshi: Stream Filters</title>
+<link rel="stylesheet" href="common/style/edgewall.css" type="text/css">
+</head>
+<body>
+<div class="document" id="stream-filters">
+    <div id="navigation">
+      <span class="projinfo">Genshi 0.6</span>
+      <a href="index.html">Documentation Index</a>
+    </div>
+<h1 class="title">Stream Filters</h1>
+<p><a class="reference external" href="streams.html">Markup Streams</a> showed how to write filters and how they are applied to
+markup streams. This page describes the features of the various filters that
+come with Genshi itself.</p>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="auto-toc simple">
+<li><a class="reference internal" href="#html-form-filler" id="id1">1   HTML Form Filler</a></li>
+<li><a class="reference internal" href="#html-sanitizer" id="id2">2   HTML Sanitizer</a></li>
+<li><a class="reference internal" href="#transformer" id="id3">3   Transformer</a></li>
+<li><a class="reference internal" href="#translator" id="id4">4   Translator</a></li>
+</ul>
+</div>
+<div class="section" id="html-form-filler">
+<h1>1   HTML Form Filler</h1>
+<p>The filter <tt class="docutils literal"><span class="pre">genshi.filters.html.HTMLFormFiller</span></tt> can automatically populate an
+HTML form from values provided as a simple dictionary. When using this filter,
+you can basically omit any <tt class="docutils literal"><span class="pre">value</span></tt>, <tt class="docutils literal"><span class="pre">selected</span></tt>, or <tt class="docutils literal"><span class="pre">checked</span></tt> attributes
+from form controls in your templates, and let the filter do all that work for
+you.</p>
+<p><tt class="docutils literal"><span class="pre">HTMLFormFiller</span></tt> takes a dictionary of data to populate the form with, where
+the keys should match the names of form elements, and the values determine the
+values of those controls. For example:</p>
+<div class="system-message">
+<p class="system-message-title">System Message: ERROR/3 (<tt class="docutils">doc\filters.txt</tt>, line 31)</p>
+<p>Unknown directive type "code-block".</p>
+<pre class="literal-block">
+.. code-block:: pycon
+
+  &gt;&gt;&gt; from genshi.filters import HTMLFormFiller
+  &gt;&gt;&gt; from genshi.template import MarkupTemplate
+
+  &gt;&gt;&gt; template = MarkupTemplate("""&lt;form&gt;
+  ...   &lt;p&gt;
+  ...     &lt;label&gt;User name:
+  ...       &lt;input type="text" name="username" /&gt;
+  ...     &lt;/label&gt;&lt;br /&gt;
+  ...     &lt;label&gt;Password:
+  ...       &lt;input type="password" name="password" /&gt;
+  ...     &lt;/label&gt;&lt;br /&gt;
+  ...     &lt;label&gt;
+  ...       &lt;input type="checkbox" name="remember" /&gt; Remember me
+  ...     &lt;/label&gt;
+  ...   &lt;/p&gt;
+  ... &lt;/form&gt;""")
+  &gt;&gt;&gt; filler = HTMLFormFiller(data=dict(username='john', remember=True))
+  &gt;&gt;&gt; print(template.generate() | filler)
+  &lt;form&gt;
+    &lt;p&gt;
+      &lt;label&gt;User name:
+        &lt;input type="text" name="username" value="john"/&gt;
+      &lt;/label&gt;&lt;br/&gt;
+      &lt;label&gt;Password:
+        &lt;input type="password" name="password"/&gt;
+      &lt;/label&gt;&lt;br/&gt;
+      &lt;label&gt;
+        &lt;input type="checkbox" name="remember" checked="checked"/&gt; Remember me
+      &lt;/label&gt;
+    &lt;/p&gt;
+  &lt;/form&gt;
+
+</pre>
+</div>
+<div class="note">
+<p class="first admonition-title">Note</p>
+<p class="last">This processing is done without in any way reparsing the template
+output. As any stream filter it operates after the template output is
+generated but <em>before</em> that output is actually serialized.</p>
+</div>
+<p>The filter will of course also handle radio buttons as well as <tt class="docutils literal"><span class="pre">&lt;select&gt;</span></tt> and
+<tt class="docutils literal"><span class="pre">&lt;textarea&gt;</span></tt> elements. For radio buttons to be marked as checked, the value in
+the data dictionary needs to match the <tt class="docutils literal"><span class="pre">value</span></tt> attribute of the <tt class="docutils literal"><span class="pre">&lt;input&gt;</span></tt>
+element, or evaluate to a truth value if the element has no such attribute. For
+options in a <tt class="docutils literal"><span class="pre">&lt;select&gt;</span></tt> box to be marked as selected, the value in the data
+dictionary needs to match the <tt class="docutils literal"><span class="pre">value</span></tt> attribute of the <tt class="docutils literal"><span class="pre">&lt;option&gt;</span></tt> element,
+or the text content of the option if it has no <tt class="docutils literal"><span class="pre">value</span></tt> attribute. Password and
+file input fields are not populated, as most browsers would ignore that anyway
+for security reasons.</p>
+<p>You'll want to make sure that the values in the data dictionary have already
+been converted to strings. While the filter may be able to deal with non-string
+data in some cases (such as check boxes), in most cases it will either not
+attempt any conversion or not produce the desired results.</p>
+<p>You can restrict the form filler to operate only on a specific <tt class="docutils literal"><span class="pre">&lt;form&gt;</span></tt> by
+passing either the <tt class="docutils literal"><span class="pre">id</span></tt> or the <tt class="docutils literal"><span class="pre">name</span></tt> keyword argument to the initializer.
+If either of those is specified, the filter will only apply to form tags with
+an attribute matching the specified value.</p>
+</div>
+<div class="section" id="html-sanitizer">
+<h1>2   HTML Sanitizer</h1>
+<p>The filter <tt class="docutils literal"><span class="pre">genshi.filters.html.HTMLSanitizer</span></tt> filter can be used to clean up
+user-submitted HTML markup, removing potentially dangerous constructs that could
+be used for various kinds of abuse, such as cross-site scripting (XSS) attacks:</p>
+<div class="system-message">
+<p class="system-message-title">System Message: ERROR/3 (<tt class="docutils">doc\filters.txt</tt>, line 97)</p>
+<p>Unknown directive type "code-block".</p>
+<pre class="literal-block">
+.. code-block:: pycon
+
+  &gt;&gt;&gt; from genshi.filters import HTMLSanitizer
+  &gt;&gt;&gt; from genshi.input import HTML
+
+  &gt;&gt;&gt; html = HTML("""&lt;div&gt;
+  ...   &lt;p&gt;Innocent looking text.&lt;/p&gt;
+  ...   &lt;script&gt;alert("Danger: " + document.cookie)&lt;/script&gt;
+  ... &lt;/div&gt;""")
+  &gt;&gt;&gt; sanitize = HTMLSanitizer()
+  &gt;&gt;&gt; print(html | sanitize)
+  &lt;div&gt;
+    &lt;p&gt;Innocent looking text.&lt;/p&gt;
+  &lt;/div&gt;
+
+</pre>
+</div>
+<p>In this example, the <tt class="docutils literal"><span class="pre">&lt;script&gt;</span></tt> tag was removed from the output.</p>
+<p>You can determine which tags and attributes should be allowed by initializing
+the filter with corresponding sets. See the API documentation for more
+information.</p>
+<p>Inline <tt class="docutils literal"><span class="pre">style</span></tt> attributes are forbidden by default. If you allow them, the
+filter will still perform sanitization on the contents any encountered inline
+styles: the proprietary <tt class="docutils literal"><span class="pre">expression()</span></tt> function (supported only by Internet
+Explorer) is removed, and any property using an <tt class="docutils literal"><span class="pre">url()</span></tt> which a potentially
+dangerous URL scheme (such as <tt class="docutils literal"><span class="pre">javascript:</span></tt>) are also stripped out:</p>
+<div class="system-message">
+<p class="system-message-title">System Message: ERROR/3 (<tt class="docutils">doc\filters.txt</tt>, line 124)</p>
+<p>Unknown directive type "code-block".</p>
+<pre class="literal-block">
+.. code-block:: pycon
+
+  &gt;&gt;&gt; from genshi.filters import HTMLSanitizer
+  &gt;&gt;&gt; from genshi.input import HTML
+
+  &gt;&gt;&gt; html = HTML("""&lt;div&gt;
+  ...   &lt;br style="background: url(javascript:alert(document.cookie); color: #000" /&gt;
+  ... &lt;/div&gt;""")
+  &gt;&gt;&gt; sanitize = HTMLSanitizer(safe_attrs=HTMLSanitizer.SAFE_ATTRS | set(['style']))
+  &gt;&gt;&gt; print(html | sanitize)
+  &lt;div&gt;
+    &lt;br style="color: #000"/&gt;
+  &lt;/div&gt;
+
+</pre>
+</div>
+<div class="warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">You should probably not rely on the <tt class="docutils literal"><span class="pre">style</span></tt> filtering, as
+sanitizing mixed HTML, CSS, and Javascript is very complicated and
+suspect to various browser bugs. If you can somehow get away with
+not allowing inline styles in user-submitted content, that would
+definitely be the safer route to follow.</p>
+</div>
+</div>
+<div class="section" id="transformer">
+<h1>3   Transformer</h1>
+<p>The filter <tt class="docutils literal"><span class="pre">genshi.filters.transform.Transformer</span></tt> provides a convenient way to
+transform or otherwise work with markup event streams. It allows you to specify
+which parts of the stream you're interested in with XPath expressions, and then
+attach a variety of transformations to the parts that match:</p>
+<div class="system-message">
+<p class="system-message-title">System Message: ERROR/3 (<tt class="docutils">doc\filters.txt</tt>, line 153)</p>
+<p>Unknown directive type "code-block".</p>
+<pre class="literal-block">
+.. code-block:: pycon
+
+  &gt;&gt;&gt; from genshi.builder import tag
+  &gt;&gt;&gt; from genshi.core import TEXT
+  &gt;&gt;&gt; from genshi.filters import Transformer
+  &gt;&gt;&gt; from genshi.input import HTML
+
+  &gt;&gt;&gt; html = HTML('''&lt;html&gt;
+  ...   &lt;head&gt;&lt;title&gt;Some Title&lt;/title&gt;&lt;/head&gt;
+  ...   &lt;body&gt;
+  ...     Some &lt;em&gt;body&lt;/em&gt; text.
+  ...   &lt;/body&gt;
+  ... &lt;/html&gt;''')
+
+  &gt;&gt;&gt; print(html | Transformer('body/em').map(unicode.upper, TEXT)
+  ...                                    .unwrap().wrap(tag.u).end()
+  ...                                    .select('body/u')
+  ...                                    .prepend('underlined '))
+  &lt;html&gt;
+    &lt;head&gt;&lt;title&gt;Some Title&lt;/title&gt;&lt;/head&gt;
+    &lt;body&gt;
+      Some &lt;u&gt;underlined BODY&lt;/u&gt; text.
+    &lt;/body&gt;
+  &lt;/html&gt;
+
+</pre>
+</div>
+<p>This example sets up a transformation that:</p>
+<blockquote>
+<ol class="arabic simple">
+<li>matches any <cite>&lt;em&gt;</cite> element anywhere in the body,</li>
+<li>uppercases any text nodes in the element,</li>
+<li>strips off the <cite>&lt;em&gt;</cite> start and close tags,</li>
+<li>wraps the content in a <cite>&lt;u&gt;</cite> tag, and</li>
+<li>inserts the text <cite>underlined</cite> inside the <cite>&lt;u&gt;</cite> tag.</li>
+</ol>
+</blockquote>
+<p>A number of commonly useful transformations are available for this filter.
+Please consult the API documentation a complete list.</p>
+<p>In addition, you can also perform custom transformations. For example, the
+following defines a transformation that changes the name of a tag:</p>
+<div class="system-message">
+<p class="system-message-title">System Message: ERROR/3 (<tt class="docutils">doc\filters.txt</tt>, line 192)</p>
+<p>Unknown directive type "code-block".</p>
+<pre class="literal-block">
+.. code-block:: pycon
+
+  &gt;&gt;&gt; from genshi import QName
+  &gt;&gt;&gt; from genshi.filters.transform import ENTER, EXIT
+
+  &gt;&gt;&gt; class RenameTransformation(object):
+  ...    def __init__(self, name):
+  ...        self.name = QName(name)
+  ...    def __call__(self, stream):
+  ...        for mark, (kind, data, pos) in stream:
+  ...            if mark is ENTER:
+  ...                data = self.name, data[1]
+  ...            elif mark is EXIT:
+  ...                data = self.name
+  ...            yield mark, (kind, data, pos)
+
+</pre>
+</div>
+<p>A transformation can be any callable object that accepts an augmented event
+stream. In this case we define a class, so that we can initialize it with the
+tag name.</p>
+<p>Custom transformations can be applied using the <cite>apply()</cite> method of a
+transformer instance:</p>
+<div class="system-message">
+<p class="system-message-title">System Message: ERROR/3 (<tt class="docutils">doc\filters.txt</tt>, line 215)</p>
+<p>Unknown directive type "code-block".</p>
+<pre class="literal-block">
+.. code-block:: pycon
+
+  &gt;&gt;&gt; xform = Transformer('body//em').map(unicode.upper, TEXT) \
+  &gt;&gt;&gt; xform = xform.apply(RenameTransformation('u'))
+  &gt;&gt;&gt; print(html | xform)
+  &lt;html&gt;
+    &lt;head&gt;&lt;title&gt;Some Title&lt;/title&gt;&lt;/head&gt;
+    &lt;body&gt;
+      Some &lt;u&gt;BODY&lt;/u&gt; text.
+    &lt;/body&gt;
+  &lt;/html&gt;
+
+</pre>
+</div>
+<div class="note">
+<p class="first admonition-title">Note</p>
+<p class="last">The transformation filter was added in Genshi 0.5.</p>
+</div>
+</div>
+<div class="section" id="translator">
+<h1>4   Translator</h1>
+<p>The <tt class="docutils literal"><span class="pre">genshi.filters.i18n.Translator</span></tt> filter implements basic support for
+internationalizing and localizing templates. When used as a filter, it
+translates a configurable set of text nodes and attribute values using a
+<tt class="docutils literal"><span class="pre">gettext</span></tt>-style translation function.</p>
+<p>The <tt class="docutils literal"><span class="pre">Translator</span></tt> class also defines the <tt class="docutils literal"><span class="pre">extract</span></tt> class method, which can
+be used to extract localizable messages from a template.</p>
+<p>Please refer to the API documentation for more information on this filter.</p>
+<div class="note">
+<p class="first admonition-title">Note</p>
+<p class="last">The translation filter was added in Genshi 0.4.</p>
+</div>
+</div>
+    <div id="footer">
+      Visit the Genshi open source project at
+      <a href="http://genshi.edgewall.org/">http://genshi.edgewall.org/</a>
+    </div>
+  </div>
+</body>
+</html>
