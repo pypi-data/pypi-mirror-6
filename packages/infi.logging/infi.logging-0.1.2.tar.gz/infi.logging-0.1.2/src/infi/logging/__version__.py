@@ -1,0 +1,10 @@
+__version__ = "0.1.2"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.1.2)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '9ee7d01b3e48f487e42d794e318be88db7f0f208'
+__git_head_subject__ = 'Finished release v0.1.2.'
+__git_head_message__ = '* release/v0.1.2:\n  TRIVIAL updated bootstrap\n  TRIVIAL avoiding KeyError in unregister_application\n  empty commit after version v0.1.1'
+__git_dirty_diff__ = ''
