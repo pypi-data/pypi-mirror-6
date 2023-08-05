@@ -1,0 +1,137 @@
+.TH ANSIBLE.DIGITAL_OCEAN 3 "2013-12-20" "1.4.3" "ANSIBLE MODULES"
+.\" generated from library/cloud/digital_ocean
+.SH NAME
+digital_ocean \- Create/delete a droplet/SSH_key in DigitalOcean
+.\" ------ DESCRIPTION
+.SH DESCRIPTION
+.PP
+Create/delete a droplet in DigitalOcean and optionally waits for it to be 'running', or deploy an SSH key. 
+.\" ------ OPTIONS
+.\"
+.\"
+.SH OPTIONS
+   
+.IP api_key
+Digital Ocean api key.   
+.IP client_id
+Digital Ocean manager id.   
+.IP command
+Which target you want to operate on.
+.IR Choices :
+droplet,ssh. (default: droplet)   
+.IP id
+Numeric, the droplet id you want to operate on.   
+.IP image_id
+Numeric, this is the id of the image you would like the droplet created with.   
+.IP name
+String, this is the name of the droplet - must be formatted by hostname rules, or the name of a SSH key.   
+.IP private_networking
+Bool, add an additional, private network interface to droplet for inter-droplet communication
+.IR Choices :
+yes,no. (default: no)(Added in Ansible version 1.4.)
+   
+.IP region_id
+Numeric, this is the id of the region you would like your server   
+.IP size_id
+Numeric, this is the id of the size you would like the droplet created at.   
+.IP ssh_key_ids
+Optional, comma separated list of ssh_key_ids that you would like to be added to the server   
+.IP ssh_pub_key
+The public SSH key you want to add to your account.   
+.IP state
+Indicate desired state of the target.
+.IR Choices :
+present,active,absent,deleted. (default: present)   
+.IP unique_name
+Bool, require unique hostnames.  By default, digital ocean allows multiple hosts with the same name.  Setting this to "yes" allows only one host per name.  Useful for idempotence.
+.IR Choices :
+yes,no. (default: no)(Added in Ansible version 1.4.)
+   
+.IP virtio
+Bool, turn on virtio driver in droplet for improved network and storage I/O
+.IR Choices :
+yes,no. (default: yes)(Added in Ansible version 1.4.)
+   
+.IP wait
+Wait for the droplet to be in state 'running' before returning.  If wait is "no" an ip_address may not be returned.
+.IR Choices :
+yes,no. (default: yes)   
+.IP wait_timeout
+How long before wait gives up, in seconds. (default: 300).\"
+.\"
+.\" ------ NOTES
+.SH NOTES
+.PP
+Two environment variables can be used, DO_CLIENT_ID and DO_API_KEY. 
+.\"
+.\"
+.\" ------ EXAMPLES
+.\" ------ PLAINEXAMPLES
+.SH EXAMPLES
+.nf
+# Ensure a SSH key is present
+# If a key matches this name, will return the ssh key id and changed = False
+# If no existing key matches this name, a new key is created, the ssh key id is returned and changed = False
+
+- digital_ocean: >
+      state=present
+      command=ssh
+      name=my_ssh_key
+      ssh_pub_key='ssh-rsa AAAA...'
+      client_id=XXX
+      api_key=XXX
+
+# Create a new Droplet
+# Will return the droplet details including the droplet id (used for idempotence)
+
+- digital_ocean: >
+      state=present
+      command=droplet
+      name=my_new_droplet
+      client_id=XXX
+      api_key=XXX
+      size_id=1
+      region_id=2
+      image_id=3
+      wait_timeout=500
+  register: my_droplet
+- debug: msg="ID is {{ my_droplet.droplet.id }}"
+- debug: msg="IP is {{ my_droplet.droplet.ip_address }}"
+
+# Ensure a droplet is present
+# If droplet id already exist, will return the droplet details and changed = False
+# If no droplet matches the id, a new droplet will be created and the droplet details (including the new id) are returned, changed = True.
+
+- digital_ocean: >
+      state=present
+      command=droplet
+      id=123
+      name=my_new_droplet
+      client_id=XXX
+      api_key=XXX
+      size_id=1
+      region_id=2
+      image_id=3
+      wait_timeout=500
+
+# Create a droplet with ssh key
+# The ssh key id can be passed as argument at the creation of a droplet (see ssh_key_ids).
+# Several keys can be added to ssh_key_ids as id1,id2,id3
+# The keys are used to connect as root to the droplet.
+
+- digital_ocean: >
+      state=present
+      ssh_key_ids=id1,id2
+      name=my_new_droplet
+      client_id=XXX
+      api_key=XXX
+      size_id=1
+      region_id=2
+      image_id=3
+
+.fi
+
+.\" ------- AUTHOR
+.SH SEE ALSO
+.IR ansible (1),
+.I http://ansible.github.com/modules.html#digital-ocean
