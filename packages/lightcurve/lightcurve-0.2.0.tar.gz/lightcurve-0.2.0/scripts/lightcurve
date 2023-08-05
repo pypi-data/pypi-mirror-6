@@ -1,0 +1,65 @@
+#!/usr/bin/env/python
+
+import argparse
+import re
+import os
+
+from lightcurve import LightCurve
+from lightcurve import io
+
+#------------------------------------------------------------
+
+def parse_args():
+    '''
+    Parse command line arguments.  Returns args object.
+    '''
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('input', type=str, nargs='*',
+                        help='filename of COS corrtag dataset' )
+
+    parser.add_argument('--step', dest='step', type=float, default=1,
+                        help='timestep for lightcurve in seconds')
+
+    parser.add_argument('--wmin', dest='wmin', type=float, default=1,
+                        help='Minimum wavelength for extraction')
+
+    parser.add_argument('--wmax', dest='wmax', type=float, default=10000,
+                        help='Maximum wavelength for extraction')
+
+    parser.add_argument('--outname', dest='outname', type=str, default='',
+                        help='Output lightcurve name')
+
+    parser.add_argument('--cat', dest='concatenate', action='store_true', default=False,
+                        help='Concatenate all input curves?')
+    
+    args = parser.parse_args()
+    return args
+
+#------------------------------------------------------------
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    all_datasets = args.input
+
+    if args.concatenate:
+        print "Concatenating datasets"
+        out_lc = LightCurve()
+
+        for dataset in all_datasets:
+            print dataset
+            new_lc = io.open( filename=dataset, step=args.step, wlim=(args.wmin, args.wmax) )
+
+            out_lc += new_lc
+
+        out_lc.write( args.outname or 'composite_curve.fits' )
+
+
+    else:
+        for dataset in all_datasets:
+            print dataset
+            out_lc = io.open( filename=dataset, step=args.step, wlim=(args.wmin, args.wmax) )
+            curvename = os.path.split( dataset )[1].replace( re.search('corrtag.*.fits', dataset).group(), 'curve.fits' )
+            out_lc.write( args.outname or curvename )
+
