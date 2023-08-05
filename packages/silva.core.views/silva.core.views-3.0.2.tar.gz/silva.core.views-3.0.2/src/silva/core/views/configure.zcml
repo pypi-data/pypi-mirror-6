@@ -1,0 +1,145 @@
+<configure
+   xmlns="http://namespaces.zope.org/zope"
+   xmlns:browser="http://namespaces.zope.org/browser"
+   xmlns:grok="http://namespaces.zope.org/grok"
+   xmlns:monkey="http://namespaces.plone.org/monkey"
+   xmlns:five="http://namespaces.zope.org/five">
+
+  <five:registerPackage package="." />
+  <exclude package="OFS" file="absoluteurl.zcml" />
+
+  <include package="five.grok" />
+  <include package="silva.core.conf" />
+  <include package="infrae.wsgi" />
+
+  <!-- Patch URL computation -->
+  <include package="collective.monkeypatcher" />
+
+  <monkey:patch
+     class="OFS.Traversable.Traversable"
+     original="absolute_url"
+     replacement=".absoluteurl.absolute_url"
+     />
+
+  <monkey:patch
+     class="OFS.Traversable.Traversable"
+     original="absolute_url_path"
+     replacement=".absoluteurl.absolute_url_path"
+     />
+
+  <monkey:patch
+     class="Products.ZCatalog.CatalogBrains.AbstractCatalogBrain"
+     original="getURL"
+     replacement=".absoluteurl.absolute_url"
+     />
+
+  <!-- Default page style -->
+  <browser:page
+     for="zope.interface.Interface"
+     template="templates/zmi_template.pt"
+     name="five_template"
+     permission="zope.Public"
+     />
+
+  <browser:page
+     for="silva.core.interfaces.ISilvaService"
+     template="templates/service_template.pt"
+     name="five_template"
+     permission="zope.Public"
+     />
+
+  <!-- AbsoluteURL views -->
+  <view
+     for="silva.core.interfaces.ISilvaObject"
+     factory=".absoluteurl.ContentAbsoluteURL"
+     type="zope.publisher.interfaces.http.IHTTPRequest"
+     permission="zope.Public"
+     provides=".interfaces.IContentURL"
+     />
+
+  <browser:page
+     for="silva.core.interfaces.ISilvaObject"
+     name="absolute_url"
+     class=".absoluteurl.ContentAbsoluteURL"
+     permission="zope.Public"
+     allowed_interface=".interfaces.IContentURL"
+     />
+
+  <view
+     for="silva.core.interfaces.IVersion"
+     factory=".absoluteurl.VersionAbsoluteURL"
+     type="zope.publisher.interfaces.http.IHTTPRequest"
+     permission="zope.Public"
+     provides=".interfaces.IContentURL"
+     />
+
+  <browser:page
+     for="silva.core.interfaces.IVersion"
+     name="absolute_url"
+     class=".absoluteurl.VersionAbsoluteURL"
+     permission="zope.Public"
+     allowed_interface=".interfaces.IContentURL"
+     />
+
+  <view
+     for="Exception"
+     factory=".absoluteurl.ErrorAbsoluteURL"
+     type="zope.publisher.interfaces.http.IHTTPRequest"
+     permission="zope.Public"
+     provides=".interfaces.IContentURL"
+     />
+
+  <browser:page
+     for="Exception"
+     name="absolute_url"
+     class=".absoluteurl.ErrorAbsoluteURL"
+     permission="zope.Public"
+     allowed_interface=".interfaces.IContentURL"
+     />
+
+  <view
+     for="OFS.interfaces.ITraversable"
+     factory=".absoluteurl.AbsoluteURL"
+     type="zope.publisher.interfaces.http.IHTTPRequest"
+     permission="zope.Public"
+     provides=".interfaces.IContentURL"
+     />
+
+  <!-- We can't set the adapter for Zope ITraversable, as there is
+       already one, but we can set it for Silva Zope objects. -->
+  <browser:page
+     for="silva.core.interfaces.IZMIObject"
+     name="absolute_url"
+     class=".absoluteurl.AbsoluteURL"
+     permission="zope.Public"
+     allowed_interface="silva.core.views.interfaces.IContentURL"
+     />
+
+  <view
+     for="Products.ZCatalog.interfaces.ICatalogBrain"
+     factory=".absoluteurl.BrainAbsoluteURL"
+     type="zope.publisher.interfaces.http.IHTTPRequest"
+     permission="zope.Public"
+     provides="silva.core.views.interfaces.IContentURL"
+     />
+
+  <browser:page
+     for="Products.ZCatalog.interfaces.ICatalogBrain"
+     name="absolute_url"
+     class=".absoluteurl.BrainAbsoluteURL"
+     permission="zope.Public"
+     allowed_interface="silva.core.views.interfaces.IContentURL"
+     />
+
+  <!-- Default traverser for Silva views -->
+  <adapter
+    for="silva.core.interfaces.ISilvaObject
+         zope.publisher.interfaces.browser.IBrowserRequest"
+    factory=".traverser.SilvaPublishTraverse"
+    provides="zope.publisher.interfaces.browser.IBrowserPublisher"
+    />
+
+  <!-- Grok this package -->
+  <grok:grok package="." />
+
+</configure>
