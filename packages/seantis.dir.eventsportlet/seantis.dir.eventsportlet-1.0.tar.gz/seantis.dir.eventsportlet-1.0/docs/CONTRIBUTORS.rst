@@ -1,0 +1,5 @@
+
+Contributors
+------------
+
+- Marc Sommerhalder [msom]
