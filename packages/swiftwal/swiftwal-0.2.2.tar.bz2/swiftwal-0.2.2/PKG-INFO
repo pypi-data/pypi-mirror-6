@@ -1,0 +1,383 @@
+Metadata-Version: 1.1
+Name: swiftwal
+Version: 0.2.2
+Summary: PostgreSQL backups, WAL archiving & PITR to OpenStack Swift
+Home-page: https://launchpad.net/swiftwal
+Author: Stuart Bishop
+Author-email: stuart.bishop@canonical.com
+License: UNKNOWN
+Description: ########
+        SwiftWAL
+        ########
+        
+        About
+        =====
+        
+        SwiftWAL is a tool for `PostgreSQL <http://postgresql.org/>`_ adminstrators,
+        allowing filesystem level backups, WAL shipping and point-in-time recovery
+        (PITR) to be made to and from OpenStack Swift storage. It is distrubuted
+        under the :doc:`GPLv3 license <license>`.
+        
+        
+        Requirements
+        ------------
+        
+        * PostgreSQL 9.1 or later.
+        
+        * `pigz <http://zlib.net/pigz/>`_ for compression and decompression.
+          :program:`pigz` is a multithreaded, drop-in replacement to
+          :program:`gzip`.
+        
+        * The `python-swiftclient <https://pypi.python.org/pypi/python-swiftclient>`_
+          Python library.
+        
+        * :command:`pg_basebackup`, a standard tool shipped with PostgreSQL.
+        
+        
+        Limitations
+        -----------
+        
+        * PostgreSQL tablespaces are not supported due to limitations in
+          :command:`pg_basebackup`'s tar output format.
+        
+        
+        Usage
+        =====
+        
+        Everything is done through the command line tool :program:`swiftwal`.
+        
+        A standard setup allowing full |PITR| would be:
+        
+            * :command:`swiftwal backup` scheduled to be run regularly, followed
+              by :command:`swiftwal prune` if the backup succeeded.
+        
+            * :command:`swiftwal archive-wal` configured as the primary
+              PostgreSQL server's ``archive_command`` setting in
+              :file:`postgresql.conf`.
+        
+            * :command:`swiftwal restore-wal` configured as the hot
+              standbys` ``restore_command`` setting in the :file:`recovery.conf`
+              files.
+        
+        
+        Common Options
+        --------------
+        
+        .. TIP::
+            If you have the standard OpenStack environment variables
+            set, or a configuration file containing the settings,  you will not
+            need to provide them explicitly on the command line. For hooking
+            into PostgreSQL's ``archive_command`` and ``restore_command`` using
+            the :option:`--config` option is usually the best approach.
+        
+        :program:`swiftwal`
+        
+        .. program:: swiftwal
+        
+        .. option:: --container CONTAINER, -C CONTAINER
+        
+            The Swift container name used to store everything. It is required
+            for all operations. You will generally use a unique container name
+            for each PostgreSQL server. You certainly don't want two or more
+            servers archiving WAL files into the same container as you will
+            experience conflicts.
+        
+        .. option:: --config FILE, -c FILE
+        
+            Specify OpenStack authentication credentials and the container using
+            a config file::
+        
+                OS_AUTH_URL=https://keystone.example.com/v2.0/
+                OS_USERNAME=alan_parsons
+                OS_PASSWORD=Pyramid
+                OS_TENANT_NAME=alan_parsons_project
+                CONTAINER=pgprod
+        
+        .. option:: --verbose, -v
+        
+            Extra output and longer reports.
+        
+        .. option:: --os-auth-url URL
+        
+            OpenStack authentication URL. Defaults to the
+            :envvar:`OS_AUTH_URL` environment variable.
+        
+        .. option:: --os-username USER
+        
+            OpenStack username. Defaults to the :envvar:`OS_USERNAME`
+            environment variable.
+        
+        .. option:: --os-password KEY
+        
+            OpenStack key. Defaults to the :envvar:`OS_PASSWORD` environment
+            variable.
+        
+        .. option:: --os-tenant-name TENANT
+        
+            OpenStack tenant name. Defaults to the :envvar:`OS_TENANT_NAME`
+            environment variable.
+        
+        
+        Backup
+        ------
+        
+        The :command:`swiftwal backup` command wraps the standard PostgreSQL
+        utility :program:`pg_basebackup`, compressing its tarball output and
+        streaming it into Swift storage. Further information about the backup
+        command line options can be found in the
+        :manpage:`pg_basebackup(1)` `documentation
+        <http://www.postgresql.org/docs/9.1/static/app-pgbasebackup.html>`_.
+        
+        .. IMPORTANT::
+            Always use the :option:`--xlog` option if you do not have reliable WAL
+            archiving configured for |PITR|. This option ensures the required WAL
+            information is included in the backup. Without the required WAL
+            information your backup cannot be recovered.
+        
+        
+        To make a backup of your database into the ``pgprod`` container::
+        
+            % swiftwal -C pgprod -v backup -c fast --xlog -H grind.example.com
+            Creating backup 20130828T1810Z in container pgprod
+            WARNING:  skipping special file "./server.crt"
+            WARNING:  skipping special file "./server.key"
+            START WAL LOCATION: 0/5C000020 (file 00000001000000000000005C)
+            CHECKPOINT LOCATION: 0/5C000058
+            BACKUP METHOD: streamed
+            START TIME: 2013-08-29 01:10:19 ICT
+            LABEL: pg_basebackup (via swiftwal)
+        
+        .. NOTE::
+            The WARNING messages here are emitted from :command:`pg_basebackup`,
+            and are always emitted on Debian and Ubuntu PostgreSQL default
+            installations as the SSL certificate files are installed as
+            symlinks.
+        
+        
+        The ISO-8601 timestamp ``20130828T1810Z`` is the key used to identify
+        this backup in SwiftWAL.
+        
+        The :command:`swiftwal list-backups` command will show you the backups
+        stored in Swift::
+        
+            % swiftwal -C pgprod list-backups
+            20130829T1125Z
+            20130829T1131Z
+            20130902T1138Z
+            20130902T1311Z
+        
+        The :option:`--verbose` option will show a more informative report::
+        
+            % swiftwal -C pgprod --verbose list-backups
+            Size   	Timestamp     	Swift Object Name
+            =======	==============	================================
+            2.72 MB	20130829T1125Z	pg_basebackup_20130829T1125Z.tgz
+            2.72 MB	20130829T1131Z	pg_basebackup_20130829T1131Z.tgz
+            2.72 MB	20130902T1138Z	pg_basebackup_20130902T1138Z.tgz
+            2.72 MB	20130902T1311Z	pg_basebackup_20130902T1311Z.tgz
+        
+            Total Size: 10.9 MB
+        
+        
+        :program:`swiftwal backup`
+        
+        .. option:: --xlog, -x
+        
+            Passed through to :program:`pg_basebackup`, instructing it to
+            include all WAL files required to restore the database. Without this
+            option, backups are useless unless the necessary WAL information
+            has been archived (eg. WAL archiving using
+            :command:`swiftwal archive-wal`.)
+        
+        .. option:: --checkpoint {fast, spread}, -c {fast, spread}
+        
+            Start the backup as soon as possible, or wait until the next
+            checkpoint has completed normally. :option:`--checkpoint fast`
+            may cause unwanted load on a particularly busy server.
+        
+        .. option:: --progress, -P
+        
+            Display progress indicators.
+        
+        .. option:: --label LABEL, -l LABEL
+        
+            Set the backup label. This is for your own use, as SwiftWAL uses the
+            backup start time to reference backups.
+        
+        .. option:: --username NAME, -U NAME
+        
+            Connect to PostgreSQL as the specified user. This user needs to have
+            the ``REPLICATION`` attribute granted with ``ALTER ROLE``, which is
+            normally the case for the default ``postgres`` user. It also needs
+            to have been granted permissions to connect to the hidden
+            ``replication`` database in :file:`pg_hba.conf`.
+        
+        .. option:: --host HOSTNAME, -H HOSTNAME
+        
+            Connect to PostgreSQL on the specified host.
+        
+        .. option:: --port PORT, -p PORT
+        
+            Connect to PostgreSQL on the specified port.
+        
+        
+        Restore
+        -------
+        
+        Restoring backups is done with the :command:`swiftwal restore` command.
+        This command streams the backup from Swift through decompression and
+        untar, unpacking the backup to the directory of your choosing. As a
+        precaution, the directory must be empty or non-existant::
+        
+            % swiftwal --container=pgprod restore 20130828T1952Z ./
+            Total bytes read: 22159360 (22MiB, 993KiB/s)
+        
+        .. TIP::
+            With a default Debian or Ubuntu PostgreSQL setup, you will also need
+            to recreate the SSL certificate symlinks or update your
+            :file:`postgresql.conf` file to specify the path directly::
+        
+                ln -s /etc/ssl/certs/ssl-cert-snakeoil.pem .
+                ln -s /etc/ssl/private/ssl-cert-snakeoil.key .
+        
+        
+        Reports
+        -------
+        
+        The :command:`swiftwal list-backups` command lists the backups stored
+        in Swift.
+        
+        The :command:`swiftwal list-wal` command lists the WAL files stored in
+        Swift.
+        
+        
+        WAL Archiving
+        -------------
+        
+        The :command:`swiftwal archive-wal` command can be used as an
+        ``archive_command`` in your PostgreSQL's :file:`postgresql.conf` file
+        to archive WAL logs directly into Swift. This allows you to configure
+        log-shipped replication and, combined with a backup made with the
+        :command:`swiftwal backup` command, lets you do |PITR|::
+        
+            archive_mode = on
+            wal_level = hot_standby
+            archive_command = 'swiftwal --config=/etc/swiftwal.conf archive-wal %p'
+        
+        program:`swiftwal archive-wal`
+        
+        .. option:: --force, -f
+        
+            Overwrite an existing WAL file. In normal operation, WAL archiving
+            commands should refuse to overwrite a WAL file if it already exists
+            at the target destination. This is a safety measure, and will
+            normally never happen unless you incorrectly configure two servers
+            to archive to the same Swift container. This option allows you to
+            override this behavior, helping you repair the problem.
+        
+        
+        WAL Shipping
+        ------------
+        
+        The :command:`swiftwal restore-wal` command can be used as a ``replay_command`` in a PostgreSQL :file:`recovery.conf` file. This lets you perform |PITR|,
+        replaying WAL information directly from Swift. It also lets you setup
+        WAL log-shipping replication and create a warm or hot standby server.
+        Log-shipping replication is often configured in addition to streaming
+        replication as a fall back, allowing a standby server to recover if it
+        has fallen behind for some reason without needing to keep vast amounts
+        of WAL files available on the primary server using the
+        ``wal_keep_segments`` configuration option::
+        
+            standby_mode = on
+            restore_command = 'swiftwal --config=/etc/swiftwal.conf restore-wal %f %p'
+            recovery_target_timeline = latest
+        
+        
+        Removing Backups & WAL Files
+        ----------------------------
+        
+        Old backups and WAL files can be removed using the :command:`swiftwal prune`
+        command, reclaiming the disk space in Swift::
+        
+          % swiftwal -C pgprod prune --keep-backups 3 --keep-wal 0
+          Removing    1 backups,   20130828T1524Z -> 20130828T1524Z
+          Keeping     3 backups,   20130828T1528Z -> 20130828T1904Z
+        
+          Removing    2 WAL files, 000000010000000000000056 -> 000000010000000000000057
+          Keeping    13 WAL files, 000000010000000000000058 -> 000000010000000000000064
+        
+        Use the common :option:`--verbose` option to generate a more verbose report.
+        
+        .. IMPORTANT::
+            Do not clean out your old backups and WAL files unless you are
+            confident your newer ones are actually recoverable. If you are
+            not using the :option:`--xlog` option when making backups, it
+            is worth checking your servers $DATADIR/pg_xlog/archive_status
+            directory for files with a .ready extension; these correspond
+            WAL files that have not been archived and may mean WAL files you
+            need to restore your backup are not yet in Swift. A script like the
+            following will let you perform a regular backup and cleanup from
+            the PostgreSQL with confidence::
+        
+                #!/bin/bash
+                PGDATA=/var/lib/postgresql/9.1/main
+                swiftwal -c /etc/swiftwal.conf -C pgprod backup
+                sleep 600
+                if [ `find ${PGDATA}/pg_xlog/archive_status -name \*.ready -cmin +9` ]
+                then
+                    echo ERROR: WAL archiving is failing. Leaving old backups.
+                else
+                    swiftwal -c /etc/swiftwal.conf -C pgprod cleanup --keep-backups=1
+                fi
+        
+            Alternatively, use the :option:`--xlog` option to make self-contained 
+            backups.
+        
+        :program:`swiftwal prune`
+        
+        .. option:: --keep-backups N
+        
+            How many backups to keep. The most recent backups are kept, and
+            older ones removed.
+        
+        .. option:: --keep-wals N
+        
+            How many WAL files to keep. More will be kept if they are needed for
+            |PITR| of a backup (all WAL information younger than the oldest backup
+            is kept). Each WAL file is 16MB in size. If set to 0, all WAL files
+            are removed except for those needed for |PITR|.
+        
+        .. option:: --dry-run, -n
+        
+            Don't actually delete anything.
+        
+        
+        Simple Single Standby Cleanup
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        
+        For a simple setup involving a single standby server without |PITR|, the :command:`swiftwal archive-cleanup` command provides the same functionality as the standard pg_archivecleanup(1) tool shipped with PostgreSQL. If it is installed in your standby server's recovery.conf file, WAL files will be automatically removed once they have been replayed and are no longer needed::
+        
+            standby_mode = on
+            restore_command = 'swiftwal -c /etc/swiftwal.conf restore-wal %f %p'
+            archive_cleanup_command='swiftwal -c /etc/swiftwal.conf archive-cleanup %r'
+            
+        
+        .. |PITR| replace:: :abbr:`PITR (point-in-time recovery)`
+        
+Keywords: postgresql postgres wal pitr backup
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Classifier: Environment :: Console
+Classifier: Environment :: OpenStack
+Classifier: Intended Audience :: System Administrators
+Classifier: Natural Language :: English
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Topic :: Database
+Classifier: Topic :: System :: Archiving :: Backup
+Classifier: Topic :: System :: Recovery Tools
+Classifier: Topic :: System :: Systems Administration
