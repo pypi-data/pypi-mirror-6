@@ -1,0 +1,33 @@
+# -*- encoding: utf-8 -*-
+import os
+
+
+def play(expr):
+    r'''Plays `expr`.
+
+    ::
+
+        >>> note = Note("c'4")
+
+    ::
+
+        >>> topleveltools.play(note) # doctest: +SKIP
+
+    This input creates and opens a one-note MIDI file.
+
+    Abjad outputs MIDI files of the format ``filename.mid``
+    under Windows.
+
+    Abjad outputs MIDI files of the format ``filename.midi``
+    under other operating systems.
+
+    Returns none.
+    '''
+    from abjad import abjad_configuration
+    from abjad.tools import systemtools
+    from abjad.tools import topleveltools
+    assert '__illustrate__' in dir(expr)
+    midi_filepath, abjad_formatting_time, lilypond_rendering_time = \
+        topleveltools.persist(expr).as_midi()
+    midi_player = abjad_configuration['midi_player']
+    systemtools.IOManager.open_file(midi_filepath, midi_player)

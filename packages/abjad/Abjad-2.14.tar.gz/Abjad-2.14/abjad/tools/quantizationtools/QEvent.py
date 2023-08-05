@@ -1,0 +1,94 @@
+# -*- encoding: utf-8 -*-
+import abc
+import inspect
+from abjad.tools import durationtools
+from abjad.tools.abctools import AbjadObject
+
+
+class QEvent(AbjadObject):
+    r'''Abstract base class from which concrete ``QEvent`` subclasses
+    inherit.
+
+    Represents an attack point to be quantized.
+
+    All ``QEvents`` possess a rational offset in milliseconds,
+    and an optional index for disambiguating events which fall
+    on the same offset in a ``QGrid``.
+    '''
+
+    ### CLASS VARIABLES ###
+
+    __slots__ = (
+        '_index',
+        '_offset',
+        )
+
+    ### INITIALIZER ###
+
+    @abc.abstractmethod
+    def __init__(self, offset=0, index=None):
+        offset = durationtools.Offset(offset)
+        self._offset = offset
+        self._index = index
+
+    ### SPECIAL METHODS ###
+
+    def __getstate__(self):
+        r'''Gets state.
+        '''
+        state = {}
+        for current_class in inspect.getmro(type(self)):
+            if hasattr(current_class, '__slots__'):
+                for slot in current_class.__slots__:
+                    if slot not in state:
+                        state[slot] = getattr(self, slot)
+        return state
+
+    def __lt__(self, expr):
+        r'''True when `epxr` is a q-event with offset greater than that of this
+        q-event. Otherwise false.
+
+        Returns boolean.
+        '''
+        if type(self) == type(self):
+            if self.offset < expr.offset:
+                return True
+        return False
+
+    def __setstate__(self, state):
+        r'''Sets state.
+        '''
+        for key, value in state.iteritems():
+            setattr(self, key, value)
+
+    ### PRIVATE PROPERTIES ###
+
+    @property
+    def _repr_specification(self):
+        return self._storage_format_specification.__makenew__(
+            is_indented=False,
+            )
+
+    @property
+    def _storage_format_specification(self):
+        from abjad.tools import systemtools
+        return systemtools.StorageFormatSpecification(
+            self,
+            keywords_ignored_when_false=(
+                'attachments',
+                ),
+            )
+
+    ### PUBLIC PROPERTIES ###
+
+    @property
+    def index(self):
+        r'''The optional index, for sorting QEvents with identical offsets.
+        '''
+        return self._index
+
+    @property
+    def offset(self):
+        r'''The offset in milliseconds of the event.
+        '''
+        return self._offset
