@@ -1,0 +1,312 @@
+Metadata-Version: 1.1
+Name: django-denormalize
+Version: 0.2.1
+Summary: Converts Django ORM objects into data documents, and keeps them in sync
+Home-page: https://bitbucket.org/wojas/django-denormalize/
+Author: Konrad Wojas
+Author-email: konrad@wojas.nl
+License: LICENSE
+Description: What is it?
+        ===========
+        
+        Django-denormalize allows you to convert a tree of Django ORM objects into one
+        data document. With 'data document' we mean a structure of dicts, lists and
+        other primitive types, that can be serialized to JSON or a Python Pickle.
+        
+        The resulting document can be used in combination with the Django cache layer
+        to create blazingly fast views that do not hit the database. The data can also
+        be synced to a NoSQL store like MongoDB_, for consumption by other frameworks,
+        like Meteor_ (NodeJS_ based).
+        
+        If any data changes in the ORM (even if it's on a some deep many-to-many
+        relationship far away from the root object), django-denormalize will
+        automatically trigger a cache invalidation of the root object's document
+        and/or sync the new document to your preferred NoSQL store.
+        
+        This module also includes special support for content in FeinCMS_ objects: all
+        regions and content types will be available under a 'content' dictionary.
+        
+        
+        Example
+        =======
+        
+        For example, suppose you have the following models:
+        
+        .. sourcecode:: python
+        
+            class Book(models.Model):
+                title = models.CharField(_("title"), max_length=80)
+                year = models.PositiveIntegerField(_("year"), null=True)
+                authors = models.ManyToManyField(Author)
+                ...
+        
+            class Author(models.Model):
+                name = models.CharField(_("name"), max_length=80)
+                ...
+        
+        
+        You can write the following class to describe your document collection:
+        
+        .. sourcecode:: python
+        
+            from denormalize.models import DocumentCollection
+        
+            class BookCollection(DocumentCollection):
+                model = Book
+                name = "books"
+                prefetch_related = ['authors']
+        
+        
+        Let's print all documents:
+        
+        .. sourcecode:: python
+        
+            books = BookCollection()
+            for doc in books.dump_collection():
+                print doc
+        
+        
+        Each document will have the following structure:
+        
+        .. sourcecode:: python
+        
+            {
+                'id': 42,
+                'title': u'Cooking for Geeks',
+                'year': 2010,
+                'authors': [
+                    {
+                        'id': 18,
+                        'name': u'Jeff Potter',
+                        ...
+                    }
+                ],
+                ...
+            }
+        
+        
+        This in itself can be useful, but the real power of django-documentsync lies
+        in its backends. Suppose we want to cache these documents,  to avoid hitting
+        the database.  We can use these documents in our views, instead of accessing
+        the Django ORM.  Backend and view code:
+        
+        .. sourcecode:: python
+        
+            # In models.py
+        
+            from denormalize.backends.cache import CacheBackend
+        
+            backend = CacheBackend()
+            backend.register(books)
+        
+            # In views.py
+        
+            def our_book_view(request, book_id):
+                book_doc = backend.get_doc(books, book_id)
+                if not book_doc:
+                    raise Http404("Book not found")
+                return render(request, 'book.html', {'book': book_doc})
+        
+        
+        Our `CacheBackend` will try to fetch the book document from the Django cache.
+        If it cannot be found, it will generate the document from the ORM and then
+        store it in the cache.
+        
+        And best of all: if any data on the Author or Book objects for this book
+        changes, the cache will automatically be invalidated for us! The `book_doc`
+        we retrieve, will always be up to date.
+        
+        
+        How does this compare with simply using the Django page cache?
+        --------------------------------------------------------------
+        
+        The traditional approach to Django scalability is using the page cache to
+        cache the entire page rendered by the view. This works quite well, but it has
+        two big disadvantages:
+        
+        * The cache will not automatically be invalidated as soon as the underlying
+          data changes. If you set the page cache time to 60 seconds, it will take
+          up to 60 seconds for a change to be visible on the site.
+        * This approach does not work well for websites where users can login and
+          see customized content.
+        
+        In simpler cases, these problems can be worked around by using template
+        fragment caching, as this allows you to cache common regions, and specify
+        which variables should be incorporated into the cache key. But even in our
+        simple Book example, it's not easy to invalidate the cache on changes to Author.
+        
+        The disadvantages of the django-denormalize approach are:
+        
+        * You no longer have access to the Django models and its methods in your
+          templates. You are dealing with the raw data. Of course, you can add any
+          extra information you might need in the template by extending the
+          `DocumentCollection`, or by creating custom template filters to calculate
+          some value.
+        * Writes by the ORM to models that are included in documents are slower,
+          because they are monitored for changes.
+        
+        
+        MongoDB backend
+        ===============
+        
+        The MongoDB_ backend works quite similar to the `CacheBackend`:
+        
+        .. sourcecode:: python
+        
+            # In models.py
+        
+            from denormalize.backends.mongodb import MongoBackend
+        
+            backend = MongoBackend(
+                name='mongo',
+                db_name='test_denormalize',
+                connection_uri='mongodb://localhost')
+            backend.register(books)
+        
+        
+        Because the data is persistent and accessed directly through the MongoDB API,
+        you need to make care to keep it in sync. You can trigger a full one-way sync
+        using the following management command (TODO: currently not implemented yet
+        for the MongoBackend, only for LocMemBackend. Coming soon!)::
+        
+            $ ./manage.py denormalize_sync mongo books
+        
+        Whenever you update the data through the ORM, the corresponding document will
+        be updated automatically. The backend preserves any extra keys you may have set
+        on the document root in MongoDB. Make sure, however, to not add or change keys
+        on subdocuments created by the driver, because they will be overwritten. In the
+        book example above, it is safe to set `doc['foo']`, but not safe to set
+        `doc['authors'][0]['foo']`.
+        
+        You should run full syncs in a cronjob, though, to prevent your data from
+        going out of sync over time due to network outages and changes that
+        bypass the ORM (see 'bugs and limitations' below).
+        
+        
+        Creating aggregate collections
+        ==============================
+        
+        Occasionaly you may want to aggregate data from more than one object on the
+        root model. The key differences here are:
+        
+        * The output documents do not have a 1:1 relation with the input documents.
+        * Any change on any root object should trigger an update.
+        
+        Use cases:
+        
+        * Creating one document with a tree structure of pages or categories
+          to generate a menu.
+        * Calculating statistics about data stored in an entire table.
+        * Generating an index document, mapping one field to
+          the ids of the documents where the field has a certain value.
+        
+        `AggregateCollection` makes this really easy. The following collection will
+        create an index by tag::
+        
+            class BookTagIndexCollection(AggregateCollection):
+                model = Book
+                name = 'book_tags'
+                prefetch_related = 'tags'
+        
+                def aggregate(self, key):
+                    assert key == 'default'
+                    index = {}
+                    for book in self.queryset().all():
+                        for tag in book.tags.all():
+                            tagname = tag.name
+                            index.setdefault(tagname, set()).add(book.id)
+                    return index
+        
+        
+        FeinCMS support
+        ===============
+        
+        Django-denormalize has experimental special support for FeinCMS. If you use
+        the special `FeinCMSCollection`, the `content` attribute will be set to a dict
+        with all regions represented as lists. All content types are included by 
+        default. If you want to follow relations on content types, you need to 
+        explicitly define all relations to follow. This will become easier in the
+        future.
+        
+        
+        Performance optimization
+        ========================
+        
+        @@@TODO: explain how to prevent spurious updates using `denormalize.context`.
+        
+        
+        Disadvantages, bugs and implementation notes
+        ============================================
+        
+        Bugs and limitations:
+        
+        * Django-normalize had not yet been extensively tested in real world
+          applications. Expect bugs. And since it's an early beta release, there
+          is no guarantee that the API will not change without warning in the near
+          future.
+        * Using django-denormalize on models that receive a lot of writes might
+          significantly slow down your application, as every write will trigger
+          database queries to determine the affected documents, and regeneration
+          of the documents that have changes. Keep you view counters and last login
+          timestamps out of the models included in documents! (You might want to
+          move these to a NoSQL store anyway.)
+        * If you bypass the ORM (raw queries, `manage.py dbshell`,
+          other applications, etc), django-denormalize cannot detect
+          the changes made to the models. After perform a large batch
+          operation, flush the Django cache, or run a full sync (denormalize_sync
+          management command) to update your NoSQL backend, depending on how you use
+          django-denormalize.
+        * If syncing to a NoSQL store and the NoSQL database is not available, you
+          will lose the update, it is currently not rescheduled (TODO: implement
+          a transaction log to keep track of changes and whether they have been
+          properly synced or not). You should run a regular full sync in a cronjob.
+        * Syncing happens only one way. If you want to change data, you need to
+          perform the modification on the ORM side, not a NoSQL side. We do try
+          hard not to overwrite any extra attributes you added in the NoSQL backends.
+        * A full sync currently does not delete stale objects (TODO)
+        * Keep the storage limitations of your backends in mind. Memcached can only
+          store objects of up to 1MB, MongoDB has a limit of 16MB. Make sure your
+          documents will not exceed these limits.
+        
+        
+        Types of projects that would benefit most of django-denormalize:
+        
+        * Writes are rare and mostly occur due to content updates in the Django admin,
+          like in CMS systems.
+        * There are a lot more reads than writes, and you want to speed up the read
+          views, while keeping the front-end personalized and responsive to data
+          changes.
+        * You want to use Meteor_ to build the front-end side of your application,
+          but do not feel like implementing a CMS in Meteor. Django-denormalize
+          allows you to build the CMS backend using the Django admin and FeinCMS_.
+          This was the original reason to start this project, so expect more updates
+          to support this!
+        * You want to use MongoDB_ to access/query your data, but prefer to keep your
+          primary data in a traditional, proven, relation database system you have
+          10 years experience with, because it makes you or your DBA sleep better.
+        
+        
+        Alternatives
+        ------------
+        
+        Django-nonrel_ allows you to use the Django ORM to directly access a NoSQL
+        database, but with limitations. If you do a lot of writes from your front-end
+        views, or want to prevent data duplication, this might be a better solution.
+        
+        PS: Need another backend? Writing one is quite simple! You only need to override
+        a base class, and implement a few methods.
+        
+        
+        .. _Meteor: http://meteor.com/
+        .. _NodeJS: http://nodejs.org/
+        .. _FeinCMS: http://www.feincms.org/
+        .. _MongoDB: http://www.mongodb.org/
+        .. _Django-nonrel: http://www.allbuttonspressed.com/projects/django-nonrel
+        
+        
+Keywords: django orm cache mongodb nosql meteor
+Platform: UNKNOWN
+Classifier: Framework :: Django
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Database
+Classifier: License :: OSI Approved :: MIT License
