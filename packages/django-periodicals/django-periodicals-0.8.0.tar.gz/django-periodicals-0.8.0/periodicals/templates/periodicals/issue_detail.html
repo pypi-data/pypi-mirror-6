@@ -1,0 +1,114 @@
+{% extends "periodicals/base_periodical.html" %}
+
+{% block title %}{{periodical.name}} - {{issue.display_name}} - {{issue.display_date}}{% endblock %}
+
+{% block javascript %}
+{{block.super}}
+<script>
+function open_add_link(button){
+    var div = document.getElementById('add_link'); 
+    div.style.display = 'block';
+    button.style.display = 'none';
+    return false;
+}
+</script>
+{% endblock javascript %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="/">Home</a>&nbsp;&gt;&nbsp;<a href="{% url 'periodicals_list' %}">Periodicals</a>&nbsp;&gt;&nbsp;<a href="{{periodical.get_absolute_url}}">{{periodical.name}}</a>&nbsp;&gt;&nbsp;<a href="{% url 'periodicals_issue_year' periodical.slug issue.pub_date|date:"Y" %}">{{issue.pub_date|date:"Y"}}</a>&nbsp;&gt;&nbsp;{{issue.display_name}}</div>
+{% endblock breadcrumbs %}
+
+{% block innercontent %}
+{% block top_nav %}
+<ul class="pager">
+  <li class="previous">{% if previous_month %}<a class="important-link" href="{{previous_month.get_absolute_url}}">{{previous_month}}</a>{% endif %}</li>
+  <li class="current"><a  class="important-link" href="{% url 'periodicals_issue_year' periodical.slug issue.pub_date|date:"Y" %}">All {{issue.pub_date|date:"Y"}} Issues</a></li>
+  <li class="next">{% if next_month %}<a class="important-link" href="{{next_month.get_absolute_url}}">{{next_month}}</a>{% endif %}</li>
+</ul>
+{% endblock top_nav %}
+{% block obj_detail %}
+<h1>{{periodical.name}} {{issue.display_date}}</h1>
+{% if issue.printed_cover or issue.digital_cover %}
+{% if issue.printed_cover %}
+<div class="article-image">
+  <a href="{{issue.buy_print}}"><img src="{{MEDIA_URL}}{{issue.printed_cover}}" /></a>
+</div>
+{% endif %}
+{% if issue.digital_cover %}
+<div class="article-image">  
+  <a href="{{issue.buy_digital}}"><img src="{{MEDIA_URL}}{{issue.digital_cover}}" /></a>
+</div>
+{% endif %}
+{% endif %}
+
+<h2>Description</h2>
+<p>{{issue.description}}</p>
+{% endblock obj_detail %}
+{% block obj_online %}
+{% if issue.read_online %}
+<div class="issue-read-online">
+  <a class="important-link" href="{{issue.read_online}}">Read this issue online</a>
+</div>
+{% endif %}
+{% if issue.buy_digital %}
+<div class="issue-buy-digital">
+  <a href="{{issue.buy_digital}}">Buy a digital copy of this issue</a>
+</div>
+{% endif %}
+{% if issue.buy_print %}
+<div class="issue-buy-print">
+  <a href="{{issue.buy_print}}">Buy a paper copy of this issue</a>
+</div>
+{% endif %}
+{% endblock obj_online %}
+{% block obj_list %}
+<div class="articles">
+  {% if issue.articles %}
+  <h2>Articles</h2>
+  <table class="article-list table table-bordered table-striped">
+    <thead>
+      <tr><th class="page-header">Page</th><th class="page-title">Title</th><th class="page-authors">Authors</th></tr>
+    </thead>
+    <tbody>
+      {% for article in issue.articles.all %}
+      <tr>      
+        <td class="article-page-number">{% if article.page %}<a href="{{article.get_absolute_url}}">{{article.page}}</a>{% else %}&nbsp;{% endif %}</td>      
+        <td><a href="{{article.get_absolute_url}}">{{article.series}}<br/>{{article.title}}</a></td><td>{% for author in article.authors.all %}<a href="{{author.get_absolute_url}}">{{author.display_name}}</a>&nbsp;{% endfor %}</td>      
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% if not issue.articles %}
+  <h2>No Articles In Database</h2>
+  {% endif %}
+</div>
+{% endblock obj_list %}
+{% if links_enabled %}
+{% block links %}
+<h2>Blog Posts, Web Pages, and Videos Referring to This Issue</h2>
+<table class="article-table table table-bordered table-striped">
+  {% for link in issue.active_links %}
+  <tr><td><a href="{{link.url}}">{{link.title}}</a></td></tr>
+  {% endfor %}
+</table>
+{% block add_link %}
+<p class="add-link">
+    <a class="btn btn-primary" target="page" rel="nofollow" onclick="open_add_link(this)" href="javascript:void(0)">Add a related blog/web page/video to this issue</a>
+  <div id="add_link" style="display:none;">
+    <form method="post" action="{% url 'periodicals_add_issue_link' periodical.slug issue.slug %}">
+      {% include "periodicals/add_link_form.html" %}
+    </form>
+  </div>
+</p>
+{% endblock add_link %}
+{% endblock links %}
+{% endif %}
+{% block pagination %}
+<ul class="pager">
+  <li class="previous">{% if previous_month %}<a class="important-link" href="{{previous_month.get_absolute_url}}">{{previous_month}}</a>{% endif %}</li>
+  <li class="current"><a class="important-link" href="{% url 'periodicals_issue_year' periodical.slug issue.pub_date|date:"Y" %}">All {{issue.pub_date|date:"Y"}} Issues</a></li>
+  <li class="next">{% if next_month %}<a class="important-link" href="{{next_month.get_absolute_url}}">{{next_month}}</a>{% endif %}</li>
+</ul>
+{% endblock pagination %}
+{% endblock innercontent %}
