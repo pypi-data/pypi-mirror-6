@@ -1,0 +1,112 @@
+## @file    setup.py
+## @brief   Python distutils code for libSBML Python module
+## @author  Michael Hucka
+## @author  Ben Bornstein
+## @author  Ben Kovitz
+## @author  Frank Bergmann (fbergman@caltech.edu)
+## 
+##<!---------------------------------------------------------------------------
+## This file is part of libSBML.  Please visit http://sbml.org for more
+## information about SBML, and the latest version of libSBML.
+##
+## Copyright 2005-2010 California Institute of Technology.
+## Copyright 2002-2005 California Institute of Technology and
+##                     Japan Science and Technology Corporation.
+## 
+## This library is free software; you can redistribute it and/or modify it
+## under the terms of the GNU Lesser General Public License as published by
+## the Free Software Foundation.  A copy of the license agreement is provided
+## in the file named "LICENSE.txt" included with this software distribution
+## and also available online as http://sbml.org/software/libsbml/license.html
+##----------------------------------------------------------------------- -->*/
+
+import glob
+import os
+import platform
+
+# figure out the os
+basepath = './base/'
+current_os = 'LINUX'
+lib_dirs =  ['/usr/lib']
+inc_dirs = ["/usr/include/libxml2"]
+libs = ["xml2", "bz2", "z"]
+extra_args = []
+package_name = '"libsbml"'
+definitions = []
+packages = [
+  ('USE_COMP', None),
+  ('USE_DISTRIB', None),
+  ('USE_FBC', None),
+  ('USE_GROUPS', None),
+  ('USE_LAYOUT', None),
+  ('USE_QUAL', None),
+  ('USE_RENDER', None),
+  ('USE_REQUIREDELEMENTS', None),
+  ('USE_SPATIAL', None),
+  ('USE_MUTLI', None),
+]
+if platform.system() == 'Darwin': 
+  current_os = 'DARWIN'
+elif platform.system() == 'Windows':
+  current_os = 'WIN32'
+  package_name = '\\"libsbml\\"'
+  definitions = [
+    ('LIBSBML_EXPORTS', None),
+	('LIBLAX_STATIC', None)
+  ]
+  dependency_dir = 'D:\Development\libsbml_dependencies\install_vs9_release_x86'
+  inc_dirs= [ dependency_dir + '/include']
+  lib_dirs= [ dependency_dir + '/lib']
+  extra_args = ['/bigobj', '/EHsc']
+  libs = ["libxml2", "libbz2", "zdll", "libiconv", "ws2_32"]
+
+cfiles = [ basepath + 'libsbml_wrap.cpp' ]
+for root, dirs, files in os.walk(basepath + 'sbml'):
+  for file in files:
+    if file.endswith('.c') or file.endswith('.cpp'):
+      cfiles.append(os.path.join(root, file))
+
+from distutils.core import setup, Extension
+
+setup(name             = "python-libsbml-experimental", 
+      version          = "5.9.2",
+      description      = "LibSBML Python API",
+      long_description = ("LibSBML is a library for reading, writing and "+
+                          "manipulating the Systems Biology Markup Language "+
+                          "(SBML).  It is written in ISO C and C++, supports "+
+                          "SBML Levels 1, 2 and 3, and runs on Linux, Microsoft "+
+                          "Windows, and Apple MacOS X.  For more information "+
+                          "about SBML, please see http://sbml.org."),
+      license          = "LGPL",
+      author           = "SBML Team",
+      author_email     = "libsbml-team@caltech.edu",
+      url              = "http://sbml.org",
+      packages         = ["libsbml"],
+      package_dir      = {'libsbml': 'libsbml'},
+      #data_files       = [('lib/site-packages', ['libsbml.pth'])],
+      ext_package      = "libsbml",
+      ext_modules      = [Extension("_libsbml", 
+                            sources = cfiles,
+							extra_compile_args = extra_args,
+                            define_macros =  definitions 
+							  +  [(current_os, None), 
+                              ('USE_LIBXML', None),
+                              ('USE_ZLIB', None),
+                              ('USE_BZ2', None),
+                              ('PACKAGE_NAME', package_name)
+                              ] 
+							  + packages,
+                            include_dirs = inc_dirs +
+							  [                              
+                              basepath + "/", 
+                              basepath + "/sbml", 
+                              basepath + "/sbml/compress", 
+                              basepath + "/sbml/validator/constraints", 
+                              basepath + "/sbml/packages/comp/validator", 
+                              basepath + "/sbml/packages/comp/validator/constraints", 
+                              "."],
+                            libraries = libs,
+                            library_dirs = lib_dirs
+                            )
+                         ]
+)
