@@ -1,0 +1,4 @@
+examples.phase.simple
+=====================
+
+.. automodule:: examples.phase.simple

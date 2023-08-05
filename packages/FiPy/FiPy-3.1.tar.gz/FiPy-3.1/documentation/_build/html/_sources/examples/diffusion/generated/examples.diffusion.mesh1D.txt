@@ -1,0 +1,4 @@
+examples.diffusion.mesh1D
+=========================
+
+.. automodule:: examples.diffusion.mesh1D

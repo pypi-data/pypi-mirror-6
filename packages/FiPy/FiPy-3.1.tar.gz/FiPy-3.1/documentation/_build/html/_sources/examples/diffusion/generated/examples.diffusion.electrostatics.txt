@@ -1,0 +1,4 @@
+examples.diffusion.electrostatics
+=================================
+
+.. automodule:: examples.diffusion.electrostatics

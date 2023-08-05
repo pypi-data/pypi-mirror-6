@@ -1,0 +1,4 @@
+examples.flow.stokesCavity
+==========================
+
+.. automodule:: examples.flow.stokesCavity

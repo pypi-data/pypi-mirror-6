@@ -1,0 +1,4 @@
+examples.diffusion.coupled
+==========================
+
+.. automodule:: examples.diffusion.coupled

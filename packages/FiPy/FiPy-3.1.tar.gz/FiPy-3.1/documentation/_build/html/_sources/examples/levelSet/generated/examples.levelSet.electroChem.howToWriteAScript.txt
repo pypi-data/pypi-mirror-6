@@ -1,0 +1,4 @@
+examples.levelSet.electroChem.howToWriteAScript
+===============================================
+
+.. automodule:: examples.levelSet.electroChem.howToWriteAScript

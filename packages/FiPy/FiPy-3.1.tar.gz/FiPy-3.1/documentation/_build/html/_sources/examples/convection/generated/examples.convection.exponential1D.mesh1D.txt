@@ -1,0 +1,4 @@
+examples.convection.exponential1D.mesh1D
+========================================
+
+.. automodule:: examples.convection.exponential1D.mesh1D

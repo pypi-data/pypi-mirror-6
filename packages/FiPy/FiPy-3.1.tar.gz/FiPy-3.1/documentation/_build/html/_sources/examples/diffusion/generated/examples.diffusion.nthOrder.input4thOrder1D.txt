@@ -1,0 +1,4 @@
+examples.diffusion.nthOrder.input4thOrder1D
+===========================================
+
+.. automodule:: examples.diffusion.nthOrder.input4thOrder1D

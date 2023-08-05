@@ -1,0 +1,4 @@
+examples.diffusion.mesh20x20
+============================
+
+.. automodule:: examples.diffusion.mesh20x20
