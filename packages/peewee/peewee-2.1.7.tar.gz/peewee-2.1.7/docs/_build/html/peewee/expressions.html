@@ -1,0 +1,146 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Expressions &mdash; peewee 2.1.6 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/flasky.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.1.6',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="peewee 2.1.6 documentation" href="../index.html" />
+   
+  
+  <link media="only screen and (max-device-width: 480px)" href="../_static/small_flask.css" type= "text/css" rel="stylesheet" />
+
+  </head>
+  <body>
+  
+  
+
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="../index.html">peewee 2.1.6 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="expressions">
+<h1>Expressions<a class="headerlink" href="#expressions" title="Permalink to this headline">¶</a></h1>
+<p>Peewee was designed to provide a simple, expressive, and pythonic way of executing
+queries.  This section will provide a quick overview of some common types of expressions.</p>
+<p>There are two primary types of objects that can be composed to create expressions:</p>
+<ul class="simple">
+<li><a class="reference internal" href="api.html#Field" title="Field"><tt class="xref py py-class docutils literal"><span class="pre">Field</span></tt></a> instances</li>
+<li>SQL aggregations and functions using <a class="reference internal" href="api.html#fn" title="fn"><tt class="xref py py-class docutils literal"><span class="pre">fn</span></tt></a></li>
+</ul>
+<p>We will assume a simple &#8220;User&#8221; model with fields for username and other things.
+It looks like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">User</span><span class="p">(</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">username</span> <span class="o">=</span> <span class="n">CharField</span><span class="p">()</span>
+    <span class="n">is_admin</span> <span class="o">=</span> <span class="n">BooleanField</span><span class="p">()</span>
+    <span class="n">is_active</span> <span class="o">=</span> <span class="n">BooleanField</span><span class="p">()</span>
+    <span class="n">last_login</span> <span class="o">=</span> <span class="n">DateTimeField</span><span class="p">()</span>
+    <span class="n">login_count</span> <span class="o">=</span> <span class="n">IntegerField</span><span class="p">()</span>
+    <span class="n">failed_logins</span> <span class="o">=</span> <span class="n">IntegerField</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Comparisons use the <a class="reference internal" href="querying.html#column-lookups"><em>Column lookups</em></a>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># username is equal to &#39;charlie&#39;</span>
+<span class="n">User</span><span class="o">.</span><span class="n">username</span> <span class="o">==</span> <span class="s">&#39;charlie&#39;</span>
+
+<span class="c"># user has logged in less than 5 times</span>
+<span class="n">User</span><span class="o">.</span><span class="n">login_count</span> <span class="o">&lt;</span> <span class="mi">5</span>
+</pre></div>
+</div>
+<p>Comparisons can be combined using bitwise &#8220;and&#8221; and &#8220;or&#8221;.  Operator precedence
+is controlled by python and comparisons can be nested to an arbitrary depth:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># user is both and admin and has logged in today</span>
+<span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">is_admin</span> <span class="o">==</span> <span class="bp">True</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">last_login</span> <span class="o">&gt;=</span> <span class="n">today</span><span class="p">)</span>
+
+<span class="c"># user&#39;s username is either charlie or charles</span>
+<span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">username</span> <span class="o">==</span> <span class="s">&#39;charlie&#39;</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">username</span> <span class="o">==</span> <span class="s">&#39;charles&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Comparisons can be used with functions as well:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># user&#39;s username starts with a &#39;g&#39; or a &#39;G&#39;:</span>
+<span class="n">fn</span><span class="o">.</span><span class="n">Lower</span><span class="p">(</span><span class="n">fn</span><span class="o">.</span><span class="n">Substr</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span> <span class="o">==</span> <span class="s">&#39;g&#39;</span>
+</pre></div>
+</div>
+<p>We can do some fairly interesting things, as expressions can be compared against
+other expressions.  Expressions also support arithmetic operations:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># users who entered the incorrect more than half the time and have logged</span>
+<span class="c"># in at least 10 times</span>
+<span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">failed_logins</span> <span class="o">&gt;</span> <span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">login_count</span> <span class="o">*</span> <span class="o">.</span><span class="mi">5</span><span class="p">))</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">login_count</span> <span class="o">&gt;</span> <span class="mi">10</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Expressions allow us to do atomic updates:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># when a user logs in we want to increment their login count:</span>
+<span class="n">User</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">login_count</span><span class="o">=</span><span class="n">User</span><span class="o">.</span><span class="n">login_count</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Expressions can be used in all parts of a query, so experiment!</p>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper"><h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/peewee/expressions.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+  <div class="footer">
+    &copy; Copyright charles leifer.
+    Created using <a href="http://sphinx.pocoo.org/">Sphinx</a>.
+  </div>
+  
+  </body>
+</html>
