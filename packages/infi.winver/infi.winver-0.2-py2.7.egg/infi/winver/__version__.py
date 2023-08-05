@@ -1,0 +1,10 @@
+__version__ = "0.2"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.2)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'e1465241a1c2bfcf11d5d0a627bafdee196b6f9a'
+__git_head_subject__ = 'Finished release v0.2.'
+__git_head_message__ = '* release/v0.2:\n  buildout.cfg: changed isolated python version to v2.7.5.4\n  HIP-782 add windows 2012 r2 to infi.winver'
+__git_dirty_diff__ = ''
