@@ -1,0 +1,381 @@
+Metadata-Version: 1.0
+Name: cubicweb-dataio
+Version: 0.3.4
+Summary: Cube for data input/output, import and export
+Home-page: http://www.cubicweb.org/project/cubicweb-dataio
+Author: LOGILAB S.A. (Paris, FRANCE)
+Author-email: contact@logilab.fr
+License: LGPL
+Description: =======
+        Summary
+        =======
+        
+        Cube for data input/output, import and export
+        
+        
+        Massive Store
+        =============
+        
+        The Massive Store is a CW store used to push massive amount
+        of data using pure SQL logic, thus avoiding CW checks.
+        It is faster than other CW stores (it does not check eid at each step,
+        it use COPY FROM method), but is less safe (no data integrity securities),
+        and does not return an eid while using create_entity function.
+        
+        WARNING: This store may be only used with PostgreSQL for now, as it
+        relies on the COPY FROM method, and on specific PostgreSQL tables
+        to get all the indexes.
+        
+        
+        Workflow of Massive Store
+        -------------------------
+        
+        The Massive Store workflow is the following:
+        
+         * Drop indexes and constraints from the meta-data tables (entities, is_instance_of, ...);
+        
+        
+         * Insertion of data:
+        
+             * using the `create_entity` function for entities;
+        
+             * using the `relate` function for relations;
+        
+             * using the `related_by_iid` function for relations based on external identifiers;
+        
+             * each insertion of a rtype that has not been seen yet will trigger the
+               creation of a temporary table for this rtype, to store the results.
+        
+             * each insertion of an etype that has not been seen yet will remove all
+               the indexes/constraints on the entity table.
+        
+        
+         * At a given point, one should call the `flush` method:
+        
+            * it will flush the entities data into the database based on `COPY_FROM`.
+        
+            * it will flush the relations data into the database based on `COPY_FROM`.
+        
+            * it will flush the relations-iid data into the database based on `COPY_FROM`.
+        
+            * it will create the metadata (entities, ...) for the insered entities.
+        
+            * it will commit.
+        
+        
+         * If some relations are created based on external identifiers (`relate_by_iid`),
+           the conversion should be manually done using the `convert_relations` method.
+        
+        
+         * At the end of the insertion, one should call the `cleanup` method:
+        
+            * it will re-create the indexes/constraints/primary key for the entities/relations tables.
+        
+            * it will re-create the indexes/constraints on the meta-data tables.
+        
+            * it will remove temporary tables and internal store tables.
+        
+        
+        
+        
+        Entities/Relations in Massive Store
+        -----------------------------------
+        
+        Due to the technical constraints on the database insertion, there are some following specific points to notice:
+        
+          * a `create_entity` call will return an entity with a specific `eid`. Eids are automatically dealt with
+            by the Massive Store (it will fetch for a given range of eids for its internal use), but you can
+            pass a specific eid in the kwargs of the `create_entity` call to bypass the automatic assignation of an eid.
+        
+          * inlined-relations are not supported in the `relate` method.
+        
+        A buffer will be created for the call to the PostgreSQL `COPY_FROM` clause.
+        If the separator used for the creation of this tabular file is found in the data of the entities (or relations),
+        it will be replace by the `replace_sep` of the store (default is to '').
+        
+        
+        
+        Basic use of Massive Store
+        --------------------------
+        
+        A simple script using the Massive Store::
+        
+            # Initialize the store
+            store = MassiveObjectStore(session)
+            # Initialize the Relation table
+            store.init_rtype_table('Person', 'lives', 'Location')
+        
+            # Import logic
+            ...
+            entity = store.create_entity('Person', ...)
+            entity = store.create_entity('Location', ...)
+        
+            # Flush the data in memory to sql database
+            store.flush()
+        
+            # Import logic
+            ...
+            entity = store.create_entity('Person', ...)
+            entity = store.create_entity('Location', ...)
+            # Person_iid and location_iid are unique iid that are data dependant (e.g URI)
+            store.relate_by_iid(person_iid, 'lives', location_iid)
+            ...
+        
+            # Flush the data in memory to sql database
+            store.flush()
+        
+            # Convert the relation
+            store.convert_relations('Person', 'lives', 'Location')
+        
+            # Clean the store / rebuild indexes
+            store.cleanup()
+        
+        In this case,  iid_subj and iid_obj represent an unique id
+        (e.g. uri, or id from the imported database) that can be used to create
+        relations after importing entities.
+        
+        
+        Advanced use of Massive Store
+        -----------------------------
+        
+        The simple and default use of the Massive Store is conservative to avoid issues in meta-data management.
+        However it is possible to increase insertion speed:
+        
+         * the flushing of meta-data could be costly if done too many times.
+           A good practive is to do only once at the end of the import.
+           For doing so, you should set `autoflush_metadata` to False in the store creation,
+           and you should call the `flush_meta_data' at the end of the import
+           (**but before the call to `cleanup`**).
+        
+         * you may avoid to commit at each flush, by setting `commit_at_flush` to False in the store creation.
+           Thus you should explicitely call the `commit` method at least once **before flushing the meta data and
+           cleaning up the store**.
+        
+         * you could avoid dropping the different indexes and constraints using the `drop_index` attribute
+           during the store creation.
+        
+         * you could set a different starting point of the eids sequence using the `eids_seq_start` attribute
+           during the store creation.
+        
+         * additional callbacks could be given to deal with commit and rollback (`on_commit_callback` and
+           `on_rollback_callback`).
+        
+        
+        Example of advanced use of Massive Store::
+        
+        
+                store = MassiveObjectStore(session,
+        				   autoflush_metadata=False,
+                                           commit_at_flush=False)
+                store.init_rtype_table('Location', 'names', 'LocationName')
+                for ind, infos in enumerate(ucsvreader(open(dumpname))):
+                    entity = {'name': infos[1], ...}
+                    entity['my_inlined_relation'] =  my_dict.get(infos[2])
+                    entity = store.create_entity('Location', **entity)
+                    store.relate_by_iid(entity.cwuri, 'my_external_relation', infos[3])
+                    if ind and ind % 200000 == 0:
+                        store.flush()
+                        store.commit()
+                store.flush()
+                store.commit()
+                store.flush_meta_data()
+                store.convert_relations('Location', 'my_external_relation', 'Location',
+                                        'cwuri', 'cwuri')
+                store.cleanup()
+        
+        
+        Restoring a database after Massive Store failure
+        ------------------------------------------------
+        
+        The Massive Store remove some constraints and indexes that are automatically
+        rebuild during the `cleanup` call. If there is an error during the import
+        process, you could still call to the `cleanup` method, or even recreate after
+        the failure another store and call the `cleanup` method of this store.
+        
+        The Massive Store create the following tables for its internal use:
+        
+         * `dataio_initialized`: information on the initialized etype/rtype tables.
+        
+         * `dataio_constraints`: the queries that may be used to restore the constraints/indexes
+           for the different etype/rtype tables.
+        
+         * `dataio_metadata`: the etypes that have already have their meta-data pushed.
+        
+        
+        Slave Mode
+        ----------
+        
+        A slave mode is available for parallel use of the Massive Store:
+        
+         * a Massive Store (*master*) should be created.
+        
+         * for all the possible etype/rtype that may be encoutered during the import,
+           the `init_etype_table`/`init_relation_table` methods of the *master* store
+           should be called.
+        
+         * different *slave* stores could be created using the `slave_mode` attribute
+           during the store creation. The `autoflush_metadata` attribute should be setted to False.
+        
+         * each *slave* store could be used in a different thread, for creating entity
+           and relation, and should only call to its `flush` and `commit` methods.
+        
+         * The *master* store should call its `flush_meta_data` and `cleanup` methods
+           at the end of the import.
+        
+        
+        RDF Store
+        =========
+        
+        The RDF Store is used to import RDF data into a CubicWeb data, based on a Yams <-> RDF schema conversion.
+        The conversion rules are stored in a XY structure.
+        
+        
+        Building an XY structure
+        ------------------------
+        
+        You have to create a file (usually called `xy.py`) in your cube, and import the dataio version of xy::
+        
+        
+            from cubes.dataio import xy
+        
+        
+        You have to register the different prefixes (common prefixes as skos or foaf are already registered)::
+        
+            xy.register_prefix('diseasome', 'http://www4.wiwiss.fu-berlin.de/diseasome/resource/diseasome/')
+        
+        
+        By default, the entity type is based on the rdf property "rdf:type", but you may changed it using::
+        
+           xy.register_rdf_etype_property('skos:inScheme')
+        
+        
+        It is also possible to give a specific callback to determine the entity type from the rdf properties::
+        
+           def _rameau_etype_callback(rdf_properties):
+               if 'skos:inScheme' in rdf_properties and 'skos:prefLabel' in rdf_properties:
+               	  return 'Rameau'
+        
+           xy.register_etype_callback(_rameau_etype_callback)
+        
+        
+        
+        The URI is fetched from the "rdf:about" property, and can be normalized using a specific callback::
+        
+            def normalize_uri(uri):
+            	if uri.endswith('.rdf'):
+                   return uri[:-4]
+        	return uri
+        
+            xy.register_uri_conversion_callback(normalize_uri)
+        
+        
+        
+        Defining the conversion rules
+        -----------------------------
+        
+        
+        Then, you may write the conversion rules:
+        
+         - xy.add_equivalence allows you to add a basic equivalence between entity type / attribute / relations,
+           and RDF properties. You may use "*" as a wild cart in the Yams part.
+           E.g. for entity types::
+        
+        	xy.add_equivalence('Gene', 'diseasome:genes')
+        	xy.add_equivalence('Disease', 'diseasome:diseases')
+        
+           E.g. for attributes::
+        
+           	xy.add_equivalence('* name', 'diseasome:name')
+        	xy.add_equivalence('* label', 'rdfs:label')
+        	xy.add_equivalence('* label', 'diseasome:label')
+        	xy.add_equivalence('* class_degree', 'diseasome:classDegree')
+        	xy.add_equivalence('* size', 'diseasome:size')
+        
+        
+           E.g. for relations::
+        
+              xy.add_equivalence('Disease close_match ExternalUri', 'diseasome:classes')
+              xy.add_equivalence('Disease subtype_of Disease', 'diseasome:diseaseSubtypeOf')
+              xy.add_equivalence('Disease associated_genes Gene', 'diseasome:associatedGene')
+              xy.add_equivalence('Disease chromosomal_location ExternalUri', 'diseasome:chromosomalLocation')
+              xy.add_equivalence('* sameas ExternalUri', 'owl:sameAs')
+              xy.add_equivalence('Gene gene_id ExternalUri', 'diseasome:geneId')
+              xy.add_equivalence('Gene bio2rdf_symbol ExternalUri', 'diseasome:bio2rdfSymbol')
+        
+        
+         - A base URI can be given to automatically determine if a Resource should be considered
+           as an external URI or an internal relation::
+        
+              xy.register_base_uri('http://www4.wiwiss.fu-berlin.de/diseasome/resource/')
+        
+        
+           A more complex logic can be used by giving a specific callback::
+        
+             def externaluri_callback(uri):
+             	 if uri.startswith('http://www4.wiwiss.fu-berlin.de/diseasome/resource/'):
+                    if uri.endswith('disease') or uri.endswith('gene'):
+                       return False
+        	    return True
+        	 return True
+        
+             xy.register_externaluri_callback(externaluri_callback)
+        
+        
+        
+        The values of attributes are built based on the Yams type. But you could use a specific
+        callback to compute the correct values from the rdf properties::
+        
+        	 def _convert_date(_object, datetime_format='%Y-%m-%d'):
+        	     """ Convert an rdf value to a date """
+        	     try:
+        		return datetime.strptime(_object.format(), datetime_format)
+        	     except:
+        	        return None
+        
+                 xy.register_attribute_callback('Date', _convert_date)
+        
+        or::
+        
+        	def format_isbn(rdf_properties):
+            	    if 'bnf-onto:isbn' in rdf_properties:
+        	       isbn = rdf_properties['bnf-onto:isbn'][0]
+        	       isbn = [i for i in isbn if i in '0123456789']
+        	       return int(''.join(isbn)) if isbn else None
+        
+        	xy.register_attribute_callback('Manifestation formatted_isbn', format_isbn)
+        
+        
+        
+        Importing data
+        --------------
+        
+        Data may thus be imported using the "import-rdf" command of cubicweb-ctl::
+        
+        
+            cubicweb-ctl import-rdf <my-instance> <filer-or-folder>
+        
+        The default library used for reading the data is "rdflib" but one may use "librdf" using the "--lib" option.
+        
+        It is also possible to force the rdf-format (it is automatically determined, but this may sometimes lead to errors),
+        using the "--rdf-format" option.
+        
+        
+        
+        Exporting data
+        --------------
+        
+        The view 'rdf' may be called and will create a RDF file from the result set. It is a modified version of the
+        CubicWeb RDFView, that take into account the more complex conversion rules from the dataio cube.
+        The format can also be forced (default is XML) using the "--format" option in the url (xml, n3 or nt).
+        
+        
+        
+        Examples
+        --------
+        
+        Examples of use of dataio rdf import could be found in the nytimes and diseasome cubes.
+Platform: UNKNOWN
+Classifier: Environment :: Web Environment
+Classifier: Framework :: CubicWeb
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: JavaScript
