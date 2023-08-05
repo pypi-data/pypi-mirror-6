@@ -1,0 +1,168 @@
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# flo-check-homework-decorate-games --- Create flo-check-homework launchers for
+#                                       the specified games
+# Copyright (c) 2011, 2012, 2013, 2014  Florent Rougon
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 dated June, 1991.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; see the file COPYING. If not, write to the
+# Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+# Boston, MA  02110-1301 USA.
+
+
+import sys, os, locale, stat, argparse, re
+import xml.etree.ElementTree as ET
+
+try:
+    from shlex import quote as shell_quote
+except ImportError:
+    def shell_quote(s):
+        return "'{0}'".format(s.replace("'", "'\"'\"'"))
+
+progname = os.path.basename(sys.argv[0])
+
+
+def create_wrappers(data_file):
+    tree = ET.parse(data_file)
+    root_elt = tree.getroot()
+
+    for i, wrapper_elt in enumerate(root_elt.findall("wrapper")):
+        name = wrapper_elt.findtext("name")
+        if not name.strip():
+            sys.exit("Empty name for wrapper number {0}! Aborting.".format(i+1))
+
+        pretty_name = wrapper_elt.findtext("pretty_name")
+        if not pretty_name.strip():
+            pretty_name = name
+
+        cmdline = display_cmd = wrapper_elt.findtext("command")
+        if not cmdline.strip():
+            cmdline = os.path.join(shell_quote(params.real_dir),
+                                   '"$(basename "$0")"')
+            display_cmd = os.path.join(shell_quote(params.real_dir), name)
+
+        print('Creating launcher for "{}" ({} → {})...'.format(
+                pretty_name, name, display_cmd))
+        fch_env_str   = "LANG={} ".format(params.fch_locale)
+        child_env_str = "LANG={} ".format(params.prog_locale)
+        contents = """\
+#! /bin/sh
+
+set -- {cmdline} "$@"
+cmd="$1"
+
+if [ -x "$cmd" ]; then
+    {fch_env_str}flo-check-homework -p "{pretty_name}" -- /usr/bin/env {child_env_str}"$@"
+else
+    echo "'$cmd' is not executable. Aborting." >&2
+    exit 1
+fi\n""".format(pretty_name=pretty_name,
+               cmdline=cmdline,
+               fch_env_str=fch_env_str,
+               child_env_str=child_env_str)
+
+        mode = 0
+        for attr in ("RUSR", "WUSR", "XUSR", "RGRP", "XGRP", "ROTH", "XOTH"):
+            mode |= getattr(stat, "S_I" + attr)
+
+        with open(os.path.join(params.wrapper_dir, name),
+                  mode="w", encoding="utf-8") as f:
+            os.fchmod(f.fileno(), mode)
+            f.write(contents)
+
+
+def process_command_line():
+    params = argparse.Namespace()
+
+    parser = argparse.ArgumentParser(
+        usage="""\
+%(prog)s [OPTION ...] DATA_FILE
+Create flo-check-homework launcher scripts for a list of programs.""",
+        description="""\
+The information concerning each wrapper script to create is read from DATA_FILE,
+which is expected in XML format. Here is a sample data file:
+
+<data>
+  <wrapper>
+    <name>dosbox</name>
+    <pretty_name>DOSBox Emulator</pretty_name>
+    <command>/usr/bin/dosbox</command>
+  </wrapper>
+
+  <wrapper>
+    ...
+  </wrapper>
+
+  ...
+</data>
+
+As prescribed by the XML specification, you must include an encoding
+declaration at the top of the data file if it is written in an encoding
+different from UTF-8.
+
+Let's take a 'wrapper' element from the data file and call NAME, PRETTY_NAME
+and COMMAND the contents of its respective child elements with the
+corresponding lower case names. This 'wrapper' element will lead to the
+creation of a shell script named {wrapper} in which PRETTY_NAME will be
+enclosed in double quotes and COMMAND will be used as is (it can have as many
+arguments as your shell allows). You can manage shell quoting issues
+accordingly.
+
+When flo-check-homework is run from the wrapper script and the work is
+satisfactory, the pupil is allowed to run COMMAND, or {realprogram}
+if COMMAND is empty.""".format(
+            wrapper=os.path.join("WRAPPER_DIR", "NAME"),
+            realprogram=os.path.join("REAL_DIR", "NAME")),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        # I want --help but not -h (it might be useful for something else)
+        add_help=False)
+
+    parser.add_argument("data_file", metavar="DATA_FILE", help="""\
+      XML file specifying the characteristics of each wrapper script to
+      create""")
+    parser.add_argument('-r', '--real-dir', default="/usr/games",
+                        help="""\
+      directory where the real programs (as opposed to the wrappers) reside
+      (default: %(default)s)"""),
+    parser.add_argument('-w', '--wrapper-dir', default="/usr/local/games",
+                        help="""\
+      directory where the wrapper scripts will be written to
+      (default: %(default)s)"""),
+    parser.add_argument('--fch-locale', default="fr_FR.UTF-8",
+                        help="""\
+      value of the LANG environment variable used for running
+      flo-check-homework in the wrapper scripts
+      (default: %(default)s)"""),
+    parser.add_argument('--prog-locale', default="en_US.UTF-8",
+                        help="""\
+      value of the LANG environment variable used for running
+      the target programs ("games") in the wrapper scripts
+      (default: %(default)s)"""),
+    parser.add_argument('--help', action="help",
+                        help="display this message and exit")
+
+    params = parser.parse_args(namespace=params)
+
+    return params
+
+
+def main():
+    global params
+
+    locale.setlocale(locale.LC_ALL, '')
+    params = process_command_line()
+
+    create_wrappers(params.data_file)
+    sys.exit(0)
+
+if __name__ == "__main__": main()

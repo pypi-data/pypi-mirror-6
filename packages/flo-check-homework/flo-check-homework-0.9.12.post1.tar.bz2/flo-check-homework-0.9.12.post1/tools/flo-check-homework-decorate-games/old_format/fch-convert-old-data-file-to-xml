@@ -1,0 +1,134 @@
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# fch-convert-old-data-file-to-xml --- Convert
+#                                      flo-check-homework-decorate-games' data
+#                                      file from the old, flat format, to the
+#                                      new, XML-based format
+# Copyright (c) 2014  Florent Rougon
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 dated June, 1991.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; see the file COPYING. If not, write to the
+# Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+# Boston, MA  02110-1301 USA.
+
+
+import sys, os, locale, argparse, re
+import xml.etree.ElementTree as ET
+
+progname = os.path.basename(sys.argv[0])
+
+
+# Taken from http://effbot.org/zone/element-lib.htm#prettyprint and modified
+# by Florent Rougon
+def indent_xml_tree(elem, level=0, basic_offset=2, last_child=False):
+    def indentation(level, nb_newlines=1):
+        return "\n"*nb_newlines + level*basic_offset*" "
+
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = indentation(level+1)
+
+        for e in elem[:-1]:
+            indent_xml_tree(e, level+1, basic_offset, False)
+        indent_xml_tree(elem[-1], level+1, basic_offset, True)
+
+    if level and (not elem.tail or not elem.tail.strip()):
+        if last_child:
+            elem.tail = indentation(level-1)
+        else:
+            nb_newlines = 2 if level == 1 else 1
+            elem.tail = indentation(level, nb_newlines=nb_newlines)
+
+
+def convert(input_name, output_name):
+    blank_or_comment_line_cre = re.compile(r"^[ \t]*(#.*)?$")
+    root_elt = ET.Element("data")
+
+    with open(input_name, "r") as ifile:
+        line_nb = 0
+
+        for line in ifile:
+            line_nb += 1
+
+            if blank_or_comment_line_cre.match(line) is not None:
+                continue
+
+            wrapper_elt = ET.SubElement(root_elt, "wrapper")
+            words = line[:-1].split('\t')
+
+            try:
+                name = words[0]
+            except IndexError:
+                print("Empty name at line {}!".format(line_nb),
+                      file=sys.stderr)
+                name = ""
+
+            name_elt = ET.SubElement(wrapper_elt, "name")
+            name_elt.text = name
+
+            try:
+                pretty_name = words[1]
+            except IndexError:
+                print("Only one column in line {} (see below)! "
+                      "Aborting:\n\n{!r}\n".format(line_nb, line),
+                      file=sys.stderr)
+                pretty_name = ""
+
+            pretty_name_elt = ET.SubElement(wrapper_elt, "pretty_name")
+            pretty_name_elt.text = pretty_name
+
+            command_elt = ET.SubElement(wrapper_elt, "command")
+            command_elt.text = '\t'.join(words[2:])
+
+    # In-place indentation of the XML tree
+    indent_xml_tree(root_elt)
+
+    tree = ET.ElementTree(root_elt)
+    tree.write(output_name, encoding="utf-8")
+
+
+def process_command_line():
+    params = argparse.Namespace()
+
+    parser = argparse.ArgumentParser(
+        usage="""\
+%(prog)s [OPTION ...] INPUT OUTPUT
+Convert flo-check-homework-decorate-games' data file from old to new \
+format.""",
+        description="""\
+The old format is a simple text format with TAB separators and comment lines
+starting with '#' characters. The new format is based on XML.""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        # I want --help but not -h (it might be useful for something else)
+        add_help=False)
+
+    parser.add_argument('input', metavar='INPUT', help="""input file""")
+    parser.add_argument('output', metavar='OUTPUT', help="""output file""")
+    parser.add_argument('--help', action="help",
+                        help="display this message and exit")
+
+    params = parser.parse_args(namespace=params)
+
+    return params
+
+
+def main():
+    global params
+
+    locale.setlocale(locale.LC_ALL, '')
+    params = process_command_line()
+
+    convert(params.input, params.output)
+    sys.exit(0)
+
+if __name__ == "__main__": main()
