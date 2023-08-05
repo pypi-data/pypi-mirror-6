@@ -1,0 +1,31 @@
+#!/bin/bash
+
+set -e
+
+usage() {
+    cat<<EOF
+Usage: rds-psql <dbinstance-name> [psql options]
+
+Open postgres and connect to an RDS instance named <dbinstance-name>.
+The following environment variables must be set:
+
+  AWS_ACCESS_KEY_ID      Amazon EC2 Key
+  AWS_SECRET_ACCESS_KEY  Amazon EC2 Secret
+  AWS_RDS_REGION         Amazon RDS Region
+EOF
+}
+
+# Print usage message and exit if no arguments are given
+test $# -eq 0 && { usage; exit; }
+
+inst="$1"
+shift;
+
+# get host from rds-host command
+cmd="rds-host"
+hostport=$(eval "$cmd $inst")
+IFS=":"; declare -a hostportparts=($hostport)
+host="${hostportparts[0]}"
+port="${hostportparts[1]}"
+psql_cmd="psql -h $host -p $port $@"
+test -n "$host" && echo "Connecting to $host:$port." && exec sh -c $psql_cmd

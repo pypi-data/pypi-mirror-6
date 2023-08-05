@@ -1,0 +1,110 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import getopt
+
+from sys import stderr
+
+import boto.rds
+
+
+def usage():
+    print >>stderr, """Usage: rds-host [-k KEY] [-s SECRET] [-r REGION] [-t TAG] [-i INSTANCE_ID] [NAME]
+Prints server host name.
+
+      --help                 display this help and exit
+  -k, --aws-key KEY          Amazon rds Key, defaults to ENV[AWS_ACCESS_KEY_ID]
+  -s, --aws-secret SECRET    Amazon rds Secret, defaults to ENV[AWS_SECRET_ACCESS_KEY]
+  -r, --region REGION        Amazon rds Region, defaults to us-east-1 or ENV[AWS_RDS_REGION]
+  -t, --tag TAG              Tag name for searching, defaults to 'Name'"""
+
+
+
+def get_matching_instances(rds, instance_id):
+    matching_instances = []
+
+    dbinstances = rds.get_all_dbinstances()
+
+    if instance_id is None:
+        matching_instances = dbinstances
+    else:
+        for dbinstance in dbinstances:
+            if instance_id == dbinstance.id:
+                matching_instances.append(dbinstance)
+
+    return matching_instances
+
+
+def getOptions(argv):
+    opts, args = getopt.getopt(argv, "hLk:s:r:",
+                                     ["help", "aws-key=", "aws-secret=", "region="])
+
+    aws_key = os.environ.get("AWS_ACCESS_KEY_ID")
+    aws_secret = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    region = os.environ.get("AWS_RDS_REGION")
+    want_help = False
+
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):
+            want_help = True;
+        elif opt in("-k", "--aws-key"):
+            aws_key = arg
+        elif opt in("-s", "--aws-secret"):
+            aws_secret = arg
+        elif opt in ("-r", "--region"):
+            region = arg
+
+    if not aws_key or not aws_secret:
+        if not aws_key:
+            error_message = "Access key not set in environment or options"
+        if not aws_secret:
+            error_message = "Secret key not set in environment or options"
+        raise Exception("Missing credentials", error_message)
+
+    instance_name = None
+    argc = len(args)
+    if argc == 1:
+        instance_name = args[0]
+    elif argc > 1:
+        raise Exception("More than one name given")
+
+    return aws_key, aws_secret, region, want_help, instance_name
+
+def get_rds_connection(region, aws_key, aws_secret):
+    return boto.rds.connect_to_region(region,
+                                      aws_access_key_id=aws_key,
+                                      aws_secret_access_key=aws_secret)
+
+def show_instances(rds, instance_name=None):
+
+    instances = get_matching_instances(rds, instance_name)
+
+    numinstances = len(instances)
+
+    formatString = "{1}:{2}"
+    if numinstances > 1:
+        formatString = "{0}\t{1}:{2}"
+
+    for instance in instances:
+        host, port = instance.endpoint
+        print formatString.format(instance.id, host, port);
+
+
+if __name__ == "__main__":
+    argv = sys.argv[1:]
+    try:
+        aws_key, aws_secret, region, want_help, instance_name = getOptions(sys.argv[1:])
+    except getopt.GetoptError, err:
+        print >>sys.stderr, err
+        usage()
+        sys.exit(2)
+
+    if want_help:
+        usage()
+        sys.exit(0)
+
+    rds = get_rds_connection(region, aws_key, aws_secret)
+    show_instances(rds, instance_name)
+
+
