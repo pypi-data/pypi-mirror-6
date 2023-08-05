@@ -1,0 +1,110 @@
+#!/usr/bin/env python
+
+from fwissr.fwissr import Fwissr
+from fwissr.registry import ReadOnlyList, ReadOnlyDict
+from fwissr.version import VERSION
+
+import argparse
+import sys
+import json
+import pprint
+
+
+class MyArgParser(argparse.ArgumentParser):
+    def error(self, message):
+        """error(message: string)
+
+        Prints a usage message incorporating the message to stderr and
+        exits.
+
+        If you override this in a subclass, it should not return -- it
+        should either exit or raise an exception.
+        """
+        self.print_usage(sys.stderr)
+        self.exit(2, '%s: error: %s\n' % (self.prog, message))
+
+
+class ReadOnlyObjectEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, ReadOnlyList):
+            return obj.data
+        if isinstance(obj, ReadOnlyDict):
+            return obj.data
+        # Let the base class default method raise the TypeError
+        return json.JSONEncoder.default(self, obj)
+
+
+desc = "The configuration registry."
+usage = '%(prog)s [-h] [-i] [-j] [--dump] [-p] [--version] key\n'
+
+try:
+    usage = usage + """
+With key:
+        """ + "\n        ".join(Fwissr.global_registry().keys())
+except Exception as e:
+    usage = usage + "\nUnable to load configuration:\n%s" % e
+
+
+parser = MyArgParser(
+    description=desc,
+    usage=usage,
+    formatter_class=argparse.RawDescriptionHelpFormatter)
+parser.add_argument(
+    '-i',
+    '--inspect',
+    action="store_true",
+    help="return 'inspected' result")
+parser.add_argument(
+    '-j',
+    '--json',
+    action="store_true",
+    help="return result in json")
+parser.add_argument(
+    '--dump',
+    action="store_true",
+    help="dump all keys and values")
+parser.add_argument(
+    '-p',
+    '--pretty',
+    action="store_true",
+    help="pretty output")
+parser.add_argument(
+    '--version',
+    action='version',
+    version=VERSION)
+parser.add_argument(
+    'key', nargs='?')
+
+
+args = parser.parse_args()
+
+if args.key is None and not args.json:
+    print "Please specify the key, e.g. 'fwissr /fqdn'"
+    print parser.print_help()
+    parser.exit()
+
+if args.dump:
+    result = Fwissr.dump()
+else:
+    if args.key is None:
+        k = "/"
+    else:
+        k = args.key
+    result = Fwissr.get(k)
+
+if args.json:
+    if args.pretty:
+        print json.dumps(
+            result,
+            cls=ReadOnlyObjectEncoder,
+            sort_keys=True,
+            indent=4, separators=(',', ': '))
+    else:
+        print json.dumps(result, sort_keys=True, cls=ReadOnlyObjectEncoder)
+elif args.inspect:
+    if args.pretty:
+        pprint.pprint(result)
+    else:
+        print result
+else:
+    print result
