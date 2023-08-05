@@ -1,0 +1,10 @@
+__version__ = "0.4.1"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.4.1)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '701080baa3c3c3b87119e6644f2698240f20c866'
+__git_head_subject__ = 'HIP-849 adding progress bar text in custom actions'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
