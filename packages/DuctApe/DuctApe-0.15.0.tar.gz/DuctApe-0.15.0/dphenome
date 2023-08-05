@@ -1,0 +1,631 @@
+#!/usr/bin/python
+"""
+DuctPhenome
+
+Analyze phenome(s) and map them to KEGG
+"""
+from ductape import __version__
+from ductape.actions import touchProject
+from ductape.common.colorlog import ColorFormatter
+from ductape.phenome.biolog import Experiment, BiologCluster, getPlates, \
+    getSinglePlates, BiologPlot
+from ductape.storage.SQLite.database import Biolog, Kegg, Project, Organism
+from ductape.terminal import RunThread
+import argparse
+import logging.handlers
+import os
+import sys
+
+__author__ = "Marco Galardini"
+__prog__ = "dphenome"
+
+################################################################################
+# Log setup
+
+logger = logging.getLogger('ductape')
+
+################################################################################
+# Methods
+
+def dinit(options, wdir, project):
+    from ductape.actions import dInit
+    if not dInit(project, wdir, options.name, options.descr):
+        logger.warning('You can remove or rename the old project file')
+        return False
+    else:
+        return True
+
+def dadd(options, wdir, project):
+    from ductape.actions import dPhenomeAdd
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    return dPhenomeAdd(project, options.orgID, options.file)
+
+def daddMulti(options, wdir, project):
+    from ductape.actions import dPhenomeMultiAdd
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    return dPhenomeMultiAdd(project, options.file)
+
+def daddDir(options, wdir, project):
+    from ductape.actions import dPhenomeDirAdd
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    return dPhenomeDirAdd(project, options.folder, options.e)
+
+def dzero(options, wdir, project):
+    from ductape.actions import dPhenomeZero
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    return dPhenomeZero(project, options.b)
+
+def dtrim(options, wdir, project):
+    from ductape.actions import dPhenomeTrim
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    return dPhenomeTrim(project)
+
+def dstart(options, wdir, project):
+    from ductape.actionsterm import fetchKegg
+    from ductape.actions import isPhenome
+    
+    if not isPhenome(project):
+        logger.warning('No phenotypic data available!')
+        return False
+    
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+
+    if options.p:
+        logger.warning('Skipping parameters calculation')
+    else:
+        # Clusterize the biolog experiment
+        if not doClusterPhenome(project, save_fig_clusters=options.f,
+                                force_params=options.r,
+                                n_clusters=options.clusters,
+                                elbow=options.e):
+            logger.error('Phenome experiment could not be clustered!')
+            return False
+
+    if options.g:
+        logger.warning('Skipping Kegg mapping')
+        return True
+            
+    # Fetch the Kegg DB?
+    if not fetchKegg(project, options.y):
+        logger.error('Could not fetch data from KEGG')
+        return False
+    
+    # We have to map 2 KEGG?
+    proj = Project(project)
+    proj.getProject()
+    
+    if proj.phenome == 'map2kegg':
+        logger.info('Skipping mapping to KEGG')
+        return True
+    
+    # Map biolog compunds to kegg
+    if not doMap2KEGG(project, options.y):
+        logger.error('Phenomic compounds could not be mapped to kegg!')
+        return False
+    
+    proj.setPhenome('map2kegg')
+    
+    return True
+
+def dplot(options, wdir, project):
+    from ductape.actions import getOrganismsColors, dSetKind, isPhenome
+    
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    
+    biolog = Biolog(project)
+    
+    if not isPhenome(project):
+        logger.warning('No phenotypic data available!')
+        return False
+    
+    # Check!
+    if biolog.atLeastOneNoParameter():
+        logger.warning('The activity index must be calculated first (run %s start)'%
+                       __prog__)
+        return False
+    
+    sigs = [s for s in biolog.getAllSignals()]
+    plates = [p for p in getSinglePlates(sigs)]
+    wells = [s for s in biolog.getAllWells()]
+    avgplates = [p for p in getSinglePlates(wells)]
+    titles = {}
+    for title in biolog.getAllTitles():
+        if title.plate_id not in titles:
+            titles[title.plate_id] = {}
+        titles[title.plate_id][title.well_id] = title.chemical
+    category = {}
+    for c in biolog.getPlateCategs():
+        category[c.plate_id] = c.category.replace(' ','_').replace('&','and')
+    
+    # If we have a mutants experiment the first organis to be shown is the wild-type
+    order = []
+    if dSetKind(project) == 'mutants':
+        organism = Organism(project)
+        for org in organism.getAll():
+            if not organism.isMutant(org.org_id):
+                order.append(org.org_id)
+                
+                for x in organism.getOrgMutants(org.org_id):
+                    order.append(x)
+    
+    bplot = BiologPlot(plates, colors=getOrganismsColors(project),
+                avgdata=avgplates, wellNames=titles,
+               maxsig=biolog.maxSignal(), plotAll=True,
+               expname=options.n, order=order, category=category,
+               svg=options.svg)
+
+    if not RunThread(bplot):
+        return False
+    
+    logger.info('Successefully generated phenomic plots (%s)'%bplot._room)
+    
+    return True
+    
+def dpurge(options, wdir, project):
+    from ductape.actions import dPhenomePurge, isPhenome
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    biolog = Biolog(project)
+    
+    if not isPhenome(project):
+        logger.warning('No phenotypic data available!')
+        return False
+    
+    # Check!
+    if biolog.atLeastOneNoParameter():
+        logger.warning('The activity index must be calculated first (run %s start)'%
+                       __prog__)
+        return False
+    
+    return dPhenomePurge(project, options.policy, options.delta,
+                         options.plates, options.replica)
+    
+def drestore(options, wdir, project):
+    from ductape.actions import dPhenomeRestore, isPhenome
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    
+    if not isPhenome(project):
+        logger.warning('No phenotypic data available!')
+        return False
+    
+    return dPhenomeRestore(project, options.plates, options.replica)
+  
+def dstats(options, wdir, project):
+    from ductape.actions import dPhenomeStats, isPhenome
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    
+    biolog = Biolog(project)
+    
+    if not isPhenome(project):
+        logger.warning('No phenotypic data available!')
+        return False
+    
+    # Check!
+    if biolog.atLeastOneNoParameter():
+        logger.warning('The activity index must be calculated first (run %s start)'%
+                       __prog__)
+        return False
+    
+    return dPhenomeStats(project, activity=options.activity,
+                         delta=options.delta, svg=options.svg)
+
+def drings(options, wdir, project):
+    from ductape.actions import dPhenomeRings, isPhenome
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    
+    biolog = Biolog(project)
+    
+    if not isPhenome(project):
+        logger.warning('No phenotypic data available!')
+        return False
+    
+    # Check!
+    if biolog.atLeastOneNoParameter():
+        logger.warning('The activity index must be calculated first (run %s start)'%
+                       __prog__)
+        return False
+    
+    return dPhenomeRings(project, delta=options.delta, difforg=options.o,
+                         svg=options.svg)
+
+def dimportplates(options, wdir, project):
+    from ductape.actions import dBiologImport
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    
+    if not dBiologImport(project, options.file):
+        logger.warning('Use %s export to see an example input file'%__prog__)
+        return False
+
+    return True
+
+def dexport(options, wdir, project):
+    from ductape.actions import dPhenomeExport, isPhenome
+    if not touchProject(project):
+        logger.warning('You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    
+    biolog = Biolog(project)
+    
+    # Check!
+    if biolog.atLeastOneNoParameter():
+        logger.warning('The activity index must be calculated first (run %s start)'%
+                       __prog__)
+        return False
+    
+    return dPhenomeExport(project, options.json)
+
+def dremove(options, wdir, project):
+    from ductape.actions import dPhenomeRemove
+    if not touchProject(project):
+        logger.warning('Nothing to be removed!\n'+
+                       'You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    return dPhenomeRemove(project, options.organisms)
+
+def dclear(options, wdir, project):
+    from ductape.actions import dPhenomeClear
+    if not touchProject(project):
+        logger.warning('Nothing to be cleaned up!\n'+
+                       'You can setup a new project by running %s init'%
+                       __prog__)
+        return False
+    return dPhenomeClear(project)
+
+def _prepareClust(project):
+    biolog = Biolog(project)
+    # Get Plate Objects
+    # TODO: here check the zero subtraction state? (it may be mixed up)
+    sigs = [s for s in biolog.getAllSignals()]
+    plates = [p for p in getPlates(sigs)]
+    isZero = biolog.atLeastOneZeroSubtracted()
+    
+    return plates, isZero
+
+def doClusterPhenome(project, save_fig_clusters=False,
+                     force_params=False, n_clusters=10, elbow=False):
+    plates, isZero = _prepareClust(project)
+
+    biolog = Biolog(project)
+
+    if len(plates) == 0:
+        logger.warning('No phenomic data available, skipping clustering')
+        return True
+
+    zeroPlates = [x.plate_id for x in biolog.getZeroSubtractablePlates()]
+
+    exp = Experiment(plates=plates, zero=isZero, zeroPlates=zeroPlates)
+    
+    bclust = BiologCluster(exp, save_fig_clusters=save_fig_clusters,
+                           force_params=force_params, n_clusters=n_clusters,
+                           elbow=elbow)
+        
+    if not RunThread(bclust):
+        return False
+        
+    if elbow:
+        logger.info('Elbow test')
+        exp.elbowTest()
+    else:
+        # Put in the DB!
+        wells = [w for w in exp.getWells(params=False)]
+        for w in wells:
+            if biolog.isZeroSubtracted(w.plate_id, w.well_id, w.strain, w.replica):
+                w.zero = True
+                
+        biolog.addWells(wells, clustered=True, replace=True)
+    
+        logger.info('Analyzed and clustered %d phenomic experiments'%len(wells))
+   
+        # Check if we have mixed parameter sources
+        sources = set([x.source for x in biolog.getParamsSources()])
+        if len(sources) > 1:
+            logger.warning('The curve parameters have been calculated with '+
+	                       '%d methods!'%len(sources))
+            for s in sources:
+                logger.warning('Method: %s'%s)
+            logger.warning('You may want to run %s start -r to force '%(__prog__)+
+	                       ' force a single method parameter calculation')
+        
+    # Parameters numerosity on the fly
+    if not elbow:
+        logger.info('Activity index distribution')
+        dist = biolog.getActivityDistribution()
+        for act in sorted(dist.keys()):
+            logger.info('Activity: %d, Number of wells %d'%(act, dist[act]))
+    else:
+        logger.warning('Activity index has not been calculated yet!')
+    
+    return True
+
+def doMap2KEGG(project, keeptrying=False):
+    from ductape.kegg.kegg import CompMapper
+    biolog = Biolog(project)
+    compounds = ['cpd:'+co.co_id for co in biolog.getCompounds2Analyse()]
+    if len(compounds) == 0:
+        logger.error('No phenomic compounds to be analyzed!')
+        return False
+    
+    kegg = Kegg(project)
+    avoid = [kid for kid in kegg.getAllIDs()]
+    
+    komap = CompMapper(compounds,avoid=avoid, keeptrying=keeptrying)
+    
+    if not RunThread(komap):
+        return False
+    
+    kegg.addCompounds(komap.result.comp)
+    logger.info('Added %d Co IDs'%len(komap.result.comp))
+    kegg.addReactions(komap.result.react)
+    logger.info('Added %d Re IDs'%len(komap.result.react))
+    kegg.addPathways(komap.result.path)
+    logger.info('Added %d Path IDs'%len(komap.result.path))
+    kegg.addRPairs(komap.result.rpair)
+    logger.info('Added %d RPair IDs'%len(komap.result.rpair))
+    # Links
+    kegg.addPathComps(komap.result.pathcomp)
+    kegg.addPathReacts(komap.result.pathreact)
+    kegg.addReactComps(komap.result.reactcomp)
+    kegg.addCompReacts(komap.result.compreact)
+    kegg.addReactRPairs(komap.result.reactrpair)
+    kegg.addRPairReacts(komap.result.rpairreact)
+    logger.info('Added Kegg links')
+    # HTML maps
+    kegg.addPathHtml(komap.result.pathmaps)
+    logger.info('Added Kegg maps')
+    
+    return True
+
+################################################################################
+# Options
+
+def getOptions():
+    description = "Add and analyze phenomes"
+    parser = argparse.ArgumentParser(description = description,
+                                     prog=__prog__)
+    parser.add_argument('-p', metavar='project', action='store',
+                        dest='project',
+                        default='ductape.db',
+                        help='Project file')
+    parser.add_argument('-w', metavar='workdir', action='store', dest='wdir',
+                        default='.',
+                        help='Working directory')
+    parser.add_argument('-v', action='count',
+                        default=0,
+                        help='Increase verbosity level')
+    parser.add_argument('--version', action='version',
+                        version='%(prog)s '+__version__)
+    subparsers = parser.add_subparsers()
+
+    parser_init = subparsers.add_parser('init', help='Initialize the project')
+    parser_init.add_argument('-n', action="store",
+                             dest='name',
+                             default = 'Project',
+                             help='Project name')
+    parser_init.add_argument('-d', metavar='descr', action="store",
+                            dest='descr',
+                            default = 'DuctApe project',
+                            help='Project description')
+    parser_init.set_defaults(func=dinit)
+
+    parser_add = subparsers.add_parser('add',
+                           help='Add a single phenomic experiment')
+    parser_add.add_argument('file', action="store",
+                            help='Phenomic data file (csv/yaml/json)')
+    parser_add.add_argument('orgID', action='store',
+                            help='Organism ID')
+    parser_add.set_defaults(func=dadd)
+    
+    parser_add_multi = subparsers.add_parser('add-multi',
+                           help='Add a single phenomic file (with multiple strains)')
+    parser_add_multi.add_argument('file', action="store",
+                            help='Phenomic data file (csv/yaml/json)')
+    parser_add_multi.set_defaults(func=daddMulti)
+    
+    parser_add_dir = subparsers.add_parser('add-dir',
+           help='Add a series of phenomes (orgIDs will be guessed)')
+    parser_add_dir.add_argument('folder', action="store",
+                            help='Folder where the phenomic files are stored')
+    parser_add_dir.add_argument('-e', metavar='extension', action="store",
+                            default = 'csv',
+                            help='Phenomic files extension')
+    parser_add_dir.set_defaults(func=daddDir)
+
+    parser_zero = subparsers.add_parser('zero', help='Biolog signals zero subtraction')
+    parser_zero.add_argument('-b', metavar='blankfile', action="store",
+                            default = None,
+                            help='Blank plate(s) phenomic file')
+    parser_zero.set_defaults(func=dzero)
+    
+    parser_trim = subparsers.add_parser('trim', help='Biolog signals trimming')
+    parser_trim.set_defaults(func=dtrim)
+
+    parser_start = subparsers.add_parser('start', help='Start the analysis')
+    parser_start.add_argument('-p', action="store_true",
+                            default=False,
+                            help='Skip parameters calculation')
+    parser_start.add_argument('-g', action="store_true",
+                            default=False,
+                            help='Skip Kegg mapping')
+    parser_start.add_argument('-y', action="store_true",
+                            default=False,
+                            help='Try to fetch Kegg data even while encountering failures')
+    parser_start.add_argument('-f', action="store_true",
+                            default=False,
+                            help='Save intermediate clusters figures')
+    parser_start.add_argument('-r', action="store_true",
+                            default=False,
+                            help='Force parameters re-calculation')
+    parser_start.add_argument('-n', metavar='clusters', action="store",
+                            dest='clusters',
+                            type=int,
+                            default=10,
+                            help='Number of clusters to be used [Default: 10]')
+    parser_start.add_argument('-e', action="store_true",
+                            default=False,
+                help='Perform an elbow test to choose the best "n" parameter')
+    parser_start.set_defaults(func=dstart)
+    
+    parser_plot = subparsers.add_parser('plot', help='Plot the phenomic data')
+    parser_plot.add_argument('-n', metavar='expname', action="store",
+                            default = 'phenome',
+                            help='Plot set name')
+    parser_plot.add_argument('-s', '--svg', action="store_true",
+                            default=False,
+                            help='Figures in svg format instead of png')
+    parser_plot.set_defaults(func=dplot)
+    
+    parser_purge = subparsers.add_parser('purge', help='Remove inconsistent replicas')
+    parser_purge.add_argument('policy', action="store",
+        choices = ['keep-max', 'keep-min', 'keep-min-one',
+                   'keep-max-one', 'replica'],
+        help='Policy to be applied')
+    parser_purge.add_argument('plates', metavar='plateID', nargs='*',
+                            action="store",
+                            default=[],
+                            help='Plate(s) to be purged')
+    parser_purge.add_argument('-d', metavar='delta', action="store", dest='delta',
+        type=int,
+        default=1,
+        help='Maximum activity delta')
+    parser_purge.add_argument('-r', metavar='replica', action="store",
+                              dest='replica',
+                              type=int,
+                              default=None,
+                      help='Replica to be purged (only with choice==replica)')
+    parser_purge.set_defaults(func=dpurge)
+    
+    parser_restore = subparsers.add_parser('restore', help='Restore the purged data')
+    parser_restore.add_argument('plates', metavar='plateID', nargs='*',
+                            action="store",
+                            default=[],
+                            help='Plate(s) to be restored')
+    parser_restore.add_argument('-r', metavar='replica', action="store",
+                              dest='replica',
+                              type=int,
+                              default=None,
+                      help='Replica to be restored')
+    parser_restore.set_defaults(func=drestore)
+    
+    parser_stats = subparsers.add_parser('stats', help='Print phenomic statistics')
+    parser_stats.add_argument('-a', metavar='activity', action="store", dest='activity',
+                              type=int,
+                              default=5,
+                              help='Activity threshold')
+    parser_stats.add_argument('-d', metavar='delta', action="store", dest='delta',
+                              type=int,
+                              default=3,
+                              help='Activity delta threshold')
+    parser_stats.add_argument('-s', '--svg', action="store_true",
+                            default=False,
+                            help='Figures in svg format instead of png')
+    parser_stats.set_defaults(func=dstats)
+    
+    parser_rings = subparsers.add_parser('rings', help='Plot phenomic rings')
+    parser_rings.add_argument('-d', metavar='delta', action="store", dest='delta',
+                              type=int,
+                              default=1,
+                              help='Activity delta threshold')
+    parser_rings.add_argument('-o', metavar='difforg', action="store",
+                            default = None,
+                            help='Diff mode: reference organism ID')
+    parser_rings.add_argument('-s', '--svg', action="store_true",
+                            default=False,
+                            help='Figures in svg format instead of png')
+    parser_rings.set_defaults(func=drings)
+    
+    parser_import = subparsers.add_parser('import-plates', help='Import custom plates')
+    parser_import.add_argument('file', action="store",
+                            help='Plates (tab-delimited file)')
+    parser_import.set_defaults(func=dimportplates)
+    
+    parser_export = subparsers.add_parser('export', help='Export phenomic data')
+    parser_export.add_argument('-j', '--json', action="store_true",
+                            default=False,
+                            help='Export JSON files instead of YAML')
+    parser_export.set_defaults(func=dexport)
+
+    parser_rm = subparsers.add_parser('rm', help='Remove phenome analysis')
+    parser_rm.add_argument('organisms', metavar='orgID', nargs='+',
+                              action="store",
+                            help='Organism(s) to be removed')
+    parser_rm.set_defaults(func=dremove)
+    
+    parser_clear = subparsers.add_parser('clear',
+                                         help='Clear all the phenomic results')
+    parser_clear.set_defaults(func=dclear)
+    
+    return parser.parse_args()
+
+################################################################################
+
+options = getOptions()
+
+logger.setLevel(logging.DEBUG)
+
+ch = logging.StreamHandler()
+if options.v == 0:
+    ch.setLevel(logging.INFO)
+elif options.v >= 1:
+    ch.setLevel(logging.DEBUG)
+formatter = ColorFormatter('%(asctime)s - $COLOR%(message)s$RESET','%H:%M:%S')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+fh = logging.handlers.RotatingFileHandler('ductape.log', maxBytes=2000000)
+formatter = logging.Formatter('%(asctime)s - %(name)s - [%(levelname)s] - %(message)s',
+                            '%Y-%m-%d %H:%M:%S')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
+
+wdir = os.path.abspath(options.wdir)
+if not os.path.exists(wdir):
+    try:
+        os.mkdir(wdir)
+    except:
+        logger.error('Could not create working directory %s'%wdir)
+    
+project = os.path.join(wdir, options.project)
+
+ret = options.func(options, wdir, project)
+
+touchProject(project)
+
+if not ret:
+    sys.exit(1)
