@@ -1,0 +1,175 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+#
+#  yifi_gui.py
+#  
+#  Copyright 2014 Kaveen Rodrigo <kaveenr@kaveen-pc>
+#  
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#  MA 02110-1301, USA.
+#  
+#  
+
+import urllib2 , webbrowser , wx , urllib
+from bs4 import BeautifulSoup
+
+appz = wx.App(False)
+
+class MainFrame ( wx.Frame ):
+	
+	def __init__( self, parent ):
+		self.mov_db = []
+		wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"FTW! Netflix by Kaveen Rodrigo", pos = wx.DefaultPosition, size = wx.Size( 677,541 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
+		
+		self.SetSizeHintsSz( wx.DefaultSize, wx.DefaultSize )
+		
+		bSizer1 = wx.BoxSizer( wx.VERTICAL )
+		
+		self.m_button2 = wx.Button( self, wx.ID_ANY, u"Get Latest", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer1.Add( self.m_button2, 0, wx.ALL|wx.EXPAND, 5 )
+		
+		self.in_search = wx.TextCtrl( self, wx.ID_ANY, u"Search", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer1.Add( self.in_search, 0, wx.ALL|wx.EXPAND, 5 )
+		
+		bSizer2 = wx.BoxSizer( wx.HORIZONTAL )
+		
+		in_qualChoices = [ u"All", u"480p", u"720p", u"1080p", u"3D", u"DVDRip", u"HDRip" ]
+		self.in_qual = wx.ComboBox( self, wx.ID_ANY, u"All", wx.DefaultPosition, wx.DefaultSize, in_qualChoices, 0 )
+		bSizer2.Add( self.in_qual, 1, wx.ALL, 5 )
+		
+		in_genChoices = [ u"All", u"Action", u"Adventure", u"Animation", u"Biography", u"Comedy", u"Crime", u"Documentary", u"Drama", u"Family", u"Fantasy", u"Film-Noir", u"History", u"Horror", u"Music", u"Musical", u"Mystery", u"Romance", u"Sci-Fi", u"Short", u"Sport", u"Thriller", u"War", u"Western" ]
+		self.in_gen = wx.ComboBox( self, wx.ID_ANY, u"All", wx.DefaultPosition, wx.DefaultSize, in_genChoices, 0 )
+		bSizer2.Add( self.in_gen, 1, wx.ALL, 5 )
+		
+		bSizer1.Add( bSizer2, 0, wx.EXPAND, 5 )
+		
+		self.m_button3 = wx.Button( self, wx.ID_ANY, u"Search", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer1.Add( self.m_button3, 0, wx.ALL|wx.EXPAND, 5 )
+		
+		m_listBox1Choices = []
+		self.m_listBox1 = wx.ListBox( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, m_listBox1Choices, 0 )
+		bSizer1.Add( self.m_listBox1, 1, wx.ALL|wx.EXPAND, 5 )
+		
+		self.SetSizer( bSizer1 )
+		self.Layout()
+		self.m_statusBar1 = self.CreateStatusBar( 1, wx.ST_SIZEGRIP, wx.ID_ANY )
+		
+		self.Centre( wx.BOTH )
+		
+		# Connect Events
+		self.m_button2.Bind( wx.EVT_BUTTON, self.get_latest )
+		self.m_button3.Bind( wx.EVT_BUTTON, self.get_search )
+		self.m_listBox1.Bind( wx.EVT_LISTBOX_DCLICK, self.do_click )
+	
+	def __del__( self ):
+		pass
+	def get_movie_list(self,pages,title="0",qual="All",gen="All"):
+		try:
+			mov_html = urllib2.urlopen("http://yify-torrents.com/browse-movie/"+str(title)+"/"+str(qual)+"/"+str(gen)+"/0/latest/"+str(pages)).read()
+			soup = BeautifulSoup(mov_html)
+			mov_list = soup.find_all("div" , { "class" : "browse-content " } )
+			for mov in mov_list:
+				mov_in_image = mov.find("div", { "class" : "browse-img" }).find("img").get("src")
+				mov_in_title = mov.find("span" , { "class" : "browseTitleLink" } ).get_text()
+				mov_in_details = mov.find_all("span" , { "class" : "browseInfoList" } )
+				mov_in_details_strip = []
+				for i in mov_in_details:
+					mov_in_details_strip.append(' '.join((i.get_text().split())))
+				mov_in_tor = mov.find("a" , { "class" : "std-btn-small mleft torrentDwl" }).get("href")
+				self.mov_db.append(dict(image = mov_in_image , title = mov_in_title , details = mov_in_details_strip , torrent = mov_in_tor))
+		except:
+			self.message = wx.MessageDialog(None, 'Try Again', 'Error', wx.OK | wx.ICON_ERROR)
+			self.message.ShowModal()
+			self.SetStatusText("Failed")
+	# Virtual event handlers, overide them in your derived class
+	def get_latest( self, event ):
+		self.m_listBox1.Clear()
+		self.mov_db = []
+		self.SetStatusText("Wait....")
+		self.get_movie_list(1)
+		self.get_movie_list(2)
+		for i in self.mov_db:
+			self.m_listBox1.Append(i["title"])
+		self.SetStatusText("Done")
+	
+	def get_search( self, event ):
+		self.SetStatusText("Wait....")
+		self.m_listBox1.Clear()
+		self.mov_db = []
+		if (self.in_search.GetValue() == "Search" or self.in_search.GetValue() == ""):
+			self.get_movie_list("","",self.in_qual.GetValue(),self.in_gen.GetValue())
+		else:
+			self.get_movie_list("",self.in_search.GetValue(),self.in_qual.GetValue(),self.in_gen.GetValue())
+		for i in self.mov_db:
+			self.m_listBox1.Append(i["title"])
+		self.SetStatusText("Done")
+	
+	def do_click( self, event ):
+		try:
+			name = self.m_listBox1.GetString(self.m_listBox1.GetSelection())
+			for i in self.mov_db:
+				if (name == i["title"]):
+					self.SetStatusText("Wait....")
+					urllib.urlretrieve(i["image"],"temp.jpg")
+					self.prev = PrevWin(None,(i["title"]+"\n"+i["details"][0]+"\n"+i["details"][1]+"\n"+i["details"][2]+"\n"+i["details"][3]),i["torrent"])
+					self.prev.Show()
+					self.SetStatusText("Done")
+		except:
+			self.SetStatusText("Failed")
+			self.message = wx.MessageDialog(None, 'Try Again', 'Error', wx.OK | wx.ICON_ERROR)
+			self.message.ShowModal()
+class PrevWin ( wx.Frame):
+	
+	def __init__( self, parent ,string , url):
+		wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"Info Window", pos = wx.DefaultPosition, size = wx.Size( 500,200 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
+		self.down =url
+		self.SetSizeHintsSz( wx.DefaultSize, wx.DefaultSize )
+		
+		bSizer9 = wx.BoxSizer( wx.HORIZONTAL )
+		
+		bSizer10 = wx.BoxSizer( wx.VERTICAL )
+		
+		self.text_in = wx.StaticText( self, wx.ID_ANY, string, wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.text_in.Wrap( -1 )
+		bSizer10.Add( self.text_in, 1, wx.ALL|wx.ALIGN_CENTER_HORIZONTAL, 20 )
+		
+		self.m_button12 = wx.Button( self, wx.ID_ANY, u"Download", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer10.Add( self.m_button12, 0, wx.ALL|wx.EXPAND, 5 )
+		
+		bSizer9.Add( bSizer10, 1, wx.EXPAND, 5 )
+		
+		bSizer11 = wx.BoxSizer( wx.VERTICAL )
+		
+		self.prev = wx.StaticBitmap( self, wx.ID_ANY, wx.Bitmap( u"temp.jpg", wx.BITMAP_TYPE_ANY ), wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer11.Add( self.prev, 0, wx.ALL|wx.ALIGN_CENTER_HORIZONTAL, 20 )
+		
+		bSizer9.Add( bSizer11, 1, wx.EXPAND|wx.ALIGN_CENTER_VERTICAL, 5 )
+		
+		self.SetSizer( bSizer9 )
+		self.Layout()
+		
+		self.Centre( wx.BOTH)
+		
+		# Connect Events
+		self.m_button12.Bind( wx.EVT_BUTTON, self.down_it )
+	
+	def __del__( self ):
+		pass
+	# Virtual event handlers, overide them in your derived class
+	def down_it( self, event ):
+		webbrowser.open(self.down,True)
+main = MainFrame(None)
+main.Show(True)
+appz.MainLoop()
