@@ -1,0 +1,77 @@
+#!/usr/bin/env python
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements. See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership. The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+import cStringIO
+
+from fudgemsg.message import Message, Envelope
+from fudgemsg import registry
+from fudgemsg import types
+
+from fudgemsg.utils import render, hexdump
+
+MY_NAME = u"Random Person"
+
+ADDRESS = [u"123 Fake Street", u"Some City",
+           u"P0S T4L", u"Country"]
+
+def main():
+    """A Simple example of how to use Fudge.
+
+    This will help drive the API design."""
+
+    MSG_TYPE = registry.DEFAULT_REGISTRY[types.FUDGEMSG_TYPE_ID]
+
+    m = Message()
+
+    m.add(MY_NAME, name=u"name")
+    m.add(19801231L, ordinal=4, name=u"dob" )
+
+    submsg = Message()
+    for line, ordinal in zip(ADDRESS, range(len(ADDRESS))):
+        submsg.add(line, ordinal=ordinal)
+    m.add(submsg, name=u"address")
+    e = Envelope(m)
+
+    output = render.PrettyPrinter()
+
+    print "Message:"
+    output.format(m)
+
+    writer = cStringIO.StringIO()
+    e.encode(writer)
+    bytes = writer.getvalue()
+
+    print "Contacts message encoded as a %d byte Fudge message"% len(bytes)
+    print "Encoded:"
+    dumper = hexdump.HexPrinter()
+    dumper.format(bytes)
+    print ""
+
+    f = Envelope.decode(bytes)
+    print "Decoded Fudge message with schema version %d and %d fields"% \
+         (f.schema_version, len(m.fields))
+    m = f.message
+    print "Message:"
+    output.format(m)
+
+
+if __name__ == '__main__':
+    main()
+
