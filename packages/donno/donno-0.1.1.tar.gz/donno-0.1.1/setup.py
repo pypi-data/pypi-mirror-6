@@ -1,0 +1,31 @@
+import multiprocessing
+
+from setuptools import setup
+
+def readme():
+    with open('README.md') as f:
+        return f.read()
+
+setup(name='donno',
+      version='0.1.1',
+      description='A personal CLI note-taking app',
+      long_description=readme(),
+      classifiers=[
+        'Operating System :: POSIX :: Linux',
+        'Environment :: Console',
+        'Programming Language :: Python :: 2.7',
+        'Intended Audience :: Developers',
+        'Topic :: Text Editors :: Text Processing'
+      ],
+      keywords='command-line, note-taking, linux',
+      url='https://bitbucket.org/leechau/donno',
+      author='Li Chao',
+      author_email='leechau@126.com',
+      license='MIT',
+      packages=['donno'],
+      entry_points = {
+          'console_scripts': ['dn=donno.donno:main'],
+      },
+      test_suite='nose.collector',
+      tests_require=['nose'],
+      zip_safe=False)
