@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# create user if not exist
+USER="hero"
+
+if ! id -u $USER >/dev/null 2>&1; then
+    echo "user does not exist"
+    useradd --create-home --shell /bin/bash $USER
+fi
+
+
+# create folders if not exist
+CORE_DIRS="/opt/trebuchet /etc/trebuchet /var/log/trebuchet"
+
+for dir in $CORE_DIRS; do
+    if [ ! -d $dir ]; then
+        mkdir -p $dir
+    fi
+    chown -R ${USER} $dir
+done
+
+
+# stop the services (if running)
+{% for package in package_service_dependencies %}
+initctl emit {{ package | upper }}_STOP_ALL
+{% endfor %}
+
+{% if debian_scripts.preinst is defined %}
+{% for script in debian_scripts.preinst %}
+{{ script }}
+{% endfor %}
+{% endif %}
