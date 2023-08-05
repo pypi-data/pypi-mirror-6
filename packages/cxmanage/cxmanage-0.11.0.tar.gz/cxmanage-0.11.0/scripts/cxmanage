@@ -1,0 +1,420 @@
+#!/usr/bin/env python
+
+# Copyright (c) 2012-2013, Calxeda Inc.
+#
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+# * Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution.
+# * Neither the name of Calxeda Inc. nor the names of its contributors
+# may be used to endorse or promote products derived from this software
+# without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+# COPYRIGHT HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+# OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+# TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+# THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
+
+import argparse
+import os
+import pkg_resources
+import subprocess
+import sys
+
+import pyipmi
+import cxmanage_api
+from cxmanage_api.cli.commands.power import power_command, \
+        power_status_command, power_policy_command, power_policy_status_command
+from cxmanage_api.cli.commands.mc import mcreset_command
+from cxmanage_api.cli.commands.fw import fwupdate_command, fwinfo_command
+from cxmanage_api.cli.commands.sensor import sensor_command
+from cxmanage_api.cli.commands.fabric import ipinfo_command, macaddrs_command, \
+        partition_config_command, uplink_info_command, uplinks_command, \
+        networks_command
+from cxmanage_api.cli.commands.config import config_reset_command, \
+        config_boot_command, config_pxe_command
+from cxmanage_api.cli.commands.info import info_command
+from cxmanage_api.cli.commands.ipmitool import ipmitool_command
+from cxmanage_api.cli.commands.ipdiscover import ipdiscover_command
+from cxmanage_api.cli.commands.tspackage import tspackage_command
+from cxmanage_api.cli.commands.eeprom import eepromupdate_command
+
+
+PYIPMI_VERSION = '0.11.0'
+IPMITOOL_VERSION = '1.8.11.0-cx9'
+
+
+PARSER_EPILOG = """examples:
+  cxmanage power status 192.168.1.1             # single host
+  cxmanage power on 192.168.1.1,192.168.1.2     # comma-separated hosts
+  cxmanage info 192.168.1.1-192.168.1.5         # IP range (5 hosts)
+  cxmanage -a sensor temp 192.168.1.1           # all nodes on a fabric
+  cxmanage -a fwupdate package ECX-1000_update.tar.gz 192.168.1.1"""
+
+FWUPDATE_EPILOG = """examples:
+  cxmanage -a fwupdate package ECX-1000_update.tar.gz 192.168.1.1
+  cxmanage -a fwupdate --full package ECX-1000_update.tar.gz 192.168.1.1"""
+
+FWUPDATE_IMAGE_TYPES = ['PACKAGE'] + sorted([
+    'DEL',
+    'DEL1',
+    'S2_ELF',
+    'SOC_ELF',
+    'A9_UEFI',
+    'A9_UBOOT',
+    'A9_EXEC',
+    'A9_ELF',
+    'SOCDATA',
+    'DTB',
+    'CDB',
+    'UBOOTENV',
+    'SEL',
+    'BOOT_LOG',
+    'UEFI_ENV',
+    'DIAG_ELF',
+    'XACTION_LOG',
+    'ROM_INFO',
+    'PARTITION_TABLE',
+    'LUAMAN',
+])
+
+EEPROMUPDATE_EPILOG = """examples:
+    cxmanage -a eepromupdate slot tn_storage.single_slot_v3.0.0.img 192.168.1.1
+    cxmanage -a eepromupdate node dual_uplink_node_0.img \
+dual_uplink_node_1.img dual_node_0.img dual_node_0.img 192.168.1.1"""
+
+
+def build_parser():
+    """setup the argparse parser"""
+    parser = argparse.ArgumentParser(
+            description='Calxeda Server Management Utility',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog=PARSER_EPILOG)
+
+    # global arguments
+    parser.add_argument('-V', '--version', action='store_true',
+            help='Show version information')
+    parser.add_argument('-u', '--user', default='admin',
+            help='Username for login')
+    parser.add_argument('-p', '--password', default='admin',
+            help='Password for login')
+    parser.add_argument('-U', '--linux-username', type=str, default='user1',
+            metavar='USER', help='Server-side Linux username')
+    parser.add_argument('-P', '--linux-password', type=str, default='1Password',
+            metavar='PASSWORD', help='Server-side Linux password')
+    parser.add_argument('-a', '--all-nodes', action='store_true',
+            help='Send command to all nodes reported by fabric')
+    parser.add_argument('--threads', type=int, metavar='THREAD_COUNT',
+            help='Number of threads to use')
+    parser.add_argument('--command_delay', type=float,
+            metavar='SECONDS', default=0.0,
+            help='Per thread time to delay between issuing commands')
+    parser.add_argument('--force', action='store_true',
+            help='Force the command to run')
+    parser.add_argument('--retry', help='Retry command on multiple times',
+            type=int, default=None, metavar='COUNT')
+    parser.add_argument('--ipmipath', help='Path to ipmitool command',
+            default=None)
+    parser.add_argument('-n', '--nodes', metavar='COUNT', type=int,
+            help='Expected number of nodes')
+    parser.add_argument('-i', '--ids', action='store_true',
+            help='Display node IDs in addition to IP addresses')
+    verbosity = parser.add_mutually_exclusive_group()
+    verbosity.add_argument('-v', '--verbose', action='store_true',
+            help='Verbose output')
+    verbosity.add_argument('-q', '--quiet', action='store_true',
+            help='Quiet output')
+    tftp_type = parser.add_mutually_exclusive_group()
+    tftp_type.add_argument('--internal-tftp', metavar='IP:PORT',
+            help='Host an internal TFTP server listening on ip:port')
+    tftp_type.add_argument('--external-tftp', metavar='IP:PORT',
+            help='Connect to remote TFTP server at ip:port')
+    parser.add_argument('--ecme-tftp-port', type=int, default=5001,
+            metavar='PORT', help='TFTP port of the ECME')
+
+    subparsers = parser.add_subparsers()
+
+    # power command
+    power = subparsers.add_parser('power',
+        help='control server power')
+    power_subs = power.add_subparsers()
+
+    power_on = power_subs.add_parser('on', help='boot the server')
+    power_on.set_defaults(power_mode='on', func=power_command)
+
+    power_off = power_subs.add_parser('off', help='shut the server off')
+    power_off.set_defaults(power_mode='off', func=power_command)
+
+    power_reset = power_subs.add_parser('reset', help='reset the server')
+    power_reset.set_defaults(power_mode='reset', func=power_command)
+
+    power_status = power_subs.add_parser('status',
+            help='get server power status')
+    power_status.set_defaults(func=power_status_command)
+
+    power_policy = power_subs.add_parser('policy',
+            help='set server power policy')
+    power_policy_subs = power_policy.add_subparsers()
+
+    power_policy_always_on = power_policy_subs.add_parser(
+            'always-on', help='always boot the server by default')
+    power_policy_always_on.set_defaults(policy='always-on',
+            func=power_policy_command)
+    power_policy_always_off = power_policy_subs.add_parser(
+            'always-off', help='never boot the server by default')
+    power_policy_always_off.set_defaults(policy='always-off',
+            func=power_policy_command)
+    power_policy_previous = power_policy_subs.add_parser(
+            'previous', help='return to previous power state by default')
+    power_policy_previous.set_defaults(policy='previous',
+            func=power_policy_command)
+    power_policy_status = power_policy_subs.add_parser(
+            'status', help='get the current power policy')
+    power_policy_status.set_defaults(func=power_policy_status_command)
+
+    # mcreset command
+    mcreset = subparsers.add_parser('mcreset',
+            help='reset the management controller')
+    mcreset.set_defaults(func=mcreset_command)
+
+    # fwupdate command
+    fwupdate = subparsers.add_parser('fwupdate', help='update firmware',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog=FWUPDATE_EPILOG)
+    fwupdate.add_argument('image_type', metavar='IMAGE_TYPE',
+            help='image type to use (%s)' % ", ".join(FWUPDATE_IMAGE_TYPES),
+            type=lambda string: string.upper(),
+            choices=FWUPDATE_IMAGE_TYPES)
+    fwupdate.add_argument('filename', help='path to file to upload')
+    fwupdate.add_argument('--full', action='store_true', default=False,
+            help='Update primary AND backup partitions (will reset MC)')
+    fwupdate.add_argument('--partition',
+            help='Specify partition to update', default='INACTIVE',
+            type=lambda string: string.upper(),
+            choices=list([
+                'FIRST',
+                'SECOND',
+                'BOTH',
+                'OLDEST',
+                'NEWEST',
+                'INACTIVE'
+            ]))
+
+    simg_args = fwupdate.add_mutually_exclusive_group()
+    simg_args.add_argument('--force-simg',
+            help='Force addition of SIMG header',
+            default=False, action='store_true')
+    simg_args.add_argument('--skip-simg',
+            help='Skip addition of SIMG header',
+            default=False, action='store_true')
+    fwupdate.add_argument('--priority',
+            help='Priority for SIMG header', default=None, type=int)
+    fwupdate.add_argument('-d', '--daddr',
+            help='Destination address for SIMG',
+            default=None, type=lambda x : int(x, 16))
+    fwupdate.add_argument('--skip-crc32',
+            help='Skip crc32 calculation for SIMG',
+            default=False, action='store_true')
+    fwupdate.add_argument('--version', dest='fw_version',
+            help='Version for SIMG header', default=None)
+    fwupdate.set_defaults(func=fwupdate_command)
+
+    # eepromupdate command
+    eepromupdate = subparsers.add_parser('eepromupdate', help='update EEPROM',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=EEPROMUPDATE_EPILOG
+    )
+    eepromupdate.add_argument('eeprom_location',
+        choices=['slot', 'node'],
+        help='EEPROM location'
+    )
+    eepromupdate.add_argument('images',
+        nargs='+',
+        help='path to file(s) to upload'
+    )
+    eepromupdate.set_defaults(func=eepromupdate_command)
+
+    # fwinfo command
+    fwinfo = subparsers.add_parser('fwinfo', help='get FW info')
+    fwinfo.set_defaults(func=fwinfo_command)
+
+    # sensor command
+    sensor = subparsers.add_parser('sensor',
+            help='read sensor value')
+    sensor.add_argument('sensor_name', help='Sensor name to read',
+            nargs='?', default='')
+    sensor.set_defaults(func=sensor_command)
+
+    # ipinfo command
+    ipinfo = subparsers.add_parser('ipinfo', help='get IP info')
+    ipinfo.set_defaults(func=ipinfo_command)
+
+    # macaddrs command
+    macaddrs = subparsers.add_parser('macaddrs',
+            help='get mac addresses')
+    macaddrs.set_defaults(func=macaddrs_command)
+
+    # partition_config command
+    partition_config = subparsers.add_parser('partition_config',
+            help='get partition config')
+    partition_config.set_defaults(func=partition_config_command)
+
+    # uplink_info command
+    uplink_info = subparsers.add_parser('uplink_info',
+            help='get uplink info')
+    uplink_info.set_defaults(func=uplink_info_command)
+
+    # uplinks command
+    uplinks = subparsers.add_parser('uplinks',
+            help='get uplinks')
+    uplinks.set_defaults(func=uplinks_command)
+
+    # networks command
+    networks = subparsers.add_parser('networks',
+            help='get networks')
+    networks.set_defaults(func=networks_command)
+
+    # config command
+    config = subparsers.add_parser('config', help='configure hosts')
+    config_subs = config.add_subparsers()
+
+    reset = config_subs.add_parser('reset',
+            help='reset to factory default')
+    reset.set_defaults(func=config_reset_command)
+
+    boot = config_subs.add_parser('boot',
+            help='set server boot order')
+    boot.add_argument('boot_order', help='boot order to use', default=[],
+            type=lambda x: [] if x == 'none' else x.split(','))
+    boot.set_defaults(func=config_boot_command)
+
+    pxe = config_subs.add_parser('pxe',
+            help='set pxe interface')
+    pxe.add_argument('interface', help='pxe interface to use')
+    pxe.set_defaults(func=config_pxe_command)
+
+    # info command
+    info = subparsers.add_parser('info', help='get host info')
+    info.add_argument('info_type', nargs='?',
+            type=lambda string: string.lower(),
+            choices=['basic', 'ubootenv'])
+    info.set_defaults(func=info_command)
+
+    # ipmitool command
+    ipmitool = subparsers.add_parser('ipmitool',
+            help='run an arbitrary ipmitool command')
+    ipmitool.add_argument('-l', '--lanplus',
+            action='store_true', default=False,
+            help='use lanplus')
+    ipmitool.add_argument('ipmitool_args', nargs='+',
+            help='ipmitool arguments')
+    ipmitool.set_defaults(func=ipmitool_command)
+
+    # ipdiscover command
+    ipdiscover = subparsers.add_parser('ipdiscover',
+            help='discover server-side IP addresses')
+    ipdiscover.add_argument('-A', '--aggressive', action='store_true',
+            help='discover IPs aggressively')
+    ipdiscover.add_argument('-6', '--ipv6', action='store_true',
+            help='Discover IPv6 addresses')
+    ipdiscover.add_argument('-I', '--interface', type=str, default=None,
+            help='Network interface to check')
+    ipdiscover.set_defaults(func=ipdiscover_command)
+
+    parser.add_argument('hostname',
+            help='nodes to operate on (see examples below)')
+
+    # tspackage command ("troubleshoot package")
+    tspackage = subparsers.add_parser('tspackage',
+            help='Save information about this node/fabric to a .tar')
+    tspackage.set_defaults(func=tspackage_command)
+
+    return parser
+
+
+def validate_args(args):
+    """ Bail out if the arguments don't make sense"""
+    if args.threads != None and args.threads < 1:
+        sys.exit('ERROR: --threads must be at least 1')
+    if args.func == fwupdate_command:
+        if args.skip_simg and args.priority:
+            sys.exit('Invalid argument --priority when supplied with --skip-simg')
+        if args.skip_simg and args.daddr:
+            sys.exit('Invalid argument --daddr when supplied with --skip-simg')
+        if args.skip_simg and args.skip_crc32:
+            sys.exit('Invalid argument --skip-crc32 when supplied with --skip-simg')
+        if args.skip_simg and args.fw_version:
+            sys.exit('Invalid argument --version when supplied with --skip-simg')
+
+
+def check_versions():
+    """Check versions of dependencies"""
+    # Check pyipmi version
+    if (pkg_resources.parse_version(pyipmi.__version__) < 
+            pkg_resources.parse_version(PYIPMI_VERSION)):
+        print 'ERROR: cxmanage requires pyipmi version %s' % PYIPMI_VERSION
+        print 'Current pyipmi version is %s' % pyipmi.__version__
+        sys.exit(1)
+
+    # Check ipmitool version
+    if 'IPMITOOL_PATH' in os.environ:
+        args = [os.environ['IPMITOOL_PATH'], '-V']
+    else:
+        args = ['ipmitool', '-V']
+
+    try:
+        ipmitool_process = subprocess.Popen(args, stdout=subprocess.PIPE)
+        ipmitool_version = ipmitool_process.communicate()[0].split()[2]
+        if pkg_resources.parse_version(ipmitool_version) < \
+                pkg_resources.parse_version(IPMITOOL_VERSION):
+            print 'ERROR: cxmanage requires IPMItool %s or later' \
+                    % IPMITOOL_VERSION
+            print 'Current IPMItool version is %s' % ipmitool_version
+            sys.exit(1)
+    except OSError:
+        print 'ERROR: cxmanage requires IPMItool %s or later' \
+                % IPMITOOL_VERSION
+        print 'No existing version was found.'
+        sys.exit(1)
+
+
+def main():
+    """Get args and go"""
+    for arg in sys.argv[1:]:
+        if arg in ['-V', '--version']:
+            print "cxmanage version %s" % cxmanage_api.__version__
+            sys.exit(0)
+        elif arg[0] != '-':
+            break
+
+    parser = build_parser()
+    args = parser.parse_args()
+    validate_args(args)
+
+    if args.ipmipath:
+        if os.path.isdir(args.ipmipath):
+            args.ipmipath = args.ipmipath.rstrip('/') + '/ipmitool'
+        os.environ['IPMITOOL_PATH'] = args.ipmipath
+
+    check_versions()
+
+    sys.exit(args.func(args))
+
+
+if __name__ == '__main__':
+    main()
