@@ -1,0 +1,356 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>filters Package &mdash; TiddlyWeb 1.4 documentation</title>
+    
+    <link rel="stylesheet" href="_static/nature.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="TiddlyWeb 1.4 documentation" href="index.html" />
+    <link rel="next" title="model Package" href="tiddlyweb.model.html" />
+    <link rel="prev" title="commands Package" href="tiddlyweb.commands.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="tiddlyweb.model.html" title="model Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="tiddlyweb.commands.html" title="commands Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">TiddlyWeb 1.4 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="filters-package">
+<h1>filters Package<a class="headerlink" href="#filters-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="id1">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">filters</span></tt> Package<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="module-tiddlyweb.filters"></span><p>Overarching handler for TiddlyWeb <a class="reference external" href="http://tiddlyweb.tiddlyspace.com/filter">filters</a>.</p>
+<p>Filters provide an extensible syntax for limiting any <a class="reference internal" href="tiddlyweb.model.html#tiddlyweb.model.collections.Collection" title="tiddlyweb.model.collections.Collection"><tt class="xref py py-class docutils literal"><span class="pre">Collection</span></tt></a> by attributes on the entities in
+the collection. Though primarily for <a class="reference internal" href="tiddlyweb.model.html#tiddlyweb.model.tiddler.Tiddler" title="tiddlyweb.model.tiddler.Tiddler"><tt class="xref py py-class docutils literal"><span class="pre">Tiddlers</span></tt></a>, <a class="reference internal" href="tiddlyweb.model.html#tiddlyweb.model.bag.Bag" title="tiddlyweb.model.bag.Bag"><tt class="xref py py-class docutils literal"><span class="pre">Bags</span></tt></a> and <a class="reference internal" href="tiddlyweb.model.html#tiddlyweb.model.recipe.Recipe" title="tiddlyweb.model.recipe.Recipe"><tt class="xref py py-class docutils literal"><span class="pre">Recipes</span></tt></a> can be filtered as well.</p>
+<p>The basic filters provide for selecting and sorting on attributes of the
+entities and for limiting (the number of) entities. These basic types of
+filter can be extended with plugins, and the ways attributes are processed
+can also be extended.</p>
+<p>Filters are parsed from a string that is formatted as a <tt class="docutils literal"><span class="pre">CGI</span></tt> query string
+with parameters and arguments. The parameter is a filter type. Each
+filter is processed in sequence: the first processing all the entities
+handed to it, the next taking only those that result from the first.</p>
+<p>Filters can be extended by adding more parsers to <tt class="docutils literal"><span class="pre">FILTER_PARSERS</span></tt>.
+Parsers for existing filter types may be extended as well (see the
+documentation for each type).</p>
+<p>The call signature for a filter is:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="nb">filter</span><span class="p">(</span><span class="n">entities</span><span class="p">,</span> <span class="n">indexable</span><span class="o">=</span><span class="n">indexable</span><span class="p">,</span> <span class="n">environ</span><span class="o">=</span><span class="n">environ</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The attribute and value for which a filter filters is established in
+the parsing stage and are set as upvalues of the filter closure that
+gets created.</p>
+<p><tt class="docutils literal"><span class="pre">indexable</span></tt> and <tt class="docutils literal"><span class="pre">environ</span></tt> are optional parameters that in special cases
+allow a <a class="reference internal" href="#module-tiddlyweb.filters.select" title="tiddlyweb.filters.select"><tt class="xref py py-mod docutils literal"><span class="pre">select</span></tt></a> style filter to be
+optimized with the use of an index. In the current implementation this is
+only done when:</p>
+<ul class="simple">
+<li>the select filter is the first filter in a stack of filters passed to
+<a class="reference internal" href="#tiddlyweb.filters.recursive_filter" title="tiddlyweb.filters.recursive_filter"><tt class="xref py py-func docutils literal"><span class="pre">recursive_filter()</span></tt></a></li>
+<li>the entities to be filtered are <a class="reference internal" href="tiddlyweb.model.html#tiddlyweb.model.tiddler.Tiddler" title="tiddlyweb.model.tiddler.Tiddler"><tt class="xref py py-class docutils literal"><span class="pre">tiddlers</span></tt></a> in the context of a <a class="reference internal" href="tiddlyweb.model.html#tiddlyweb.model.bag.Bag" title="tiddlyweb.model.bag.Bag"><tt class="xref py py-class docutils literal"><span class="pre">bag</span></tt></a> (this helps to constrain the index)</li>
+</ul>
+<p>When both of the above are true the system looks for a module named by
+<tt class="docutils literal"><span class="pre">tiddlyweb.config['indexer']</span></tt>, imports it, looks for a function called
+<tt class="docutils literal"><span class="pre">indexy_query</span></tt>, and passes <tt class="docutils literal"><span class="pre">environ</span></tt> and information about the bag
+and the attribute being selected.</p>
+<p>What <tt class="docutils literal"><span class="pre">index_query</span></tt> does to satisfy the query is up to the module. It
+should return a list of tiddlers that have been loaded from the
+<a class="reference internal" href="tiddlyweb.html#tiddlyweb.store.Store" title="tiddlyweb.store.Store"><tt class="xref py py-class docutils literal"><span class="pre">tiddlyweb.store.Store</span></tt></a>.</p>
+<p>If for some reason <tt class="docutils literal"><span class="pre">index_query</span></tt> does not wish to perform the query (e.g.
+the index cannot satisfy the query) it may raise <tt class="docutils literal"><span class="pre">FilterIndexRefused</span></tt> and
+the normal filtering process will be performed.</p>
+<p>Note that testing should be done to determine if using an index is
+of any benefit. In some stores (for example caching stores) traversing
+the tiddlers is faster than using an index.</p>
+<dl class="exception">
+<dt id="tiddlyweb.filters.FilterError">
+<em class="property">exception </em><tt class="descclassname">tiddlyweb.filters.</tt><tt class="descname">FilterError</tt><a class="headerlink" href="#tiddlyweb.filters.FilterError" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+<p>An exception to throw when an attempt is made to filter on an
+unavailable attribute.</p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="tiddlyweb.filters.FilterIndexRefused">
+<em class="property">exception </em><tt class="descclassname">tiddlyweb.filters.</tt><tt class="descname">FilterIndexRefused</tt><a class="headerlink" href="#tiddlyweb.filters.FilterIndexRefused" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#tiddlyweb.filters.FilterError" title="tiddlyweb.filters.FilterError"><tt class="xref py py-class docutils literal"><span class="pre">tiddlyweb.filters.FilterError</span></tt></a></p>
+<p>A filter index has refused to satisfy a filter with its index.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.parse_for_filters">
+<tt class="descclassname">tiddlyweb.filters.</tt><tt class="descname">parse_for_filters</tt><big>(</big><em>query_string</em>, <em>environ=None</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.parse_for_filters" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take a string that looks like a <tt class="docutils literal"><span class="pre">CGI</span></tt> query string and parse it
+for filters. Return a tuple of a list of filter functions and
+a string of whatever was in the query string that did not result
+in a filter.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.recursive_filter">
+<tt class="descclassname">tiddlyweb.filters.</tt><tt class="descname">recursive_filter</tt><big>(</big><em>filters</em>, <em>entities</em>, <em>indexable=False</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.recursive_filter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Recursively process the list of <tt class="docutils literal"><span class="pre">filters</span></tt> found by
+<a class="reference internal" href="#tiddlyweb.filters.parse_for_filters" title="tiddlyweb.filters.parse_for_filters"><tt class="xref py py-func docutils literal"><span class="pre">parse_for_filters()</span></tt></a> against the given list of <tt class="docutils literal"><span class="pre">entities</span></tt>.</p>
+<p>Each next filter processes only those entities that were results of
+the previous filter.</p>
+<p><em>Misnamed, early versions were more truly recursive.</em></p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-tiddlyweb.filters.limit">
+<span id="limit-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">limit</span></tt> Module<a class="headerlink" href="#module-tiddlyweb.filters.limit" title="Permalink to this headline">¶</a></h2>
+<p>A <a class="reference internal" href="#module-tiddlyweb.filters" title="tiddlyweb.filters"><tt class="xref py py-mod docutils literal"><span class="pre">filter</span></tt></a> type to limit a group of entities
+using a syntax similar to SQL Limit:</p>
+<div class="highlight-python"><pre>limit=&lt;index&gt;,&lt;count&gt;
+limit=&lt;count&gt;</pre>
+</div>
+<dl class="function">
+<dt id="tiddlyweb.filters.limit.limit">
+<tt class="descclassname">tiddlyweb.filters.limit.</tt><tt class="descname">limit</tt><big>(</big><em>entities</em>, <em>count=0</em>, <em>index=0</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.limit.limit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Make a slice of a list of entities based on a count and index.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.limit.limit_parse">
+<tt class="descclassname">tiddlyweb.filters.limit.</tt><tt class="descname">limit_parse</tt><big>(</big><em>count='0'</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.limit.limit_parse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse the argument of a <tt class="docutils literal"><span class="pre">limit</span></tt> <a class="reference internal" href="#module-tiddlyweb.filters" title="tiddlyweb.filters"><tt class="xref py py-mod docutils literal"><span class="pre">filter</span></tt></a>
+for a count and index argument, return a function which does the limiting.</p>
+<p>Exceptions while parsing are passed up the stack.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-tiddlyweb.filters.select">
+<span id="select-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">select</span></tt> Module<a class="headerlink" href="#module-tiddlyweb.filters.select" title="Permalink to this headline">¶</a></h2>
+<p>A <a class="reference internal" href="#module-tiddlyweb.filters" title="tiddlyweb.filters"><tt class="xref py py-mod docutils literal"><span class="pre">filter</span></tt></a> type for selecting only some
+entities, usually <a class="reference internal" href="tiddlyweb.model.html#tiddlyweb.model.tiddler.Tiddler" title="tiddlyweb.model.tiddler.Tiddler"><tt class="xref py py-class docutils literal"><span class="pre">tiddlers</span></tt></a>,
+from a collection of entities, usually by an attribute of the tiddlers.</p>
+<p>The syntax is:</p>
+<div class="highlight-python"><pre>select=attribute:value    # attribute is value
+select=attribute:!value   # attribute is not value
+select=attribute:&gt;value   # attribute is greater than value
+select=attribute:&lt;value   # attribute is less than value</pre>
+</div>
+<p><tt class="docutils literal"><span class="pre">ATTRIBUTE_SELECTOR</span></tt> is checked for a function which returns <tt class="docutils literal"><span class="pre">True</span></tt>
+or <tt class="docutils literal"><span class="pre">False</span></tt> for whether the provided value matches for the entity being
+tested. The default case is lower case string equality. Other functions
+may be provided by plugins. Attributes may be virtual, i.e. not real
+attributes on entity. For example we can check for the presence of a
+tag in a tiddlers tags attribute with:</p>
+<div class="highlight-python"><pre>select=tag:tagvalue</pre>
+</div>
+<p>An attribute function takes an entity, an attribute name and a value.
+It may then do anything it wants with it, and must return <tt class="docutils literal"><span class="pre">True</span></tt> or
+<tt class="docutils literal"><span class="pre">False</span></tt>.</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">!</span></tt> negates a selection, getting all those entities that don&#8217;t match.</li>
+<li><tt class="docutils literal"><span class="pre">&gt;</span></tt> gets those entities that sort greater than the value.</li>
+<li><tt class="docutils literal"><span class="pre">&lt;</span></tt> gets those entities that sort less than the value.</li>
+</ul>
+<p>When doing sorting <tt class="docutils literal"><span class="pre">ATTRIBUTE_SORT_KEY</span></tt> is consulted to canonicalize the
+value. See <a class="reference internal" href="#module-tiddlyweb.filters.sort" title="tiddlyweb.filters.sort"><tt class="xref py py-mod docutils literal"><span class="pre">tiddlyweb.filters.sort</span></tt></a>.</p>
+<dl class="function">
+<dt id="tiddlyweb.filters.select.bag_in_recipe">
+<tt class="descclassname">tiddlyweb.filters.select.</tt><tt class="descname">bag_in_recipe</tt><big>(</big><em>entity</em>, <em>attribute</em>, <em>value</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.select.bag_in_recipe" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return <tt class="docutils literal"><span class="pre">True</span></tt> if the named <a class="reference internal" href="tiddlyweb.model.html#tiddlyweb.model.bag.Bag" title="tiddlyweb.model.bag.Bag"><tt class="xref py py-class docutils literal"><span class="pre">bag</span></tt></a>
+is in the <a class="reference internal" href="tiddlyweb.model.html#tiddlyweb.model.recipe.Recipe" title="tiddlyweb.model.recipe.Recipe"><tt class="xref py py-class docutils literal"><span class="pre">recipe</span></tt></a>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.select.default_func">
+<tt class="descclassname">tiddlyweb.filters.select.</tt><tt class="descname">default_func</tt><big>(</big><em>entity</em>, <em>attribute</em>, <em>value</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.select.default_func" title="Permalink to this definition">¶</a></dt>
+<dd><p>Look in the entity for an attribute with the provided value.
+First real object attributes are checked, then, if available,
+extended fields. If neither of these are present, return <tt class="docutils literal"><span class="pre">False</span></tt>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.select.field_in_fields">
+<tt class="descclassname">tiddlyweb.filters.select.</tt><tt class="descname">field_in_fields</tt><big>(</big><em>entity</em>, <em>attribute</em>, <em>value</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.select.field_in_fields" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return <tt class="docutils literal"><span class="pre">True</span></tt> if the entity has the named field.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.select.select_by_attribute">
+<tt class="descclassname">tiddlyweb.filters.select.</tt><tt class="descname">select_by_attribute</tt><big>(</big><em>attribute</em>, <em>value</em>, <em>entities</em>, <em>negate=False</em>, <em>indexable=None</em>, <em>environ=None</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.select.select_by_attribute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Select entities where value of <tt class="docutils literal"><span class="pre">attribute</span></tt> matches the provide value.</p>
+<p>If <tt class="docutils literal"><span class="pre">negate</span></tt> is <tt class="docutils literal"><span class="pre">True</span></tt>, get those that don&#8217;t match.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.select.select_parse">
+<tt class="descclassname">tiddlyweb.filters.select.</tt><tt class="descname">select_parse</tt><big>(</big><em>command</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.select.select_parse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse a select <a class="reference internal" href="#module-tiddlyweb.filters" title="tiddlyweb.filters"><tt class="xref py py-mod docutils literal"><span class="pre">filter</span></tt></a> string into
+attributes and arguments and return a function (for later use)
+which will do the selecting.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.select.select_relative_attribute">
+<tt class="descclassname">tiddlyweb.filters.select.</tt><tt class="descname">select_relative_attribute</tt><big>(</big><em>attribute</em>, <em>value</em>, <em>entities</em>, <em>greater=False</em>, <em>lesser=False</em>, <em>environ=None</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.select.select_relative_attribute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Select entities that sort greater or less than the provided <tt class="docutils literal"><span class="pre">value</span></tt>
+for the provided <tt class="docutils literal"><span class="pre">attribute</span></tt>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.select.tag_in_tags">
+<tt class="descclassname">tiddlyweb.filters.select.</tt><tt class="descname">tag_in_tags</tt><big>(</big><em>entity</em>, <em>attribute</em>, <em>value</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.select.tag_in_tags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return <tt class="docutils literal"><span class="pre">True</span></tt> if the provided entity has a tag of value in its
+tag list.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.select.text_in_text">
+<tt class="descclassname">tiddlyweb.filters.select.</tt><tt class="descname">text_in_text</tt><big>(</big><em>entity</em>, <em>attribute</em>, <em>value</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.select.text_in_text" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return <tt class="docutils literal"><span class="pre">True</span></tt> if the provided entity has the string provided in
+<tt class="docutils literal"><span class="pre">value</span></tt> within its text attribute.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-tiddlyweb.filters.sort">
+<span id="sort-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">sort</span></tt> Module<a class="headerlink" href="#module-tiddlyweb.filters.sort" title="Permalink to this headline">¶</a></h2>
+<p>A <a class="reference internal" href="#module-tiddlyweb.filters" title="tiddlyweb.filters"><tt class="xref py py-mod docutils literal"><span class="pre">filter</span></tt></a> type to sort a collection of
+entities by some attribute. The syntax is:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">sort</span><span class="o">=</span><span class="n">attribute</span>   <span class="c"># sort ascending</span>
+<span class="n">sort</span><span class="o">=-</span><span class="n">attribute</span>  <span class="c"># sort descending</span>
+</pre></div>
+</div>
+<p>Atribute is either a real entity attribute or a key in
+<tt class="docutils literal"><span class="pre">ATTRIBUTE_SORT_KEY</span></tt> that has as its value a function used to generate a
+key to pass to the sort. <tt class="docutils literal"><span class="pre">ATTRIBUTE_SORT_KEY</span></tt> can be extended by plugins.</p>
+<dl class="function">
+<dt id="tiddlyweb.filters.sort.as_int">
+<tt class="descclassname">tiddlyweb.filters.sort.</tt><tt class="descname">as_int</tt><big>(</big><em>attribute</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.sort.as_int" title="Permalink to this definition">¶</a></dt>
+<dd><p>Treat attribute as <tt class="docutils literal"><span class="pre">int</span></tt> if it looks like one.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.sort.date_to_canonical">
+<tt class="descclassname">tiddlyweb.filters.sort.</tt><tt class="descname">date_to_canonical</tt><big>(</big><em>datestring</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.sort.date_to_canonical" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take a (TiddlyWiki-style) string of 14 or less digits and turn it
+into 14 digits for the sake of comparing entity dates.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.sort.sort_by_attribute">
+<tt class="descclassname">tiddlyweb.filters.sort.</tt><tt class="descname">sort_by_attribute</tt><big>(</big><em>attribute</em>, <em>entities</em>, <em>reverse=False</em>, <em>environ=None</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.sort.sort_by_attribute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sort a group of entities by some attribute.
+Inspect <tt class="docutils literal"><span class="pre">ATTRIBUTE_SORT_KEY</span></tt> to see if there is a special
+function by which we should generate the value for this
+attribute.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="tiddlyweb.filters.sort.sort_parse">
+<tt class="descclassname">tiddlyweb.filters.sort.</tt><tt class="descname">sort_parse</tt><big>(</big><em>attribute</em><big>)</big><a class="headerlink" href="#tiddlyweb.filters.sort.sort_parse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a function which will sort a collection of entities.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">filters Package</a><ul>
+<li><a class="reference internal" href="#id1"><tt class="docutils literal"><span class="pre">filters</span></tt> Package</a></li>
+<li><a class="reference internal" href="#module-tiddlyweb.filters.limit"><tt class="docutils literal"><span class="pre">limit</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-tiddlyweb.filters.select"><tt class="docutils literal"><span class="pre">select</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-tiddlyweb.filters.sort"><tt class="docutils literal"><span class="pre">sort</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="tiddlyweb.commands.html"
+                        title="previous chapter">commands Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="tiddlyweb.model.html"
+                        title="next chapter">model Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/tiddlyweb.filters.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="tiddlyweb.model.html" title="model Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="tiddlyweb.commands.html" title="commands Package"
+             >previous</a> |</li>
+        <li><a href="index.html">TiddlyWeb 1.4 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Chris Dent.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>
