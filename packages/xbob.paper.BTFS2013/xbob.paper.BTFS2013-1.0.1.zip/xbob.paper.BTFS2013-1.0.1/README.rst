@@ -1,0 +1,151 @@
+On the Improvements of Uni-modal and Bi-modal Fusions of Speaker and Face Recognition for Mobile Biometrics
+===========================================================================================================
+
+This package is able to re-generate the plots and figures that are published in the paper "On the Improvements of Uni-modal and Bi-modal Fusions of Speaker and Face Recognition for Mobile Biometrics".
+You can download the Paper_ from our publication server.
+
+The results of the paper are based on the score files that were submitted to the 2013 `Speaker Recognition <http://www.beat-eu.org/evaluations/icb-2013-speaker-recognition-mobio>`_ and `Face Recognition <http://www.beat-eu.org/evaluations/icb-2013-face-recognition-mobio>`_ evaluations on the MOBIO_ database.
+With the generous permission of the participants, we re-arranged and unified their score files and made them publicly available.
+Using these score files, in our paper we show that the uni-modal fusion of scores from several face or speaker recognition algorithms can moderately improve verification performance, whereas the bi-modal fusion of face and speaker recognition systems enormously improves performance.
+
+With this package we provide the source code to re-compute and re-evaluate the score fusions that were generated for the paper.
+Also, code for re-producing the Figures and Tables in the paper is provided.
+
+
+Errata
+------
+The DET plots in the published Paper were plotted with exchanged FAR and FRR axes.
+The plots have been corrected in the Paper_, and in version 1.0.1 of this package.
+
+
+Installation
+------------
+To be able to re-run the experiments of the paper, two external sources are required:
+
+Bob
+...
+All software given in this paper relies on the free signal-processing and machine learning toolbox Bob_ originally developed by the Biometrics Group at Idiap_.
+Please visit Bob_'s web page for installation instructions.
+This package is tested with Bob in version 1.2.0, but in principle it should also work with later versions.
+
+Be aware that currently there is no MS Windows port for Bob_.
+If you are using Windows, please consider installing `VirtualBox <http://www.virtualbox.org>`_ and download our pre-packaged `Ubuntu VDI <http://www.idiap.ch/software/bob/images/xubuntu_raring_i386--with_bob_1.2.0.ova>`_ (right click, save target as), which has the size of 1.1 GB.
+
+MOBIO
+.....
+The score files from the participants of the competitions are stored in the MOBIO_ database.
+To be granted access to the database, you need to sign the license agreement.
+Afterwards, please download the file **ICB_2013_system_scores.tar.gz** and extract it to a directory of your choice.
+This directory will be called ``[SCORE_DIRECTORY]`` in the following.
+
+This package
+............
+Finally, this package can be easily downloaded and extracted using the download link on the PyPI_ page.
+Afterwards, please go to the command line, change to the extracted directory and call::
+
+  $ python bootstrap.py
+  $ bin/buildout
+
+This sequence will automatically download detect the installation directory of Bob_ and locally download any software that is not installed globally on your system.
+Also, it will create a **bin** directory that will contain all executable scripts that will allow you to re-run the experiments, and which are explained in more detail below.
+
+.. note::
+  When you have installed Bob_ in a non-standard directory, please open the **buildout.cfg** file in the root directory of the package and change the ``prefixes`` accordingly.
+
+
+Running the experiments
+-----------------------
+The set of experiments are divided into four groups.
+For each group of experiments, one script in the **bin** directory exists.
+Most of these scripts have a common set of command line options, which have a long (starting with ``--``) and a short (starting with a single ``-``) name.
+Here, we will only introduce the long one, please use the ``--help`` option to see the shortcuts:
+
+* ``--data-directory`` (required): The ``[SCORE_DIRECTORY]`` where the original score files can be found.
+* ``--modality``: The modalities that should be evaluated, i.e., ``face``, ``speaker`` or both (the default).
+* ``--protocol``: The protocol of the MOBIO database that should be evaluated, i.e., ``male``, ``female`` or both (the default).
+* ``--verbose``: The verbosity level of the script. Use this option several times to increase the verbosity from 0 (ERROR) to 1 (WARNING), 2 (INFO) and 3 (DEBUG). A verbosity level of 2 (e.g. using ``-vv``) is recommended.
+* ``--fused-directory``: The directory in which the fused score files will be written (not available in all scripts). The default values will fit in most cases.
+* ``--force``: By default, already computed fused score files will not be re-generated if they already exist. Use the ``--force`` option to always generate the fused score files (not available in all scripts).
+
+Evaluation of raw score files
+.............................
+The first group of experiments will simply re-evaluate the original score files and re-produce Table 2 of the Paper_.
+Simply call::
+
+  $ bin/single.py --data-directory [SCORE_DIRECTORY] --latex-directory [LATEX] -vv
+
+where ``[LATEX]`` is a directory of your choice, which will be automatically created if it does not exist yet.
+This experiment will create two LaTeX-compatible files **[LATEX]/single_face.tex** and **[LATEX]/single_speaker.tex** containing the system shortcut, the long system name, the EER (male), the HTER (male), the EER (female) and the HTER (female).
+These files can be imported into LaTeX tables, e.g., by defining ``\newcommand{\Result}[6]{#1 & #3 & #4 & #5 & #6\\}`` outside and calling ``\input{[LATEX]/single_face}`` inside a ``tabular`` with five columns.
+
+
+Uni-modal fusion
+................
+The second group of experiments perform a uni-modal fusion of face or speaker recognition systems.
+It iterates through the algorithms and fuses the ``N`` best algorithms for each modality, with ``N`` varying from 1 to 9 (face) and 12 (speaker).
+Finally, the Table 3 of the Paper_ is regenerated by::
+
+  $ bin/unimodal.py --data-directory [SCORE_DIRECTORY] --latex-directory [LATEX] -vv
+
+Again, the generated LaTeX-compatible files **[LATEX]/fusion_face.tex** and **[LATEX]/fusion_speaker.tex** can be imported to LaTeX tables similarly as described above.
+
+.. note::
+  The script above might run for several minutes to compute all uni-modal fusions.
+
+Bi-modal fusion
+...............
+The third experiment will perform a bi-modal fusion in a more greedy way.
+It loads the score files for all face and all speaker recognition systems and searches for the best combination of fusing algorithms.
+Starting with the best system, which is ``F-1`` in both the male and the female protocol, it searches for the algorithm that decreases the EER best and add that to the set of fused systems.
+One after another, all systems will be added, and finally the Figure 3 is generated as a multi-page PDF file ``[BI_MODAL_PDF_FILE]`` by the call::
+
+  $ bin/bimodal.py --data-directory [SCORE_DIRECTORY] --plot-file [BI_MODAL_PDF_FILE] -vv
+
+.. warning::
+  Due to the nature of the experiment, the execution of this script might take several hours (even days) to be computed.
+
+Comparison plots
+................
+The final script will generate the remaining Figures 1 and 2 of the Paper_, together in one PDF file ``[COMPARISON_PDF_FILE]``.
+This script can only be run after the uni-modal and bi-modal fusion scrips ``bin/unimodal.py`` and ``bin/bimodal.py`` have finished.
+Please call::
+
+  $ bin/plots.py --data-directory [SCORE_DIRECTORY] --plot-file [COMPARISON_PDF_FILE]
+
+If you have specified other ``--fused-directory`` parameters in the calls to ``bin/unimodal.py`` or ``bin/bimodal.py``, please set the ``--unimodal-directory`` or ``--bimodal-directory`` option accordingly.
+
+
+Getting Help
+------------
+In case you need help or you found some mistake, please feel free to file a bug report under http://gitlab.idiap.ch/manuel.guenther/xbob-paper-btfs2013 or send an `email <mailto:manuel.guenther@idiap.ch>`_.
+
+Helping us
+----------
+In case you liked Bob_, our Paper_ and/or our package, please cite::
+
+  @INPROCEEDINGS{Khoury_BTFS_2013,
+           author = {Khoury, Elie and G{\"{u}}nther, Manuel and El Shafey, Laurent and Marcel, S{\'{e}}bastien},
+            month = oct,
+            title = {On the Improvements of Uni-modal and Bi-modal Fusions of Speaker and Face Recognition for Mobile Biometrics},
+        booktitle = {Biometric Technologies in Forensic Science},
+             year = {2013},
+         location = {Nijmegen, The Netherlands},
+         abstract = {The MOBIO database provides a challenging test-bed for speaker and face recognition systems because it includes voice and face samples as they would appear in forensic scenarios.
+                    In this paper, we investigate uni-modal and bi-modal multi-algorithm fusion using logistic regression.
+                    The source speaker and face recognition systems were taken from the 2013 speaker and face recognition evaluations that were held in the context of the last International Conference on Biometrics (ICB-2013).
+                    Using the unbiased MOBIO protocols, the employed evaluation measures are the equal error rate (EER), the half-total error rate (HTER) and the detection error trade-off (DET).
+                    The results show that by uni-modal algorithm fusion, the HTER's of the speaker recognition system are reduced by around 35\%, and of the face recognition system by between 15\% and 20\%.
+                    Bi-modal fusion drastically boosts recognition by a relative gain of 65\% - 70\% of performance compared to the best uni-modal system.},
+              pdf = {http://publications.idiap.ch/downloads/papers/2013/Khoury_BTFS_2013.pdf}
+  }
+
+TODO::
+
+  Improve the BibTeX entry as soon as the paper is published.
+
+
+.. _paper : http://publications.idiap.ch/index.php/publications/show/2688
+.. _bob : http://www.idiap.ch/software/bob
+.. _idiap : http://www.idiap.ch
+.. _mobio : http://www.idiap.ch/dataset/mobio
+.. _pypi : http://pypi.python.org/pypi/xbob.paper.BTFS2013
