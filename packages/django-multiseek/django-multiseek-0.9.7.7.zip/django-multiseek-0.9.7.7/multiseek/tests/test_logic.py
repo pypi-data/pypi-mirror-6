@@ -1,0 +1,258 @@
+# -*- encoding: utf-8 -*-
+
+import json
+from unittest import TestCase
+
+from ludibrio import Mock, Dummy
+
+from multiseek.logic import UnknownOperation, AutocompleteQueryObject, \
+    RangeQueryObject, RANGE_OPS, StringQueryObject, QueryObject, DIFFERENT, \
+    NOT_CONTAINS, NOT_STARTS_WITH, MultiseekRegistry, STRING, ParseError, \
+    UnknownField, EQUALITY_OPS_ALL, OR, AND, create_registry, get_registry, \
+    EQUAL, IntegerQueryObject, LESSER_OR_EQUAL, RANGE, ReportType, Ordering, MULTISEEK_ORDERING_PREFIX
+from multiseek.util import make_field
+
+test_json = json.dumps({'form_data': [None,
+    dict(field='foo', operator=unicode(EQUALITY_OPS_ALL[0]), value='foo', prev_op=None)]})
+
+
+class TestQueryObject(TestCase):
+    def setUp(self):
+        class MyQueryObject(QueryObject):
+            field_name = "foo"
+
+        self.q = MyQueryObject()
+
+    def test_value_from_web(self):
+        self.assertEquals(123, self.q.value_from_web(123))
+
+
+    def test_query_for(self):
+        res = self.q.query_for("foobar", DIFFERENT)
+        self.assertEquals(
+            """(NOT (AND: ('foo', 'foobar')))""",
+            str(res))
+
+    def test_query_for_raises(self):
+        self.assertRaises(
+            UnknownOperation, self.q.query_for, 'foobar', 'unknown operation')
+
+
+class TestStringQueryObject(TestCase):
+    def setUp(self):
+        class MyStringQueryObject(StringQueryObject):
+            field_name = "foo"
+
+        self.q = MyStringQueryObject()
+
+    def test_query_for(self):
+        args = [
+            (DIFFERENT, "(NOT (AND: ('foo', 'foobar')))"),
+            (NOT_CONTAINS, "(NOT (AND: ('foo__icontains', 'foobar')))"),
+            (NOT_STARTS_WITH,
+             "(NOT (AND: ('foo__startswith', 'foobar')))")
+        ]
+
+        for param, result in args:
+            res = self.q.real_query("foobar", param)
+            self.assertEquals(str(res), result)
+
+    def test_query_for_raises(self):
+        self.assertRaises(
+            UnknownOperation,
+            self.q.real_query, 'lol', 'bad operation')
+
+
+class TestAutocompleteQueryObject(TestCase):
+    def test_value_from_web(self):
+        q = AutocompleteQueryObject('foo')
+
+        with Mock() as model:
+            model.objects.get(pk=1) >> True
+
+        q.model = model
+        self.assertEquals(q.value_from_web(None), None)
+        self.assertEquals(q.value_from_web('foo'), None)
+        self.assertEquals(q.value_from_web(1), True)
+
+
+class TestRangeQueryObject(TestCase):
+    def test_value_from_web(self):
+        r = RangeQueryObject('foo')
+        self.assertEquals(r.value_from_web("[1,2]"), [1, 2])
+        self.assertEquals(r.value_from_web('["1","2"]'), [1, 2])
+        self.assertEquals(r.value_from_web("[1,2,3]"), None)
+        self.assertEquals(r.value_from_web('["foo","bar"]'), None)
+        self.assertEquals(r.value_from_web('123'), None)
+
+        self.assertRaises(
+            UnknownOperation, r.real_query, [1, 2], 'foo')
+
+        res = r.real_query([1, 2], RANGE_OPS[1])
+        self.assertEquals(
+            str(res), "(NOT (AND: ('foo__gte', 1), ('foo__lte', 2)))")
+
+
+class TestIntegerQueryObject(TestCase):
+    def test_value_from_web(self):
+        r = IntegerQueryObject('foo')
+        self.assertEquals(r.value_from_web('123'), 123)
+
+        self.assertRaises(
+            UnknownOperation, r.real_query, 123, 'foo')
+
+        res = r.real_query(123, unicode(LESSER_OR_EQUAL))
+        self.assertEquals(
+            str(res), "(AND: ('foo__lte', 123))")
+
+
+class TestMultiseekRegistry(TestCase):
+    def setUp(self):
+        self.registry = MultiseekRegistry()
+        self.registry.add_field(StringQueryObject('foo'))
+        self.registry.add_field(RangeQueryObject('bar'))
+        self.registry.add_field(RangeQueryObject('quux', public=False))
+        self.registry.report_types = [
+            ReportType("list", "List"),
+            ReportType("table", "Table")
+        ]
+        self.registry.ordering = [
+            Ordering("foo", "Foo"),
+            Ordering("bar", "Bar"),
+        ]
+
+    def test_add_field_raises(self):
+        self.assertRaises(
+            AssertionError, self.registry.add_field, StringQueryObject('foo'))
+
+    def test_field_by_type(self):
+        self.assertEquals(
+            len(self.registry.field_by_type(STRING)),
+            1)
+
+        self.assertEquals(
+            len(self.registry.field_by_type(RANGE, public=False)),
+            2)
+
+    def test_extract(self):
+        self.assertEquals(
+            self.registry.extract('field_name'), ['foo', 'bar'])
+
+        self.assertEquals(
+            self.registry.extract('field_name', public=False),
+            ['foo', 'bar', 'quux'])
+
+    def test_parse_field(self):
+        self.assertRaises(
+            ParseError,
+            self.registry.parse_field, {})
+
+        self.assertRaises(
+            UnknownField,
+            self.registry.parse_field,
+            dict(field='XXX', operator='IS', value='LOL', prev_op=None))
+
+        self.assertRaises(
+            UnknownOperation,
+            self.registry.parse_field,
+            dict(field='foo', operator='XXX', value='FO', prev_op=None))
+
+        res = self.registry.parse_field(
+            dict(field='foo', operator=EQUALITY_OPS_ALL[0], value='foo', prev_op=None))
+
+        self.assertEquals(str(res), "(AND: ('foo', 'foo'))")
+
+    def test_get_recursive_list(self):
+        input = [None,
+            [None, [None, dict(field='foo', operator=unicode(EQUALITY_OPS_ALL[0]), value='foo', prev_op=None)]],
+            dict(field='foo', operator=unicode(EQUALITY_OPS_ALL[0]), value='bar', prev_op="BAD OP")]
+
+        self.assertRaises(
+            UnknownOperation,
+            self.registry.get_query_recursive,
+            input)
+
+        input[2]['prev_op'] = OR
+
+        res = self.registry.get_query_recursive(input)
+        self.assertEquals(str(res), "(OR: ('foo', 'foo'), ('foo', 'bar'))")
+
+    def test_get_query(self):
+        self.assertEquals(
+            str(
+                self.registry.get_query(
+                    json.loads(test_json)['form_data'])),
+            "(AND: ('foo', u'foo'))")
+
+    def test_get_query_for_model(self):
+        self.registry.model = Dummy()
+        self.registry.get_query_for_model(json.loads(test_json))
+        self.registry.get_query_for_model(None)
+
+    def test_recreate_form(self):
+        op = unicode(EQUALITY_OPS_ALL[0])
+        fld_noop = dict(field='foo', operator=op, value=u'foo', prev_op=None)
+        fld_and = dict(field='foo', operator=op, value=u'foo', prev_op=AND)
+        fld_or = dict(field='foo', operator=op, value=u'foo', prev_op=OR)
+        res = self.registry.recreate_form(
+            {'form_data':
+                 [None,
+                  fld_noop,
+                  fld_or, [
+                     AND,
+                     fld_noop,
+                     fld_or],
+                  fld_and,
+                  [OR,
+                   fld_noop,
+                   fld_or]
+                 ],
+             'ordering': {
+                 '%s1' % MULTISEEK_ORDERING_PREFIX: "1",
+                 '%s1_dir' % MULTISEEK_ORDERING_PREFIX: "1",
+             },
+             'report_type': '1'})
+
+        self.maxDiff = None
+
+        ex = u"""$('#frame-0').multiseekFrame('addField', 'foo', 'equals', 'foo', null);
+$('#frame-0').multiseekFrame('addField', 'foo', 'equals', 'foo', 'or');
+$('#frame-0').multiseekFrame('addFrame', 'and');
+$('#frame-1').multiseekFrame('addField', 'foo', 'equals', 'foo', null);
+$('#frame-1').multiseekFrame('addField', 'foo', 'equals', 'foo', 'or');
+$('#frame-0').multiseekFrame('addField', 'foo', 'equals', 'foo', 'and');
+$('#frame-0').multiseekFrame('addFrame', 'or');
+$('#frame-2').multiseekFrame('addField', 'foo', 'equals', 'foo', null);
+$('#frame-2').multiseekFrame('addField', 'foo', 'equals', 'foo', 'or');
+\t\t$("select[name=order_1] option").eq(1).prop("selected", true);
+\t\t$("input[name=order_1_dir]").attr("checked", true);
+\t\t$("select[name=_ms_report_type] option").eq(1).prop("selected", true);
+\t\tif (window.Foundation) {
+\t\t\tFoundation.libs.forms.refresh_custom_select($("select[name=order_1]"), true);
+\t\t\t$("input[name=order_1_dir]").next().toggleClass("checked", true);
+\t\t\tFoundation.libs.forms.refresh_custom_select($("select[name=_ms_report_type]"), true)
+\t\t}\n""" % dict(equal=EQUAL)
+
+        self.assertEquals(ex, res)
+
+    def     test_create_registry(self):
+        create_registry(None, StringQueryObject('foo'))
+
+    def test_get_registry(self):
+        r = get_registry('test_app.multiseek_registry')
+        from test_app.multiseek_registry import registry
+
+        self.assertEquals(r, registry)
+
+    def test_bug_3(self):
+        f = self.registry.fields[0]
+        v = self.registry.fields[0].ops[0]
+        value = 'foo'
+
+        field = make_field(f, v, value)
+        field_or = make_field(f, v, value, "lol")
+
+        form = {'form_data': [None, field, field, field, field_or]}
+
+        self.assertRaises(
+            ParseError, self.registry.recreate_form, form)
