@@ -1,0 +1,10 @@
+__version__ = "0.1"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = 'develop'
+__git_remote_tracking_branch__ = 'origin/develop'
+__git_remote_url__ = 'git@infinigit.infinidat.com:host/infi-recipe-buildout-logging.git'
+__git_head_hash__ = 'a93e0b2d95fd70fe30c219af45fa4845c335647f'
+__git_head_subject__ = 'Finished release v0.1.'
+__git_head_message__ = '* release/v0.1:\n  TRIVIAL inital commit\n  added all project files'
+__git_dirty_diff__ = ''
