@@ -1,0 +1,155 @@
+<!-- snippets/header.html starts. This is the top navigation header on our page -->
+<div id="top_navigation_bar" class="navbar navbar-fixed-top" xmlns="http://www.w3.org/1999/html">
+    <div class="navbar-inner">
+        <div class="container-fluid" style="padding-right: 0px;">
+            <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </a>
+
+            <!-- Logo in top nav -->
+            <a class="brand" href="{% url misc.views.index %}">Adagios</a>
+            <div class="nav-collapse">
+                <ul class="nav">
+
+
+
+                    <!-- Object Browser -->
+                    <li class="{% if urlname == "objectbrowser"%}active{% endif %}">
+                        <a href="{% url objectbrowser.views.list_object_types %}" ><i class="glyph-grey glyph-edit"></i> Configure</a>
+                    </li>
+
+                    <!-- Nagios -->
+                    <li>
+                        <a href="{% url misc.views.nagios %}"><i class="glyph-list glyph-grey"></i> Nagios</a>
+                    </li>
+
+                    <!-- Any extra plugins can put an entry in the menubar -->
+                    {% for i in menubar_items %}
+                        <!-- Plugin menubar for {{ i }} -->
+                        {% include i %}
+                        <!-- End of plugin menubar {{ i }} -->
+                    {% endfor %}
+                </ul>
+
+
+
+
+                <!-- Right aligned navbar - MISC -->
+
+                <ul class="nav pull-right">
+                    {% if not nagios_running %}
+                        <li>
+		    <form action="{% url misc.views.nagios_service %}" method="POST">
+		    {% csrf_token %}
+                      <input type="hidden" name="start" value="1" />
+                      <input type="image" src="{% url media path="img/tdot.png" %}" class="glyph-grey glyph-play-button" alt="start"/>
+                    </form>
+                        </li>
+                    {% endif %}
+                    <li>
+                        <div id="nagios_needs_reload">
+                            <form id="nagios_needs_reload_button" class="hide" action="{% url misc.views.nagios_service %}" method="POST">
+                                {% csrf_token %}
+                                <input type="hidden" name="reload" value="1" />
+                                <input type="image" src="{% url media path="img/tdot.png" %}" class="glyph-white glyph-refresh" alt="reload"/>
+                            </form>
+                        </div>
+                    </li>
+                    {% if num_problems and plugins.status  %}
+                        <li style="color: red;">
+                        <a style="color: red;" href="{% url status.views.problems %}?unhandled">
+                            <i class="glyph-white  glyph-warning-sign" title="You have unhandled problems"></i>
+                            {{ num_problems }} problems
+                        </a>
+                        </li>
+                    {% endif %}
+                    <!--
+                    <li>
+                        <a data-toggle="modal"
+                           href="#notifications">
+                            <div class="badge{% if notifications|length %} badge-warning{% endif %}"><span id="num_notifications">{{ notifications|length }}</span> Notification{% if notifications|length != 1 %}s{% endif %}</div>
+                        </a>
+                    </li>
+                    -->
+
+                    <li class="dropdown"><a><i class="glyph-grey glyph-clock"></i> {{ current_time }}</a></li>
+
+                    <li class="dropdown" id="user-drop-down">
+                        <a class="dropdown-toggle"
+                           data-toggle="dropdown"
+                           href="#"><i class="glyph-user glyph-grey"></i> {{ remote_user }}
+                            {% if tagged_comments %}({{ tagged_comments }}){% endif %}
+                        </a>
+                        <ul class="dropdown-menu">
+                            {% if tagged_comments and plugins.status %}
+                                <li>
+
+                                <a href="{% url status.views.contact_detail remote_user %}">
+                                    User {{ remote_user }} is mentioned in {{ tagged_comments }} comments.
+                                </a>
+                                </li>
+                            {% endif %}
+                            {% if plugins.status %}
+                                <li><a href="{% url status.views.contact_detail remote_user %}">My Profile</a></li>
+                            {% endif %}
+                            <li><a href="{% url misc.views.sign_out %}">Sign Out</a></li>
+                        </ul>
+                    </li>
+                    <li class="dropdown">
+                        <a class="dropdown-toggle"
+                           data-toggle="dropdown"
+                           href="#"><i class="glyph-cogwheel glyph-grey"></i>
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a href="https://github.com/opinkerfi/adagios/issues">Report Bug</a></li>
+                            <li><a href="https://github.com/opinkerfi/adagios/issues">Make Suggestion</a></li>
+                            <li><a href="http://adagios.org/">Project Webpage</a></li>
+                            <li class="divider"></li>
+                            <li><a href="{%  url objectbrowser.views.show_plugins %}">Missing Plugins</a></li>
+                            <li><a href="{%  url objectbrowser.views.edit_nagios_cfg %}">Edit nagios.cfg</a></li>
+                            <li><a href="{%  url misc.views.nagios_service %}">Nagios Service</a></li>
+                            <li><a href="{%  url misc.views.gitlog %}">Object History</a></li>
+                            <li><a href="{%  url objectbrowser.views.config_health %}">Config Health</a></li>
+                            <li><a href="{%  url misc.views.settings %}">Settings</a></li>
+                            <li class="divider"></li>
+                            <li><a href="{%  url misc.views.pnp4nagios %}">PNP Integration</a></li>
+                            <!-- Any extra plugins can put an entry in the menubar -->
+                            {% for i in misc_menubar_items %}
+                                <!-- Plugin menubar for {{ i }} -->
+                                {% include i %}
+                                <!-- End of plugin menubar {{ i }} -->
+                            {% endfor %}
+
+                        </ul>
+                   </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+    <div class="modal hide fade" id="notifications">
+        <div class="modal-header"><h3>Notifications: <span id="num_notifications">{{ notifications|length }}</span></h3></div>
+        <div class="modal-body">
+            {%  for id,notification in notifications.items %}
+                <div class="alert alert-{{ notification.level }}" data-notification-dismiss="{{ id }}">
+
+                    <strong>{{ notification.level }}!</strong> {{  notification.message }}
+                    <div class="pull-right">
+                        <a href="#" data-dismiss="alert">
+                            Hide
+                        </a>
+                    </div>
+                </div>
+            {%  endfor %}
+        </div>
+        <div class="modal-footer">
+            <button class="btn" data-dismiss="modal">Close</button>
+        </div>
+    </div>
+
+
+<!-- snippets/header.html ends -->
