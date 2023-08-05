@@ -1,0 +1,142 @@
+{% extends "edit_object.html" %}
+{% block title %}{{  block.super }}{% endblock %}
+
+{% block head %}{{ block.super }} {% endblock %}
+
+
+
+{% block sidebar %}{{ block.super }}{% endblock %}
+
+{% block adagios_hausinn %}
+    {{ block.super }}
+    {% if status.text and status.plugin_output %}
+        <div class="row-fluid" id="top_status">
+            <!-- offset don't work on fluid grid system for now -->
+            <div class="span1"><div class="servicestate label {{ status.css_label }}" id="state">{{ status.text }}</div></div>
+            <div class="span11"><div id="top_status_output" class="label label-inverse">{{ status.plugin_output}}</div></div>
+        </div>
+    {% endif %}
+{% endblock %}
+
+
+{% block content %}
+
+    {% if my_object %}
+        <!-- wrapper for scrollable items -->
+        <ul class="nav nav-tabs" id="objecttab">
+            <li><a href="#general" data-toggle="tab">General</a></li>
+            <li><a href="#monitoring" data-toggle="tab">Monitoring</a></li>
+            <li><a href="#notifications_tab" data-toggle="tab">Notifications</a></li>
+            <li id="macros_li"><a href="#macros_tab" data-toggle="tab">Macros</a></li>
+            <li><a href="#advanced" data-toggle="tab">Advanced</a></li>
+        </ul>
+        <form class="form-horizontal" action="#" method="POST">
+            {% csrf_token %}
+            <div class="tab-content">
+                <div class="tab-pane" id="general">
+                    <fieldset>
+                        {% include "bootstrap_field.html" with field=form.host_name %}
+                        {% include "bootstrap_field.html" with field=form.address %}
+                        {% include "bootstrap_field.html" with field=form.alias %}
+                        {% include "bootstrap_field.html" with field=form.hostgroups %}
+                        {% include "bootstrap_field.html" with field=form.use %}
+                    </fieldset>
+
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit">Save changes</button>
+                    </div>
+                </div>
+
+                <div class="tab-pane" id="monitoring">
+                    {% if command_line and form.host_name.value and form.register != '0' %}
+                        <pre>{{ command_line }}</pre>
+                    {% endif %}
+                    <fieldset>
+                        {% include "bootstrap_field.html" with field=form.check_command %}
+                        {% include "bootstrap_field.html" with field=form.max_check_attempts %}
+                        {% include "bootstrap_field.html" with field=form.check_interval %}
+                        {% include "bootstrap_field.html" with field=form.active_checks_enabled %}
+                        {% include "bootstrap_field.html" with field=form.passive_checks_enabled %}
+                        {% include "bootstrap_field.html" with field=form.check_period %}
+                    </fieldset>
+
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit">Save changes</button>
+                        <button class="btn">Cancel</button>
+                    </div>
+                </div>
+
+
+                <div class="tab-pane" id="notifications_tab">
+                    <fieldset>
+
+                        {% include "bootstrap_field.html" with field=form.notification_interval %}
+                        {% include "bootstrap_field.html" with field=form.first_notification_delay %}
+                        {% include "bootstrap_field.html" with field=form.notification_period %}
+                        {% include "bootstrap_field.html" with field=form.notification_options %}
+                        {% include "bootstrap_field.html" with field=form.contact_groups %}
+                        {% include "bootstrap_field.html" with field=form.contacts %}
+                    </fieldset>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit">Save changes</button>
+                        <button class="btn">Cancel</button>
+                    </div>
+                </div>
+                <div class="tab-pane" id="macros_tab">
+                    <div class="well">
+                        This tab contains custom macros (also called "custom variables") for this {{  my_object.object_type }}.
+                    </div>
+                    <fieldset>
+                        {% if fields.non_field_errors %}
+                            {{ fields.non_field_errors  }}
+                        {%  endif %}
+
+                        {% for field in form %}
+                            {%  if field.label|slice:":1" == "_" %}
+                                {% include "bootstrap_field.html" with field=field %}
+                            {% endif %}
+                        {% endfor %}
+                    </fieldset>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit">Save changes</button>
+                    </div>
+
+                </div>
+
+        </form>
+                <div class="tab-pane" id="advanced">
+                    <!-- All Attributes -->
+                    <h2>All Attributes</h2>
+                    <form action="{% url objectbrowser.views.advanced_edit my_object.id %}" method="post" class="form-horizontal">{% csrf_token %}
+                        {% include "bootstrap_fields.html" with fields=advanced_form %}
+                        <div class="form-actions">
+                            <button class="btn btn-primary" type="submit">Submit</button>
+                        </div>
+                    </form>
+                </div> <!-- End of advanced tab -->
+
+            </div>
+    {% else %}
+        <p>Object not found </p>
+    {% endif %}
+
+{% endblock %}
+
+
+
+
+
+
+{% block footer %}
+    {{ block.super }}
+    <script type="text/javascript">
+        $(document).ready(function() {
+
+                    if ( $('div.tab-pane#macros_tab fieldset').children().length ) {
+                        $('li#macros_li').show();
+                    }
+                }
+        );
+    </script>
+
+{% endblock %}

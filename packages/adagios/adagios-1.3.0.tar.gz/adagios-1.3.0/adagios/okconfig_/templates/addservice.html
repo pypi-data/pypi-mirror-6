@@ -1,0 +1,104 @@
+{% extends "base_okconfig.html" %}
+{% block title %}Add Service{% endblock %}
+{% block smallheader %}add {% endblock %}
+{% block largeheader %}service {% endblock %}
+{% block head %}
+{% endblock %}
+{% block nav2 %}<a href="{% url adagios.okconfig_.views.addservice %}">Add Service</a>{% endblock %}
+
+{% block content %}
+
+                {% if form %}
+
+
+                    <form action="#" id="add_service_to_host" method="POST" class="form-horizontal">{% csrf_token %}
+                        <fieldset>
+                            <legend>Select host name and service</legend>
+                            {% for field in form %}
+                                <label class="control-label" for="{{ field.name }}">{{ field.label }}{% if field.help %} <abbr rel="tooltip" title="{{ field.label }}" data-content="{{ field.help_text }}"><i class="icon-question-sign"></i></abbr> {% endif %}</label>
+                                <div class="controls" id="advanced_field">
+                                    {{ field }}
+                                </div>
+
+                            {% endfor %}
+                        </fieldset>
+                        <div id="service_macros" class="hide">
+                            <fieldset>
+                                <legend> <span id="service_name"></span></legend>
+                                <span id="notes"><! -- notes will go in here --></span>
+                                <span id="notes_url"><!-- notes_url will go here --></span>
+                                <p></p>
+                                <table class="table table-condensed">
+                                    <tbody id="macros_for_this_service"><!-- Macros will go in here --></tbody>
+                                </table>
+
+                            </fieldset>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" type="submit">Add service</button>
+                        </div>
+                    </form>
+                {% endif %}
+
+
+{% endblock %}
+
+{% block footer %}
+
+    <script>
+    $('select#id_service').change(function() {
+        var $this = $(this);
+        $('#macros_for_this_service').html('');
+        $("#notes_url").html('');
+        $("#notes").html('');
+        $('#service_macros').hide();
+        $.getJSON(BASE_URL + "rest/pynag/json/get_objects",
+                {
+                    name: $(this).val(),
+                    object_type: 'service',
+                    with_fields: '*'
+                },
+                function (data) {
+                    var num_fields = 0;
+                    if (data[0]) {
+                        var myservice = data[0];
+                    } else {
+                        console.log("Called get_objects but got empty results for " + $(this).val());
+                    }
+                    var myobj = data[0];
+                    var service_macro_html = '';
+                    console.log(myobj);
+                    var friendly_name = null;
+                    $.each(myobj, function(i, k) {
+                        if (i.substring(0, 1) == "_" || i == 'service_description') {
+                            num_fields += 1;
+                            friendly_name = i.replace('$_SERVICE', '').replace('$','');
+
+                            // replace all underscores with space:
+                            friendly_name = friendly_name.split('_').join(' ');
+
+                            service_macro_html += '<tr><td>' +
+                                    friendly_name +
+                                    '</td><td>' +
+                                    '  <input type="text" class="span11" name="' + i + '" value="' + myobj[i] + '">' +
+                                    '</td>';
+                        }
+                        if (i == 'notes') {
+                            $("#notes").html(myobj[i]);
+                        }
+                        if (i == 'notes_url') {
+                            $("#notes_url").html("See documentation <a href='" + myobj[i] + "'>here</a>." );
+                        }
+                    });
+                    service_macro_html += ""
+                    if (num_fields) {
+                        $('#service_name').text($this.val());
+                        $('#macros_for_this_service').html(service_macro_html);
+                        $('#service_macros').show();
+                    }
+                }).error(function(jqXHR) {
+                    console.log('Failed to fetch data: URL: "' + this.url + '" Server Status: "' + jqXHR.status + '" Status: "' + jqXHR.statusText + '"');
+                });
+    });
+    </script>
+{%  endblock %}
