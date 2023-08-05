@@ -1,0 +1,41 @@
+#!python
+
+import sys
+import time
+import argh
+import requests
+from urllib import quote_plus
+from bs4 import BeautifulSoup
+
+
+def parse_tweet(one):
+    nick = one.find('a', 'nickname').text.strip()
+    url = one.find('div', 'time pull-right').a["href"]
+    message = one.find('div', 'message').text[1:]
+    return nick, message, url
+
+
+def main(query, number=None, interval=120):
+    already_seen = []
+    first = True
+
+    while 42:
+        soup = BeautifulSoup(requests.get("http://www.icerocket.com/search?tab=twitter&fr=h&q=%s" % quote_plus(query)).content)
+
+        tweets = map(parse_tweet, reversed(soup.find("ul", id="twitter-results")('li', 'media')))
+
+        if first and number is not None:
+            tweets = tweets[:int(number)]
+            first = False
+
+        for nick, message, url in tweets:
+            if url not in already_seen:
+                already_seen.insert(0, url)
+                already_seen = already_seen[:100]
+                message = message.replace("\r\n", " ").replace("\n", " ")
+                sys.stdout.write(("%s: %s - %s\n" % (nick, message, url)).encode("Utf-8"))
+                sys.stdout.flush()
+
+        time.sleep(interval)
+
+argh.dispatch_command(main)
