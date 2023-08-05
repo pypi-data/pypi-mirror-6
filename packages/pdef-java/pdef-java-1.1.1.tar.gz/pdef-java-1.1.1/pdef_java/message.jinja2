@@ -1,0 +1,156 @@
+// {{ generated_by }}
+package {{ message.module|jpackage }};
+
+
+{% if message.doc %}
+/** {{ message.doc }} */
+{% endif %}
+public class {{ message|jname }} extends {{ message|jmessage_base }} {
+    {% for field in message.declared_fields %}
+    private {{ field.type|jref }} {{ field.name }};
+    {% endfor %}
+
+{% if message.discriminator_value %}
+    public {{ message|jname }}() {
+        this.{{ message.discriminator|jfield_set }}({{ message.discriminator_value|jref }});
+    }
+{% else %}
+    public {{ message|jname }}() {}
+{% endif %}
+
+    public {{ message|jname }}(final {{ message|jname }} another) {
+        super(another);
+    {% if message.discriminator_value %}
+        this.{{ message.discriminator|jfield_set }}({{ message.discriminator_value|jref }});
+    {% endif %}
+    {% for field in message.declared_fields if not field.is_discriminator %}
+        {% if field.type.is_collection or field.type.is_message %}
+        this.{{ field.name }} = io.pdef.DataTypes.copy(another.{{ field.name }});
+        {% else %}
+        this.{{ field.name }} = another.{{ field.name }};
+        {% endif %}
+    {% endfor %}
+    }
+
+    public static {{ message|jname }} fromMap(final java.util.Map<String, Object> map) {
+        return io.pdef.json.JsonFormat.instance().readObject(map, DESCRIPTOR);
+    }
+
+    public static {{ message|jname }} fromJson(final String s) {
+        return io.pdef.json.JsonFormat.instance().read(s, DESCRIPTOR);
+    }
+
+{% for field in message.declared_fields %}
+    // {{ field.name }}
+    public {{ field.type|jref_unboxed }} {{ field|jfield_get }}() {
+    {% if field.type.is_collection or field.type.is_message %}
+        return {{ field.name }} != null ? {{ field.name }} : ({{ field.name }} = {{ field.type|jdefault }});
+    {% else %}
+        return {{ field.name }} != null ? {{ field.name }} : {{ field.type|jdefault }};
+    {% endif %}
+    }
+
+    public {{ message|jname }} {{ field|jfield_set }}(final {{ field.type|jref_unboxed }} value) {
+        this.{{ field.name }} = value;
+        return this;
+    }
+
+    public boolean {{ field|jfield_has }}() {
+        return {{ field.name }} != null;
+    }
+
+    public {{ message|jname }} {{ field|jfield_clear }}() {
+        this.{{ field.name }} = null;
+        return this;
+    }
+
+{% endfor %}
+{% for field in message.inherited_fields %}
+    // {{ field.name }}
+    @Override
+    public {{ message|jname }} {{ field|jfield_set }}(final {{ field.type|jref_unboxed }} value) {
+        super.{{ field|jfield_set }}(value);
+        return this;
+    }
+
+    @Override
+    public {{ message|jname }} {{ field|jfield_clear }}() {
+        super.{{ field|jfield_clear }}();
+        return this;
+    }
+
+{% endfor %}
+    @Override
+    public {{ message|jname }} copy() {
+        return new {{ message|jname }}(this);
+    }
+
+    @Override
+	public void merge(final io.pdef.Message message) {
+		super.merge(message);
+		if (!(message instanceof {{ message|jname }})) return;
+
+		{{ message|jname }} another = ({{ message|jname }}) message;
+    {% for field in message.declared_fields if not field.is_discriminator %}
+        {% if field.type.is_collection or field.type.is_message %}
+        if (another.{{ field.name }} != null) this.{{ field.name }} = io.pdef.DataTypes.copy(another.{{ field.name }});
+        {% else %}
+        if (another.{{ field.name }} != null) this.{{ field.name }} = another.{{ field.name }};
+        {% endif %}
+    {% endfor %}
+	}
+
+    @Override
+    public io.pdef.descriptors.MessageDescriptor<? extends {{ message|jname }}> descriptor() {
+        return DESCRIPTOR;
+    }
+
+    public static final io.pdef.descriptors.MessageDescriptor<{{ message|jname }}> DESCRIPTOR = io.pdef.descriptors.MessageDescriptor.<{{ message|jname }}>builder()
+            .setJavaClass({{ message|jname }}.class)
+            .setProvider(new io.pdef.Provider<{{ message|jname }}>() {
+                public {{ message|jname }} get() {
+                    return new {{ message|jname }}();
+                }
+            })
+            {% if message.base %}
+            .setBase({{ message.base|jdescriptor }})
+            {% endif %}
+            {% if message.discriminator_value %}
+            .setDiscriminatorValue({{ message.discriminator_value|jref }})
+            {% endif %}
+            {% for subtype in message.subtypes %}
+            .addSubtype(new io.pdef.Provider<io.pdef.descriptors.MessageDescriptor<? extends {{ message|jname }}>>() {
+                public io.pdef.descriptors.MessageDescriptor<? extends {{ message|jname }}> get() {
+                    return {{ subtype|jdescriptor }};
+                }
+            })
+            {% endfor %}
+            {% for field in message.declared_fields %}
+            .addField(io.pdef.descriptors.FieldDescriptor.<{{ message|jname }}, {{ field.type|jref }}>builder()
+                    .setName("{{ field.name }}")
+                {% if field.is_discriminator %}
+                    .setDiscriminator(true)
+                {% endif %}
+                {% if field.type.is_primitive %}
+                    .setType({{ field.type|jdescriptor }})
+                {% else %}
+                    .setType(new io.pdef.Provider<io.pdef.descriptors.DataTypeDescriptor<{{ field.type|jref }}>>() {
+                        public io.pdef.descriptors.DataTypeDescriptor<{{ field.type|jref }}> get() {
+                            return {{ field.type|jdescriptor }};
+                        }
+                    })
+                {% endif %}
+                    .setAccessor(new io.pdef.descriptors.FieldAccessor<{{ message|jname }}, {{ field.type|jref }}>() {
+                        public {{ field.type|jref }} get({{ message|jname }} message) {
+                            return message.{{ field.name }};
+                        }
+
+                        public void set({{ message|jname }} message, {{ field.type|jref }} value) {
+                            message.{{ field.name }} = value;
+                        }
+                    })
+                    .build())
+            {% endfor %}
+            .build();
+}
+
