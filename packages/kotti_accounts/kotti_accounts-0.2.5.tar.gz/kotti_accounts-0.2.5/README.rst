@@ -1,0 +1,175 @@
+| Code_ | Bugs_ | Forum_ | Docs_ | License_ | Contact_
+
+.. _Code : http://github.com/frgomes/kotti_accounts
+.. _Bugs : http://github.com/frgomes/kotti_accounts/issues
+.. _Forum : http://github.com/frgomes/kotti_accounts/wiki
+.. _Docs : http://kotti_accounts.readthedocs.org
+.. _License : http://opensource.org/licenses/BSD-3-Clause
+.. _Contact : http://github.com/~frgomes
+
+
+`kotti_accounts`_ is a `Kotti`_ plugin which allows a user principal to be associated to
+multiple email accounts.
+
+`Find out more about Kotti`_
+
+.. _`Kotti`: http://pypi.python.org/pypi/Kotti
+.. _`Find out more about Kotti`: http://pypi.python.org/pypi/Kotti
+.. _`kotti_velruse`: http://pypi.python.org/pypi/kotti_velruse
+.. _`kotti_accounts`: http://pypi.python.org/pypi/kotti_accounts
+
+
+For the impatient
+=================
+
+There's a demo which shows how it works.
+Just run the commands below inside a clean virtualenv.
+
+::
+
+    git clone https://github.com/frgomes/kotti_velruse_demo.git
+    cd kotti_velruse_demo
+    ./run-server.sh
+
+
+Setup
+=====
+
+1. Insert ``kotti_accounts.kotti_configure`` on ``kotti.configurators``
+
+::
+
+    kotti.configurators = kotti_velruse.kotti_configure
+                          kotti_accounts.kotti_configure
+                          # other plugins...
+
+2. See also kotti_velruse_ for other configurations, since ``kotti_velruse`` and
+   ``kotti_accounts`` were designed to work together.
+
+
+Design Decisions
+================
+
+* associate multiple externally authenticated identities to a single Principal.
+
+* substitute part of the internal registration workflow provided by ``kotti.security``.
+
+* behave as a drop-in to the existing ``kotti.security`` Principals.
+
+* all existing test cases depending on Principals must pass.
+
+* integrate with `kotti_velruse`_ via events.
+
+
+Workflow
+========
+
+New user
+--------
+
+The actions enumerated below happen when a user authenticates for the first time using
+his/her external OpenID account (or any other authentication method):
+
+- the user's real name and email address are obtained from the external provider;
+
+- a new Principal is created and populated with the real name and email address;
+
+- a new Account is created and populated with the email address;
+
+- the newly created Account is associated with the newly created Principal;
+
+- event UserSelfRegistered is triggered, in order to integrate with other plugins.
+
+- the session is then authenticated with the allocated Principal.
+
+
+Returning user
+--------------
+
+These actions enumerated below happen when a returning user authenticates:
+
+- the user's real name and email address are obtained from the external provider;
+
+- find the Account which matches the email address;
+
+- finds the Principal associated with the Account;
+
+- the session is then authenticated with the Principal found.
+
+
+Add email to existing user
+--------------------------
+
+These actions enumerated below happen when new email addresses are added to an existing
+Principal, using the new Preferences page:
+
+- the user remains authenticated as he/she was, keeping the current Principal;
+
+- the user performs a new login, authenticates against another external provider;
+
+- the user's real name and email address are obtained from the external provider;
+
+- a new Account is created and populated with the email address; the real name is discarded;
+
+- the newly created Account is associated with the existing created Principal;
+
+- the session remains authenticated as it was in the beginning.
+
+
+Pending
+-------
+
+- (TODO) ability to merge accounts.
+
+
+Troubleshooting
+===============
+
+How do I authenticate as administrator?
+---------------------------------------
+
+The default authentication method provided by Kotti retrieves Principals from the database
+and compares the password you type against what is stored there. The authentication method
+provided by ``kotti_accounts`` relies on authentication performed by external providers,
+which means that the usual ``admin/qwerty`` is not valid anymore.
+
+The way to become administrator consists on these steps:
+
+- Insert something similar to the below into your configuration file:
+
+::
+
+    kotti.accounts.admins = admin@example.com
+                            webmaster@example.com
+
+.. note::
+
+    This allows the specified list of emails to be understood as special.
+    It means that administrator rights will be automatically assigned **only** at Principal
+    creation, which happens *when the user authenticates for the first time*.
+
+- Start the server and authenticate using some external provider, employing any of the
+  emails listed as part of ``kotti.accounts.admins``.
+
+- Stop the server
+
+- Remove the configuration you just done on ``kotti.accounts.admins``.
+
+.. warning::
+
+    In order to enforce security, it's a good practice to remove ``kotti.accounts.admins``
+    from your configuration.
+
+
+- Start the server
+
+
+
+When you login to your previously created user account, using an external provider, you
+will be recognized as administrator.
+
+
+Support
+=======
+
+Please find links on the top of this page.
