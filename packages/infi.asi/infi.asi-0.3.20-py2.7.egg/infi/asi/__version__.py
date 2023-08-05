@@ -1,0 +1,10 @@
+__version__ = "0.3.20"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.3.20)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '3d36c6ac5d538f07102019f07f7ee99d1fa69801'
+__git_head_subject__ = 'Revert "Revert "STORAGEMODEL-246""'
+__git_head_message__ = 'This reverts commit 8c90ea5097dc800da9fbb0f61954e95b1ac0befc.'
+__git_dirty_diff__ = ''
