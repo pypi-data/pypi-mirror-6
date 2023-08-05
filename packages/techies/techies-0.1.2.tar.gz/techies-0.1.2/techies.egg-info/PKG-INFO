@@ -1,0 +1,209 @@
+Metadata-Version: 1.1
+Name: techies
+Version: 0.1.2
+Summary: Opinionated Python toolbox
+Home-page: https://github.com/woozyking/techies
+Author: Runzhou Li (Leo)
+Author-email: runzhou.li@gmail.com
+License: Copyright (c) 2014 Runzhou Li
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+Description: techies
+        =======
+        
+        Opinionated Python toolbox
+        
+        Master branch: |Build Status|
+        
+        List of Tools
+        -------------
+        
+        ``Queue`` Implementations (backed by Redis)
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        
+        1. ``techies.landmines.Queue``, based on Redis List. Interfaces are
+           almost standard queue compatible.
+        2. ``techies.landmines.UniQueue``, based on Redis Sorted Set. Inherits
+           ``techies.landmines.Queue`` but ignores repetitive items, keeps items
+           unique. Score of the sorted set member is epoch timestamp from
+           ``time.time()``.
+        3. ``techies.landmines.CountQueue``, based on Redis Sorted Set. Inherits
+           ``techies.landmines.UniQueue`` but score is used as a count of item
+           appearance, that the item has the highest count gets placed in front
+           to be ``get`` first
+        
+        Prerequisites
+        -------------
+        
+        -  Redis server for ``Queue`` implementations
+        
+        Installation
+        ------------
+        
+        ::
+        
+            $ pip install techies
+            $ pip install techies --upgrade  # to update
+        
+        Usage
+        -----
+        
+        ``Queue``
+        ~~~~~~~~~
+        
+        .. code:: python
+        
+            from techies.landmines import Queue
+        
+            q = Queue(key='demo_q', host='localhost', port=6379, db=0)
+        
+            # put, or enqueue
+            q.put('lol')
+            q.put('dota')
+            q.put('skyrim')
+            q.put('dota')
+        
+            # Check size of the queue, two ways
+            print(q.qsize())  # 4
+            print(len(q))  # 4
+        
+            # get, or dequeue
+            print(q.get())  # 'lol'
+            print(q.get())  # 'dota'
+            print(q.get())  # 'skyrim'
+            print(q.get())  # 'dota'
+            print(q.get())  # ''
+        
+            # clear the queue
+            q.clear()
+        
+        ``UniQueue``
+        ~~~~~~~~~~~~
+        
+        .. code:: python
+        
+            from techies.landmines import UniQueue
+        
+            q = UniQueue(key='demo_q', host='localhost', port=6379, db=0)
+        
+            # put, or enqueue
+            q.put('lol')
+            q.put('dota')
+            q.put('skyrim')
+            q.put('dota')  # this one is ignored
+        
+            # Check size of the unique queue, two ways
+            print(q.qsize())  # 3
+            print(len(q))  # 3
+        
+            # get, or dequeue
+            print(q.get())  # 'lol'
+            print(q.get())  # 'dota'
+            print(q.get())  # 'skyrim'
+            print(q.get())  # ''  # only 3 unique items
+        
+            # clear the queue
+            q.clear()
+        
+        ``CountQueue``
+        ~~~~~~~~~~~~~~
+        
+        .. code:: python
+        
+            from techies.landmines import CountQueue
+        
+            q = CountQueue(key='demo_q', host='localhost', port=6379, db=0)
+        
+            # put, or enqueue
+            q.put('lol')
+            q.put('dota')
+            q.put('skyrim')
+            q.put('dota')  # increment the count of the existing 'dota'
+        
+            # Check size of the unique queue, two ways
+            print(q.qsize())  # 3
+            print(len(q))  # 3
+        
+            # get, or dequeue
+            print(q.get())  # 'dota'  # the one with the most count is returned first
+            print(q.get())  # 'lol'
+            print(q.get())  # 'skyrim'
+            print(q.get())  # ''  # only 3 unique items still
+        
+            # clear the queue
+            q.clear()
+        
+        Test (Unit Tests)
+        -----------------
+        
+        To run unit tests locally, make sure that you have Redis server
+        installed and running
+        
+        ::
+        
+            $ pip install -r requirements.txt
+            $ pip install -r test_requirements.txt
+            $ nosetests --with-coverage --cover-package=techies
+        
+        License
+        -------
+        
+        The MIT License (MIT). See the full
+        `LICENSE <https://github.com/woozyking/techies/blob/master/LICENSE>`__.
+        
+        .. |Build Status| image:: https://travis-ci.org/woozyking/techies.png?branch=master
+           :target: https://travis-ci.org/woozyking/techies
+        
+        Changelog
+        ---------
+        
+        0.1.2 (2014-01-17)
+        ~~~~~~~~~~~~~~~~~~
+        
+        -  Added ``CountQueue``, inherits ``UniQueue`` but the score is used as
+           a count of item appearance, that the item has the highest count gets
+           placed in front to be ``get`` first
+        -  Behavior of all ``Queue`` and its subclasses' ``put`` and
+           ``put_nowait`` methods changed from return certain value to not
+           return anything (more Python standard Queue like)
+        
+        0.1.1 (2014-01-16)
+        ~~~~~~~~~~~~~~~~~~
+        
+        -  Python 3.2 and 3.3 supported now
+        -  Behavior of both ``Queue`` and ``UniQueue``'s ``get`` method changed
+           from returning ``None`` to empty "native string" (unicode for Python
+           2.x, str for Python 3.x) when attempting to dequeue from an empty
+           queue
+        
+        0.1.0 (2014-01-16)
+        ~~~~~~~~~~~~~~~~~~
+        
+        -  Initial release with Redis backed ``Queue`` and ``UniQueue``
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Natural Language :: English
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.2
+Classifier: Programming Language :: Python :: 3.3
