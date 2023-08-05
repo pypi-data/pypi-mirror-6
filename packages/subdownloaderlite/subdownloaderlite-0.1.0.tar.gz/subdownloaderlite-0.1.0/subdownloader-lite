@@ -1,0 +1,98 @@
+#!/usr/bin/python
+"""
+This file is part of SubDownloaderLite.
+
+    SubDownloaderLite is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License.
+
+    SubDownloaderLite is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+import os, sys, getopt, re
+from subdownloader.errors import subtitlErrorHandler
+from subdownloader.opensubtitles import openSubtitles
+from subdownloader.downloadmanager import downloadManager
+from subdownloader.utils.version import get_version
+
+
+def main(argv):
+	try:
+		opt, args = getopt.getopt(argv, "hi:l:", ["help", "inlude=", "lang="])
+	except getopt.GetoptError, err:
+		print str(err)
+		usage()
+		sys.exit(2)
+
+	output = None
+	verbose = False
+	Language = "eng"
+	Input = ""
+	subtitles = downloadManager()
+
+	for o, a in opt:
+		if o in ("-h", "--help"):
+		    usage()
+		    sys.exit()
+		elif o in ("-i", "--input"):
+			Input = a
+		elif o in ("-l", "--lang"):
+			Language = a
+		else:
+		    assert False, "unhandled option"
+
+	Language = re.findall ( '([\w]{2,3}),?', Language )
+
+	if Input == "":
+		print "Input File/Folder must be supplied\n"
+		usage()
+		sys.exit(2)
+
+	for lan in Language:
+		if not subtitles.checkLanguage(lan):
+			print "Language " + lan + " not supported\n"
+			Language.remove(lan)
+
+	#if len(Language) == 0:
+	#	print "No valid language selected."
+	#	usage()
+	#	sys.exit(2)
+
+	print "Connecting to OpenSubtitles.org"
+	if subtitles.LogIn() == 0:
+		print "Connection error\n"
+		return 2
+
+	if os.path.isdir(Input):
+		print "Folder selected : " + Input
+		subtitles.DownloadFolder(Input,Language)
+		subtitles.LogOut()
+	elif os.path.isfile(Input):
+		print "File selected : " + Input
+		retVal = subtitles.DownloadSingle(Input,Language)
+		subtitles.LogOut()
+		sys.exit(retVal)
+	else:
+		print "Unknown input " + Input + "\n"
+		usage()
+		sys.exit(2)
+
+def usage():
+    usage = """subdownloader-lite v""" + get_version() + """
+    -h --help                 Prints this
+    -i --inupt		      Input file or directory
+    -l --lang                 Language/s of subtitle to search 
+			      (if more than one use , as sepatrator)
+    """
+    print usage
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:]) # [1:] slices off the first argument which is the name of the program
+
