@@ -1,0 +1,136 @@
+
+
+Introduction
+******************
+
+What is pywizard?
+===================
+
+Pywizard is a tool for automation of server configuration.
+It allows you to describe your server requirements in pure python, using python's rich syntax.
+
+Pywizard uses concept of provision scripts, that are running on target server. it means you have
+full access to the surrounding environment. It allows to make deep introspection of system during
+execution
+But it's different from just executing python scripts on target server. Pywizard is transactional.
+Pywizard uses concept of "resources". Provision script goal is to fill pywizard worker with resources
+and at the end of execution all those resources will be applied or not applied at all, if provision
+script has stopped in middle. Also this delayed execution style allows resources interact with each other.
+
+What pywizard is not?
+=======================
+
+At current stage, pywizard have no public tools to execute code on remote servers.
+Support, for remote execution and reporting will be publicly released as soon as Zeromq will release 4.0.0
+version, as it is used as basement for pywizard remote execution. What's missing from current version
+is authentication on transport level of ZeroMQ. So, pywizard waiting for ZeroMQ 4.0.0!
+
+Pywizard features
+===================
+
+- **Zero configuration**
+- **Runs locally** on target server
+- **Fast**, as there is no ssh in the middle
+- Uses **native APIs of linux package managers**, as they are also python
+- **Transactional**, first collect resources, then execute
+- **It's just python**, so organize your code whatever way you used to
+
+Don't know python can I use pywizard?
+=========================
+
+Yes, you can think about pywizard's scripts as special DSL for provision and you will succeed.
+
+Take a look at this: http://www.stavros.io/tutorials/python/
+
+Or better this: http://docs.python.org/2/tutorial/ (to understand full power of language)
+
+Example use cases
+===================
+
+Application deployments
+-------------------------
+
+If you need to roll out deployment environment for your application quickly, create
+file "provision.py" with contents, like::
+
+    from pywizard.api import *
+
+    package('nginx', 'mysql')
+
+    # ... add more configs here
+
+    with virtualenv('../app-env'):
+        pip_requirements('requirements.txt')
+
+And execute it with::
+
+    $ sudo pywizard apply provision.py
+
+Then you will never forgot to install any required tools on your server.
+
+
+Embedded automation
+---------------------------------
+
+This may be part of your system, that serves some kind of SAAS platform::
+
+    def configure_deployments():
+
+        with pywizard_apply():
+
+            client = MongoClient()
+
+            active_deployments = client.server_management.client_deployments.find({'active': True})
+
+
+            require_sudo()
+
+            package([
+                'vim', 'htop', 'python-dev', 'git', 'python-pip', 'libjpeg-dev', 'libfreetype6',
+                'libfreetype6-dev', 'zlib1g-dev', 'libmemcached-dev', 'libmysqld-dev', 'mysql-server', 'memcached',
+                'gunicorn', 'nginx'
+            ])
+            elasticsearch('0.90.0')
+
+            nginx = service('nginx')
+
+            for deployment in active_deployments:
+
+                gunicorn = service('%s_gunicorn' % user_name, controller='upstart')
+
+                user_name = deployment['name']
+                user(user_name)
+                deployment_home = '/home/deployments/%s' % user_name
+                directory(deployment_home)
+
+                gunicorn_conf = file_('/etc/init/%s_gunicorn.conf' % user_name, content=tpl('gunicorn.conf', {
+                                    'home': deployment_home,
+                                    'user': user_name,
+                                    'port': deployment['app_port']
+                                }))
+
+                gunicorn_conf.on_create = gunicorn.restart
+                gunicorn_conf.on_update = gunicorn.restart
+
+                nginx_conf = file_('/etc/nginx/sites-enabled/%s.conf' % user_name, content=tpl('nginx.conf', {
+                                    'home': deployment_home,
+                                    'id': user_name,
+                                    'domain': deployment['domain'],
+                                    'ssl': False,
+                                    'port': deployment['app_port']
+                                }))
+
+                nginx_conf.on_create = nginx.restart
+                nginx_conf.on_update = nginx.reload
+
+                mysql_database(user_name, secure_mysql_password(user_name, init=rand), user_name)
+
+Then, call it form your code::
+
+    configure_deployments()
+
+.. note::
+    At current stage, this example do not provide ability to get feedback from provision script, except
+    success/error at the end of execution. But, in later versions, pywizard will be able to live-stream
+    log of execution through zeromq message stream.
+
