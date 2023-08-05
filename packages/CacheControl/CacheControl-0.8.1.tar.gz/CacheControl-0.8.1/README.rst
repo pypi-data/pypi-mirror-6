@@ -1,0 +1,35 @@
+==============
+ CacheControl
+==============
+
+CacheControl is a port of the caching algorithms in httplib2_ for use with
+requests_ session object.
+
+It was written because httplib2's better support for caching is often
+mitigated by its lack of threadsafety. The same is true of requests in
+terms of caching.
+
+
+Quickstart
+==========
+
+::
+
+  import requests
+
+  from cachecontrol import CacheControl
+
+
+  sess = requests.session()
+  cached_sess = CacheControl(sess)
+
+  response = cached_sess.get('http://google.com')
+
+If the URL contains any caching based headers, it will cache the
+result in a simple dictionary.
+
+For more info, check out the docs_
+
+.. _docs: http://cachecontrol.readthedocs.org/en/latest/
+.. _httplib2: http://code.google.com/p/httplib2/
+.. _requests: http://docs.python-requests.org/
