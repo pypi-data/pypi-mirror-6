@@ -1,0 +1,160 @@
+{% extends 'ftp_deploy/base.html' %}
+
+{% block title %}
+    <div id="service-actions" class="pull-right">
+        <div class="btn-group pull-right">
+            <a href="{% url 'ftpdeploy_service_edit' service.pk %}" type="button" class="btn btn-primary">Edit</a>
+            <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown">
+                <span class="caret"></span>
+                <span class="sr-only">Toggle Dropdown</span>
+            </button>
+            <ul class="dropdown-menu" role="menu">
+                <li><a href="{% url 'ftpdeploy_service_delete' service.pk %}" id="service-delete">Delete</a></li>
+            </ul>
+        </div>
+        <span class="clearfix"></span>
+    </div>
+    <h2 class="pull-left">{{service.repo_name}} <small>Manage</small></h2>
+{% endblock title %}
+
+{% block content %}
+
+    <div class="row">
+        <div class="col-sm-8">
+			<h3 style="display: inline;">Statistics</h3>
+            <ul class="list-unstyled">
+                <li>
+                    <small>
+                    POST Hook: 
+                    {% if service.repo_hook %}
+                        <i class="fa fa-check c-ok"></i>
+                    {% else %}
+                        <b>{{service.hook_url}}</b> 
+                        <a href="{% url 'ftpdeploy_bb_api' service.pk %}" id="add_hook"><i class="fa fa-times c-remove"></i> Add hook</a> 
+                    {% endif %}
+                    </small>
+                </li>    
+                <li><small>Branch: <b>{{service.repo_branch}}</b></small></li>
+                <li><small>Number of Deploys: <span class="label label-success"><b>{{service.deploys}}</b></span> </small></li>
+                {% if service.fail_deploys %}
+                    <li><small>Fail Deploys: <span class="label label-danger"><b>{{service.fail_deploys}}</b></span></small></li>
+                {% endif %}
+                {% if service.skipped_deploys %}
+                    <li><small>Skipped Deploys: <span class="label label-warning"><b>{{service.skipped_deploys}}</b></span></small></li>
+                {% endif %}
+                <li><small>Last Deploy User: <b>{{service.latest_log_user}}</b></small></li>
+                <li><small>Last Deploy Date: <b>{{service.latest_log_date}}</b></small></li>
+            </ul>
+            
+        </div>
+        <div class="col-sm-4">
+        	<h2 style="display: inline;">Status</h2>
+    			{% if service.status %}
+    			    <a href="{% url 'ftpdeploy_service_status' service.pk %}" id="service-manage-status"><i class="fa fa-check c-ok"></i></a>
+				    <p><small>Last Check: {{service.updated}}</small></p>
+    			{% else %}
+    			    <a href="{% url 'ftpdeploy_service_status' service.pk %}" id="service-manage-status"><i class="fa fa-times c-remove"></i></a>
+    			    <p><small>{{service.status_message|safe}}</small></p>
+    			{% endif %}
+        	<span class="clearfix"></span>
+        	
+        </div>
+    </div>
+   
+    <div class="row">
+        <div class="col-sm-12">
+            <h6 style="display: inline;">Notifications: <b>{{service.notification}}</b></h6> <a href="{% url 'ftpdeploy_service_notification' service.pk %}" id="notification" ><i class="fa fa-cog"></i></a>
+        </div>
+    </div>
+	<br>
+    <div class="row">
+        <div class="col-sm-12">
+            <div id="deploy-progress" style="{% if not service.lock %}display: none;{% endif %}">
+                <h5>Deploying...</h5>
+                <div class="progress progress-striped active">
+                    <div class="progress-bar"  role="progressbar" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100" style="width: 100%">
+                    
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <br>
+    {% if fail_logs %}
+        <div class="row">
+        	<div class="col-sm-12">
+        		<div id="fail-deploys">
+                    <h3>Fail Deploys</h3>
+                    <table class="table table-hover">
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>User</th>
+                            <th>Commits</th>
+                            <th>Restorable</th>
+                            <th>Status</th>
+                            <th>
+                                {% if not service.lock or 1 %}
+                                    <a href="{% url 'ftpdeploy_service_restore' service.pk %}" class="btn btn-success btn-xs pull-right" id="restore-init">Restore Deploys</a>
+                                {% else %}
+                                    <button type="button" class="btn btn-default btn-xs pull-right" disabled="disabled">Service Locked</button>
+                                {% endif %}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody id="log-list">
+                                {% for log in fail_logs %}
+                                <tr>
+                                    <td>{{log.created}}</td>
+                                    <td>{{log.user}}</td>
+                                    <td>
+                                        <button class="btn btn-default btn-xs" data-toggle="popover" data-content="{% for commits in log.commits_info %} <small>'{{commits.0}}' ({{commits.1}})</small> <br> <small>{{commits.2}}</small> <hr> {% endfor %}">{{log.commits_info|length}}</button>
+                                    </td>
+                                    <td>
+                                        {% if log.payload %}
+                                            <i class="fa fa-check c-ok"></i>
+                                        {% else %}
+                                            <i class="fa fa-times c-remove"></i>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <i class="fa fa-times c-remove"  data-toggle="tooltip" data-placement="left" title="{{log.status_message}}"></i>
+                                    </td>
+                                    <td>
+                                        <a href="#" class="btn btn-warning btn-xs pull-right log-skip">Skip</a>
+                                        <a href="{% url 'ftpdeploy_log_skip' log.pk %}#" class="btn btn-warning btn-xs pull-right log-skip-confirm" style="display: none;">Confirm</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    {% endif %}
+    
+    <br>
+    <div class="row">
+    	<div class="col-sm-12">
+    		<h3>Recent Deploys</h3>
+    		<table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Service</th>
+                    <th>Branch</th>
+                    <th>Date</th>
+                    <th>Commits</th>
+                    <th>User</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="log-list">
+                    {% include "ftp_deploy/log/list.html" with logs=recent_logs %}
+                </tbody>
+            </table>
+    	</div>
+    </div>
+
+{% endblock content %}
+
