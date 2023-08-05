@@ -1,0 +1,139 @@
+#!/usr/bin/env python2.7
+# pybc_server: A generic blockchain server example.
+
+import argparse, sys, os, itertools, time, logging
+from twisted.internet import reactor
+
+import pybc
+import pybc.util
+
+def parse_args(args):
+    """
+    Takes in the command-line arguments list (args), and returns a nice argparse
+    result with fields for all the options.
+    Borrows heavily from the argparse documentation examples:
+    <http://docs.python.org/library/argparse.html>
+    """
+    
+    # The command line arguments start with the program name, which we don't
+    # want to treat as an argument for argparse. So we remove it.
+    args = args[1:]
+    
+    # Construct the parser (which is stored in parser)
+    # Module docstring lives in __doc__
+    # See http://python-forum.com/pythonforum/viewtopic.php?f=3&t=36847
+    # And a formatter class so our examples in the docstring look good. Isn't it
+    # convenient how we already wrapped it to 80 characters?
+    # See http://docs.python.org/library/argparse.html#formatter-class
+    parser = argparse.ArgumentParser(description=__doc__, 
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    
+    # Now add all the options to it
+    parser.add_argument("blockstore",
+        help="the name of a file to store blocks in")
+    parser.add_argument("--port", type=int, default=8008, 
+        help="the port to listen on")
+    parser.add_argument("--network_version", type=int, default=1, 
+        help="the network version to participate in")
+    parser.add_argument("--network_name", type=str, default="test", 
+        help="the name of the network to participate in")
+    parser.add_argument("--peer_host", type=str, default=None, 
+        help="the hostname of another peer to connect to")
+    parser.add_argument("--peer_port", type=int, default=None, 
+        help="the port of another peer to connect to")
+    parser.add_argument("--generate", action="store_true",
+        help="generate a block every so often")
+
+    # Logging options
+    parser.add_argument("--loglevel", default="INFO", choices=["DEBUG", "INFO",
+        "WARNING", "ERROR", "CRITICAL"],
+        help="logging level to use")
+        
+    return parser.parse_args(args)
+
+block_in_progress = None
+
+def generate_block(peer):
+    """
+    Keep on generating blocks in the background.
+    
+    Don't loop indefinitely, so that the Twisted main thread dying will stop
+    us.
+   
+    
+    """
+    
+    global block_in_progress
+    
+    if block_in_progress is not None:
+        # Keep working on the block we were working on
+        success = block_in_progress.do_some_work(peer.blockchain.algorithm)
+        
+        if success:
+            # We found a block!
+            logging.info("Generated block!")
+            peer.send_block(block_in_progress)
+            # Start again
+            block_in_progress = None
+        elif time.time() > block_in_progress.timestamp + 60:
+            # This block is too old. Try a new one.
+            logging.info("Generating block is getting old! Restart generation!")
+            block_in_progress = None
+        elif (peer.blockchain.highest_block is not None and 
+            peer.blockchain.highest_block.block_hash() != 
+            block_in_progress.previous_hash):
+            
+            # This block is no longer based on the top of the chain
+            logging.info("New block from elsewhere! Restart generation!")
+            block_in_progress = None
+    else:
+        # We need to start a new block
+        logging.info("Starting a block!")
+        block_in_progress = peer.blockchain.make_block(
+            "Generic server.py-generated block.")
+    
+    # Tell the main thread to make us another thread.
+    reactor.callFromThread(reactor.callInThread, generate_block, peer)
+                
+def main(args):
+    """
+    Parses command line arguments, and runs a blockchain peer.
+    "args" specifies the program arguments, with args[0] being the executable
+    name. The return value should be used as the program's exit code.
+    """
+    
+    options = parse_args(args) # This holds the nicely-parsed options object
+    
+    # Set the log level
+    pybc.util.set_loglevel(options.loglevel)
+    
+    logging.info("Starting server on port {}".format(options.port))
+    
+    # Make a proof of work algorithm
+    algorithm = pybc.PowAlgorithm()
+    
+    # Make a blockchain that uses it, using the specified blockchain file
+    blockchain = pybc.Blockchain(algorithm, options.blockstore)
+        
+    # Now make a Peer.
+    peer = pybc.Peer(options.network_name, options.network_version, blockchain,
+        port=options.port)
+    
+    if options.peer_host is not None and options.peer_port is not None:
+        # Point it at a user specified other peer.
+        peer.connect(options.peer_host, options.peer_port)
+        # Tell it it heard about the peer now
+        peer.peer_seen(options.peer_host, options.peer_port, int(time.time()))
+        
+    if options.generate:
+        # Schedule a block generation
+        reactor.callInThread(generate_block, peer)
+    
+    # Run the peer
+    peer.run()
+        
+    return 0
+
+if __name__ == "__main__" :
+    sys.exit(main(sys.argv))
+
