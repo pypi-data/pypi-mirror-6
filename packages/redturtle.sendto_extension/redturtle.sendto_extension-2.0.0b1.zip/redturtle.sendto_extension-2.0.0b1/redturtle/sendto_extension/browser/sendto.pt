@@ -1,0 +1,197 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:tal="http://xml.zope.org/namespaces/tal"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      metal:use-macro="here/main_template/macros/master"
+      xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+      i18n:domain="redturtle.sendto_extension"
+      xml:lang="en" lang="en">
+
+<metal:head fill-slot="head_slot">
+    <meta name="robots" content="noindex,follow" />
+</metal:head>
+
+<metal:head fill-slot="javascript_head_slot">
+    <metal:field-content use-macro="context/@@rt.zptformfield.autocomplete_lines/javascript_helpers" />
+</metal:head>
+
+<body>
+
+<metal:title fill-slot="content-title">
+    <h1 class="documentFirstHeading"
+        i18n:domain="plone"
+        i18n:translate="heading_send_page_to">Send this page to someone</h1>
+</metal:title>
+
+<metal:description fill-slot="content-description">
+    <div class="documentDescription"
+         i18n:translate="description_send_page_url_to">
+                You can send a link to this page to a know e-mail address filling
+                information below.
+    </div>
+</metal:description>
+
+<metal:content-core fill-slot="content-core">
+    <metal:content-core define-macro="content-core">
+
+    <form id="sendToForm" method="post" action=""
+          tal:define="can_query_members view/can_query_members;
+                      can_query_groups view/can_query_groups;"
+          tal:attributes="action string:${context/absolute_url}/@@${view/__name__}">
+
+        <fieldset id="fieldset-base">
+            <legend i18n:translate="" id="fieldsetlegend-base">Sending information</legend>
+
+            <div class="field" tal:condition="view/can_set_sender_mail">
+                <label for="send_from_address" i18n:domain="plone" i18n:translate="label_send_from">From</label>
+                <span class="fieldRequired" title="Required"
+                      i18n:domain="plone" 
+                      i18n:attributes="title title_required;"
+                      i18n:translate="label_required">(Required)</span>
+                <div class="formHelp"
+                     i18n:domain="plone" i18n:translate="help_send_from">
+                  Your email address.
+                </div>
+                <input type="email"
+                       id="send_from_address"
+                       name="send_from_address"
+                       size="50"
+                       tal:define="member context/@@plone_portal_state/member;"
+                       tal:attributes="value python: request.get('send_from_address', member.getProperty('email',''));"
+                       />
+            </div>
+    
+            <div class="field">
+                <input type="checkbox" id="cc_me" name="cc_me:boolean:default" value="1"
+                       tal:attributes="checked python:request.get('cc_me') and 'checked' or nothing" />
+                <label for="cc_me" i18n:translate="">Add me to recipients</label>
+                <div class="formHelp" i18n:translate="help_cc_me">
+                  Add my address to the list of recipients so I can receive the e-mail
+                </div>
+            </div>
+    
+            <div class="field">
+                <label for="message" i18n:translate="">Message</label>
+                <div class="formHelp" i18n:translate="message_help">
+                  Provide a message to be sent to recipient with the link to this page
+                </div>
+                <textarea id="message" name="message" rows="7"
+                          tal:content="request/message|nothing"></textarea>
+            </div>
+
+			<tal:multiple_recipients condition="view/can_send_to_multiple_recipients">
+	            <div class="field onLeft">
+	                <label for="send_to_address" i18n:translate="">Send to</label>
+	                <div class="formHelp" i18n:translate="">
+	                  Enter a list of email addresses to send this page to
+	                </div>
+	                <textarea id="send_to_address"
+	                       name="send_to_address"
+	                       rows="5"
+	                       tal:content="request/send_to_address|nothing"
+	                       ></textarea>
+	            </div>
+	            <div class="field onRight">
+	                <label for="send_to_address_bcc" i18n:translate="">Send to (using BCC)</label>
+	                <div class="formHelp" i18n:translate="i18n_send_to_address_help_bcc">
+	                  Enter a list of email addresses to send this page to.
+	                  Addresses in this list will not be revealed to other recipients
+	                </div>
+	                <textarea id="send_to_address_bcc"
+	                       name="send_to_address_bcc"
+	                       rows="5"
+	                       tal:content="request/send_to_address_bcc|nothing"
+	                       ></textarea>
+	            </div>
+			</tal:multiple_recipients>
+
+			<tal:single_recipient condition="not:view/can_send_to_multiple_recipients">
+	            <div class="field">
+	                <label for="send_to_address" i18n:translate="">Send to</label>
+	                <div class="formHelp" i18n:translate="">
+	                  Enter the email address to send this page to
+	                </div>
+	                <input type="email"
+	                       id="send_to_address"
+	                       name="send_to_address"
+						   value=""
+						   size="50"
+	                       tal:attributes="value request/send_to_address|nothing"
+	                       />
+	            </div>
+			</tal:single_recipient>
+
+
+            <tal:querymembers condition="can_query_members">
+                <tal:field define="fieldName string:send_to_members;
+                                   source string:${portal_url}/@@query-site-members;
+                                   fieldLabel view/i18n_send_to_members;
+                                   fieldHelp view/i18n_send_to_members_help;
+                                   required python:False;
+                                   listClass string:userItems;
+                                   cssFieldAdditionalClasses string:onLeft;
+                                   elements python:view.load_users_from_req('send_to_members');
+                                   ">
+                    <metal:field-content use-macro="context/@@rt.zptformfield.autocomplete_lines/field" />
+                </tal:field>
+    
+                <tal:field define="fieldName string:send_to_members_bcc;
+                                   source string:${portal_url}/@@query-site-members;
+                                   fieldLabel view/i18n_send_to_members_bcc;
+                                   fieldHelp view/i18n_send_to_members_help_bcc;
+                                   required python:False;
+                                   listClass string:userItems;
+                                   cssFieldAdditionalClasses string:onRight;
+                                   elements python:view.load_users_from_req('send_to_members_bcc');
+                                   ">
+                    <metal:field-content use-macro="context/@@rt.zptformfield.autocomplete_lines/field" />
+                </tal:field>
+            </tal:querymembers>
+
+            <tal:querygroups condition="can_query_groups">
+                <tal:field define="fieldName string:send_to_groups;
+                                   source string:${portal_url}/@@query-groups;
+                                   fieldLabel view/i18n_send_to_groups;
+                                   fieldHelp view/i18n_send_to_groups_help;
+                                   required python:False;
+                                   listClass string:groupItems;
+                                   cssFieldAdditionalClasses string:onLeft;
+                                   elements python:view.load_groups_from_req('send_to_groups');
+                                   ">
+                    <metal:field-content use-macro="context/@@rt.zptformfield.autocomplete_lines/field" />
+                </tal:field>
+    
+                <tal:field define="fieldName string:send_to_groups_bcc;
+                                   source string:${portal_url}/@@query-groups;
+                                   fieldLabel view/i18n_send_to_groups_bcc;
+                                   fieldHelp view/i18n_send_to_groups_help_bcc;
+                                   required python:False;
+                                   listClass string:groupItems;
+                                   cssFieldAdditionalClasses string:onRight;
+                                   elements python:view.load_groups_from_req('send_to_groups_bcc');
+                                   ">
+                    <metal:field-content use-macro="context/@@rt.zptformfield.autocomplete_lines/field" />
+                </tal:field>
+            </tal:querygroups>
+
+            <div class="field captcha" tal:condition="view/capcha_enabled">
+                <label for="recaptcha_response_field" i18n:translate="">Protection from spam</label>
+                <div class="formHelp" i18n:translate="captcha_check_help">
+                  Fill the captcha protection field below, for being sure that you are an human.
+                </div>
+                <tal:block tal:replace="structure context/@@captcha/image_tag"/>
+            </div>
+
+        </fieldset>
+
+        <input type="hidden" name="form.submitted" value="1" />
+        
+        <input type="submit" name="Send" value="Send"
+               i18n:domain="plone" i18n:attributes="value"/>
+
+    </form>
+
+    </metal:content-core>
+</metal:content-core>
+
+</body>
+</html>
