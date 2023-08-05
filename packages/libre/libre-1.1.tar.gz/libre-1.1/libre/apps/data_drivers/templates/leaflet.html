@@ -1,0 +1,121 @@
+{% load staticfiles %}
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>L.I.B.R.E.</title>
+
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+        <!-- Leaflet -->
+        <link rel="stylesheet" href="{% static 'packages/leaflet-0.7/leaflet.css' %}" />
+        {% if template_extra_context.enable_clustering %}
+            <link rel="stylesheet" href="{% static 'packages/leaflet.markercluster.20131204/MarkerCluster.css' %}" />
+            <link rel="stylesheet" href="{% static 'packages/leaflet.markercluster.20131204/MarkerCluster.Default.css' %}" />
+        {% endif %}
+
+    <style>
+        body {
+            padding: 0;
+            margin: 0;
+        }
+        html, body, #map {
+            height: 100%;
+        }
+    </style>
+    {{ header|default:''|safe }}
+    </head>
+    <body>
+        <div id="map"></div>
+
+        <script src="{% static 'packages/leaflet-0.7/leaflet.js' %}"></script>
+
+        {% if template_extra_context.enable_clustering %}
+            <script src="{% static 'packages/leaflet.markercluster.20131204/leaflet.markercluster.js' %}"></script>
+        {% endif %}
+
+        <script>
+            // create a map in the "map" div, set the view to a given place and zoom
+            var map = L.map('map')
+
+            // add an OpenStreetMap tile layer
+            L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="http://osm.org/copyright"></a>OpenStreetMap & contributors'
+            }).addTo(map);
+
+            var markers = {
+                {% for marker in markers.all %}
+                    '{{ marker.slug }}': L.icon({
+                        iconUrl: '{{ marker.icon.compose_base64 }}',
+                        {% if marker.shadow %}
+                            shadowUrl: '{{ marker.shadow.get_absolute_url }}',
+                        {% endif %}
+
+                        //iconSize:     [38, 95], // size of the icon
+                        //shadowSize:   [50, 64], // size of the shadow
+                        iconAnchor:   [{{ marker.icon_anchor_x }}, {{ marker.icon_anchor_y }}], // point of the icon which will correspond to marker's location
+                        shadowAnchor: [{{ marker.shadow_anchor_x }}, {{ marker.shadow_anchor_y }}],  // the same for the shadow
+                        popupAnchor:  [{{ marker.popup_anchor_x }}, {{ marker.popup_anchor_y }}] // point from which the popup should open relative to the iconAnchor
+                    }),
+                {% endfor %}
+            }
+            // Features with custom marker
+            var geoJsonLayer = L.geoJson({{ data|safe }}, {
+                onEachFeature: function (feature, layer) {
+                    layer.bindPopup(feature.properties._popup);
+                },
+                pointToLayer: function (feature, latlng) {
+                    if (feature.properties._marker in markers) {
+                        return L.marker(latlng, {icon: markers[feature.properties._marker]});
+                    } else {
+                        return L.marker(latlng);
+                    }
+                },
+            });
+
+            {% if template_extra_context.enable_clustering %}
+                var clusterLayer = L.markerClusterGroup();
+                clusterLayer.addLayer(geoJsonLayer);
+                map.addLayer(clusterLayer);
+            {% else %}
+                map.addLayer(geoJsonLayer);
+            {% endif %}
+
+            {% if template_extra_context.geometry %}
+                var feature = {
+                    'type': 'Feature',
+                    'geometry': {{ template_extra_context.geometry|safe }},
+                    'properties': {
+                        'style': {
+                            'color': '#004070',
+                            'weight': 4,
+                            'opacity': 1
+                        }
+                    }
+                }
+
+                var fenceLayer = L.geoJson(feature, {
+                     style: function (feature) {
+                         return feature.properties.style;
+                     },
+                 }).addTo(map);
+            {% endif %}
+
+            {% if template_extra_context.latitude and template_extra_context.longitude %}
+                map.setView([{{ template_extra_context.latitude|default:18.30 }}, {{ template_extra_context.longitude|default:-66.60 }}], {{ template_extra_context.zoom_level|default:10 }});
+            {% elif template_extra_context.extents %}
+                map.fitBounds([
+                    [{{ template_extra_context.extents.1 }}, {{ template_extra_context.extents.0 }}],
+                    [{{ template_extra_context.extents.3 }}, {{ template_extra_context.extents.2 }}]
+                ],
+                    {
+                        padding: [7, 7]
+                    }
+                );
+            {% else %}
+                map.locate({setView: true, maxZoom: {{ template_extra_context.zoom_level|default:10 }}});
+            {% endif %}
+        </script>
+    </body>
+</html>
