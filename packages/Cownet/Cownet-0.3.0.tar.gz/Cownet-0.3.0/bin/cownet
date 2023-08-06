@@ -1,0 +1,114 @@
+#!/usr/bin/python
+
+# Imports
+import os, re, sys, argparse, time
+import fcntl, termios, struct
+from subprocess import check_output
+from subprocess import call
+
+# The brains
+class Cownet:
+	light = False
+	def __init__(self, interface, delay, light):
+		self.interface = interface
+		self.delay = delay
+		self.light = light
+		self.width = self.terminal_size() - 8 
+
+		while(True):
+			self.loadNetData()
+			self.cowSayWhat()
+			time.sleep(self.delay)
+
+	def terminal_size(self):
+		h, w, hp, wp = struct.unpack('HHHH',
+			fcntl.ioctl(0, termios.TIOCGWINSZ,
+			struct.pack('HHHH', 0, 0, 0, 0)))
+		return w
+
+	def loadNetData(self):
+		# Get the response from netstat and break it up by row
+		ns =  check_output(["netstat", "-ib"])
+		ns = ns.split('\n')
+
+		# Look through each row
+		for row in ns:
+			# Clean up and break up each row further
+			row = re.sub('\s+', ' ', row).strip()
+			row = row.split(' ')
+
+			# Check for the matching interface, and save the data
+			if row[0] == self.interface:
+				self.inBytes = int(row[6])
+				self.outBytes = int(row[9])
+				break
+
+		# Build string and pass to cowsay
+		if hasattr(self, 'inBytes') and hasattr(self, 'outBytes'):
+			self.say = "Received " + self.sizeof_fmt(self.inBytes) + " / Sent " + self.sizeof_fmt(self.outBytes)
+		else:
+			self.say = "Were having trouble reading " + self.interface + ", are you sure thats the correct interface?"
+
+	def printCenter(self, txt):
+		print(str.center(txt, self.width))
+
+	def cowSayWhat(self):
+
+		if self.light == False:
+			os.system('clear')
+			call(["figlet", "-w", str(self.width), "-c", "cownet"])
+			self.printCenter("____________________________________")
+			self.printCenter("< " + self.say + " >")
+			self.printCenter("------------------------------------")
+			self.printCenter("    \   ^__^        ")
+			self.printCenter("     \  (oo)\_______")
+			self.printCenter("            (__)\       )\/\\")
+			self.printCenter("                ||----w |")
+			self.printCenter("                ||     ||")
+		else:
+			print(self.say)
+
+	# Turn raw numbers to user friendly strings
+	def sizeof_fmt(self, num):
+		for x in ['bytes','KB','MB','GB','TB']:
+			if num < 1024.0:
+				return "%3.1f %s" % (num, x)
+			num /= 1024.0
+
+# The main class to handle threads, and inputs
+class Main:
+	# Setup some default varialbes
+	interface = "en1"
+	delay = 30.0
+	version = "0.3.0"
+	light = False
+
+	def __init__(self, argv):
+		parser = argparse.ArgumentParser(prog='Cownet')
+		parser.add_argument("-l", "--light", help="The low calorie version", action='store_true')
+		parser.add_argument("-i", "--interface", type=str, help="Change the network interface (defaults to en1)")
+		parser.add_argument("-d", "--delay", type=float, help="Change the frequency we check your usage data (defaults to 30 seconds)")
+		parser.add_argument("-v", '--version', action='version', version='%(prog)s 0.3.0')
+
+		args = parser.parse_args()
+		if args.delay:
+			self.delay = float(args.delay)
+		if args.interface:
+			self.interface = args.interface
+		if args.light:
+			self.light = True
+
+		if self.light == False:
+			print 'Cownet' + self.version
+			print 'https://github.com/obihann/cownet/'
+			print 'This tool is protected by the GNU General Public License v2.'
+			print 'Copyright Jeffrey Hann 2013'
+			print '------------------------------------------------------------'
+
+		try:
+			self.net = Cownet(self.interface, self.delay, self.light)
+		except KeyboardInterrupt:
+			sys.exit()
+
+if __name__ == "__main__":
+	main = Main(sys.argv[1:])
