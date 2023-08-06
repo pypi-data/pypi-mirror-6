@@ -1,0 +1,62 @@
+# -*- coding: utf-8 -*-
+from south.utils import datetime_utils as datetime
+from south.db import db
+from south.v2 import SchemaMigration
+from django.db import models
+
+
+class Migration(SchemaMigration):
+
+    def forwards(self, orm):
+        # Adding model 'Affiliation'
+        db.create_table(u'agency_affiliation', (
+            (u'id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
+            ('person', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['agency.Person'], null=True, blank=True)),
+            ('organization', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['agency.Organization'], null=True, blank=True)),
+            ('start_date', self.gf('django.db.models.fields.DateField')(null=True, blank=True)),
+            ('end_date', self.gf('django.db.models.fields.DateField')(null=True, blank=True)),
+        ))
+        db.send_create_signal(u'agency', ['Affiliation'])
+
+
+    def backwards(self, orm):
+        # Deleting model 'Affiliation'
+        db.delete_table(u'agency_affiliation')
+
+
+    models = {
+        u'agency.affiliation': {
+            'Meta': {'object_name': 'Affiliation'},
+            'end_date': ('django.db.models.fields.DateField', [], {'null': 'True', 'blank': 'True'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'organization': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['agency.Organization']", 'null': 'True', 'blank': 'True'}),
+            'person': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['agency.Person']", 'null': 'True', 'blank': 'True'}),
+            'start_date': ('django.db.models.fields.DateField', [], {'null': 'True', 'blank': 'True'})
+        },
+        u'agency.agent': {
+            'Meta': {'object_name': 'Agent'},
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'polymorphic_ctype': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "u'polymorphic_agency.agent_set'", 'null': 'True', 'to': u"orm['contenttypes.ContentType']"})
+        },
+        u'agency.organization': {
+            'Meta': {'object_name': 'Organization', '_ormbases': [u'agency.Agent']},
+            u'agent_ptr': ('django.db.models.fields.related.OneToOneField', [], {'to': u"orm['agency.Agent']", 'unique': 'True', 'primary_key': 'True'}),
+            'name': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '200'})
+        },
+        u'agency.person': {
+            'Meta': {'object_name': 'Person', '_ormbases': [u'agency.Agent']},
+            u'agent_ptr': ('django.db.models.fields.related.OneToOneField', [], {'to': u"orm['agency.Agent']", 'unique': 'True', 'primary_key': 'True'}),
+            'first_name': ('django.db.models.fields.CharField', [], {'max_length': '200', 'null': 'True', 'blank': 'True'}),
+            'last_name': ('django.db.models.fields.CharField', [], {'max_length': '200', 'null': 'True', 'blank': 'True'}),
+            'middle_name': ('django.db.models.fields.CharField', [], {'max_length': '200', 'null': 'True', 'blank': 'True'})
+        },
+        u'contenttypes.contenttype': {
+            'Meta': {'ordering': "('name',)", 'unique_together': "(('app_label', 'model'),)", 'object_name': 'ContentType', 'db_table': "'django_content_type'"},
+            'app_label': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'model': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '100'})
+        }
+    }
+
+    complete_apps = ['agency']
