@@ -1,0 +1,204 @@
+Metadata-Version: 1.1
+Name: dict2colander
+Version: 0.2
+Summary: Dictionary to Colander schema conversion library
+Home-page: https://bitbucket.org/pfacka/dict2colander
+Author: Peter Facka
+Author-email: pfacka@binaryparadise.com
+License: MIT Licence (http://opensource.org/licenses/MIT)
+Description: dict2colander
+        =============
+        
+        *Convert python dict (YAML, JSON) to colander schema.*
+        
+        `Colander <http://docs.pylonsproject.org/projects/colander/en/latest/>`_
+        is library, which enables you to validate and convert YAML, JSON
+        and HTML form data. Colander schema as it is could be defined only
+        in Python declaratively for example like this:
+        
+        
+        
+        .. code-block:: python
+        
+            import colander
+            
+            class Person(colander.MappingSchema):
+                name = colander.SchemaNode(colander.String())
+                age = colander.SchemaNode(colander.Int(),
+                                          validator=colander.Range(0, 200))
+            
+                @colander.instantiate()
+                class phones(colander.SequenceSchema):
+            
+                    @colander.instantiate()
+                    class phone(colander.MappingSchema):
+                        location = colander.SchemaNode(colander.String(),
+                                             validator=colander.OneOf(['home', 'work']))
+                        number = colander.SchemaNode(colander.String())
+        
+        With dict2colander you can define the same colander schema in
+        dictionary and convert it to colader.MappingSchema object.
+        
+        Instalation
+        -----------
+        
+        You can install dict2colander from
+        `Python Package Index <https://pypi.python.org/pypi/dict2colander/0.1>`_
+        like this:
+        
+        
+        
+        .. code-block:: shell
+        
+            pip install dict2colander
+        
+        Usage
+        -----
+        
+        
+        
+        .. code-block:: python
+        
+            from dict2colander import dict2colander
+            
+            schema_dict = {
+                'type': 'Mapping',
+                'name': 'person',
+                'subnodes': [
+                    {'type': 'String', 'name': 'name'},
+            
+                    {'type': 'Integer', 'name': 'age',
+                     'validators':
+                        {'Range': {'args': ('0', '200')}}},
+            
+                    {'type': 'Sequence',
+                     'name': 'phones',
+                     'subnodes': [
+            
+                         {'type': 'Mapping', 'name': 'phone',
+                          'subnodes': [
+            
+                              {'type': 'String', 'name': 'location',
+                               'validators':
+                                 {'OneOf': {'args': (['home', 'work'],)}}},
+            
+                              {'type': 'String', 'name': 'number'}
+            
+                          ]}]},
+                ]
+            }
+            
+            schema = dict2colander(schema_dict)
+            data = {
+                     'name': 'keith',
+                     'age': '20',
+                     'friends':[('1', 'jim'),('2', 'bob'), ('3', 'joe'), ('4', 'fred')],
+                     'phones':[{'location':'home', 'number':'555-1212'},
+                               {'location':'work', 'number':'555-8989'},],
+                     }
+            
+            serialized_data = schema.deserialize(data)
+            print serialized_data
+        
+        Dict2colander is intended to make possible to read colander schemas
+        from YAML or JSON format. So here is schema from previous example
+        written in YAML:
+        
+        
+        
+        .. code-block:: yaml
+        
+            ---
+            name: person
+            type: Mapping
+            
+            subnodes:
+                - name: name
+                  type: String
+            
+                - name: age
+                  type: Integer
+                  validators:
+                    Range:
+                        args: ['0', '200']
+            
+                - name: phones
+                  type: Sequence
+                  subnodes: 
+                    - name: phone
+                      type: Mapping
+                      subnodes:
+                        - name: location
+                          type: String
+                          validators:
+                            OneOf:
+                                args: [[home, work]]
+            
+                        - name: number
+                          type: String
+        
+        Note that *Range* validator has arguments defined as *Strings* not
+        *Integers* although that field *age* is of type *Integer*.
+        
+        Here are data to deserialize in YAML format from first example:
+        
+        
+        
+        .. code-block:: yaml
+        
+            ---
+            name: keith
+            age: 20
+            friends:
+                - [1, jim]
+                - [2, bob]
+                - [3, joe]
+                - [4, fred]
+            
+            phones:
+                - location: home
+                  number: 555-1212
+            
+                - location: work
+                  number: 555-8989
+        
+        Here is example how YAML data are deserialized with schema defined
+        in YAML document.
+        
+        
+        
+        .. code-block:: python
+        
+            import yaml
+            import dict2colander
+            
+            def deserialize(yaml_doc, yaml_schema):
+                mapping_schema = dict2colander.dict2colander(yaml_schema)
+                return mapping_schema.deserialize(yaml_doc)
+            
+            f = open('doc.yaml')
+            doc = yaml.load(f)
+            f.close()
+            
+            f = open('schema.yaml')
+            schema = yaml.load(f)
+            f.close()
+            
+            dict_doc = deserialize(doc, schema)
+            print dict_doc
+        
+        
+        
+Keywords: schema validation dictionary Colander YAML JSON
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Web Environment
+Classifier: Intended Audience :: Developers
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: POSIX
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Requires: colander(>=1.0)
+Provides: dict2colander (0.2)
