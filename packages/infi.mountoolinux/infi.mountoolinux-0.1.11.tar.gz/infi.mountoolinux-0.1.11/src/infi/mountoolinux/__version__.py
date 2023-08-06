@@ -1,0 +1,10 @@
+__version__ = "0.1.11"
+__git_commiter_name__ = "Arnon Yaari"
+__git_commiter_email__ = "arnony@infinidat.com"
+__git_branch__ = '(detached from v0.1.11)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '66dfd31942666ed74b474163b2c06d75146ae71e'
+__git_head_subject__ = 'change bunch->munch and add dependency'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
