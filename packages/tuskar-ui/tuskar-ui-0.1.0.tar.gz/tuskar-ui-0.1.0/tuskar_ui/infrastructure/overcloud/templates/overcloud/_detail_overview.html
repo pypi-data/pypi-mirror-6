@@ -1,0 +1,194 @@
+{% load i18n %}
+{% load url from future%}
+
+{% if overcloud.is_deploying or overcloud.is_failed %}
+  {% if overcloud.is_deploying %}
+    <div class="alert alert-info">
+      <div class="row-fluid">
+        <div class="span2">
+          <strong>Deploying...</strong>
+          <div class="progress progress-striped active progress-info">
+            <div class="bar bar-info" style="width:{{ progress }}%"></div>
+          </div>
+        </div>
+  {% else %}
+    <div class="alert alert-error">
+      <div class="row-fluid">
+        <div class="span2">
+          <strong>Deployment failed</strong>
+          <div class="progress progress-striped progress-danger">
+            <div class="bar bar-info" style="width:{{ progress }}%"></div>
+          </div>
+        </div>
+  {% endif %}
+    <div class="span10">
+      {% if last_failed_events %}
+        <strong>{% trans "Last failed events:" %}</strong>
+        {% for event in last_failed_events %}
+        <div>
+          <dl>
+            <dt>{% trans "Timestamp" %}</dt>
+            <dd><time datetime="{{ event.event_time }}">{{ event.event_time }}</time></dd>
+            <dt>{% trans "Resource Name" %}</dt>
+            <dd>{{ event.resource_name }}</dd>
+            <dt>{% trans "Status" %}</dt>
+            <dd>{{ event.resource_status }}</dd>
+            <dt>{% trans "Reason" %}</dt>
+            <dd>{{ event.resource_status_reason }}</dd>
+          </dl>
+        </div>
+        {% endfor %}
+      {% endif %}
+      <a href="?tab=detail__log" data-toggle="tab" data-target="#detail__log" class="pull-right">See full log</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if not dashboard_urls and not overcloud.is_deploying and not overcloud.is_failed %}
+<div class="row-fluid">
+  <div class="span8">
+    <p>Your OpenStack Deployment has been successfully deployed. It needs to be initialized before you will be able to use it.
+    <p/>
+
+    <button type="button" class="btn btn-primary" data-toggle="collapse" data-target="#demo">
+    Initialize
+    </button>
+    <div id="demo" class="collapse">
+      <p>You need to run the below commands on the machine where you have tripleo source code and
+         direct access through ssh to control node ({{overcloud.keystone_ip}}).
+      </p>
+      <pre>
+  export TRIPLEO_ROOT=~/tripleo
+  cd $TRIPLEO_ROOT
+
+  # Be careful to source tripleorc here, some variables are rewritten below
+  source $TRIPLEO_ROOT/tripleorc
+
+  export OVERCLOUD_IP={{overcloud.keystone_ip}}
+
+  export OVERCLOUD_ADMIN_TOKEN={{overcloud.attributes.AdminToken}}
+  export OVERCLOUD_ADMIN_PASSWORD={{overcloud.attributes.AdminPassword}}
+  export OVERCLOUD_CEILOMETER_PASSWORD={{overcloud.attributes.CeilometerPassword}}
+  export OVERCLOUD_CINDER_PASSWORD={{overcloud.attributes.CinderPassword}}
+  export OVERCLOUD_GLANCE_PASSWORD={{overcloud.attributes.GlancePassword}}
+  export OVERCLOUD_HEAT_PASSWORD={{overcloud.attributes.HeatPassword}}
+  export OVERCLOUD_NEUTRON_PASSWORD={{overcloud.attributes.NeutronPassword}}
+  export OVERCLOUD_NOVA_PASSWORD={{overcloud.attributes.NovaPassword}}
+  export OVERCLOUD_SWIFT_PASSWORD={{overcloud.attributes.SwiftPassword}}
+  export OVERCLOUD_SWIFT_HASH={{overcloud.attributes.SwiftHashSuffix}}
+
+  OVERCLOUD_ENDPOINT="http://$OVERCLOUD_IP:5000/v2.0"
+  NEW_JSON=$(jq '.overcloud.password="'${OVERCLOUD_ADMIN_PASSWORD}'" | .overcloud.endpoint="'${OVERCLOUD_ENDPOINT}'" | .overcloud.endpointhost="'${OVERCLOUD_IP}'"' $TE_DATAFILE)
+  echo $NEW_JSON > $TE_DATAFILE
+
+  source ./tripleo-incubator/overcloudrc
+
+  init-keystone -p $OVERCLOUD_ADMIN_PASSWORD $OVERCLOUD_ADMIN_TOKEN \
+      $OVERCLOUD_IP admin@example.com heat-admin@$OVERCLOUD_IP \
+      ${SSLBASE:+--ssl $PUBLIC_API_URL}
+  setup-endpoints $OVERCLOUD_IP --cinder-password $OVERCLOUD_CINDER_PASSWORD \
+      --glance-password $OVERCLOUD_GLANCE_PASSWORD \
+      --heat-password $OVERCLOUD_HEAT_PASSWORD \
+      --neutron-password $OVERCLOUD_NEUTRON_PASSWORD \
+      --nova-password $OVERCLOUD_NOVA_PASSWORD \
+      --swift-password $OVERCLOUD_SWIFT_PASSWORD \
+      --enable-horizon \
+      ${SSLBASE:+--ssl $PUBLIC_API_URL}
+  keystone role-create --name heat_stack_user
+      </pre>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="row-fluid">
+  <div class="span8">
+    <h2>{% trans "Deployment Roles" %}</h2>
+    <div class="widget">
+      <table class="table">
+      {% for role in roles %}
+        <tr>
+          <td><a
+              href="{% url 'horizon:infrastructure:overcloud:role' overcloud.id role.role.id %}"
+              >{{ role.name }} <span class="badge">({{ role.total_node_count }})</span></a>
+          </td>
+          <td>
+          {% if not role.total_node_count %}
+            <div class="muted">
+              <i class="icon-minus"></i>
+              {% trans "No node" %}
+            </div>
+          {% else %}
+            {% if role.error_node_count %}
+              <div class="text-error">
+                <i class="icon-exclamation-sign"></i>
+            {% elif role.deploying_node_count or role.waiting_node_count %}
+              <div class="text-warning">
+                <i class="icon-cog"></i>
+            {% else %}
+              <div class="text-success">
+                <i class="icon-ok"></i>
+            {% endif %}
+            {% if role.total_node_count == role.deployed_node_count %}
+              {% trans "All nodes are running" %}
+            {% else %}
+              {{ role.deployed_node_count }} {% trans "deployed" %} /
+              {{ role.deploying_node_count }} {% trans "deploying" %} /
+              {{ role.waiting_node_count }} {% trans "waiting" %}
+              {% if role.error_node_count %}
+                <span style="color: red">
+                  / {{ role.error_node_count }} {% trans "error" %}
+                </span>
+              {% endif %}
+            {% endif %}
+              </div>
+          {% endif %}
+          </td>
+          <td>
+            {% if role.capacity %}
+            <div class="row-fluid">
+              <div class="span6"><p>{{ role.capacity }}%</p></div>
+              <div class="span6">
+                <div class="progress active progress-info">
+                  <div class="bar bar-info" style="width:{{ role.capacity }}%"></div>
+                </div>
+              </div>
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </table>
+    </div>
+  </div>
+  <div class="span4">
+    <div class="widget">
+      <h2>{% trans "Deployment Role Distribution" %}</h2>
+      <div class="d3_pie_chart_distribution" data-used='{% for role in roles %}{{ role.name }}={{ role.deployed_node_count|default:"0" }}{% if not forloop.last %}|{% endif %}{% endfor %}'></div>
+    </div>
+    <div class="clear"></div>
+    <div class="widget">
+      <h2>{% trans "Horizon UI Connection" %}</h2>
+      {% if dashboard_urls %}
+        {% for dashboard_url in dashboard_urls %}
+          <p>
+            <a href="{{ dashboard_url }}">
+              {% trans "Horizon UI" %} ({{ dashboard_url }}).
+            </a>
+          </p>
+        {% endfor %}
+      {% else %}
+         You need to initialize your OpenStack Deployment first.
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script type="text/javascript">
+(window.$ || window.addHorizonLoadEvent)(function () {
+  $('div > a[data-target="#detail__log"]').click(function () {
+     $('li > a[data-target="#detail__log"]').tab('show');
+  });
+});
+</script>

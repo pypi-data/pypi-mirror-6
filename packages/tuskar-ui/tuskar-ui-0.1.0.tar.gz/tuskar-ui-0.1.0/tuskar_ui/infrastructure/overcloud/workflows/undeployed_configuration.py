@@ -1,0 +1,70 @@
+# -*- coding: utf8 -*-
+#
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
+import django.forms
+from django.utils.translation import ugettext_lazy as _
+import horizon.workflows
+
+from tuskar_ui import api
+from tuskar_ui import utils
+
+
+def make_field(name, Type, NoEcho, Default, Description, AllowedValues=None,
+               **kwargs):
+    """Create a form field using the parameters from a Heat template."""
+
+    label = utils.de_camel_case(name)
+    Widget = django.forms.TextInput
+    attrs = {}
+    widget_kwargs = {}
+    if Default == 'unset':
+        attrs['placeholder'] = _("auto-generate")
+    if Type == 'String':
+        Field = django.forms.CharField
+    elif Type == 'Integer':
+        Field = django.forms.IntegerField
+    else:
+        raise ValueError("Unsupported parameter type in Heat template.")
+    if NoEcho == 'true':
+        Widget = django.forms.PasswordInput
+        widget_kwargs['render_value'] = True
+    if AllowedValues is not None:
+        return django.forms.ChoiceField(initial=Default, choices=[
+            (value, value) for value in AllowedValues
+        ], help_text=Description, required=False, label=label)
+    return Field(widget=Widget(attrs=attrs, **widget_kwargs), initial=Default,
+                 help_text=Description, required=False, label=label)
+
+
+class Action(horizon.workflows.Action):
+    class Meta:
+        slug = 'deployed_configuration'
+        name = _("Configuration")
+
+    def __init__(self, request, *args, **kwargs):
+        super(Action, self).__init__(request, *args, **kwargs)
+        parameters = api.Overcloud.template_parameters(request).items()
+        parameters.sort()
+
+        for name, data in parameters:
+            self.fields[name] = make_field(name, **data)
+
+
+class Step(horizon.workflows.Step):
+    action_class = Action
+    contributes = ('configuration',)
+    template_name = 'infrastructure/overcloud/undeployed_configuration.html'
+
+    def contribute(self, data, context):
+        context['configuration'] = data
+        return context
