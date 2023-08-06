@@ -1,0 +1,10 @@
+__version__ = "0.2.10"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.2.10)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '604eb1978ae867c482f8b86d8b5e8f88ee2127c0'
+__git_head_subject__ = 'Finished release v0.2.10.'
+__git_head_message__ = '* release/v0.2.10:\n  MultipathDevice\n  STORAGEMODEL-268 MultipathFrameworkModel.find_multipath_device_by_block_access_path now supports lookup by /dev/dm-X and not just by /dev/mapper/mpathY\n  buildout.cfg: adding setuptools to requirements\n  buildout.cfg: remove distribute from requirements\n  get_infinidat_block_devices_and_controllers__mapped_to_lun0\n  update dependencies'
+__git_dirty_diff__ = ''
