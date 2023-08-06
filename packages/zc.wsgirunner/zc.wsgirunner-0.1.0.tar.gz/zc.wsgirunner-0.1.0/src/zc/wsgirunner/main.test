@@ -1,0 +1,144 @@
+We have a script named 'run-wsgi':
+
+    >>> import pkg_resources
+    >>> run = pkg_resources.load_entry_point(
+    ...     'zc.wsgirunner', 'console_scripts', 'run-wsgi')
+
+
+We have a configuration::
+
+  [DEFAULT]
+  a = 1
+
+  [app:main]
+  use = call:zc.wsgirunner.tests:App
+  number = 1
+  a = 2
+
+  [app:two]
+  use = call:zc.wsgirunner.tests:App
+  number = 2
+
+  [server:main]
+  use = call:zc.wsgirunner.tests:Server
+  port = 8080
+
+  [server:three]
+  use = call:zc.wsgirunner.tests:Server
+  port = 8083
+
+.. -> src
+
+  >>> with open('config', 'w') as f:
+  ...     _ = f.write(src)
+
+Now now now we can run the wsgi application.
+
+We're using test applications and servers, so we're not actually
+running anything. :)
+
+    >>> run('config'.split())
+    Server(['__file__', 'a', 'here'], {'port': '8080'})
+    serving
+    App(['__file__', 'a', 'here'], {'number': '1'})
+
+By default, we run the main entry points.
+
+We can override this:
+
+    >>> run('config -atwo -sthree'.split())
+    Server(['__file__', 'a', 'here'], {'port': '8083'})
+    serving
+    App(['__file__', 'a', 'here'], {'number': '2'})
+
+For the sake of older Pythons, the check interval is increased:
+
+    >>> import sys
+    >>> sys.getcheckinterval()
+    1000
+
+Your configuration can contain process-level configuration, as well as
+logging configuration::
+
+  [DEFAULT]
+  global = dynamics
+
+  [app:main]
+  use = call:zc.wsgirunner.tests:App
+  number = 1
+
+  [server:main]
+  use = call:zc.wsgirunner.tests:Server
+  port = 8080
+
+  [logging:main]
+  level = INFO
+
+  [logging:zconfig]
+  config =
+    <logger>
+       level INFO
+    </logger>
+
+  [configuration:main]
+  use = egg:zc.wsgirunner
+  parm = 42
+
+  [configuration:beta]
+  use = egg:zc.wsgirunner#beta
+  parm = 43
+
+  [configuration:theta]
+  use = call:zc.wsgirunner.tests:test_config3
+  parm = 33
+
+
+.. -> src
+
+    >>> with open('config', 'w') as f:
+    ...     _ = f.write(src)
+
+Now, without options, our default configuration entry point will be called
+
+    >>> run('config'.split())
+    test_config1(['global'], {'parm': '42'})
+    Server(['__file__', 'global', 'here'], {'port': '8080'})
+    serving
+    App(['__file__', 'global', 'here'], {'number': '1'})
+
+And ``logging.basicConfig`` is called:
+
+    >>> import logging
+    >>> logging.basicConfig.call_args
+    call(level=20)
+    >>> logging.basicConfig.reset_mock()
+
+But ``ZConfig.configureLoggers`` wasn't:
+
+    >>> import ZConfig
+    >>> ZConfig.configureLoggers.call_args
+
+Specify the alternate entry point:
+
+    >>> run('config -c beta'.split())
+    test_config2(['global'], {'parm': '43'})
+    Server(['__file__', 'global', 'here'], {'port': '8080'})
+    serving
+    App(['__file__', 'global', 'here'], {'number': '1'})
+
+    >>> logging.basicConfig.call_args
+    call(level=20)
+    >>> logging.basicConfig.reset_mock()
+    >>> ZConfig.configureLoggers.call_args
+
+Finally, specify a module expression and a zonfig-based logger:
+
+    >>> run('config -c theta -l zconfig'.split())
+    test_config3(['global'], {'parm': '33'})
+    Server(['__file__', 'global', 'here'], {'port': '8080'})
+    serving
+    App(['__file__', 'global', 'here'], {'number': '1'})
+
+    >>> logging.basicConfig.call_args
+    >>> ZConfig.configureLoggers.call_args
+    call('\n<logger>\nlevel INFO\n</logger>')
