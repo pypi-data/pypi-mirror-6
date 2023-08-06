@@ -1,0 +1,124 @@
+Metadata-Version: 1.0
+Name: cubicweb-ner
+Version: 0.1.0
+Summary: Cube for named entities source and recognition (NER).
+Home-page: http://www.cubicweb.org/project/cubicweb-ner
+Author: LOGILAB S.A. (Paris, FRANCE)
+Author-email: contact@logilab.fr
+License: LGPL
+Description: Summary
+        -------
+        Cube for named entities source and recognition (NER).
+        
+        
+        This cube provides:
+        
+         - the notion of NerSource (i.e. Named Entities Source), e.g. dbpedia or dbpedia-en (for
+           Dbpedia in english).
+        
+         - the notion of NerEntry, which is a token/word/entry that could be recognized.
+           Basically it requires a "label" and a "cwuri", but an "unormalize_label"
+           could be given for quicker match, a "weight" for disambiguation or
+           a "lang" for sorting. It should be related to a NerSource.
+        
+         - the notion of NerProcess, which is an entity type that stores the parameters
+           for a Named Entities Recognition: a "name", an "host" (appid or url of a sparql endpoint),
+           a request (RQL or SPARQL, with the "token" key for substitution), a type ('rql' or 'sparql')
+           for now, and a lang (for sorting).
+        
+        
+        Basically a lexic could be defined (NerSource), that contains entries (NerEntry).
+        Thus processes (NerProcess) could be defined in other applications to retrieve these entries
+        in some content.
+        
+        
+        
+        Installation
+        ------------
+        
+        Creation of the instance:
+        
+         * Create an instance using: cubicweb-ctl create ner <name-of-instance>
+        
+         * Create the instance's database using: cubicweb-ctl db-create <name-of-instance>
+        
+        
+        Creating entities
+        -----------------
+        
+        For creating a NerSource (in a cw shell):
+        
+          session.create_entity('NerSource', name=<name of the source>)
+        
+        E.g.:
+        
+          session.create_entity('NerSource', name=u"dbpedia-38-en")
+        
+        
+        For creating a simple NerEntry (in a cw shell):
+        
+          session.create_entity('NerEntry', label=<label of the entry>, cwuri=<uri of the entry>)
+        
+        E.g.:
+        
+          session.create_entity('NerEntry', label=u"Barack Obama", cwuri=u"http://dbpedia.org/page/Barack_Obama"
+                                            ner_source=123)
+        
+        or :
+        
+          session.create_entity('NerEntry', label=u"Barack Obama", cwuri=u"http://dbpedia.org/page/Barack_Obama",
+                                            ner_source=123, unormalize_label=u"barack obama", lang=u'fr', weight=1)
+        
+        
+        For creating a NerProcess, probably in another application (in a cw shell):
+        
+            session.create_entity('NerProcess', name=<name of the process>, host=<name/url of the host>,
+                                                type=<rql or sparql>, request=<rql or sparql query with %(token)s>)
+        
+        E.g.:
+        
+            session.create_entity('NerProcess', name=u'dbpedia38-en', host=u'ner',
+                                                type=u'rql', lang=u'en',
+                                                request=u'Any U WHERE X label %(token)s, X cwuri U, '
+                                                         'X ner_source NS, NS name "dbpedia38-en"')
+        
+        or :
+        
+            session.create_entity('NerProcess', name=u'dbpedia-sparql', host=u'http://dbpedia.org/sparql',
+                                                type=u'sparql', lang=u'en',
+                                                request=u'''SELECT ?uri
+        					            WHERE{
+         						    ?uri rdfs:label "%(w)s"@en .
+         						    ?uri rdf:type ?type
+         						    FILTER(?type IN (dbpedia-owl:Agent, dbpedia-owl:Event,
+         						    dbpedia-owl:MeanOfTransportation,
+        						    dbpedia-owl:Place,
+         						    dbpedia-owl:TopicalConcept))}''')
+        
+        Commands
+        --------
+        
+        A command "NerImportDbpedia" exists to import the labels from a dbpedia dump:
+        
+         * Download the 'labels_en.nt' from Dbpedia (e.g. http://wiki.dbpedia.org/Downloads38),
+           in the Dataset "Titles". WARNING ! You should download the NT file.
+        
+         * Decompress the file
+        
+         * Use the command:
+        
+               cubicweb-ctl ner-import-dbpedia <instance name> labels_en.nt --name=<name of the source>
+        
+          where <name of the source> could be "dbpedia38-en" for example.
+        
+        
+        Adapters
+        --------
+        
+        The "INamedEntitiesContentAbstract" adapter could be use to imply that an etype
+        has a content where Named Entities Recognition could be applied.
+Platform: UNKNOWN
+Classifier: Environment :: Web Environment
+Classifier: Framework :: CubicWeb
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: JavaScript
