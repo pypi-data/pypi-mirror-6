@@ -1,0 +1,2405 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-US" lang="en-US">
+
+<!-- Last Modified:             $Date$ -->
+<!-- Document Version Number:   $Revision$            -->
+
+<head>
+<title>
+PyRXP 1.08
+</title>
+</head>
+
+<body>
+
+<h1>PyRXP 1.08</h1>
+<h2>User Documentation</h2>
+
+<h1>1. Introduction</h1>
+
+<h2>1.1  Who is this document aimed at?</h2>
+
+<p>
+This document is aimed at anyone who wants to know how to use the pyRXP parser extension from
+Python. It's assumed that you know how to use the Python programming
+language and understand its terminology. We make no attempt to teach XML in this
+document, so you should already know the basics (what a DTD is, some of
+the syntax etc.)
+</p>
+
+<h2>1.2    What is PyRXP?</h2>
+
+<p>
+PyRXP is a Python language wrapper around the excellent RXP parser.
+RXP is a validating namespace-aware XML parser written in C. Together,
+they provide the fastest XML-parsing framework available to Python
+programmers today.
+</p>
+
+<p>
+RXP was written by Richard Tobin at the Language Technology Group, 
+Human Communication Research Centre, University of Edinburgh.
+PyRXP was written by Robin Becker at ReportLab.
+</p>
+
+<p>
+This documentation describes pyRXP-1.08 being used with RXP 1.4.0, as
+well as ReportLab's emerging XML toolkit which uses it.
+</p>
+
+<h2>1.3    License terms</h2>
+
+<p>
+Edinburgh University have released RXP under the GPL.  This is
+generally fine for in-house or open-source use.  But if you want to
+use it in a closed-source commercial product, you may need to
+negotiate a separate license with them.  By contrast, most Python
+software uses a less restrictive license; Python has its own license,
+and ReportLab uses the FreeBSD license for our PDF Toolkit, which
+means you CAN use it in commercial products.
+</p>
+
+<p>
+
+We licensed RXP for our commercial products, but are releasing pyRXP
+under the GPL.  If you want to use pyRXP for a commercial product, you
+need to purchase a license.  We are authorised resellers for RXP and
+can sell you a commercial license to use it in your own products.
+PyRXP is ideal for embedded use being lightweight, fast and pythonic.
+
+</p>
+
+<p>
+However, the XML framework ReportLab is using and building will be
+under our own license.  It predates pyRXP and can be made to work off any 
+XML parser (such as expat), and we hope to produce something which can go into
+the Python distribution one day.
+</p>
+
+<h2>1.4 Why another XML toolkit?</h2>
+
+<p>
+This grew out of real world needs which others in the Python community
+may share.  ReportLab make tools which read in some kind of data and
+make PDF reports.  One common input format these days is XML.  It's
+very convenient to express the interface to a system as an XML file.
+Some other system might send us some XML with tags like &lt;invoice&gt; and
+&lt;customer&gt;, and we turn these into nice looking invoices.
+</p>
+
+<p>
+Also, we have a commercial product called Report Markup Language -
+we sell a converter to turn RML files into PDF.  This has to parse
+XML, and do it fast and accurately.
+</p>
+
+<p>
+Typically we want to get this XML into memory as fast as possible.
+And, if the performance penalties are not too great, we'd like the
+option to validate it as well.  Validation is useful because we can
+stop bad data at the point of input; if someone else sends our system
+an XML 'invoice packet' which is not valid according to the agreed
+DTD, and gets a validation error, they will know what's going on.
+This is a lot more helpful than getting a strange and unrelated-sounding
+error during the formatting stage.
+</p>
+
+<p>
+We tried to use all the parsers we could find.  We found that almost
+all of them were constructing large object models in Python code,
+which took a long time and a lot of memory.  Even the fastest C-based
+parser, expat (which was not yet a standard part of Python at the
+time) calls back into Python code on every start and end tag, which
+defeats most of the benefit.  Aaron Watters of ReportLab sat down for
+a couple of days in 2000 and produced his own parser, rparsexml, which
+uses string.find and got pretty much the same speed as pyexpat.  We
+evolved our own representation of a tree in memory; which became
+the cornerstone of our approach; and when we found RXP we found it
+easy to make a wrapper around it to produce the "tuple tree".
+</p>
+
+<p>
+We have now reached the point in our internal bag-of-tools where XML
+parsing is a standard component, running entirely at C-like speeds,
+and we don't even think much about it any more.  Which means we must
+be doing something right and it's time to share it :-)
+</p>
+
+<h2>1.5    Design Goals</h2>
+
+
+<p>
+This is part of an XML framework which we will polish up and release
+over time as we find the time to document it.  The general components
+are:
+</p>
+
+<ul>
+<li>A standard in-memory representation of an XML document (the <i>tuple tree</i> below)</li>
+<li>Various parsers which can produce this - principally pyRXP, but expat wrapping is possible</li>
+<li>A 'lazy wrapper' around this which gives a very friendly Pythonic interface for navigating the tree</li>
+<li>A lightweight transformation tool which does a lot of what XSLT can do, but again with Pythonic syntax</li>
+</ul>
+
+<p>In general we want to get the whole structure of an XML document into 
+memory as soon as possible.  Having done so, we're going to traverse through
+it and move the data into our own object model anyway; so we don't
+really care what kind of "node objects" we're dealing with and
+whether they are DOM-compliant. Our goals for the whole framework are:</p>
+
+<ul>
+<li>Fast - XML parsing should not be an overhead for a program</li>
+<li>Validate when needed, with little or no performance penalty</li>
+<li>Construct a complete tree in memory which is easy and natural to access</li>
+<li>An easy lightweight wrapping system with some of the abilities of XSLT without the complexity</li>
+</ul>
+
+<p>Note that pyRXP is just the main parsing component and not the framework itself.</p>
+
+
+<h2>1.6    Design non-goals</h2>
+
+
+<p>
+It's often much more helpful to spell out what a system or component will NOT do.
+Most of all we are NOT trying to produce a standards-compliant parser.</p>
+<ul>
+<li>Not a SAX parser</li>
+<li>Not a DOM parser</li>
+<li>Does not capture full XML structure</li>
+</ul>
+<p>Why not?  Aren't standards good?</p>
+<p>
+It's great that Python has support for SAX and DOM, but these are basically
+Java (or at least cross-platform) APIs.  If you're doing Python, it's possible
+to make things simpler, and we've tried.  Let's imagine you have some XML
+containing an <i>invoice</i> tag, that this in turn contains <i>lineItems</i>
+tags, and each of these has some text content and an <i>amount</i> attribute.
+Wouldn't it be nice if you could write some Python code this simple?
+</p>
+
+<pre>
+invoice = pyRXP.Parser().parse(myInvoiceText)
+for lineItem in invoice:
+    print invoice.amount
+</pre>
+
+<p>Likewise, if a node is known to contain text, it would be really handy
+to just treat it as a string.  We have a preprocessor we use to insert data
+into HTML and RML files which lets us put Python expressions in curly braces, 
+and we often do things like</p>
+
+<pre>
+&lt;html&gt;&lt;head&gt;&lt;title&gt;My web page&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;
+&lt;h1&gt;Statement for {{xml.customer.DisplayName}}&lt;/h1&gt;
+&lt;!-- etc etc --&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+&lt;h1&gt;&lt;/h1&gt;
+</pre>
+
+<p>
+Try to write the equivalent in Java and you'll have loads of method calls to
+getFirstElement(), getNextElement() and so on.  Python has beautifully compact
+and readable syntax, and we'd rather use it.  So we're not bothering with
+SAX and DOM support ourselves.  (Although if other people want to contribute full DOM
+and SAX wrappers for pyRXP, we'll accept the patches).
+</p>
+
+
+<h2>1.7 How fast is it?</h2>
+
+
+<p>The examples file includes a crude benchmarking script.  It measures speed
+and memory allocation of a number of different parsers and frameworks. This
+is documented later on.  Suffice to say that we can parse hamlet in 0.15
+seconds with full validation on a P500 laptop.  Doing the same with the
+<i>minidom</i> in the Python distribution takes 33 times as long and 
+allocates 8 times as much memory, and does not validate.  It also 
+appears to have a significant edge on Microsoft's XML parser and on
+FourThought's cDomlette.   Using pyRXP means that XML parsing will typically
+take a tiny amount of time compared to whatever your Python program will
+do with the data later.</p>
+
+
+<h2>1.8  The Tuple Tree structure</h2>
+
+<p>
+Most 'tree parsers' such as DOM create 'node objects' of some
+sort.  The DOM gives one consensus of what such an object should look
+like.  The problem is that "objects" means "class instances in
+Python", and the moment you start to use such beasts, you move away
+from fast C code to slower interpreted code.  Furthermore, the nodes
+tend to have magic attribute names like "parent" or "children",
+which one day will collide with structural names.
+</p>
+
+<p>
+So, we defined the simplest structure we could which captured the
+structure of an XML document.  Each tag is represented as a tuple of
+</p>
+<pre>
+(tagName, dict_of_attributes, list_of_children, spare)
+</pre>
+<p>
+The dict_of_attributes can be None (meaning no attributes) or a
+dictionary mapping attribute names to values. The list_of_children may
+either be None (meaning a singleton tag) or a list with elements that
+are 4-tuples or plain strings.
+</p>
+<p>A great advantage of this representation - which only uses built-in
+types in Python - is that you can marshal it (and then zip or encrypt the 
+results) with one line of Python code.  Another is that one can write
+fast C code to do things with the structure. And it does not require any 
+classes installed on the client machine, which is very useful when
+moving xml-derived data around a network.</p>
+
+<p>
+This does not capture the full structure of XML.  We make decisions
+before parsing about whether to expand entities and CDATA nodes, and
+the parser deals with it; after parsing we have most of the XML
+file's content, but we can't get back to the original in 100% of
+cases.  For example following two representations will both (with
+default settings) return the string "Smith &amp; Jones", and you can't
+tell from the tuple tree which one was in the file:
+</p>
+
+<pre>
+&lt;provider&gt;Smith &amp;amp; Jones&lt;provider&gt;
+</pre>
+<p>
+Alternatively one can use
+</p>
+<pre>
+&lt;provider&gt;&lt;[CDATA[Smith &amp; Jones]]&gt;]&lt;![CDATA[]&gt;&lt;provider&gt;
+</pre>
+
+<p>
+So if you want a tool to edit and rewrite XML files with perfect
+fidelity, our model is not rich enough.  However, note that RXP itself
+DOES provide all the hooks and could be the basis for such a parser.
+</p>
+
+
+
+
+
+<h2>1.9    Can I get involved?</h2>
+
+
+<p>
+Sure!  Join us on the Reportlab-users mailing list (<i>www.egroups.com/group/reportlab-users</i>), 
+and feel free to contribute patches.  The final section of this manual has a brief
+"wish list".</p>
+
+
+<p>Because the Reportlab Toolkit is used in many mission
+critical applications and because tiny changes in parsers can have unintended
+consequences, we will keep checkin rights on sourceforge to a trusted
+few developers; but we will do our best to consider and process patches.
+</p>
+
+
+
+<h1>2.  Installation and Setup</h1>
+
+
+<p>
+We make available pre-built Windows binaries.  On other platforms you can build it 
+from source using distutils.  pyRXP is a single extension module with no other
+dependencies outside Python itself.
+</p>
+
+
+<h2>2.1 Windows binary - pyRXP.pyd</h2>
+
+
+<p>
+ReportLab's FTP server has a win32-dlls directory, which is
+sub-divided into Python versions. Each of these has the version of the
+pyd file suitable for use with that version of Python. So, the version
+we use with Python 2.2 is at</p>
+<pre>
+http://www.reportlab.com/ftp/win32-dlls/2.2/pyRXP.pyd
+</pre>
+
+<p>
+Download the pyRXP DLL from the ReportLab FTP site. Save the pyRXP.pyd
+in the DLLs directory under your Python installation (eg this is the
+<span style="font-family: courier;">C:\Python22\DLLs</span> directory for a standard
+Windows installation of Python 2.2).
+</p>
+
+<h2>2.2 Source Code installation</h2>
+
+<p>
+The source code is open source under the GPL. This is available on
+SourceForge.
+</p>
+<p>
+The source for pyRXP and a slightly patched version of RXP is made
+available by anonymous CVS at
+</p>
+<pre>
+:pserver:anonymous@cvs.reportlab.sourceforge.net:/cvsroot/reportlab
+</pre>
+<p>
+To get the source use the commands 
+</p>
+<pre>
+cvs -d :pserver:anonymous@cvs.reportlab.sourceforge.net:/cvsroot/reportlab login 
+cvs -d :pserver:anonymous@cvs.reportlab.sourceforge.net:/cvsroot/reportlab co rl_addons/pyRXP 
+</pre>
+
+<p>
+enter a carriage return for the password.
+</p>
+
+<p>
+If you have obtained the source code in the way described above, the
+<span style="font-family: courier;">rl_addons/pyRXP</span> directory  should contain
+a distutils script, <span style="font-family: courier;">setup.py</span> which should
+be run with argument install or build. If successful a shared library
+<span style="font-family: courier;">pyRXP.pyd</span> or <span style="font-family: courier;">pyRXP.so</span> should be built.
+</p>
+
+<h2>2.2.1 Post installation tests</h2>
+
+<p>
+Whichever method you used to get pyRXP installed, you should run the
+short test suite to make sure there haven't been any problems.
+</p>
+<p>Cd to the <span style="font-family: courier;">rl_addons/pyRXP/test</span> directory and run the file
+<span style="font-family: courier;">testRXPbasic.py</span>.
+</p>
+
+<p>
+If you have built the Unicode aware version (<span style="font-family: courier;">pyRXPU.pyd</span>
+or <span style="font-family: courier;">pyRXPU.so</span>, only available in the source distribution at the moment),
+running the test program should show you this:
+</p>
+<pre>
+C:\tmp\rl_addons\pyRXP\test>python testRXPbasic.py
+..........................................
+42 tests, no failures!</pre>
+
+<p>
+If you have only installed the standard (8-bit) pyRXP, you should see something like this:
+</p>
+<pre>
+C:\tmp\rl_addons\pyRXP\test>testRXPbasic.py
+.....................
+21 tests, no failures!
+</pre>
+
+<p>
+These are basic health checks, which are the minimum required to make
+sure that nothing drastic is wrong. This is the very least that you
+should do - you should not skip this step!
+</p>
+
+<p>
+If you want to be more thorough, there is a much more comprehensive
+test suite which tests XML compliance. This is run by a file called
+<span style="font-family: courier;">test_xmltestsuite.py</span>, also in the test
+directory. This depends on a set of more than 300 tests written by
+James Clark which you can download in the form of a zip file from
+</p>
+
+<pre>
+http://www.reportlab.com/ftp/xmltest.zip
+</pre>
+<p>
+or
+</p>
+<pre>
+ftp://ftp.jclark.com/pub/xml/xmltest.zip
+</pre>
+
+<p>
+You can simply drop this in the test directory and run the
+test_xmltestsuite file which will automatically unpack and use it.
+</p>
+
+<h2>2.3 Examples</h2>
+<p>
+We have made available a small directory of example stuff to play with.
+This will be superceded by the release of the framework soon.  As such
+there is no formal package location for it; unzip anywhere you want.
+</p>
+<pre>
+http://www.reportlab.com/ftp/pyRXP_examples.zip
+</pre>
+
+<p>
+The examples directory includes a couple of substantial XML files with
+DTDs, a wrapper module called <i>xmlutils</i> which provides easy access
+to the tuple tree, and the beginnings of a benchmarking script.  The benchmark
+script tries to find lots of XML parsers on your system.  Both are documented
+in section 4 below.
+</p>
+
+
+
+
+
+<h1>3.  Using pyRXP</h1>
+
+
+<h2>3.1.    Simple use without validation</h2>
+
+
+<h2>3.1.1    The Parse method and callable instances of the parser</h2>
+
+
+<p>
+Firstly you have to import the pyRXP module (using Python's <span style="font-family: courier;">import</span>
+statement).  While we are here, pyRXP has a couple of attributes that
+are worth knowing about: <span style="font-family: courier;">version</span> gives you a string with the
+version number of the pyRXP module itself, and <span style="font-family: courier;">RXPVersion</span> gives
+you string with the version information for the rxp library embedded
+in the module.
+</p>
+
+<pre>
+C:\Python22>python
+Python 2.2.1 (#34, Apr  9 2002, 19:34:33) [MSC 32 bit (Intel)] on win32
+Type "help", "copyright", "credits" or "license" for more information.
+>>> import pyRXP 
+>>> pyRXP.version
+'1.08'
+>>> pyRXP.RXPVersion
+'RXP 1.4.0 Copyright Richard Tobin, LTG, HCRC, University of Edinburgh'
+</pre>
+
+<p>
+Once you have imported pyRXP, you can instantiate a parser instance
+using the <span style="font-family: courier;">Parser</span> class.
+</p>
+
+<pre>
+>>>p=pyRXP.Parser()
+</pre>
+
+<p>
+This by itself isn't very useful. But it does allow us to create a
+single parser which we can reuse many times. It also allows us to type
+a short variable name rather than 'pyRXP.Parser' every time we
+need to use it. p is now an instance of Parser - Parser is a
+constructer that creates an object with its own methods and
+attributes. When you create a parser like this you can also set
+multiple flags at the same time. This can save you from having to set
+them separately, or having to set them all repeatedly each time you
+need to do a parse.
+</p>
+
+<p>
+To parse some XML, you use the <span style="font-family: courier;">parse</span>
+method. The simplest way of doing this is to feed it a string. You
+could create the string beforehand, or read it from disk (using
+something like <span style="font-family: courier;">s=open('filename',
+'r').read())</span>. PyRXP isn't designed to allow you to read the
+source directly from disk without an intermediate step like this.
+</p>
+
+<p>
+As well as exposing this method, instances of Parser are
+callable. This means that you can do this:
+</p>
+
+<pre>
+&gt;&gt;&gt; p=pyRXP.Parser()
+&gt;&gt;&gt; p('&lt;a&gt;some text&lt;/a&gt;')
+</pre>
+
+<p>
+instead of this
+</p>
+
+<pre>
+&gt;&gt;&gt; p=pyRXP.Parser()
+&gt;&gt;&gt; p.parse('&lt;a&gt;some text&lt;/a&gt;')
+</pre>
+
+<p>
+Both would give you exactly the same result (<span style="font-family: courier;">('a', None, ['some text'], None))</span>)
+</p>
+
+<p>
+We'll use the second style in this documentation, since it makes the
+examples slightly clearer. Whether you do or not is up to you and your
+programming style.
+</p>
+
+<p>
+We'll start with some very simple examples and leave validation for
+later.
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;tag&gt;content&lt;/tag&gt;')
+('tag', None, ['content'], None)
+</pre>
+
+<p>
+This could also be expressed more long-windedly as 
+<span style="font-family: courier;">
+pyRXP.Parser().parse('&lt;tag&gt;content&lt;/tag&gt;')
+</span>
+</p>
+
+<p>
+Each element ("tag") in the XML is represented as a tuple of 4
+elements:</p>
+<ul>
+<li>'tag':  the tag
+name (aka element name).</li>
+<li>None:  a
+dictionary of the tag's attributes (null here since it doesn't
+have any).</li>
+<li>['content']:  a
+list of included textual results. This is the contents of the
+tag.</li>
+<li>None:  the
+fourth element is unused by default.</li>
+</ul>
+
+<p>
+This tree structure is equivalent to the input XML, at least in
+information content. It is theoretically possible to recreate the
+original XML from this tree since no information has been lost.
+</p>
+
+<p>
+A tuple tree for more complex XML snippets will contain more of these
+tuples, but they will all use the same structure as this one.
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;tag1&gt;&lt;tag2&gt;content&lt;/tag2&gt;&lt;/tag1&gt;')
+('tag1', None, [('tag2', None, ['content'], None)], None)
+</pre>
+
+
+<p>
+This may be easier to understand if we lay it out differently:
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;tag1&gt;&lt;tag2&gt;content&lt;/tag2&gt;&lt;/tag1&gt;')
+('tag1',
+ None,
+     [('tag2',
+       None,
+       ['content'],
+       None)
+     ],
+None)
+</pre>
+
+<p>
+Tag1 is the name of the outer tag, which has no attributes. Its
+contents is a list. This contents contains Tag2, which has its own
+attribute dictionary (which is also empty since it has no attributes)
+and its content, which is the string 'content'. It has the closing
+null element, then the list for Tag2 is closed, Tag1 has its own final
+null element and it too is closed.
+</p>
+
+<p>
+The XML that is passed to the parser must be balanced. Any opening and
+closing tags must match. They wouldn't be valid XML otherwise.
+</p>
+
+<h2>3.1.2 Empty tags and the ExpandEmpty flag</h2>
+
+
+<p>
+Look at the following three examples. The first one is a fairly
+ordinary tag with contents. The second and third can both be
+considered as empty tags - one is a tag with no content between its
+opening and closing tag, and the other is the singleton form which by
+definition has no content.
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;tag&gt;my contents&lt;/tag&gt;')
+('tag', None, ['my contents'], None)
+
+&gt;&gt;&gt; p.parse('&lt;tag&gt;&lt;/tag&gt;')
+('tag', None, [], None)
+
+&gt;&gt;&gt; p.parse('&lt;tag/&gt;')
+('tag', None, None, None)
+</pre>
+
+<p>
+Notice how the contents list is handled differently for the last two
+examples. This is how we can tell the difference between an empty tag
+and its singleton version. If the content list is empty then the tag
+doesn't have any content, but if the list is None, then it can't
+have any content since it's the singleton form which can't have
+any by definition.
+</p>
+
+
+<p>
+Another example:
+</p>
+
+<pre>
+&gt;&gt;&gt;p.parse('&lt;outerTag&gt;&lt;innerTag&gt;bb&lt;/innerTag&gt;aaa&lt;singleTag/&gt;&lt;/outerTag&gt;')
+('outerTag', None, [('innerTag', None, ['bb'], None), 'aaa', ('singleTag', 
+None, None, None)], None)
+</pre>
+
+
+<p>
+Again, this is more understandable if we show it like this:
+</p>
+
+<pre>
+('outerTag',
+ None,
+     [('innerTag',
+       None,
+       ['bb'],
+       None),
+          'aaa',
+              ('singleTag',
+               None,
+               None,
+               None)
+      ],
+ None)
+</pre>
+
+<p>
+In this example, the tuple contains the outerTag (with no attribute
+dictionary), whose list of contents are the innerTag, which contains
+the string 'bb' as its contents, and the singleton singleTag whose
+contents list is replaced by a null.
+</p>
+
+<p>
+The way that these empty tags are handled can be changed using the <span style="font-family: courier;">ExpandEmpty</span> flag. If ExpandEmpty is set to 0,
+these singleton forms come out as None, as we have seen in the examples above.
+However, if you set it to 1, the empty tags are returned as standard
+tags of their sort.
+</p>
+
+<p>
+This may be useful if you will need to alter the tuple tree at some
+future point in your processing. Lists and dictionaries are mutable,
+but None isn't and therefore can't be changed.
+</p>
+
+<p>Some examples. This is what happens if we accept the default behaviour:</p>
+                                 
+<pre>
+&gt;&gt;&gt; p.parse('&lt;a&gt;some text&lt;/a&gt;')
+('a', None, ['some text'], None)
+</pre>
+
+<p>Explicitly setting <span style="font-family: courier;">ExpandEmpty</span> to 1 gives us these:</p>
+<pre>
+&gt;&gt;&gt; p.parse('&lt;a&gt;some text&lt;/a&gt;', ExpandEmpty=1)
+('a', {}, ['some text'], None)
+</pre>
+
+<p>
+Notice how the None from the first example is being returned as an
+empty dictionary in the second version. ExpandEmpty makes the sure
+that the attribute list is always a dictionary. It also makes sure
+that a self-closed tag returns an empty list.
+</p>
+
+<p>
+A very simple example of the singleton or 'self-closing' version of a
+tag.
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;b/&gt;', ExpandEmpty=0)
+('b', None, None, None)
+</pre>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;b/&gt;', ExpandEmpty=1)
+('b', {}, [], None)
+</pre>
+<p>
+Again, notice how the Nones have been expanded.
+</p>
+
+<p>
+Some more examples show how these work with slightly more complex XML
+which uses nested tags:
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;a&gt;some text&lt;b&gt;Hello&lt;/b&gt;&lt;/a&gt;', ExpandEmpty=0)
+('a', None, ['some text', ('b', None, ['Hello'], None)], None)
+
+&gt;&gt;&gt; p.parse('&lt;a&gt;some text&lt;b&gt;Hello&lt;/b&gt;&lt;/a&gt;', ExpandEmpty=1)
+('a', {}, ['some text', ('b', {}, ['Hello'], None)], None)
+</pre>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;a&gt;some text&lt;b&gt;&lt;/b&gt;&lt;/a&gt;', ExpandEmpty=0)
+('a', None, ['some text', ('b', None, [], None)], None)
+
+&gt;&gt;&gt; p.parse('&lt;a&gt;some text&lt;b&gt;&lt;/b&gt;&lt;/a&gt;', ExpandEmpty=1)
+('a', {}, ['some text', ('b', {}, [], None)], None)
+</pre>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;a&gt;some text&lt;b/&gt;&lt;/a&gt;', ExpandEmpty=0)
+('a', None, ['some text', ('b', None, None, None)], None)
+
+&gt;&gt;&gt; p.parse('&lt;a&gt;some text&lt;b/&gt;&lt;/a&gt;', ExpandEmpty=1)
+('a', {}, ['some text', ('b', {}, [], None)], None)
+</pre>
+
+
+
+<h2>3.1.3    Processing instructions</h2>
+
+
+<p>
+Both the comment and processing instruction tag names are special -
+you can check for them relatively easily. This section processing
+instruction and the next one covers handling comments.
+</p>
+
+<p>
+A processing instruction allows developers to place information
+specific to an outside application within the docuent. You can handle it using the 
+ReturnProcessingInstruction attribute. 
+</p>
+
+<p>
+There is a module global called piTagName (ie you need to do
+'<span style="font-family: courier;">pyRXP.piTagName</span>' rather than refering to an instance like
+'p.piTagName' which won't work).
+</p>
+<pre>
+&gt;&gt;&gt; pyRXP.piTagName
+'&lt;?'
+</pre>
+
+<pre>
+&gt;&gt;&gt; p.parse(&lt;a&gt;&lt;?works document="hello.doc"?&gt;&lt;/a&gt;')
+('a', None, [], None)
+&gt;&gt;&gt; #vanishes - like a comment
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;?works document="hello.doc"?&gt;&lt;/a&gt;', ReturnProcessingInstructions=1)
+('a', None, [('&lt;?', {'name': 'works'}, ['document="hello.doc"'], None)], None)
+&gt;&gt;&gt;
+</pre>
+
+<p>
+You can test against <span style="font-family: courier;">piTagName</span> - but don't
+try and change it. See the section on trying to change <span style="font-family: courier;">commentTagName</span> for an example of what would
+happen.
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;?works document="hello.doc"?&gt;&lt;/a&gt;',
+... ReturnProcessingInstructions=1)[2][0][0] is pyRXP.piTagName
+1
+&gt;&gt;&gt; #identical! (ie same object each time)
+</pre>
+
+<p>
+This is a simple test and doesn't even have to process the characters.
+It allows you to process these lists looking for processing
+instructions (or comments if you are testing against commentTagName as
+show in the next section)
+</p>
+
+
+<h2>3.1.4    Handling comments and the srcName attribute</h2>
+
+
+<p><b>NB</b> The way ReturnComments works has changed between versions. </p>
+
+<p>
+By default, PyRXP ignores comments and their contents are lost (this
+behaviour can be changed - see the section of Flags later for
+details).
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;tag&gt;&lt;!-- this is a comment about the tag --&gt;&lt;/tag&gt;')
+('tag', None, [], None)
+
+&gt;&gt;&gt; p.parse('&lt;!-- this is a comment --&gt;')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Document ends too soon
+ in unnamed entity at line 1 char 27 of [unknown]
+Document ends too soon
+Parse Failed!
+</pre>
+
+<p>
+This causes an error, since the parser sees an empty string which
+isn't valid XML.
+</p>
+
+<p>
+It is possible to set pyRXP to not swallow comments using the ReturnComments attribute.
+</p>
+
+<pre>                                                                     
+&gt;&gt;&gt; p.parse('&lt;tag&gt;&lt;!-- this is a comment about the tag --&gt;&lt;/tag&gt;', ReturnComments=1)
+('tag', None, [('&lt;!--', None, [' this is a comment about the tag '], None)], None)
+</pre>
+
+<p>
+Using ReturnComments, the comment are returned in the same way as an
+ordinary tag, except that the tag has a special name. This special
+name is defined in the module global 'commentTagName'. You can't just
+do p.commentTagName, since it's a module object which isn't related to
+the parser at all.
+</p>
+
+<pre>
+&gt;&gt;&gt; p.commentTagName
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+AttributeError: commentTagName
+
+&gt;&gt;&gt; pyRXP.commentTagName
+'&lt;!--'
+</pre>
+
+<p>
+Don't try to change the commentTagName. Not only would it be of
+dubious value, but it doesn't work. You change the variable in the
+python module, but <i>not</i> in the underlying object, as
+the following example shows:
+</p>
+
+<pre>
+&gt;&gt;&gt; import pyRXP
+&gt;&gt;&gt; p=pyRXP.Parser()
+&gt;&gt;&gt; pyRXP.commentTagName = "##" # THIS WON'T WORK!
+&gt;&gt;&gt; pyRXP.commentTagName
+'##'
+&gt;&gt;&gt; #LOOKS LIKE IT WORKS - BUT SEE BELOW FOR WHY IT DOESN'T
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;!-- this is another comment comment --&gt;&lt;/a&gt;', ReturnComments = 1)
+&gt;&gt;&gt; # DOESN'T WORK!
+&gt;&gt;&gt; ('a', None, [('&lt;!--', None, [' this is another comment comment '], None)], None)
+&gt;&gt;&gt; #SEE?
+</pre>
+
+<p>
+What it is useful for is to check against to see if you have been returned a comment:
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;!-- comment --&gt;&lt;/a&gt;', ReturnComments=1)
+('a', None, [('&lt;!--', None, [' comment '], None)], None)
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;!-- comment --&gt;&lt;/a&gt;', ReturnComments=1)[2][0][0]
+'&lt;!--'
+&gt;&gt;&gt; #this returns the comment name tag from the tuple tree...
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;!-- comment --&gt;&lt;/a&gt;', ReturnComments=1)[2][0][0] is pyRXP.commentTagName
+1
+&gt;&gt;&gt; #they're identical
+&gt;&gt;&gt; #it's easy to check if it's a special name
+</pre>
+
+<p>
+Using ReturnComments is useful, but there are circumstances where it
+fails. Comments which are outside the root tag (in the following snippet,
+that means which are outside the tag '&lt;tag/&gt;', ie the last
+element in the line) will still be lost:
+</p>
+                                                                        
+<pre>                                                                    
+&gt;&gt;&gt; p.parse('&lt;tag/&gt;&lt;!-- this is a comment about the tag --&gt;', ReturnComments=1)
+('tag', None, None, None)
+</pre>
+
+<p>
+To get around this, you need to use the ReturnList attribute:
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;tag/&gt;&lt;!-- this is a comment about the tag --&gt;', ReturnComments=1, ReturnList=1)
+[('tag', None, None, None), ('&lt;!--', None, [' this is a comment about the tag '], None)]
+&gt;&gt;&gt;
+</pre>
+
+<p>
+Since we've seen a number of errors in the preceding paragraphs, it
+might be a good time to mention the <span style="font-family: courier;">srcName</span>
+attribute. The Parser has an attribute called srcName which is useful
+when debugging. This is the name by which pyRXP refers to your code in
+tracebacks. This can be useful - for example, if you have read the
+XML in from a file, you can use the srcName attribute to show the
+filename to the user. It doesn't get used for anything other than
+pyRXP Errors - SyntaxErrors  and IOErrors still won't refer to
+your XML by name.
+</p>
+
+<pre>
+&gt;&gt;&gt; p.srcName = 'mycode'
+&gt;&gt;&gt; p.parse('&lt;a&gt;aaa&lt;/a')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Expected &gt; after name in end tag, bu
+ in unnamed entity at line 1 char 10 of mycode
+Expected &gt; after name in end tag, but got &lt;EOE&gt;
+Parse Failed!
+</pre>
+
+<p>
+The XML that is passed to the parser must be balanced. Not only must
+the opening and closing tags match (they wouldn't be valid XML
+otherwise), but there must also be one tag that encloses all the
+others. If there are valid fragments that aren't enclosed
+by another valid tag, they are considered 'multiple elements' and
+a pyRXP Error is raised.
+</p>
+
+<pre>
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;/a&gt;&lt;b&gt;&lt;/b&gt;')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Document contains multiple elements
+ in unnamed entity at line 1 char 9 of [unknown]
+
+&gt;&gt;&gt; p.parse('&lt;outer&gt;&lt;a&gt;&lt;/a&gt;&lt;b&gt;&lt;/b&gt;&lt;/outer&gt;')
+('outer', None, [('a', None, [], None), ('b', None, [], None)], None)
+</pre>
+
+<h2>3.1.5 A brief note on pyRXPU</h2>
+
+
+<p>
+PyRXPU is the 16-bit Unicode aware version of pyRXP.
+</p>
+
+<p>
+In most cases, the only difference in behaviour between pyRXP and pyRXPU is that
+pyRXPU returns Unicode strings. This may be inconveneient for some applications as Python doesn't yet
+handle unicode filenames etc terribly well. A work around is to get pyRXPU to return <b>utf8</b> using the
+<i>ReturnUTF8</i> boolean argument in the parser creation or call. Then all values are returned as utf8
+encoded strings.
+</p>
+
+<p>
+pyRXPU is built to try and do the right thing with both unicode and
+non-unicode strings.
+</p>
+
+<pre>
+&gt;&gt;&gt; import pyRXPU
+&gt;&gt;&gt; pyRXPU.Parser()('&lt;a&gt;&lt;?works document="hello.doc"?&gt;&lt;/a&gt;', ReturnProcessingInstructions=1)
+(u'a', None, [(u'&lt;?', {'name': u'works'}, [u'document="hello.doc"'], None)], None)
+</pre>
+
+<p>
+In most cases, the only way to tell the difference (<i>other</i> than
+sending in Unicode) is by the module name.
+</p>
+<pre>
+&gt;&gt;&gt; import pyRXPU
+&gt;&gt;&gt; pyRXPU.__name__
+'pyRXPU'
+&gt;&gt;&gt; import pyRXP
+&gt;&gt;&gt; pyRXP.__name__
+'pyRXP'
+</pre>
+
+
+
+<h2>
+3.2.    Validating against a DTD
+</h2>
+
+
+<p>
+This section describes the default behaviours when validating against
+a DTD. Most of these can be changed - see the section on flags later
+in this document for details on how to do that.
+</p>
+
+<p>
+For the following examples, we're going to assume that you have a
+single directory with the DTD and any test files in it.
+</p>
+
+<pre>
+&gt;&gt;&gt; import os
+&gt;&gt;&gt; os.getcwd()
+'C:\\tmp\\pyRXP_tests'
+
+&gt;&gt;&gt; os.listdir('.')
+['sample1.xml', 'sample2.xml', 'sample3.xml', 'sample4.xml', 'tinydtd.dtd']
+
+&gt;&gt;&gt; dtd = open('tinydtd.dtd', 'r').read()
+
+&gt;&gt;&gt; print dtd
+&lt;!-- A tiny sample DTD for use with the PyRXP documentation --&gt;
+&lt;!-- $Header $--&gt;
+
+&lt;!ELEMENT a (b)&gt;
+&lt;!ELEMENT b (#PCDATA)*&gt;
+</pre>
+                               
+<p>
+This is just to show you how trivial the DTD is for this example.
+It's about as simple as you can get - two tags, both mandatory.
+Both a and b must appear in an xml file for it to conform to this DTD,
+but you can have as many b's as you want, and they can contain any
+content.
+</p>
+
+<pre>
+&gt;&gt;&gt; fn=open('sample1.xml', 'r').read()
+
+&gt;&gt;&gt; print fn
+&lt;?xml version="1.0" encoding="iso-8859-1" standalone="no" ?&gt;
+&lt;!DOCTYPE a SYSTEM "tinydtd.dtd"&gt;
+
+&lt;a&gt;
+&lt;b&gt;This is the contents&lt;/b&gt;
+&lt;/a&gt;
+</pre>
+
+<p>                             
+This is the simple example file.  The first line is the XML declaration,
+and the <i>standalone="no"</i> part says that there should be an external DTD.  The
+second line says where the DTD is, and gives the name of the root element - 
+<i>a</i> in this case.  If you put this in your XML document, pyRXP will
+attempt to validate it.
+</p>
+
+<pre>                         
+&gt;&gt;p.parse(fn)
+('a',
+ None,
+ ['\n', ('b', None, ['This tag is the contents'], None), '\n'],
+ None)
+&gt;&gt;&gt;
+</pre>
+
+<p>This is a successful parse, and returns a tuple tree in the same way
+as we have seen where the input was a string.</p>
+                       
+<p>
+If you have a reference to a non-existant DTD file in a file (or one
+that can't be found over a network), then any attempt to parse it
+will raise a pyRXP error.
+</p>
+
+<pre>                            
+&gt;&gt;&gt; fn=open('sample2.xml', 'r').read()
+
+&gt;&gt;&gt; print fn
+&lt;?xml version="1.0" encoding="iso-8859-1" standalone="no" ?&gt;
+&lt;!DOCTYPE a SYSTEM "nonexistent.dtd"&gt;
+
+&lt;a&gt;
+&lt;b&gt;This is the contents&lt;/b&gt;
+&lt;/a&gt;
+
+&gt;&gt;&gt; p.parse(fn)
+C:\tmp\pyRXP_tests\nonexistent.dtd: No such file or directory
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Couldn't open dtd entity file:///C:/tmp/pyRXP_tests/nonexistent.dtd
+ in unnamed entity at line 2 char 38 of [unknown]
+</pre>
+                               
+
+<p>
+This is a different kind of error to one where no DTD is specified:
+</p>
+
+<pre>                            
+&gt;&gt;&gt; fn=open('sample4.xml', 'r').read()
+
+&gt;&gt;&gt; print fn
+&lt;?xml version="1.0" encoding="iso-8859-1" standalone="no" ?&gt;
+&lt;a&gt;
+&lt;b&gt;This is the contents&lt;/b&gt;
+&lt;/a&gt;
+
+&gt;&gt;&gt; p.parse(fn,NoNoDTDWarning=0)
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Document has no DTD, validating abandoned
+ in unnamed entity at line 3 char 2 of [unknown]
+</pre>
+
+
+
+<p>
+If you have errors in your XML and it does not validate against the
+DTD, you will get a different kind of pyRXPError.
+</p>
+
+<pre>
+&gt;&gt;&gt; fn=open('sample3.xml', 'r').read()
+
+&gt;&gt;&gt; print fn
+&lt;?xml version="1.0" encoding="iso-8859-1" standalone="no" ?&gt;
+&lt;!DOCTYPE a SYSTEM "tinydtd.dtd"&gt;
+
+&lt;x&gt;
+&lt;b&gt;This is the contents&lt;/b&gt;
+&lt;/x&gt;
+
+&gt;&gt;&gt; p.parse(fn)
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Start tag for undeclared element x
+ in unnamed entity at line 4 char 3 of [unknown]
+&gt;&gt;&gt;
+</pre>
+
+<p>     
+Whether PyRXP validates against a DTD, together with a number of other
+behaviours is decided by how the various flags are set.
+</p>
+<p>
+By default, <span style="font-family: courier;">ErrorOnValidityErrors</span> is set
+to 1, as is <span style="font-family: courier;">NoNoDTDWarning</span>. If you want
+the XML you are parsing to actually validate against your DTD, you should
+have both of these set to 1 (which is the default value), otherwise instead 
+of raising a pyRXP error saying the XML that doesn't conform to the DTD (which may or 
+may not exist) this will be silently ignored. You should also have <span style="font-family: courier;">Validate</span> set to 1, otherwise validation won't
+even be attempted.
+</p>
+
+<p>
+Note that the first examples in this chapter - the ones without a DTD
+- only worked because we had carefully chosen what seem like the
+sensible defaults.  It is set to validate, but not to complain if
+the DTD is missing.  So when you feed it something without a DTD
+declaration, it notices the DTD is missing but continues in non-validating mode.
+There are numerous flags set out below which affect the behaviour.
+</p>
+
+
+<h2>3.3    Interface Summary</h2>
+
+
+<p>
+The python module exports the following:
+</p>
+
+<table>
+<tr><td><p><span style="font-family: courier;">Error</span></p></td><td>a python exception</td></tr>
+<tr><td><p><span style="font-family: courier;">Version</span></p></td><td>the string version of the module</td></tr>
+<tr><td><p><span style="font-family: courier;">RXPVersion</span></p></td><td>the version string of the rxp library embedded in the module</td></tr>
+<tr><td><p><span style="font-family: courier;">parser_flags</span></p></td><td>a dictionary of parser flags - the values are the defaults for parsers</td></tr>
+<tr><td><p><span style="font-family: courier;">Parser(*kw)</span></p></td><td>Create a parser</td></tr>
+<tr><td><p><span style="font-family: courier;">piTagName</span></p></td><td>special tagname used for processing instructions</td></tr>
+<tr><td><p><span style="font-family: courier;">commentTagName</span></p></td><td>special tagname used for comments</td></tr>
+<tr><td><p><span style="font-family: courier;">recordLocation</span></p></td><td>a special do nothing constant that can be used as
+the 'fourth' argument and causes location information
+to be recorded in the fourth position of each node.</td></tr>
+</table>
+							   
+<h2>3.4    Parser Object Attributes and Methods</h2>
+
+
+<p><span style="font-family: courier;">parse(src)</span></p><p>
+We have already seen that this is the main interface to the parser. It
+returns ReportLab's standard tuple tree representation of the xml source. 
+The string <i>src</i> contains the xml.
+</p>
+
+<p>The keyword arguments can modify the instance attributes for this call only. For example, we can do
+</p>
+
+<pre>
+&gt;&gt;&gt;p.parse('&lt;a&gt;some text&lt;/a&gt;', ReturnList=1, ReturnComments=1)
+</pre>
+
+<p>instead of</p>
+
+<pre>
+&gt;&gt;&gt;p.ReturnList=1
+&gt;&gt;&gt;p.ReturnComments=1
+&gt;&gt;&gt;p.parse('&lt;a&gt;some text&lt;/a&gt;')
+</pre>
+
+<p>
+Any other parses using p will be unaffacted by the values of
+ReturnList and ReturnComments in the first example, whereas all
+parses using p will have ReturnList and ReturnComments set to 1 after the second.
+</p>
+                               
+<p><span style="font-family: courier;">srcName</span></p><p>
+A name used to refer to the source text in error and warning messages.
+It is initially set as '&lt;unknown&gt;'.  If you know that the data
+came from "spam.xml" and you want error messages to say so, you can
+set this to the filename.
+</p>
+
+<p><span style="font-family: courier;">warnCB  0,</span></p><p>
+Warning callback.  Should either be None, 0, or a callable object (e.g. a function)
+with a single argument which will receive warning messages. If None is used then warnings are
+thrown away. If the default 0 value is used then warnings are written
+to the internal error message buffer and will only be seen if an error
+occurs.
+</p>
+
+<p><span style="font-family: courier;">eoCB</span></p><p>
+Entity-opening callback. The argument should be None or a callable method with a 
+single argument. This method will be called when external entities are opened. The
+method should return a (possibly modified) URI.  So, you could intercept a declaration
+referring to <i>http://some.slow.box/somefile.dtd</i> and point at at the local
+copy you know you have handy, or implement a DTD-caching scheme.
+</p>
+<p><span style="font-family: courier;">fourth</span></p><p>
+This argument should be None (default) or a callable method with
+no arguments. If callable, will be called to get or generate the
+4th item of every 4-item tuple or list in the returned tree.
+May also be the special value pyRXP.recordLocation to cause the 4th item to
+be set to a location information tuple ((startname,startline,startchar),(endname,endline,endchar)).
+</p>
+
+<h2>
+3.5    List of Flags
+</h2>
+
+<p>
+Flag attributes corresponding to the rxp flags; the values are the module standard defaults.
+pyRXP.parser_flags returns these as a dictionary if you need to refer to these inline.
+</p>
+
+<table style="plainTable">
+<tr><td>
+Flag (1=on, 0=off)</td><td>Default</td></tr>
+<tr><td>
+AllowMultipleElements</td><td>0
+</td></tr>
+<tr><td>
+AllowUndeclaredNSAttributes</td><td>0
+</td></tr>
+<tr><td>
+CaseInsensitive</td><td>0
+</td></tr>
+<tr><td>
+ErrorOnBadCharacterEntities</td><td>1
+</td></tr>
+<tr><td>
+ErrorOnUndefinedAttributes</td><td>0
+</td></tr>
+<tr><td>
+ErrorOnUndefinedElements</td><td>0
+</td></tr>
+<tr><td>
+ErrorOnUndefinedEntities</td><td>1
+</td></tr>
+<tr><td>
+ErrorOnUnquotedAttributeValues</td><td>1
+</td></tr>
+<tr><td>
+ErrorOnValidityErrors</td><td>1
+</td></tr>
+<tr><td>ExpandCharacterEntities</td><td>1</td></tr>
+<tr><td>ExpandEmpty</td><td>0</td></tr>
+<tr><td>
+ExpandGeneralEntities</td><td>1
+</td></tr>
+<tr><td>
+IgnoreEntities</td><td>0
+</td></tr>
+<tr><td>
+IgnorePlacementErrors</td><td>0
+</td></tr>
+<tr><td>MaintainElementStack</td><td>1</td></tr>
+<tr><td>MakeMutableTree</td><td>0</td></tr>
+<tr><td>
+MergePCData</td><td>1
+</td></tr>
+<tr><td>
+NoNoDTDWarning</td><td>1
+</td></tr>
+<tr><td>
+NormaliseAttributeValues</td><td>1
+</td></tr>
+<tr><td>
+ProcessDTD</td><td>0
+</td></tr>
+<tr><td>
+RelaxedAny</td><td>0
+</td></tr>
+<tr><td>ReturnComments</td><td>0</td></tr>
+<tr><td>ReturnProcessingInstructions</td><td>0</td></tr>
+<tr><td>
+ReturnDefaultedAttributes</td><td>1
+</td></tr>
+<tr><td>
+ReturnList</td><td>0</td></tr>                              
+<tr><td>
+ReturnNamespaceAttributes</td><td>0
+</td></tr>
+<tr><td>
+ReturnUTF8 (pyRXPU)</td><td>0
+</td></tr>
+<tr><td>
+SimpleErrorFormat</td><td>0
+</td></tr>
+<tr><td>
+TrustSDD</td><td>1
+</td></tr>
+<tr><td>
+Validate</td><td>1
+</td></tr>
+<tr><td>
+WarnOnRedefinitions</td><td>0
+</td></tr>
+<tr><td>
+XMLExternalIDs</td><td>1
+</td></tr>
+<tr><td>
+XMLLessThan</td><td>0
+</td></tr>
+<tr><td>
+XMLMiscWFErrors</td><td>1
+</td></tr>
+<tr><td>
+XMLNamespaces</td><td>0
+</td></tr>
+<tr><td>
+XMLPredefinedEntities</td><td>1
+</td></tr>
+<tr><td>
+XMLSpace</td><td>0
+</td></tr>
+<tr><td>
+XMLStrictWFErrors</td><td>1
+</td></tr>
+<tr><td>
+XMLSyntax</td><td>1
+</td></tr>
+</table>
+
+
+<h2>
+3.6    Flag explanations and examples
+</h2>
+
+
+<p>
+With so many flags, there is a lot of scope for interaction between
+them. These interactions are not documented yet, but you should be
+aware that they exist.
+</p>
+
+<p>
+<b>AllowMultipleElements</b> 
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+A piece of XML that does not have a single root-tag enclosing all the
+other tags is described as having multiple elements. By default, this
+will raise a pyRXP error. Turning this flag on will ignore this and
+not raise those errors.
+</p>
+<p>
+Example:
+</p>
+<pre>
+&gt;&gt;&gt; p.AllowMultipleElements = 0
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;/a&gt;&lt;b&gt;&lt;/b&gt;')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Document contains multiple elements
+ in unnamed entity at line 1 char 9 of [unknown]
+
+&gt;&gt;&gt; p.AllowMultipleElements = 1
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;/a&gt;&lt;b&gt;&lt;/b&gt;')
+('a', None, [], None)
+&gt;&gt;&gt;
+</pre>
+
+<p>
+<b>AllowUndeclaredNSAttributes </b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+<i>[to be added]</i>
+</p>
+<p>
+Example:
+</p>
+<p>
+<i>[to be added]</i>
+</p>
+
+<p>
+<b>CaseInsensitive</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+This flag controls whether the parse is case sensitive or not.
+</p>
+<p>
+Example:
+</p>
+<pre>
+&gt;&gt;&gt; p.CaseInsensitive=1
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;/A&gt;')
+('A', None, [], None)
+
+&gt;&gt;&gt; p.CaseInsensitive=0
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;/A&gt;')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Mismatched end tag: expected &lt;/a&gt;, got &lt;/A&gt;
+ in unnamed entity at line 1 char 7 of [unknown]
+&gt;&gt;&gt;
+</pre>
+
+<p>
+<b>ErrorOnBadCharacterEntities</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set, character entities which expand to illegal values are
+an error, otherwise they are ignored with a warning.
+</p>
+<p>
+Example:
+</p><pre>
+&gt;&gt;&gt; p.ErrorOnBadCharacterEntities=0
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;#999;&lt;/a&gt;')
+('a', None, [''], None)
+
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;#999;&lt;/a&gt;')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: 0x3e7 is not a valid 8-bit XML character
+ in unnamed entity at line 1 char 10 of [unknown]
+</pre>
+
+<p>
+<b>ErrorOnUndefinedAttributes</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set and there is a DTD, references to undeclared attributes
+are an error.
+</p>
+<p>
+See also: ErrorOnUndefinedElements
+</p>
+
+<p>
+<b>ErrorOnUndefinedElements</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set and there is a DTD, references to undeclared elements
+are an error.
+</p>
+<p>
+See also: ErrorOnUndefinedAttributes
+</p>
+
+<p>
+<b>ErrorOnUndefinedEntities</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set, undefined general entity references are an error,
+otherwise a warning is given and a fake entity constructed whose value
+looks the same as the entity reference.
+</p>
+<p>
+Example:
+</p>
+<pre>
+&gt;&gt;&gt; p.ErrorOnUndefinedEntities=0
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;dud;&lt;/a&gt;')
+('a', None, ['&amp;dud;'], None)
+
+&gt;&gt;&gt; p.ErrorOnUndefinedEntities=1
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;dud;&lt;/a&gt;')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Undefined entity dud
+ in unnamed entity at line 1 char 9 of [unknown]
+</pre>
+
+<p>
+<b>ErrorOnUnquotedAttributeValues</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+<i>[to be added]</i>
+</p>
+
+<p>
+<b>ErrorOnValidityErrors</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is on, validity errors will be reported as errors rather than
+warnings.  This is useful if your program wants to rely on the
+validity of its input.
+</p>
+<p><b>ExpandEmpty</b></p><p>Default: 0</p><p>Description:</p>
+<p>If false, empty attribute dicts and empty lists of children are changed into the value None in every 4-item tuple or list in the returned tree.</p>
+
+<p>
+<b>ExpandCharacterEntities</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set, entity references are expanded.  If not, the
+references are treated as text, in which case any text returned that
+starts with an ampersand must be an entity reference (and provided
+MergePCData is off, all entity references will be returned as separate
+pieces).
+</p>
+<p>
+See also: ExpandGeneralEntities, ErrorOnBadCharacterEntities
+</p>
+<p>
+Example:
+</p>
+<pre>
+&gt;&gt;&gt; p.ExpandCharacterEntities=1
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;#109;&lt;/a&gt;')
+('a', None, ['m'], None)
+
+&gt;&gt;&gt; p.ExpandCharacterEntities=0
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;#109;&lt;/a&gt;')
+('a', None, ['&amp;#109;'], None)
+</pre>
+
+
+<p>
+<b>ExpandGeneralEntities</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set, entity references are expanded.  If not, the
+references are treated as text, in which case any text returned that
+starts with an ampersand must be an entity reference (and provided
+MergePCData is off, all entity references will be returned as separate
+pieces).
+</p>
+<p>
+See also: ExpandCharacterEntities
+</p>
+<p>
+Example:
+</p>
+<pre>
+&gt;&gt;&gt; p.ExpandGeneralEntities=0
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;amp;&lt;/a&gt;')
+('a', None, ['&amp;amp;'], None)
+
+&gt;&gt;&gt; p.ExpandGeneralEntities=1
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;amp;&lt;/a&gt;')
+('a', None, ['&amp;'], None)
+</pre>
+
+<p>
+<b>IgnoreEntities</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+If this flag is on, normal entity substitution takes place. If it is
+off, entities are passed through unaltered.
+</p>
+<p>
+Example:
+</p>
+<pre>
+&gt;&gt;&gt; p.IgnoreEntities=0
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;amp;&lt;/a&gt;')
+('a', None, ['&amp;'], None)
+
+&gt;&gt;&gt; p.IgnoreEntities=1
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;amp;&lt;/a&gt;')
+('a', None, ['&amp;amp;'], None)
+</pre>
+
+
+<p>
+<b>IgnorePlacementErrors</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+<i>[to be added]</i>
+</p>
+
+<p>
+<b>MaintainElementStack</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+<i>[to be added]</i>
+</p>
+<p><b>MakeMutableTree</b></p><p>Default: 0</p><p>Description:</p>
+<p>If false, nodes in the returned tree are 4-item tuples; if true, 4-item lists.</p>
+
+
+<p>
+<b>MergePCData</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set, text data will be merged across comments and entity
+references.
+</p>
+
+<p>
+<b>NoNoDTDWarning</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+Usually, if <span style="font-family: courier;">Validate</span> is set, the parser
+will produce a warning if the document has no DTD.  This flag
+suppresses the warning (useful if you want to validate if possible,
+but not complain if not).
+</p>
+
+
+<p>
+<b>NormaliseAttributeValues</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set, attributes are normalised according to the standard.
+You might want to not normalise if you are writing something like an
+editor.
+</p>
+
+<p>
+<b>ProcessDTD</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+If <span style="font-family: courier;">TrustSDD</span> is set and a <span style="font-family: courier;">DOCTYPE</span> declaration is present, the internal
+part is processed and if the document was not declared standalone or
+if <span style="font-family: courier;">Validate</span> is set the external part is
+processed.  Otherwise, whether the <span style="font-family: courier;">DOCTYPE</span>
+is automatically processed depends on <span style="font-family: courier;">ProcessDTD</span>; if <span style="font-family: courier;">ProcessDTD</span> is not set the user must call <span style="font-family: courier;">ParseDtd()</span> if desired.
+</p>
+<p>
+See also:  TrustSDD
+</p>
+
+
+<p>
+<b>RelaxedAny</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+<i>[to be added]</i>
+</p>
+
+
+<p>
+<b>ReturnComments</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set, comments are returned as nodes with tag name pyRXP.commentTagName, otherwise they are ignored.
+</p>
+<p>
+Example:
+</p>
+<pre>
+&gt;&gt;&gt; p.ReturnComments = 1
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;!-- this is a comment --&gt;&lt;/a&gt;')
+('a', None, [('&lt;!--', None, [' this is a comment '], None)], None)
+&gt;&gt;&gt; p.ReturnComments = 0
+&gt;&gt;&gt; p.parse('&lt;a&gt;&lt;!-- this is a comment --&gt;&lt;/a&gt;')
+('a', None, [], None)
+</pre>
+<p>
+See also: ReturnList
+</p>
+
+<p>
+<b>ReturnDefaultedAttributes</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set, the returned attributes will include ones defaulted as
+a result of ATTLIST declarations, otherwise missing attributes will
+not be returned.
+</p>
+
+
+<p>
+<b>ReturnList</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+If both ReturnComments and ReturnList are both set to 1, the whole
+list (including any comments) is returned from a parse. If ReturnList
+is set to 0, only the first tuple in the list is returned (ie the
+actual XML content rather than any comments before it).
+</p>
+<p>
+Example:
+</p>
+<pre>
+&gt;&gt;&gt; p.ReturnComments=1
+&gt;&gt;&gt; p.ReturnList=1
+&gt;&gt;&gt; p.parse('&lt;!-- comment --&gt;&lt;a&gt;Some Text&lt;/a&gt;&lt;!-- another comment --&gt;')
+[('&lt;!--', None, [' comment '], None), ('a', None, ['Some Text'], None), ('&lt;!--',
+ None, [' another comment '], None)]
+&gt;&gt;&gt; p.ReturnList=0
+&gt;&gt;&gt; p.parse('&lt;!-- comment --&gt;&lt;a&gt;Some Text&lt;/a&gt;&lt;!-- another comment --&gt;')
+('a', None, ['Some Text'], None)
+&gt;&gt;&gt; 
+</pre>
+<p>
+See also: ReturnComments
+</p>
+
+
+<p>
+<b>ReturnNamespaceAttributes</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+<i>[to be added]</i>
+</p>
+<p><b>ReturnProcessingInstructions</b></p><p>Default: 0</p><p>Description:</p>
+<p>If this is set, processing instructions are returned as nodes with tagname pyRXP.piTagname,
+otherwise they are ignored.
+</p>
+
+
+<p>
+<b>SimpleErrorFormat</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+This causes the output on errors to get shorter and more compact.
+</p>
+<p>
+Example:
+</p>
+<pre>
+&gt;&gt;&gt; p.SimpleErrorFormat=0
+&gt;&gt;&gt; p.parse('&lt;a&gt;causes an error&lt;/b&gt;')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Mismatched end tag: expected &lt;/a&gt;, got &lt;/b&gt;
+ in unnamed entity at line 1 char 22 of [unknown]
+
+&gt;&gt;&gt; p.SimpleErrorFormat=1
+&gt;&gt;&gt; p.parse('&lt;a&gt;causes an error&lt;/b&gt;')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: [unknown]:1:22: Mismatched end tag: expected &lt;/a&gt;, got &lt;/b&gt;
+</pre>
+
+<p>
+<b>TrustSDD</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If <span style="font-family: courier;">TrustSDD</span> is set and a <span style="font-family: courier;">DOCTYPE</span> declaration is present, the internal
+part is processed and if the document was not declared standalone or
+if <span style="font-family: courier;">Validate</span> it is set the external part is
+processed.  Otherwise, whether the <span style="font-family: courier;">DOCTYPE</span>
+is automatically processed depends on <span style="font-family: courier;">ProcessDTD</span>; if <span style="font-family: courier;">ProcessDTD</span> is not set the user must call <span style="font-family: courier;">ParseDtd()</span> if desired.
+</p>
+<p>
+See also: ProcessDTD
+</p>
+
+<p>
+<b>Validate</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is on, the parser will validate the document. If it's off,
+it won't. It is not usually a good idea to set this to 0.
+</p>
+
+<p>
+<b>WarnOnRedefinitions</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is on, a warning is given for redeclared elements, attributes,
+entities and notations.
+</p>
+
+<p>
+<b>XMLExternalIDs</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+<i>[to be added]</i>
+</p>
+
+
+<p>
+<b>XMLLessThan</b> 
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+<i>[to be added]</i>
+</p>
+
+<p>
+<b>XMLMiscWFErrors</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+To do with  well-formedness errors.
+</p>
+<p>
+See also: XMLStrictWFErrors
+</p>
+
+<p>
+<b>XMLNamespaces</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is on, the parser processes namespace declarations (see
+below).  Namespace declarations are <i>not</i> returned as part of the list
+of attributes on an element. The namespace value will be prepended to names
+in the manner suggested by James Clark ie if <i>xmlns:foo='foovalue'</i>
+is active then <i>foo:name-->{fovalue}name</i>.
+</p>
+<p>
+See also: XMLSpace
+</p>
+
+
+<p>
+<b>XMLPredefinedEntities</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is on, pyRXP recognises the standard preset XML entities <span style="font-family: courier;"><![CDATA[&amp; &lt; &gt; &quot;]]></span> and <span style="font-family: courier;"><![CDATA[&apos;]]></span>) . If this is off, all
+entities including the standard ones must be declared in the DTD or an
+error will be raised.
+</p>
+
+<p>
+Example:
+</p>
+<pre>
+&gt;&gt;&gt; p.XMLPredefinedEntities=1
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;amp;&lt;/a&gt;')
+('a', None, ['&amp;'], None)
+
+&gt;&gt;&gt; p.XMLPredefinedEntities=0
+&gt;&gt;&gt; p.parse('&lt;a&gt;&amp;amp;&lt;/a&gt;')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in ?
+pyRXP.Error: Error: Undefined entity amp
+ in unnamed entity at line 1 char 9 of [unknown]
+</pre>
+
+<p>
+<b>XMLSpace</b>
+</p>
+<p>
+Default: 0
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is on, the parser will keep track of xml:space attributes
+</p>
+<p>
+See also: XMLNamespaces
+</p>
+
+<p>
+<b>XMLStrictWFErrors</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+If this is set, various well-formedness errors will be reported as
+errors rather than warnings.
+</p>
+
+
+<p>
+<b>XMLSyntax</b>
+</p>
+<p>
+Default: 1
+</p>
+<p>
+Description:
+</p>
+<p>
+<i>[to be added]</i>
+</p>
+
+
+<h1>4. The examples and utilities</h1>
+
+
+<p>The zip file of examples contains a couple of validatable documents in xml,
+the samples used in this manual, and two utility modules: one for benchmarking
+and one for navigating through tuple trees.</p>
+
+
+<h2>4.1 Benchmarking</h2>
+
+<p><i>benchmarks.py</i> is a script aiming to compare performance of various
+parsers.  We include it to make our results reproducable.  It is not a work of
+art and if you think you can make it fairer or better, tell us how!  Here's
+an example run.</p>
+
+
+<pre>
+C:\code\rlextra\radxml\samples&gt;benchmarks.py
+
+    Interactive benchmark suite for Python XML parsers.
+    Parsers available:
+
+opened sample XML file 444220 bytes long
+        1.  pyRXP
+        2.  rparsexml
+        3.  minidom
+        4.  msxml30
+        5.  4dom
+        6.  cdomlette
+
+Shall we do memory tests?  i.e. you look at Task Manager? y/n  y
+Test number (or x to exit)&gt;1
+testing pyRXP
+Pre-parsing: please input python process memory in kb &gt;2904
+Post-parsing: please input python process memory in kb &gt;7180
+12618 tags, 8157 attributes
+pyRXP: init 0.0315, parse 0.3579, traverse 0.1594, mem used 4276kb, mem factor 9.86
+</pre>
+
+
+
+<p>Instead of the traditional example (hamlet), we took as our example an
+early version of the Report Markup Language user guide, which is about
+half a megabyte.  Hamlet's XML has almost no attributes; ours contains lots
+of attributes, many of which will need conversion to numbers one day, and so 
+it provides a more rounded basis for benchmarks</p>
+<p>We measure several factors.  First there is speed.  Obviously this 
+depends on your PC.  The script exits after each test so you get a clean
+process.  We measure (a) the time to load the parser and any code it
+needs into memory (important if doing CGI); (b) time to produce the tree,
+using whatever the parser natively produces; and (c) time to traverse
+the tree counting the number of tags and attributes. Note, (c) might be important
+with a 'very lazy' parser which searched the source text on every request.
+Also, later on we will be able to look at the difference between traversing
+a raw tuple tree and some objects with friendlier syntax.</p>
+
+<p>Next is memory.  Actually you have to measure that!  If anyone can give
+us the API calls on Windows and other platforms to find out the current
+process size, we'd be grateful!  What we are interested in is how big the
+structure is in memory.  The above shows that the memory allocated is 9.86
+times as big as the original XML text.  That sounds a lot, but it's actually
+much less than most DOM parsers.</p>
+
+
+<p>By contrast, here's the result for the <i>minidom</i> parser included in the official
+Python distro:</p>
+
+<pre>
+minidom: init 0.3039, parse 12.6435, traverse 0.0000, mem used 29136kb, mem factor 67.16
+</pre>
+
+<p>Even though minidom uses pyexpat (which is in C) to parse the XML, it's
+36 times slower and uses 7 times more memory.  And of course it does not validate.
+</p>
+
+<h2>4.2 xmlutils and the TagWrapper</h2>
+
+<p>Finally, we've included a 'tag wrapper' class which makes it easy to
+navigate around the tuple tree.  This is randomly selected from many such
+modules we have used in various projects; the next task for us is to
+pick ONE and publish it!  Essentially, it uses lazy evaluation to try
+and figure out which part of the XML you want.  If you ask for
+'tag.spam', it will check if (a) there is an attribute called spam,
+or (b) if there is a child tag whose tag name is 'spam'.  And you
+can iterate over child nodes as a sequence.  And, the str() method of
+a tag which just contains text is just the text.  The snippets below
+should make it clear what we are doing.</p>
+
+<pre>
+&gt;&gt;&gt; tree = pyRXP.Parser().parse(srcText)
+&gt;&gt;&gt; srcText = open('rml_a.xml').read()
+&gt;&gt;&gt; tree = pyRXP.Parser().parse(srcText)
+&gt;&gt;&gt; import xmlutils
+&gt;&gt;&gt; tw = xmlutils.TagWrapper(tree)
+&gt;&gt;&gt; tw
+TagWrapper&lt;document&gt;
+&gt;&gt;&gt; tw.filename
+'RML_UserGuide_1_0.pdf'
+&gt;&gt;&gt; len(tw.story)  # how many tags in the story?
+1566
+&gt;&gt;&gt; tw.template.pageSize
+'(595, 842)'
+
+&gt;&gt;&gt; for elem in tw.story:
+... 	if elem.tagName == 'h1':
+... 		print elem
+... 		
+ RML User Guide
+
+Part I - The Basics
+Part II - Advanced Features
+Part III - Tables
+Appendix A - Colors recognized by RML
+Appendix B - Glossary of terms and abbreviations
+Appendix C - Letters used by the Greek tag
+Appendix D - Command reference
+Generic Flowables (Story Elements)
+Graphical Drawing Operations
+Graphical State Change Operations
+Style Elements
+Page Layout Tags
+Special Tags
+&gt;&gt;&gt; 
+</pre>
+
+
+<p>We are NOT saying this is a particularly good or complete wrapper;
+but we do intend to standardize on one such wrapper module in the near future,
+because it makes access to XML information much more 'pythonic' and pleasant.
+It could be used with tuple trees generated by any parser.  Please let
+us know if you have any suggestions on how it should behave.</p>
+
+
+<h1>
+5.  Future Directions
+</h1>
+
+
+<h2>
+5.1    Test Suite
+</h2>
+
+
+<p>
+We urgently need a unittest-based suite full of samples saying
+'parse this XML with these flags and assert fact X about the
+output'.  If done right, this could be used to generate the
+documentation on the parser flags as well.  It will be very
+important when allowing pluggable parsers.
+</p>
+
+<p>
+In the meantime, there are some simple tests. Look at the file <span style="font-family: courier;">test\t.py</span>.
+</p>
+
+<h2>
+5.2    Standardize the Wrapper
+</h2>
+
+
+<p>
+A standard wrapper class to let you 'drill down' into the tuple
+tree.  This should be as pythonic as possible.
+</p>
+
+<h2>
+5.3    Other parsers
+</h2>
+
+
+<p>
+Include tuple tree constructors based on other parsers.  One could use
+pyexpat (in fact a few lines could be added to pyexpat itself to
+produce a tuple tree in some future version of Python).  This would be
+useful for people who cannot install extensions but have Python 2.0 or
+above.  We also have our own parser, Aaron Watters' rparsexml, which
+uses no C code and is thus useful in places where you cannot build
+extensions.  The latter is not guaranteed to be 100% standards
+compliant, but this means we can modify it to handle bad XML.
+</p>
+
+<h2>
+5.4    Better Benchmark Suite
+</h2>
+
+
+<p>
+Extend this so that it knows about more parsers and (if possible) can
+detect the memory used by them without needing to pause and look in
+Task Manager.  Ensure we are being fair to competitors and using their
+parsers optimally.
+</p>
+
+<h2>
+5.5    Type Conversion Utility
+</h2>
+
+
+<p>
+In the parsed output, everything is a string.  Yet XML is full of
+attributes which "mean" numeric values.  In particular our own
+Report Markup Language has numerous attributes like <i>x, y, width,
+height</i>, as well as color attributes.  It would be really useful to 
+generalize the conversion step. Let's say you can provide a mapping like this
+</p>
+<pre>
+1.  (tag, attribute) -&gt; reader function
+2.   attribute -&gt; reader function
+</pre>
+<p>
+Many of the reader functions are just <i>int</i> or <i>float</i>; others
+could be written in Python or C.  For example we have standard length
+expressions like "3cm" or "8.5in" which we convert to float values in points.
+This could say that (a) if this tag name and attribute name has a converter
+function, use it in-place;  (b) if the attribute name has a converter, use
+that;  and if (c) there is nothing specified, leave it as a string.
+</p>
+
+
+
+<p>
+So the tree could be converted "in place" with a simple API call, at C-like 
+speeds.  And we'd be able to remove a lot of code from our application
+and replace it with a very simple mapping.  Expect this real soon now!
+</p>
+
+<p>
+Note that this type-conversion is not an XML standard.  The one true way is 
+probably to use XML Schema; but for now this is not possible as we don't 
+have a schema-validating parser, and we are big fans of stuff 
+that works now.
+</p>
+
+<h2>
+5.6    Source File References
+</h2>
+
+
+<p>
+Debug/trace info:  add an extra structure to show the position in the
+original source file where the tag starts and finished.  This would be
+a parse-time option, as you might not want to take the time and
+memory.  This would let an application raise an error saying not just that the
+color tag contained a bad color value, but also that it occurred at
+line 2352 of the input.  Useful!  This is why we reserved the final
+tuple element for future use.
+</p>
+
+
+<h2>
+5.7    (longer term and debatable) Richer Tuple Tree Structure
+</h2>
+
+
+<p>It has been suggested that we expand the structure in a couple of
+ways.  Instead of tuples we could make a new C-based node object with
+a richer model.
+</p>
+
+<p>
+Each node should have some pointer back to its parent.  This makes
+navigation a lot easier, but means a little more housekeeping.
+</p>
+
+<p>
+We could then also let you distinguish things like CDATA and entity
+nodes and make it a fully rewritable DOM implementation, running at
+C-like speeds.  We could even go further and keep references to things
+like comments, which are not part of the XML standard.
+</p>
+
+<p>
+PyRXP meets our needs already and we won't rush into this.  Still, it
+might be an attractive enhancement for a future version of Python;
+essentially one would make a lightweight XML node into a built-in
+type.
+</p>
+ 
+
+<address>
+ReportLab<br />
+165 The Broadway<br />
+Wimbledon<br />
+London, UK SW19 1NE
+</address>
+
+</body>
+
+</html>
