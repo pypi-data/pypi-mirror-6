@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+"""
+..
+    Copyright: LeafLabs, LLC, 2014
+    License: MIT License
+    Author: bnewbold@leaflabs.com
+    Date: Feb 2014
+
+Pretty printer with filtering for dealing with large Xilinx ISE build output
+logs.
+
+Call with --help for usage info.
+"""
+
+from __future__ import print_function
+import argparse
+import sys
+
+from xmsgs import *
+
+
+# ========== Script/Args =========== #
+def main():
+    parser = argparse.ArgumentParser(
+        description="Shows the diff! Of the things!",
+        usage="%(prog)s [options]")
+    parser.add_argument('-f', '--full', action="store_true",
+        help="display full output")
+    parser.add_argument('-e', '--everything', action="store_true",
+        help="very verbose output, showing metadata for each message")
+    parser.add_argument('-b', '--by-file', action="store_true",
+        help="Display outputs by filename")
+    parser.add_argument('-s', '--skip-paths', nargs="+",
+        help="Skip paths (can be globs)")
+    parser.add_argument('--show-path', action="store_true",
+        help="show file paths (when possible); implies --full")
+    parser.add_argument('file', type=str,
+        help="")
+    parser.add_argument('-i', '--ignore', nargs="+", type=int,
+        help="list of warnings to ignore (integers)")
+    parser.add_argument('-t', '--types', nargs="+", type=str,
+        help="list of types to handle (error, warning, info, severe)")
+
+    args = parser.parse_args()
+
+    xmsgs_configure(
+        disable_color=(not os.isatty(sys.stdout.fileno())),
+        ignore_list=args.ignore,
+        types=args.types,
+        skip_paths=args.skip_paths)
+
+    if os.path.isdir(args.file):
+        # if we got an empty directory, poke around for subdirectories
+        the_file = glob.glob(args.file + "/*.xmsgs")
+        if len(the_file) == 0:
+            the_file = glob.glob(args.file + "/_xmsgs/*.xmsgs")
+        if len(the_file) == 0:
+            the_file = glob.glob(args.file + "/logs/*.xmsgs")
+        if len(the_file) == 0:
+            print("No files found.")
+            return
+    else:
+        the_file = [args.file, ]
+
+    (msgs, counts) = parse(the_file)
+
+    printargs = dict(
+        everything=args.everything,
+        full=(args.full or args.show_path),
+        show_path=args.show_path,
+    )
+
+    if args.by_file:
+        print_by_file(msgs, **printargs)
+    else:
+        print_msgs(msgs, None, **printargs)
+    print_counts(counts)
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,95 @@
+#!/usr/bin/env python
+"""
+..
+    Copyright: LeafLabs, LLC, 2014
+    License: MIT License
+    Author: bnewbold@leaflabs.com
+    Date: Feb 2014
+
+Diff utility with filtering for, eg, comparing the number of warnings and
+errors between successive bitfile builds.
+
+Call with --help for usage info.
+"""
+
+from __future__ import print_function
+import argparse
+import sys
+
+from xmsgs import *
+
+
+# ========== Script/Args =========== #
+def main():
+    parser = argparse.ArgumentParser(
+        description="Shows the diff! Of the things!",
+        usage="%(prog)s [options]")
+    parser.add_argument('-f', '--full', action="store_true",
+        help="display full output")
+    parser.add_argument('-e', '--everything', action="store_true",
+        help="very verbose output, showing metadata for each message")
+    parser.add_argument('-b', '--by-file', action="store_true",
+        help="Display outputs by filename")
+    parser.add_argument('-s', '--skip-paths', nargs="+",
+        help="Skip paths (can be globs)")
+    parser.add_argument('--show-path', action="store_true",
+        help="show file paths (when possible); implies --full")
+    parser.add_argument('before_file', type=str,
+        help="")
+    parser.add_argument('after_file', type=str,
+        help="")
+    parser.add_argument('-i', '--ignore', nargs="+", type=int,
+        help="list of warnings to ignore (integers)")
+    parser.add_argument('-t', '--types', nargs="+", type=str,
+        help="list of types to handle (error, warning, info, severe)")
+
+    args = parser.parse_args()
+
+    xmsgs_configure(
+        disable_color=(not os.isatty(sys.stdout.fileno())),
+        ignore_list=args.ignore,
+        types=args.types,
+        skip_paths=args.skip_paths)
+
+    if os.path.isdir(args.before_file):
+        # if we got an empty directory, poke around for subdirectories
+        before_files = glob.glob(args.before_file + "/*.xmsgs")
+        if len(before_files) == 0:
+            before_files = glob.glob(args.before_file + "/_xmsgs/*.xmsgs")
+        if len(before_files) == 0:
+            before_files = glob.glob(args.before_file + "/logs/*.xmsgs")
+        if len(before_files) == 0:
+            print("No 'before' files found.")
+            return
+    else:
+        before_files = [args.before_file, ]
+
+    if os.path.isdir(args.after_file):
+        after_files = glob.glob(args.after_file + "/*.xmsgs")
+        if len(after_files) == 0:
+            after_files = glob.glob(args.after_file + "/_xmsgs/*.xmsgs")
+        if len(after_files) == 0:
+            after_files = glob.glob(args.after_file + "/logs/*.xmsgs")
+        if len(after_files) == 0:
+            print("No 'after' files found.")
+            return
+    else:
+        after_files = [args.after_file, ]
+
+    (add, remove, counts) = parse_diff(before_files, after_files)
+
+    printargs = dict(
+        everything=args.everything,
+        full=(args.full or args.show_path),
+        show_path=args.show_path,
+    )
+
+    if args.by_file:
+        print_by_file(add, remove, **printargs)
+    else:
+        print_msgs(remove, 'remove', **printargs)
+        print_msgs(add, 'add', **printargs)
+    print_counts(counts, diff=True)
+
+if __name__ == '__main__':
+    main()
