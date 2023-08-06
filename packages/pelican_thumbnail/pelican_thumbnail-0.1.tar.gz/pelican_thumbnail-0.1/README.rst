@@ -1,0 +1,53 @@
+Pelican Tumbnail Plugin
+=======================
+
+Pelican Thumbnail Plugin is a plugin for pelican to select thumbnail from your post.
+
+Now, its developing state...
+
+
+Installation
+------------
+
+This plugin is not registered on PyPI. You should clone this repository and install through pip::
+
+    git clone git@github.com:wutali/pelican_thumbnail.git
+    cd pelican_thumbnail
+    pip install -e .
+
+
+Usage
+-----
+
+If you insert thumbnail for YouTube, add youtube meta tag like this::
+
+    It is awesome!
+    ==============
+
+    :date: 2014-01-01 00:00
+    :slug: awesome-youtube
+    :author: Me
+    :youtube: teAqRZX4hbY
+
+
+You can do same thing to Niconico Movie (its japanese movie service.)::
+
+    It is great!
+    ==============
+
+    :date: 2014-01-01 00:00
+    :slug: great-niconico
+    :author: Me
+    :niconico: sm19220627
+
+But Niconico movies original thumbnail is a little small...
+
+Use the thumbnail attribute of article object when you use thumbnail on your theme::
+
+    <img src="{{ article.thumbnail }}" />
+
+
+License
+-------
+
+Pelican Thumbnail is released under the MIT License. http://www.opensource.org/licenses/mit-license
