@@ -1,0 +1,505 @@
+#!/usr/bin/env python
+'''
+Created on 12.02.2014
+
+@author: phimi
+'''
+import sys, getopt
+import base64, urllib2, urllib
+import json
+import zipfile
+import time
+from _pyio import BytesIO
+import gzip
+import re
+
+baseURL = "https://apiomat.org/yambas/rest"
+apiKey = None
+system = "LIVE"
+userMail = None
+password = None
+appName = None
+defaultPwd = '12345'
+smKey = None
+smEnv = 0
+
+classNamesAndIds = {}
+metaModelHrefs = {}
+objs = {}
+
+USER_MODEL = 'user'
+
+def showHelp(sys):
+   print 'Usage: import-stackmob-to-apiOmat --ifile=<inputfile> --smKey=<stackmob_publickey> --smEnv=<stackmob_environment> --appName=<appName> --apiKey=<apiKey> --system=<usedSystem> --userMail=<userMail> --password=<userPassword> --defaultPwd=<def_pw_for_user>'
+   print 'Example: import-stackmob-to-apiOmat  -i 9339.zip -K 123456 -E 0 -a StackmobImport -k 0000000 -s LIVE -u login@apiomat.org -p 12345 -d <default_password_for_user> '
+   sys.exit()
+
+def main(argv):
+   global userMail,password, apiKey, system, appName, defaultPwd, smKey, smEnv
+   inputfile = ''
+   try:
+      opts, _ = getopt.getopt(argv, "hi:i:K:E:a:k:s:u:p:d", ["ifile=", "smKey=", "smEnv=", "appName=", "apiKey=", "system=", "userMail=", "password=", "defaultPwd="])
+   except getopt.GetoptError:
+      print 'import-stackmob-to-apiOmat -i <inputfile> -K <sm_apiKey> -E <sm_enviroment> -a <appName> -s <usedSystem> -u <userMail> -p <userPassword> -d <default_password_for_user> '
+      sys.exit(2)
+   for opt, arg in opts:
+      if opt == '-h':
+         showHelp(sys)
+      elif opt in ("-i", "--ifile"):
+         inputfile = arg
+      elif opt in ("-K", "--smKey"):
+         smKey = arg
+      elif opt in ("-e", "--smEnv"):
+         smEnv = arg
+      elif opt in ("-a", "--appName"):
+         appName = arg
+      elif opt in ("-s", "--system"):
+         system = arg
+      elif opt in ("-u", "--userMail"):
+         userMail = arg
+      elif opt in ("-p", "--password"):
+         password = arg
+      elif opt in ("-k", "--apiKey"):
+         apiKey = arg
+      elif opt in ("-d", "--defaultPwd"):
+         defaultPwd = arg
+   #check args
+   if not apiKey or not appName or not inputfile or not password or not userMail:
+      showHelp(sys)
+   print 'Input file is ', inputfile
+   isZipFile = zipfile.is_zipfile(inputfile)
+   #begin with reading zip
+   if isZipFile:
+      filelist = []
+      relations = []
+      
+      zf = zipfile.ZipFile(inputfile)
+      #find files to extract
+      for info in zf.infolist():
+         filelist.append(info.filename)
+      #Get class definitions from stackmob REST API
+      print '### Trying to get object definitions from Stackmob ###'
+      metaData = _getMetaData();
+      objData = {}
+      #first let's create meta models
+      for filename in filelist:
+         #lets create metamodels in apiOmat
+         objectName = filename[filename.rindex('/') + 1:-5]
+         print '### Start importing ',objectName,' ###'
+         objectHREF = createMetaModel(objectName)
+         if objectHREF:
+            metaModelHrefs[objectName] = objectHREF
+            classNamesAndIds[objectName] = objectHREF
+         print "## Created MetaModel with ID ", objectHREF, " ##"
+      #then let's create attributes and data
+      for filename in filelist:
+         try:
+            data = zf.read(filename)
+         except KeyError:
+            print 'ERROR: Did not find %s in zip file' % filename
+         else:
+            #create valid JSON string from data
+            data =re.sub(r'}\s{', '}, {', data)
+            jsonStr =json.loads('[' + data + ']')
+            #print repr(jsonStr)
+            #lets parse
+            objectName = filename[filename.rindex('/') + 1:-5]
+            objects = parseJSON(jsonStr, objectName, metaData)
+            objectHREF = metaModelHrefs[objectName];
+            print "## Create MetaModel-Attributes for %s ##" % objectName
+            createMetaModelAttributes(objectHREF, objects[0])
+            print "## Created MetaModel-Attributes ##"
+            deployApp()
+            print "## Deploy Module ##"
+            createData(objects, objectName)
+            print "## Imported data ##"
+            print '### End importing ',objectName,' ###'
+      
+      print '### Begin with relation processing ###'
+      #handle relations
+      for relation in relations:
+         #_Join/relation/_User.json
+         model = relation.split(':')[2][:-5]
+         data = zf.read(relation)
+         print '## Process relations for ', model, '##'
+         processRelations(model, data)
+      print '### End with relation processing ###'
+   else:
+      print "Sorry no zip file"
+
+def deployApp():
+#    href = baseURL + "/customers/%s/apps/%s" % (userMail,appName)
+#    postData = {
+#                'applicationName' : "%s" % appName,
+#                'applicationStatus' : {'%s' % system:'ACTIVE'}
+#                }
+#    data = json.dumps(postData)
+#    req = urllib2.Request(href, data, headers)
+#    req.get_method = lambda: 'PUT' 
+#    try:
+#       response = urllib2.urlopen(req)
+#       if response.getcode() == 200:
+#          print "# Updated app #"
+#    except urllib2.HTTPError,error:
+#          print "Some error occurred when updating app '%s': %s" % (appName, error.code)
+   
+   #deploy module
+   headers = _setHeader()
+   href = baseURL + "/modules/%sMain" % appName 
+   postData= {
+              'moduleStatus':{'LIVE':'DEPLOYED'}
+   }
+   data = json.dumps(postData)
+   req = urllib2.Request(href, data, headers)
+   req.get_method = lambda: 'PUT'
+   try:
+      response = urllib2.urlopen(req)
+      if response.getcode() == 200:
+         print "# Updated module #"
+   except urllib2.HTTPError,error:
+         print "Some error occurred when updating module '%s': %s" % (appName, error.code)
+   
+   
+def parseJSON(jsonList, attrName, metaData):
+   typeMap = {}
+   data = []
+   if(isinstance(jsonList, (list, tuple, dict)) and len(jsonList) > 0):
+      for jsonObj in jsonList:
+         #iterate over attributes
+         objData = {}
+         if(isinstance(jsonObj, (list))):
+            continue
+         for key, value in jsonObj.iteritems():
+            val = value
+            #add only keys that are not already there
+            properties = []
+            if key == '_id':
+               #try to find the right properties because naming of json key equals not naming of property
+               props = metaData[attrName]['properties'];
+               for p in props:
+                  if 'identity' in props[p]:
+                     properties = props[p]
+                     break;
+            else:
+               properties = metaData[attrName]['properties'][key];
+            typeOfKey = properties['type']
+            title = properties['title']
+            k = title
+            
+            #check if it is username
+            if 'identity' in properties and key == "_id" and properties['title'] == 'username':
+               k = 'userName'
+               key = None
+               pass
+            #check if it is pk
+            elif 'identity' in properties:
+               k = 'foreignId'
+               key = None
+            #it's relation
+            elif '$ref' in properties:
+               #one to many relation
+               if typeOfKey == 'array':
+                  typeOfKey = 'REF__%s' % properties['$ref']
+               else:
+                  typeOfKey = 'SINGLEREF__%s' % properties['$ref']
+            else:
+               #check if it is geo location
+               if 'properties' in properties and 'lat' in properties['properties']:
+                  typeOfKey = 'GeoPoint'
+               #check if it createdAt and modifiedAt
+               elif key == 'createddate':
+                  k = 'createdAt'
+                  #Attribute exists by standard so ignore
+                  key = None
+               elif key == 'lastmoddate':
+                  k = 'lastModifiedAt'
+                  #Attribute exists by standard so ignore
+                  key = None
+               elif typeOfKey == 'boolean':
+                  val = 1 if value else 0
+               #it's array
+               elif typeOfKey == 'array':
+                  arrayType = properties["items"]["type"]
+                  #convert booleans
+                  if(arrayType == 'boolean'):
+                     val = []
+                     for v in value:
+                        val.append( 1 if v else 0) 
+                  
+                  typeOfKey = 'ARRAY__%s' % arrayType
+               #ignore binary
+               elif typeOfKey == 'binary':
+                  pass
+               else:
+                  val = value
+            if key and key not in typeMap:
+               typeMap[key] = { 'type' : typeOfKey, 'name' : title }
+             
+            if k:  
+               objData[k] = val
+         data.append(objData)
+            
+   return [typeMap, data]
+
+def createMetaModel(objName):
+   href = baseURL + "/modules/%sMain/metamodels" % appName
+   headers = _setHeader('application/x-www-form-urlencoded')
+   req = urllib2.Request(href, "metaModelName=%s" % objName, headers)
+   try:
+      response = urllib2.urlopen(req)
+      if response.getcode() == 201:
+         href = response.info().getheader("Location")
+         #create child of MemberModel if parse user
+         if objName == USER_MODEL:
+            _createMemberModelChild(href)
+         return href
+   except urllib2.HTTPError,error:
+      if error.code == 830:
+         #download all metamodels
+         _getAllMetaModels()
+      print "-> Some error occurred when creating meta model: ", error.code
+
+def _getAllMetaModels():
+   href = baseURL + "/modules/%sMain/metamodels" % appName 
+   headers = _setHeader()
+   req = urllib2.Request(href, None, headers)
+   try:
+      response = urllib2.urlopen(req)
+      if response.getcode() == 200:
+         data = response.read()
+         if response.info().get('Content-Encoding') == 'gzip':
+            buf = BytesIO(data)
+            f = gzip.GzipFile(fileobj=buf)
+            data = f.read()
+         data = json.loads(data)
+         if(isinstance(data, (dict, tuple, list))):
+            for metaModel in data:
+              classNamesAndIds[metaModel['name']] = metaModel['href']
+              metaModelHrefs[metaModel['name']] = metaModel['href']
+   except urllib2.HTTPError,error:
+      print "-> Some error occurred when processing member model: ", error.code
+
+def _createMemberModelChild(childHref):
+   #downoad all basic modules to find MemberModel
+   href = baseURL + "/modules/Basics/metamodels" 
+   headers = _setHeader()
+   req = urllib2.Request(href, None, headers)
+   try:
+      response = urllib2.urlopen(req)
+      if response.getcode() == 200:
+         data = response.read()
+         if response.info().get('Content-Encoding') == 'gzip':
+            buf = BytesIO(data)
+            f = gzip.GzipFile(fileobj=buf)
+            data = f.read()
+         data = json.loads(data)
+         if(isinstance(data, (dict, tuple, list))):
+            for metaModel in data:
+               if metaModel['name'] == 'MemberModel':
+                  memberHref = metaModel['href']
+                  memberID = memberHref.rsplit('/',1)[1]
+                  #add parent for 
+                  childHref += "/parent"
+                  #parentMetaModelId
+                  headers = _setHeader('application/x-www-form-urlencoded')
+                  req = urllib2.Request(childHref, "parentMetaModelId=%s" % memberID, headers)
+                  try:
+                     response = urllib2.urlopen(req)
+                     if response.getcode() == 201:
+                        print "# Successfully created parent #"
+                  except urllib2.HTTPError,error:
+                     print "-> Some error occurred when creating parent meta model: ", error.code
+                  break 
+   except urllib2.HTTPError,error:
+      print "-> Some error occurred when processing member model: ", error.code
+
+
+def createMetaModelAttributes(objHREF, typeMap):
+   if not typeMap or not objHREF:
+      return
+   href = objHREF + "/attributes"
+   headers = _setHeader('application/x-www-form-urlencoded')
+   for k, v in typeMap.iteritems():
+      #check if it is a reference
+      objType = v['type']
+      name = v['name']
+      if objType.startswith('SINGLEREF__') or  objType.startswith('REF__'):
+         className = objType.split('__')[1]
+         linkHref = classNamesAndIds[className]
+         typ = linkHref.rsplit('/',1)[1]
+         postData = {'refModelId': typ, 'isCollection' : 'true' if objType.startswith('REF') else 'false', 'attributeName': name}
+      elif objType.startswith('ARRAY'):
+         typ = getApiOmatType(objType.split('__')[1])
+         postData = {'attributeType': typ, 'isCollection' : 'true', 'attributeName': name}
+      else:   
+         typ = getApiOmatType(objType)
+         if not typ:
+            typ = objType
+         postData = {'attributeType': typ, 'isCollection' : 'false', 'attributeName': name}
+      data = urllib.urlencode(postData)
+      req = urllib2.Request(href, data, headers)
+      try:
+         response = urllib2.urlopen(req)
+         if response.getcode() == 201:
+            print '# Sucessfully created metamodel attribute ', name, " #"
+      except urllib2.HTTPError,error:
+            print "-> Some error occurred when creating attribute '%s': %s" % (name, error.code)
+
+def createData(objects, objectName):
+   references = [] 
+   types = objects[0]
+   referenceTypes = list(k for k, v in types.iteritems() if (v['type'].startswith('SINGLEREF' ) or v['type'].startswith('REF' )))
+   data = objects[1]
+   headers = _setHeader()
+   href = baseURL + "/apps/%s/models/%sMain/%s" % (appName, appName, objectName) 
+   for dataObj in data:
+      tup = tuple( ((k,v) for k, v in dataObj.iteritems() if k in referenceTypes))
+      #create json obj and send to server
+      dataObj['@type'] =  "%sMain$%s" % (appName, objectName)
+      if objectName == USER_MODEL:
+         #set default password for user
+         dataObj['password'] = defaultPwd
+      postData = json.dumps( dataObj )
+      print "JSON: %s" % repr(postData)
+      req = urllib2.Request(href, postData, headers)
+      try:
+         response = urllib2.urlopen(req)
+         if response.getcode() == 201:
+            print "# Sucessfully added data row to ", objectName, " #"
+            objHref =  response.info().getheader("Location")
+            objs[dataObj['foreignId']] = objHref
+            if tup:
+               references.append( {"objHref": objHref, "refObj" : tup })
+      except urllib2.HTTPError,error:
+            print "-> Some error occurred when adding '%s': %s" % (dataObj, error.code)
+   #add Relationshop type data
+   for ref in references:
+      #first find obj with foreignId == refVal
+      refTmp = ref['refObj'][0]
+      objHref = ref['objHref']
+      refKey = refTmp[0]
+      refVal = refTmp[1]
+      #create reference
+      data = _getData(None, refVal, href = href)
+      if isinstance(data, (dict,tuple,list)) and len(data) > 0:
+         objHref += '/%s' % refKey
+         req = urllib2.Request(objHref, json.dumps(data), headers)
+         try:
+            response = urllib2.urlopen(req)
+            if response.getcode() == 201:
+               print "# Created reference successful: %s -> %s #" % (refKey, refVal)
+         except urllib2.HTTPError,error:
+               print "-> Error occurred when creating reference '%s': %s" % (objHref, error.code)
+
+def _setHeader(cType = 'application/json'):
+   authCreds ="Basic " + base64.b64encode(userMail + ":" + password);
+   headers = { 
+              'Authorization': authCreds,
+              'X-apiomat-apikey' : apiKey,
+              'Accept' : 'application/json',
+              'Accept-Encoding' : 'gzip, deflate',
+              'Content-Type' : cType,
+              'X-apiomat-sdkVersion': '1.0',
+              'X-apiomat-system': system
+   }
+   return headers
+
+def getApiOmatType(objType):
+   try:
+      return {
+            'unicode': 'String',
+           'float': 'Double',
+           'number': 'Double',
+           'integer': 'Long',
+           'Date': 'Date',
+           'GeoPoint': 'Location',
+           'boolean': 'Long',
+           'File': 'String',
+           'string': 'String',
+      }[objType]
+   except KeyError as error:
+      return None
+
+def _getData(modelName, childId, href = None):
+   data = None
+   params = urllib.urlencode({"q":"foreignId==\"%s\"" % childId})
+   if not href:
+      href = baseURL + "/apps/%s/models/%sMain/%s" % (appName, appName, modelName)
+   loadHref = href + "?" + params
+   headers = _setHeader()
+   req = urllib2.Request(loadHref, None, headers)
+   try:
+      response = urllib2.urlopen(req)
+      if response.getcode() == 200:
+         data = response.read()
+         if response.info().get('Content-Encoding') == 'gzip':
+            buf = BytesIO(data)
+            f = gzip.GzipFile(fileobj=buf)
+            data = f.read()
+         data = json.loads(data)
+         if isinstance(data, (list)) and len(data) > 0:
+            data = data[0]
+   except urllib2.HTTPError as error:
+      print "-> Can't found object '%s': %s" % (childId, error.code)
+   return data
+
+def processRelations(modelName, jsonData):
+   #first parse data
+   jsonList = json.loads(jsonData)['results']
+   if(isinstance(jsonList, (list, tuple, dict))) and len(jsonList) > 0:
+      typ = ""
+      jsonObj = jsonList[0]
+      parentId = jsonObj["owningId"]
+      childId = jsonObj["relatedId"]
+      #find in apiOmat type for childId
+      data = _getData(None, childId, objs[childId])
+      typ = data["@type"].split("$")[1]
+      #lets create metamodelattribute
+      if typ:
+         refKey = "%ss" % typ
+         metaModelAttr= {
+                     refKey : "RELATION__%s" % typ
+                     }
+         createMetaModelAttributes(metaModelHrefs[modelName], metaModelAttr)
+         deployApp()
+      #add data
+      #TODO extract href
+      parentHref= objs[parentId]
+      for refData in jsonList:
+         data = _getData(typ, refData["relatedId"])
+         #set reference
+         href = parentHref + "/%s" % (refKey[0].lower() + refKey[1:] )
+         headers = _setHeader()
+         req = urllib2.Request(href, json.dumps(data), headers)
+         try:
+            response = urllib2.urlopen(req)
+            if response.getcode() == 201:
+               print "# Created reference successfully %s #" % (refKey)
+         except urllib2.HTTPError,error:
+               print "-> Error creating reference '%s': %s" % (href, error.code)
+
+#GEt metadata from Stackmob REST API
+def _getMetaData():
+   metaData = []
+   url = 'http://api.stackmob.com/listapi'
+   headers = { 
+              'X-StackMob-API-Key': smKey,
+              'Accept' : "application/vnd.stackmob+json; version=%d" % (smEnv),
+              'Content-Type' : 'application/json',
+   }
+   req = urllib2.Request(url, None, headers)
+   try:
+      response = urllib2.urlopen(req)
+      if response.getcode() == 200:
+         print "# Got metadata successfully  #"
+         #read json
+         data = response.read()
+         metaData =json.loads(data)
+         
+   except urllib2.HTTPError,error:
+      print "-> Error loading metadata from stackmob '%s': %s" % (href, error.code)
+   return metaData;
+
+
+if __name__ == '__main__':
+   main(sys.argv[1:])
