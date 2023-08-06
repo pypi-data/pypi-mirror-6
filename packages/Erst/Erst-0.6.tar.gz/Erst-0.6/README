@@ -1,0 +1,29 @@
+Erst
+
+Erst is a fuse filesystem that does automatic versioning.  It uses a mercurial repository to do the revision control.
+
+It runs single threaded because it uses mercurial update command to switch the "view" you have of the filesystem.  In most cases this won't be much of a penalty, but if you have multiple things accessing the filesystem using different time views, it could impact performance.
+
+
+Past file access is read only.  To access a past version of the file simply put an iso 8601 timestamp as the leading element of the path, after the path to the mountpoint.
+
+For example if your filesystem is mounted as /tmp/project_n, you could access what it looked like on Jan6, 2014 by doing /tmp/project_n/2014-01-06.  With just a date it gives you the "end of the day" view.  You can also include a specific timestamp to further control when, /tmp/project_n/2014-01-06T13:30:20
+
+Timestamps are in 24 hour clock style, by default it's considered local time, if you'd like it to be UTC instead, add a Z to the end, /tmp/project_n/2014-01-06T13:30:20Z
+
+Things get commited on the close, create, rename, and remove operations.
+
+I don't recommend using this to store large binary files, it'll work, but it can make the repository a lost slower when switching between views.
+
+
+Files added to the "repo" directory outside of mercurial or erst won't be seen by erst.  Erst uses the mercurial manifest to determine what files should appear in a given view.
+
+
+Erst ignores files with specific endings:
+ currently .swp, .swpx, .swo, .swn, .o, ~, .hg
+
+It does this to avoid temporary swap files made by emacs, vi(m), and compiling.  If you want to change this on your system, just modify the __ignore list in the Erst class. Maybe one day there will be a config file that will contain that, instead of having to modify the source.
+
+You can also use Erst to "mount" an existing mercurial repo that was not created by Erst.
+
+when removing the last item in a directory, the directory will get removed as well since mercurial doesn't track directories as such.  This will cause an error when using rm -r
