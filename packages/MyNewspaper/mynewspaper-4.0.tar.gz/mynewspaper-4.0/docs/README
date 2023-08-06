@@ -1,0 +1,761 @@
+============
+My Newspaper
+============
+:Author: Iñigo Serna, inigoserna AT gmail DOT com
+
+:Version: 4.0, April 13th. 2014
+
+:Home page: http://inigo.katxi.org/devel/mynewspaper/
+
+:License: | Copyright © 2005-14, Iñigo Serna
+          | This software has been released under the `GNU Affero GPL License`_ version 3
+            or later, see the COPYING_ file that comes with this package.
+          | There is NO WARRANTY.
+
+:Last update: Sun Apr 13 13:18:26 2014
+
+.. meta::
+   :description: MyNewspaper is a web-based personal RSS/ATOM news aggregator
+                 and feeds reader written in Python 3
+   :keywords: MyNewspaper, RSS, ATOM, feeds, aggregator, python
+
+.. contents:: Table of Contents
+
+
+
+Introduction
+============
+This is the documentation for *MyNewspaper*, a web-based personal RSS/ATOM
+news aggregator and feeds reader written in Python 3.
+
+It incorporates its own web server and store all the information in a database;
+but don't be afraid, it's very easy to install and use, and powerful enough for most users.
+
+Can be completely controlled with the keyboard.
+It even has an adapted web interface for mobile devices.
+
+Code and development is publically available in the `BitBucket repository`_.
+
+Want to know how it looks like?
+
+.. table:: **Web interface on Firefox 28 on Fedora Linux 20**
+
+   ===========================   ===========================
+   .. image:: ss1.jpeg           .. image:: ss2.jpeg
+   *Home*                        *Folders*
+   ---------------------------   ---------------------------
+   .. image:: ss3.jpeg           .. image:: ss4.jpeg
+   *Reading articles 1*          *Reading articles 2*
+   ===========================   ===========================
+
+.. table:: **Mobile web interface on an Android smartphone with Firefox 28**
+
+   ===========================   ===========================   ===========================
+   .. image:: ss5.jpeg           .. image:: ss6.jpeg           .. image:: ss7.jpeg
+   *Summary*                     *List of articles*            *Reading an article*
+   ===========================   ===========================   ===========================
+
+
+A bit of history
+----------------
+*MyNewspaper* can be considered an old project, as first version dates from 2005, 
+and since then it has adopted and adapted different web paradigms: CGI running 
+on a web server in v1.0, pure web app in v2.0, javascript and AJAX for v3.0.
+
+A couple of years after v3.0 release I abandoned it to join Google Reader wave,
+but since the announce of its shutdown I turned to *MyNewspaper* as I didn't like
+any of the alternatives. Thus I rewrote from scratch all the code. It was fast,
+I had a working version in a month, many weeks before Google Reader closed,
+but then it took about 10 months more to write the documentation…
+
+Anyway, this is now version 4.0, a very fast and nice web-based feeds reader
+for personal use.
+
+
+Technically…
+------------
+*MyNewspaper* is a web application and, as such, it has backend and frontend code.
+
+Backend is written in Python_ and based upon BottlePy_ web microframework,
+and frontend use HTML and JavaScript with the help of jQuery_ library.
+
+Permanent storage is saved in a SQLite_ DB, without any abstraction modules or
+ORMs to speed up DB interaction.
+
+It uses `Mark Pilgrim's Universal FeedParser`_ module to download and
+handle feeds in RSS, Atom and other popular formats.
+
+All the needed modules are already included within the package.
+More information can be found in the Dependencies_ section.
+
+
+Dependencies
+------------
+All the required dependencies are already packed within *MyNewspaper* so you
+don't need to download and install any module.
+
+I specify the versions I currently use, note different versions could
+not work.
+
+- MyNewspaper_, you can download it from here_
+- Python_ >= v3.2 (v2.x doesn't work)
+- BottlePy_ (v0.12.5, included)
+- `Mark Pilgrim's Universal FeedParser`_ (v5.1.2, included)
+- DateUtil_ (v2.1, included)
+- jQuery_ (v2.1.0, included), jQueryUI_ (v1.10.2, included)
+- modern web browser with javascript support enabled
+- cron, to periodically update RSS feeds (optional)
+- a web server, as frontend to *MyNewspaper* (optional)
+
+JavaScript code minimized with `Closure Compiler`_.
+
+
+License
+-------
+*MyNewspaper* has been released under the `GNU Affero GPL License`_ version 3
+or later, read the COPYING_ file that comes with this package.
+There is NO WARRANTY.
+
+
+Contact
+-------
+In case you have any criticism, comment, suggestion, etc you can use
+the `BitBucket Issue Tracker`_ or send me an email to the address stated above.
+
+
+Download and Installation
+=========================
+First of all, download *MyNewspaper* from here_. It's all you need to do, 
+no additional modules or libraries to install, only Python 3.2+.
+
+You can run *MyNewspaper* in different ways. I'll show you different methods
+as examples, simple and more elaborated, but note that you can also mix
+from both approaches.
+
+
+Easy way: uncompress & run
+--------------------------
+This is an easy and fast way to get *MyNewspaper* running, but it's not
+the proper method if you want to keep it running permanently.
+
+Uncompress source package in a directory of your choice and go there.
+You don't need to configure anything. Just be sure you have Python
+version 3.2 or upper installed on your machine.
+
+Now run the application: ::
+   
+    $ python3 ./mynewspaper.py 
+    Bottle v0.12.5 server starting up (using WSGIRefServer())...
+    Listening on http://127.0.0.1:8887/
+    Hit Ctrl-C to quit.
+
+  
+It will automatically start its own web server on IP 127.0.0.1 and port 8887,
+then you can open a web browser to that URL in the same computer.
+You can change both IP and port editing the function `run_standalone()`
+at the end of `src/web.py` file.
+
+This method is convenient for testing or taking a look at the program
+but consider a more robust approach for production.
+
+
+Production: guru's way
+----------------------
+If you want to install *MyNewspaper* as a system service this is the right
+choice.
+
+We will configure a running web server as a frontend for *MyNewspaper*,
+install a cron recipe to update feeds periodically in an automatic and
+transparent  way and finally install an init.d script to make *MyNewspaper*
+start with your system.
+
+1. As before, uncompress package in a directory of your choice. In
+   this case it is a good idea to use a subdirectory under your web
+   documents hierarchy
+2. Then change the ownership of the whole directory to that user of
+   your web server
+
+For example::
+
+    # cd /var/www
+    # tar xvfx path_to/mynewspaper-X.Y.tar.gz
+    # chown -R <www_user> mynewspaperX
+
+Note that depending on your distribution, web documents root path could be
+other than */var/www*.
+
+Next, let's study how to do some advanced configurations.
+
+
+Run behind a web server
+~~~~~~~~~~~~~~~~~~~~~~~
+Note *MyNewspaper* (in fact the micro web framework it's based on, BottlePy_)
+does not directly provide user authentication, ssl or traffic compression
+on his own.
+Thus it's a worth idea to run behind a web server, specially if you want to
+deploy it on a internet accessible computer.
+You will get many other advantages as well:
+
+- use the public URL you like, and let the web server map it to the program
+  internal URL
+- run under SSL transparently
+- use transparent authentication for the program
+- compress traffic between *MyNewspaper* and the web browser
+- integrate visits information with your site logs
+
+
+**With nginx**
+
+nginx_ is the web server I use nowdays, fast and powerful.
+
+Example 1: use a virtual host: *https://mynewspaper.domain.com* ::
+
+  [...]
+  # enable and configure SSL and gzip compression
+  [...]
+  server {
+      listen       443;
+      server_name  mynewspaper.domain.com;
+      ssl          on;
+      access_log   /var/log/nginx/mynewspaper-access.log  main;
+  
+      location / {
+          auth_basic            "My Newspaper";
+          auth_basic_user_file  "/etc/nginx/domain.com.users";
+          proxy_pass            http://127.0.0.1:8887;
+      }
+      location /images {
+          disable_symlinks  off;
+          alias /var/www/mynewspaper4/images;
+      }
+      location /static {
+          disable_symlinks  off;
+          alias /var/www/mynewspaper4/static;
+      } 
+      location /docs {
+          disable_symlinks  off;
+          alias /var/www/mynewspaper4/docs;
+      }
+  }
+  [...]
+
+
+**With lighttpd**
+
+lighttpd_ is a fast, powerful web server with lot of features.
+
+Example 1: use a virtual host: *http://mynewspaper.domain.com* ::
+
+  [...]
+  server.modules = ( ..., "mod_proxy", "mod_simple_vhost", ... )
+  [...]
+  $HTTP["host"] == "mynewspaper.domain.com" {
+    server.document-root = "/var/www/mynespaper/"
+    accesslog.filename = "/var/log/lighttpd/mynewspaper-access_log"
+    proxy.server = ( "" => (("host" => "127.0.0.1", "port" => 8887)) )
+  }
+  [...]
+
+Example 2: rewrite url: *http://www.domain.com/mynewspaper* [#]_ ::
+
+  [...]
+  server.modules = ( ..., "mod_rewrite", "mod_proxy", ... )
+  [...]
+  $HTTP["host"] == "www.domain.com" {
+    [...]
+    $HTTP["url"] =~ "^/mynewspaper" {
+      server.document-root = "/var/www/mynewspaper2"
+      url.rewrite-once = ( "^/mynewspaper(.*)$" => "/$1" )
+      proxy.server = ( "" => (("host" => "127.0.0.1", "port" => 8887)) )
+    }
+    [...]
+  }
+  [...]
+
+.. [#] This doesn't work in some lighttpd v1.4.x versions due to a bug
+       in lighttpd code, see http://trac.lighttpd.net/trac/ticket/164
+
+
+**With apache**
+
+apache_, the most popular web server.
+
+The concepts are quite similar to any other web server.
+
+
+**Other**
+
+There are other alternatives: FCGI, WSGI, running as CGI, etc.
+More ideas in `BottlePy_ documentation <http://bottlepy.org/docs/dev/deployment.html>`_.
+
+
+Automatic updates with cron
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. Copy *tools/mynewspaper.cron* file to */etc/cron.d* with the name
+   *mynewspaper*
+2. Uncomment the proper line depending on how you want to access the application:
+   internal web or web front. By default, it will update feeds each 30 minutes
+3. Finally, restart cron daemon
+
+::
+
+    # cp tools/mynewspaper.cron /etc/cron.d/mynewspaper
+    # [edit] /etc/cron.d/mynewspaper
+    # systemctl restart crond # or /etc/init.d/crond restart
+
+If you don't understand anything, consult your *cron* documentation.
+
+Of course, you can fetch new articles from the web UI too.
+
+
+Running as a system service
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Nowdays I use supervisor_ to start, run and control my python web applications.
+
+This is the configuration file I use, from */etc/supervisor.d/web_mynewspaper.ini*: ::
+
+    [program:web_mynewspaper]
+    command=/home/www/mynewspaper4/mynewspaper.py
+    directory=/home/www/mynewspaper4
+    priority=100
+    autostart=true
+    autorestart=true
+    user=www
+    log_stdout=true
+    log_stderr=true
+    logfile=/var/log/supervisord/web_mynewspaper.log
+    logfile_maxbytes=1MB
+    logfile_backups=5
+    
+Anyway you could easily create your own *systemctl* or *init.d* scripts.
+
+
+Using MyNewspaper
+=================
+
+First steps
+-----------
+Initial wizard
+~~~~~~~~~~~~~~
+Once you have the application installed and running, open your web
+browser and navigate to the URL shown on the terminal,
+http://127.0.0.1:8887 by default. If you run *MyNewspaper* behind a web server
+and use url rewriting you could use that public URL too.
+
+.. Note::
+
+   You can also manually upgrade a  *MyNewspaper* v3 database from
+   command line using the *migrate_db_from_v3_to_v4.py* shell script
+   in *tools* directory. Remember to backup the database file before.
+
+.. image:: ss-tut-wizard.jpeg
+   :align: right
+
+First time you will be redirected to the initial wizard where you will
+be able to import feeds from an *OPML File*, import feeds from *Google
+Reader Takeout* file, migrate data from a *MyNewspaper v3 database* or start
+without feeds.
+
+
+Main screen
+~~~~~~~~~~~
+After you have completed the wizard, the application will download the
+new articles for the feeds you have defined (if any) and then you will
+be redirected to the summary screen of the application. This could
+take some time if there are a lot of feeds or you have a slow internet
+connection.
+
+.. image:: ss-tut-main.jpeg
+   :align: right
+
+Once the database is properly configured and application is running
+you can always go to http://127.0.0.1:8887 (or configured URL) to see
+the summary page.
+
+Now your are ready to enjoy *MyNewspaper*.
+
+
+User Interface
+--------------
+As you can see in the image above, the screen is divided into 3
+parts:
+
+- at the top, there is the header
+- at the left, the sidebar
+- at the right, the body of the application
+
+
+The Header
+~~~~~~~~~~
+Logo with a couple of buttons:
+
+- hide/show sidebar toggle button, at the left
+- refresh view button, at the right of logo
+
+
+The Sidebar
+~~~~~~~~~~~
+The sidebar is placed at the left of the page.
+It can be hidden and showed clicking the button on the header or with `ESC`
+key shortcut.
+
+It contains some links: *Home view*, *Folders view*, *Archive*, *Search*.
+
+Below them there is the list with feeds folders, and the count if there are
+unread articles.
+The groups can be expanded or collapsed to show or hide feeds in the folder.
+Clicking on folders or feeds will lead you to the `Articles view`_.
+
+
+The Body
+~~~~~~~~
+It can contain different pages:
+
+- `Home view`_
+- `Folders view`_
+- `Group view`_
+- `Feed view`_
+- `Articles view`_
+   
+Home view
+.........
+| A summary with links to some management actions, reports or help.
+| For example, you can add new subscriptions, update feeds, import feeds
+  from an OPML file, export current feeds as OPML, export database, etc.
+| You can also manage the database (*clean the data*): Compact (vacuum),
+  or Remove old entries from cache (> 3 months).
+
+Folders view
+............
+| A table with the folders (groups) defined showing the name, number of feeds,
+  and number of *unread*, *starred*, *postponed*, *archived* and *total*
+  articles.
+| Some actions at top: *new folder*, *stats*, and *update feeds*.
+| Name and numbers are hyperlinks to other views.
+
+Group view
+..........
+| A table with the feeds defined in the group showing the name, and number
+  of *unread*, *starred*, *postponed*, *archived* and *total* articles.
+| Some actions at top: *add subscription*, *rename folder*, *delete folder*,
+  *stats*, and *update feeds*.
+| Name and numbers are hyperlinks to other views.
+
+Feed view
+.........
+| Feed name, feed URL, home page, state (enabled, disabled, broken),
+  date of last update, and number of *unread*, *starred*, *postponed*,
+  *archived* and *total* articles.
+| Some actions at top: *edit*, *delete*, *stats*, *update*.
+| Hyperlinks are used too.
+
+Articles view
+.............
+.. Note::
+   An article is or can be marked in any of the following states:
+
+   - |st1| Delete
+   - |st2| Unread
+   - |st3| Starred (favourite)
+   - |st4| Later (postponed for later)
+   - |st5| Archived
+
+.. |st1| image:: ../images/st_delete.png
+   :width: 15px
+.. |st2| image:: ../images/st_unread.png
+   :width: 15px
+.. |st3| image:: ../images/st_starred.png
+   :width: 15px
+.. |st4| image:: ../images/st_later.png
+   :width: 15px
+.. |st5| image:: ../images/st_archived.png
+   :width: 15px
+
+A list contaning a batch of the selected articles.
+By default there is a maximum of 100 entries per page, but you have
+buttons to load 100 more or all.
+
+**Button bar**
+
+.. image:: ss-tut-arts_btns.jpeg
+
+There is a button bar at the top providing different actions:
+
+- Process button (more on this later)
+- Pop-over to change which articles to show (by state)
+- Pop-over to filter articles by state
+- Pop-over to change sort mode
+- Toggle button to expand articles contents or show header only
+- Toggle button to hide/show articles images
+- Pop-over to change the state of all shown (non filtered out) articles
+
+**Article areas**
+
+.. image:: ss-tut-arts.jpeg
+
+Each line represents an article. They are divided in several areas,
+from left to right:
+
+- article state icon
+- feed name, in color green
+- feed favicon
+- article title, in bold
+- brief summary
+- time stamp
+- article contents, hidden by default
+
+The two orange vertical bars around an article represent the cursor,
+and it marks the currently selected entry.
+You can operate on current article using `Keyboard navigation`_.
+
+**Mouse actions:**
+
+- Placing the mouse over the status icon will open a small window allowing
+  to change it
+- Clicking on the article title will open the original source of the article
+  in another tab/window
+- Clicking on the summary will show or hide article contents
+   
+**Process**
+
+Clicking on the *Process* button will perform for each article the action
+marked in its state: delete, let it as unread, starred, mark for
+later use, or archive.
+
+Remember *Process* only operate on loaded and visible entries.
+
+
+Keyboard navigation
+-------------------
+If you prefer keyboard navigation you can avoid the mouse to control *MyNewspaper*.
+
++ **Global**
+
+  - ESC	-> Toggle sidebar
+  - h	-> Go to Home
+  - f	-> Folders
+  - /	-> Search
+  - u	-> Unread items
+  - r	-> Refresh view
+  - ?	-> Show Keyboard Shortcuts
+  
++ **Articles view**
+
+  - j	-> Select next article
+  - k	-> Select previous article
+  - SPC	-> Move one page down and select article
+  - BackSpace	-> Move one page up and select article
+  - n	-> Select and open next article
+  - p	-> Select and open previous article
+  - Home	-> Move to first article and select it
+  - End	-> Move to last article and select it
+  - 1	-> View with articles expanded
+  - 2	-> View with only articles titles shown
+  - i	-> Show or hide the images in articles
+  - v, Enter	-> Expand or collapse selected article
+  - s	-> Cycle actions for current article
+  - o	-> Open article in new window or tab
+  - Shift + a	-> Process visible articles
+  - Shift + m	-> Load more articles
+  - Shift + t	-> Load all articles
+
+
+MyNewspaper Mobile
+==================
+*MyNewspaper* contains a minimalist web interface for mobile devices
+like smartphones and tablets, where screen size and lack of proper
+keyboard and mouse make difficult to manage the application in a
+traditional way.
+
+The URL is located at: http://127.0.0.1:8887/m or http://mynewspaper.domain.com/m.
+
+There are 3 main views:
+
+- `Summary`_
+- `Articles list`_
+- `Article contents`_
+
+
+Summary
+-------
+| List of all the folders with *unread* articles.
+| You can change selected state (*unread* by default) by tapping on the *state*
+  icon at the header.
+| To expand a folder click on its name.
+| To go `Articles list`_ view click on the number at right.
+
+
+Articles list
+-------------
+| A list of articles with their title, feed, timestamp and a few lines
+  of the contents as a brief summary.
+| Clicking on the *back* image will return to `Summary`_ view.
+| Touching on the icon at the left of an article will open a popup window
+  to change its state.
+| Tap article summary to open `Article contents`_ view.
+
+
+Article contents
+----------------
+| This page shows the contents of the selected article.
+| Clicking on the *back* image will return to `Articles list`_ view.
+| There are *up* and *down* arrows to navigate to previous or next article.
+
+
+FAQ
+===
+- **Default port 8887 is not free on my system, what can I do?**
+   Edit the function `run_standalone()` at the end of `src/web.py` file.
+
+- **I don't want to start MyNewspaper every time I reboot the computer...**
+   This is explained in *Download and Installation* -> `Production: guru's way`_.
+
+- **I want to put MyNewspaper behind a web server to add SSL or authentication**
+   This is explained in *Download and Installation* -> `Production: guru's way`_.
+
+- **Can I search the articles?**
+   It's not implemented yet.
+
+- **The reports don't work**
+   They are not implemented yet.
+
+- **Do you supply more themes/styles?**
+   No, *MyNewspaper* has the style I like. But if you write a new
+   style, send it to me and maybe I could reconsider the decision.
+
+
+ChangeLog & TODO
+================
+
+Releases
+--------
+**v4.0** *"I hate writing documentation"*
+    [2014/04/13] Completely rewritten. Download from here_  ::
+
+      - General:
+          . rewritten everything from scratch
+          . all dependencies are included within the application
+          . new documentation, including a brief tutorial
+      - Core:
+          . use BottlePy web framework instead of CherryPy
+          . don't use any ORM, access DB directly
+          . use dateutil module to parse timestamps
+      - UI:
+          . UI completely rewritten
+          . new look & feel: darker theme, new icons
+          . use newer versions of jQuery and jQueryUI
+      - Mobile version:
+          . completely rewritten
+          . don't use jQuery Mobile
+
+**v3.0** *"a new one is here"*
+    [2010/12/29] Javascript & AJAX, mobile version  ::
+
+      - Core:
+          . articles new "postponed" state
+          . AJAX calls between python core and UI javascript
+          . option to disable a feed temporary
+          . create http://mynewspaper/update entry point
+          . speed, speed, speed
+          . clean code
+          . remove cheetah templating engine
+      - UI:
+          . UI completely rewritten, using jQuery and jQueryUI
+          . added visual effects
+          . drag&drop to sort groups or feeds
+          . new icons
+          . navigation using keys
+          . new navigation bar
+          . show/hide images
+      - Mobile version of the web interface
+          . http://mynewspaper/m
+      - Admin:
+          . configuration
+          . init wizard
+          . feeds report
+          . new error 404 - not found page
+
+**v2.0:** *"living with no name"*
+    [2006/07/XX] Unreleased  ::
+
+      - Core:
+          . use CherryPy insted of CGI
+          . articles new "favs" and "archived" states
+          . improved fetching feeds, using threads
+      - UI:
+          . toggle sidebar
+          . new "virtual" folder in sidebar
+	  - Admin:
+          . opml import/export (http://www.opml.org/)
+          . stats: no. of fav/unread/total articles per group/feed,
+                   older/newer, .db type and size
+
+**v1.4:** *"even faster and sexier than before"*
+    [2005/08/01] Speed, usability, UI improvements  ::
+
+      - New features:
+          . Unread virtual folder
+          . Favourites
+      - Faster:
+          . with v1.2 summary page was very slow if >3k articles, it
+            has been profiled and optimised. Basically I've substituted
+            len(a_group.feeds) and len(a_feed.articles) by
+            select(XXX).count() I've also built OR-expressions
+            dinamically instead of for-loops when dealing with SQLObject
+      - UI:
+          . show/hide heading/contents for all articles or per article
+          . "toggle" button to invert selections
+          . user can see number of selected/total articles
+          . show articles in batches of 50 articles
+          . un/selecting articles should update count button
+      - bugs fixed:
+          . crash in maintenance when no feeds defined
+          . crash in archive/unmark_as_read if no articles selected
+
+**v1.2:** *"faster (25-35%), cleaner (100%), smaller (69%) and even more robust (100%)"*
+    [2005/07/24] A major rewrite and clean up of the code  ::
+
+      - UI:
+          . use Cheetah as html template
+          . generate valid html
+          . clean css
+      - Use SQLObject as database abstraction
+      - bugs fixed:
+          . fix 'XXXadminXXX' hack
+          . now no names are passed in urls or forms, id instead =>
+            => no more crashes due to encoding problems
+          . crash: 'Stiri Ziare.ro': 'http://www3.ziare.ro/backend.php'
+          . feeds_edit doesn't expand group in sidebar
+          . timeout for feed downloading => feedparser does it
+          . a pile of them
+
+**v1.0:** *"initial release"*
+    [2005/07/17] Initial release.
+
+
+TODO
+----
+TODO file with some ideas and eventual future enhancements is at TODO_.
+
+
+.. _MyNewspaper: http://inigo.katxi.org/devel/mynewspaper
+.. _TODO: TODO
+.. _here: http://inigo.katxi.org/devel/mynewspaper/mynewspaper-4.0.tar.gz
+.. _`GNU Affero GPL License`: http://www.gnu.org/licenses/agpl-3.0.html
+.. _COPYING: COPYING
+.. _`BitBucket repository`: https://bitbucket.org/inigoserna/mynewspaper4
+.. _`BitBucket Issue Tracker`: https://bitbucket.org/inigoserna/mynewspaper4/issues
+
+.. _Python: http://www.python.org
+.. _`Mark Pilgrim's Universal FeedParser`: https://pypi.python.org/pypi/feedparser
+.. _BottlePy: http://bottlepy.org
+.. _DateUtil: http://labix.org/python-dateutil
+.. _SQLite: http://sqlite.org
+.. _jQuery: http://jquery.com
+.. _jQueryUI: http://jqueryui.com
+.. _`Closure Compiler`: http://closure-compiler.appspot.com/home
+
+.. _nginx: http://nginx.org
+.. _lighttpd: http://www.lighttpd.net
+.. _apache: http://www.apache.org
+.. _supervisor: http://supervisord.org/
