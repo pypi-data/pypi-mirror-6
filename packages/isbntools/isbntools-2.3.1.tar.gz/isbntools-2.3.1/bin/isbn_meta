@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import sys
+import logging
+from isbntools import meta
+from isbntools import config
+from isbntools import registry
+
+
+FMT1 = 'ISBN-13: %s\nTitle: %s\n'
+FMT2 = 'Author: %s\n'
+FMT3 = 'Author%s: %s\n'
+FMT4 = 'Publisher: %s\nYear: %s\n'
+logging.basicConfig(level=logging.DEBUG)
+
+
+def usage(available="wcat|goob|..."):
+    sys.stderr.write('Usage: isbn_meta ISBN [%s] [apikey]\n  ...  or try with '
+                     'another service in list!\n' % available)
+    sys.exit(1)
+
+
+if __name__ == "__main__":
+    try:
+        if len(sys.argv) in (3, 4):
+            service = sys.argv[2]
+            try:
+                config.add_apikey(sys.argv[2], sys.argv[3])
+            except:
+                pass
+        else:
+            service = 'default'
+        r = meta(sys.argv[1], service)
+        sys.stdout.write(FMT1 % (r['ISBN-13'], r['Title']))
+        if len(r['Authors']) == 1:
+            sys.stdout.write(FMT2 % r['Authors'][0])
+        else:
+            for i, a in enumerate(r['Authors']):
+                sys.stdout.write(FMT3 % (i + 1, a))
+        sys.stdout.write(FMT4 % (r['Publisher'], r['Year']))
+    except:
+        providers = registry.services.keys()
+        providers.remove('default')
+        available = '|'.join(providers)
+        usage(available)
