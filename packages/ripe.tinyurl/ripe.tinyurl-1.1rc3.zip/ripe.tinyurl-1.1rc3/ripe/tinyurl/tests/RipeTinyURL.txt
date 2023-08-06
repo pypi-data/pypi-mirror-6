@@ -1,0 +1,109 @@
+RIPE TinyURL
+===============
+
+A doc test for all the customviews we've applied to the sites
+
+Setting up the test
+-------------------
+
+Set up a programmatic browser to emulate a user clicking through a web
+interface.
+
+   >>> app = layer['app']
+   >>> from plone.testing.z2 import Browser
+   >>> browser = Browser(app)
+   >>> browser.handleErrors = False
+   >>> portal = layer['portal']
+   >>> portal_url = 'http://nohost/plone'
+
+The test profile has loaded some dummy content and test user profiles
+needed to perform the test below.
+
+Now we log in to the site to set up the content type
+
+    >>> from plone.app.testing import TEST_USER_ID
+    >>> from plone.app.testing import TEST_USER_NAME
+    >>> from plone.app.testing import TEST_USER_PASSWORD
+    >>> from plone.app.testing import SITE_OWNER_NAME
+    >>> from plone.app.testing import SITE_OWNER_PASSWORD
+
+Anon user access
+--------------------------
+Can we access the BrowserView when we're not logged in
+
+    >>> from plone.testing.z2 import Browser
+    >>> browser = Browser(app)
+    >>> browser.open(portal_url + '/ripe-tinyurl')
+    >>> 'Login Name' in browser.contents
+    True
+
+
+Login to the site
+--------------------------
+Use the login page instead of the login portlet (which may be inactive):
+
+    >>> browser.open(portal_url + '/login')
+    >>> browser.getControl(name='__ac_name').value = SITE_OWNER_NAME
+    >>> browser.getControl(name='__ac_password').value = SITE_OWNER_PASSWORD
+    >>> browser.getControl(name='submit').click()
+
+Did we manage to log in correctly
+
+    >>> "You are now logged in" in browser.contents
+    True
+
+    >>> browser.open(portal_url)
+    >>> browser.url == portal_url
+    True
+
+Can we now access the browserview
+
+    >>> browser.open(portal_url + '/ripe-tinyurl')
+    >>> 'TinyURL management screen' in browser.contents
+    True
+
+Adding a URL
+-----------------------
+First lets add nothing, we should recieve back a warning
+
+    >>> browser.open(portal_url + '/ripe-tinyurl')
+    >>> browser.getControl(name='submit').click()
+    >>> 'TinyURL management screen' in browser.contents
+    True
+    >>> 'Please enter a valid URL' in browser.contents
+    True
+
+First lets add an invalid URL, we should recieve back a warning
+
+    >>> browser.open(portal_url + '/ripe-tinyurl')
+    >>> browser.getControl(name='remoteUrl').value = 'test'
+    >>> browser.getControl(name='submit').click()
+    >>> 'TinyURL management screen' in browser.contents
+    True
+    >>> #fh = open('/tmp/test.html', 'w'); fh.write(browser.contents); fh.close()
+    >>> 'Please enter a valid URL' in browser.contents
+    True
+
+First lets add a valid URL
+
+    >>> browser.open(portal_url + '/ripe-tinyurl')
+    >>> browser.getControl(name='remoteUrl').value = 'http://www.test.com'
+    >>> browser.getControl(name='submit').click()
+    >>> 'TinyURL management screen' in browser.contents
+    True
+    >>> 'The shortened URL is' in browser.contents
+    True
+    >>> 'The URL has already been applied to the site' in browser.contents
+    False
+
+First lets add the same valid URL again
+
+    >>> browser.open(portal_url + '/ripe-tinyurl')
+    >>> browser.getControl(name='remoteUrl').value = 'http://www.test.com'
+    >>> browser.getControl(name='submit').click()
+    >>> 'TinyURL management screen' in browser.contents
+    True
+    >>> 'The shortened URL is' in browser.contents
+    True
+    >>> 'The URL has already been applied to the site' in browser.contents
+    True
