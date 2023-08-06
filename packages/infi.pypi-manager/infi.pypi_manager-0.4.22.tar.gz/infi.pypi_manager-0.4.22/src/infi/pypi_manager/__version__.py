@@ -1,0 +1,10 @@
+__version__ = "0.4.22"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.4.22)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'bf675796151f70b67a92860f689cc031ba9d5309'
+__git_head_subject__ = 'TRIVIAL fixing tests'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
