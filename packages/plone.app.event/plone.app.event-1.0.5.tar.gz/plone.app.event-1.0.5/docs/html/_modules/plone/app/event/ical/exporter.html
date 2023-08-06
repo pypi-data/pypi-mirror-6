@@ -1,0 +1,410 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>plone.app.event.ical.exporter &mdash; plone.app.event 1.0dev documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '1.0dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="plone.app.event 1.0dev documentation" href="../../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for plone.app.event.ical.exporter</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">Acquisition</span> <span class="kn">import</span> <span class="n">aq_inner</span>
+<span class="kn">from</span> <span class="nn">Products.ZCatalog.interfaces</span> <span class="kn">import</span> <span class="n">ICatalogBrain</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">timedelta</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">default_timezone</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">get_events</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IEventAccessor</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IICalendar</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IICalendarEventComponent</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">is_datetime</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">pydt</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">tzdel</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">utc</span>
+<span class="kn">from</span> <span class="nn">plone.uuid.interfaces</span> <span class="kn">import</span> <span class="n">IUUID</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implementer</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implements</span>
+<span class="kn">from</span> <span class="nn">zope.publisher.browser</span> <span class="kn">import</span> <span class="n">BrowserView</span>
+
+<span class="kn">import</span> <span class="nn">icalendar</span>
+<span class="kn">import</span> <span class="nn">pytz</span>
+
+
+<span class="n">PRODID</span> <span class="o">=</span> <span class="s">&quot;-//Plone.org//NONSGML plone.app.event//EN&quot;</span>
+<span class="n">VERSION</span> <span class="o">=</span> <span class="s">&quot;2.0&quot;</span>
+
+
+<div class="viewcode-block" id="construct_icalendar"><a class="viewcode-back" href="../../../../../api/ical/exporter.html#plone.app.event.ical.exporter.construct_icalendar">[docs]</a><span class="k">def</span> <span class="nf">construct_icalendar</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">events</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns an icalendar.Calendar object.</span>
+
+<span class="sd">    :param context: A content object, which is used for calendar details like</span>
+<span class="sd">                    Title and Description. Usually a container, collection or</span>
+<span class="sd">                    the event itself.</span>
+
+<span class="sd">    :param events: The list of event objects, which are included in this</span>
+<span class="sd">                   calendar.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cal</span> <span class="o">=</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">Calendar</span><span class="p">()</span>
+    <span class="n">cal</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;prodid&#39;</span><span class="p">,</span> <span class="n">PRODID</span><span class="p">)</span>
+    <span class="n">cal</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;version&#39;</span><span class="p">,</span> <span class="n">VERSION</span><span class="p">)</span>
+
+    <span class="n">cal_title</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">Title</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">cal_title</span><span class="p">:</span>
+        <span class="n">cal</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;x-wr-calname&#39;</span><span class="p">,</span> <span class="n">cal_title</span><span class="p">)</span>
+
+    <span class="n">cal_desc</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">Description</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">cal_desc</span><span class="p">:</span>
+        <span class="n">cal</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;x-wr-caldesc&#39;</span><span class="p">,</span> <span class="n">cal_desc</span><span class="p">)</span>
+
+    <span class="n">uuid</span> <span class="o">=</span> <span class="n">IUUID</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">uuid</span><span class="p">:</span>  <span class="c"># portal object does not have UID</span>
+        <span class="n">cal</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;x-wr-relcalid&#39;</span><span class="p">,</span> <span class="n">uuid</span><span class="p">)</span>
+
+    <span class="n">cal_tz</span> <span class="o">=</span> <span class="n">default_timezone</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">cal_tz</span><span class="p">:</span>
+        <span class="n">cal</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;x-wr-timezone&#39;</span><span class="p">,</span> <span class="n">cal_tz</span><span class="p">)</span>
+
+    <span class="n">tzmap</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="s">&#39;__getslice__&#39;</span><span class="p">):</span>  <span class="c"># LazyMap doesn&#39;t have __iter__</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="p">[</span><span class="n">events</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">ICatalogBrain</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">event</span><span class="p">):</span>
+            <span class="n">event</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">getObject</span><span class="p">()</span>
+        <span class="n">acc</span> <span class="o">=</span> <span class="n">IEventAccessor</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+        <span class="n">tz</span> <span class="o">=</span> <span class="n">acc</span><span class="o">.</span><span class="n">timezone</span>
+        <span class="c"># TODO: the standard wants each recurrence to have a valid timezone</span>
+        <span class="c"># definition. sounds decent, but not realizable.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">acc</span><span class="o">.</span><span class="n">whole_day</span><span class="p">:</span>  <span class="c"># whole day events are exported as dates without</span>
+                               <span class="c"># timezone information</span>
+            <span class="n">tzmap</span> <span class="o">=</span> <span class="n">add_to_zones_map</span><span class="p">(</span><span class="n">tzmap</span><span class="p">,</span> <span class="n">tz</span><span class="p">,</span> <span class="n">acc</span><span class="o">.</span><span class="n">start</span><span class="p">)</span>
+            <span class="n">tzmap</span> <span class="o">=</span> <span class="n">add_to_zones_map</span><span class="p">(</span><span class="n">tzmap</span><span class="p">,</span> <span class="n">tz</span><span class="p">,</span> <span class="n">acc</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+        <span class="n">cal</span><span class="o">.</span><span class="n">add_component</span><span class="p">(</span><span class="n">IICalendarEventComponent</span><span class="p">(</span><span class="n">event</span><span class="p">)</span><span class="o">.</span><span class="n">to_ical</span><span class="p">())</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">tzid</span><span class="p">,</span> <span class="n">transitions</span><span class="p">)</span> <span class="ow">in</span> <span class="n">tzmap</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">cal_tz</span> <span class="o">=</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">Timezone</span><span class="p">()</span>
+        <span class="n">cal_tz</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;tzid&#39;</span><span class="p">,</span> <span class="n">tzid</span><span class="p">)</span>
+        <span class="n">cal_tz</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;x-lic-location&#39;</span><span class="p">,</span> <span class="n">tzid</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="p">(</span><span class="n">transition</span><span class="p">,</span> <span class="n">tzinfo</span><span class="p">)</span> <span class="ow">in</span> <span class="n">transitions</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+
+            <span class="k">if</span> <span class="n">tzinfo</span><span class="p">[</span><span class="s">&#39;dst&#39;</span><span class="p">]:</span>
+                <span class="n">cal_tz_sub</span> <span class="o">=</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">TimezoneDaylight</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">cal_tz_sub</span> <span class="o">=</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">TimezoneStandard</span><span class="p">()</span>
+
+            <span class="n">cal_tz_sub</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;tzname&#39;</span><span class="p">,</span> <span class="n">tzinfo</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">])</span>
+            <span class="n">cal_tz_sub</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;dtstart&#39;</span><span class="p">,</span> <span class="n">transition</span><span class="p">)</span>
+            <span class="n">cal_tz_sub</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;tzoffsetfrom&#39;</span><span class="p">,</span> <span class="n">tzinfo</span><span class="p">[</span><span class="s">&#39;tzoffsetfrom&#39;</span><span class="p">])</span>
+            <span class="n">cal_tz_sub</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;tzoffsetto&#39;</span><span class="p">,</span> <span class="n">tzinfo</span><span class="p">[</span><span class="s">&#39;tzoffsetto&#39;</span><span class="p">])</span>
+            <span class="c"># TODO: add rrule</span>
+            <span class="c"># tzi.add(&#39;rrule&#39;,</span>
+            <span class="c">#         {&#39;freq&#39;: &#39;yearly&#39;, &#39;bymonth&#39;: 10, &#39;byday&#39;: &#39;-1su&#39;})</span>
+            <span class="n">cal_tz</span><span class="o">.</span><span class="n">add_component</span><span class="p">(</span><span class="n">cal_tz_sub</span><span class="p">)</span>
+        <span class="n">cal</span><span class="o">.</span><span class="n">add_component</span><span class="p">(</span><span class="n">cal_tz</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">cal</span>
+
+</div>
+<span class="k">def</span> <span class="nf">add_to_zones_map</span><span class="p">(</span><span class="n">tzmap</span><span class="p">,</span> <span class="n">tzid</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">tzid</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s">&#39;utc&#39;</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">is_datetime</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
+        <span class="c"># no need to define UTC nor timezones for date objects.</span>
+        <span class="k">return</span> <span class="n">tzmap</span>
+    <span class="n">null</span> <span class="o">=</span> <span class="n">datetime</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">tz</span> <span class="o">=</span> <span class="n">pytz</span><span class="o">.</span><span class="n">timezone</span><span class="p">(</span><span class="n">tzid</span><span class="p">)</span>
+    <span class="n">transitions</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">tz</span><span class="p">,</span> <span class="s">&#39;_utc_transition_times&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">transitions</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">tzmap</span>  <span class="c"># we need transition definitions</span>
+    <span class="n">dtzl</span> <span class="o">=</span> <span class="n">tzdel</span><span class="p">(</span><span class="n">utc</span><span class="p">(</span><span class="n">dt</span><span class="p">))</span>
+
+    <span class="c"># get transition time, which is the dtstart of timezone.</span>
+    <span class="c">#     the key function returns the value to compare with. as long as item</span>
+    <span class="c">#     is smaller or equal like the dt value in UTC, return the item. as</span>
+    <span class="c">#     soon as it becomes greater, compare with the smallest possible</span>
+    <span class="c">#     datetime, which wouldn&#39;t create a match within the max-function. this</span>
+    <span class="c">#     way we get the maximum transition time which is smaller than the</span>
+    <span class="c">#     given datetime.</span>
+    <span class="n">transition</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">transitions</span><span class="p">,</span>
+                     <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">item</span><span class="p">:</span> <span class="n">item</span> <span class="o">&lt;=</span> <span class="n">dtzl</span> <span class="ow">and</span> <span class="n">item</span> <span class="ow">or</span> <span class="n">null</span><span class="p">)</span>
+
+    <span class="c"># get previous transition to calculate tzoffsetfrom</span>
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">transitions</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">transition</span><span class="p">)</span>
+    <span class="n">prev_idx</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">idx</span> <span class="o">-</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">idx</span>
+    <span class="n">prev_transition</span> <span class="o">=</span> <span class="n">transitions</span><span class="p">[</span><span class="n">prev_idx</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">localize</span><span class="p">(</span><span class="n">tz</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">dt</span> <span class="ow">is</span> <span class="n">null</span><span class="p">:</span>
+            <span class="c"># dummy time, edge case</span>
+            <span class="c"># (dt at beginning of all transitions, see above.)</span>
+            <span class="k">return</span> <span class="n">null</span>
+        <span class="k">return</span> <span class="n">pytz</span><span class="o">.</span><span class="n">utc</span><span class="o">.</span><span class="n">localize</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span><span class="o">.</span><span class="n">astimezone</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span>  <span class="c"># naive to utc + localize</span>
+    <span class="n">transition</span> <span class="o">=</span> <span class="n">localize</span><span class="p">(</span><span class="n">tz</span><span class="p">,</span> <span class="n">transition</span><span class="p">)</span>
+    <span class="n">dtstart</span> <span class="o">=</span> <span class="n">tzdel</span><span class="p">(</span><span class="n">transition</span><span class="p">)</span>  <span class="c"># timezone dtstart must be in local time</span>
+    <span class="n">prev_transition</span> <span class="o">=</span> <span class="n">localize</span><span class="p">(</span><span class="n">tz</span><span class="p">,</span> <span class="n">prev_transition</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">tzid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">tzmap</span><span class="p">:</span>
+        <span class="n">tzmap</span><span class="p">[</span><span class="n">tzid</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c"># initial</span>
+    <span class="k">if</span> <span class="n">dtstart</span> <span class="ow">in</span> <span class="n">tzmap</span><span class="p">[</span><span class="n">tzid</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="n">tzmap</span>  <span class="c"># already there</span>
+    <span class="n">tzmap</span><span class="p">[</span><span class="n">tzid</span><span class="p">][</span><span class="n">dtstart</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;dst&#39;</span><span class="p">:</span> <span class="n">transition</span><span class="o">.</span><span class="n">dst</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">timedelta</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+        <span class="s">&#39;name&#39;</span><span class="p">:</span> <span class="n">transition</span><span class="o">.</span><span class="n">tzname</span><span class="p">(),</span>
+        <span class="s">&#39;tzoffsetfrom&#39;</span><span class="p">:</span> <span class="n">prev_transition</span><span class="o">.</span><span class="n">utcoffset</span><span class="p">(),</span>
+        <span class="s">&#39;tzoffsetto&#39;</span><span class="p">:</span> <span class="n">transition</span><span class="o">.</span><span class="n">utcoffset</span><span class="p">(),</span>
+        <span class="c"># TODO: recurrence rule</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">tzmap</span>
+
+
+<span class="nd">@implementer</span><span class="p">(</span><span class="n">IICalendar</span><span class="p">)</span>
+<div class="viewcode-block" id="calendar_from_event"><a class="viewcode-back" href="../../../../../api/ical/exporter.html#plone.app.event.ical.exporter.calendar_from_event">[docs]</a><span class="k">def</span> <span class="nf">calendar_from_event</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Event adapter. Returns an icalendar.Calendar object from an Event</span>
+<span class="sd">    context.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="n">aq_inner</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">construct_icalendar</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+
+</div>
+<span class="nd">@implementer</span><span class="p">(</span><span class="n">IICalendar</span><span class="p">)</span>
+<div class="viewcode-block" id="calendar_from_container"><a class="viewcode-back" href="../../../../../api/ical/exporter.html#plone.app.event.ical.exporter.calendar_from_container">[docs]</a><span class="k">def</span> <span class="nf">calendar_from_container</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Container adapter. Returns an icalendar.Calendar object from a</span>
+<span class="sd">    Containerish context like a Folder.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="n">aq_inner</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="s">&#39;/&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">getPhysicalPath</span><span class="p">())</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">get_events</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">construct_icalendar</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+
+</div>
+<span class="nd">@implementer</span><span class="p">(</span><span class="n">IICalendar</span><span class="p">)</span>
+<div class="viewcode-block" id="calendar_from_collection"><a class="viewcode-back" href="../../../../../api/ical/exporter.html#plone.app.event.ical.exporter.calendar_from_collection">[docs]</a><span class="k">def</span> <span class="nf">calendar_from_collection</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Container/Event adapter. Returns an icalendar.Calendar object from a</span>
+<span class="sd">    Collection.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="n">aq_inner</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">get_events</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">construct_icalendar</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="ICalendarEventComponent"><a class="viewcode-back" href="../../../../../api/ical/exporter.html#plone.app.event.ical.exporter.ICalendarEventComponent">[docs]</a><span class="k">class</span> <span class="nc">ICalendarEventComponent</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns an icalendar object of the event.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">implements</span><span class="p">(</span><span class="n">IICalendarEventComponent</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">context</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">event</span> <span class="o">=</span> <span class="n">IEventAccessor</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">to_ical</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="n">ical</span> <span class="o">=</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+
+        <span class="n">event</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">event</span>
+
+        <span class="c"># TODO: event.text</span>
+
+        <span class="c"># must be in utc</span>
+        <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;dtstamp&#39;</span><span class="p">,</span> <span class="n">utc</span><span class="p">(</span><span class="n">pydt</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">())))</span>
+        <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;created&#39;</span><span class="p">,</span> <span class="n">utc</span><span class="p">(</span><span class="n">pydt</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">created</span><span class="p">)))</span>
+        <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;last-modified&#39;</span><span class="p">,</span> <span class="n">utc</span><span class="p">(</span><span class="n">pydt</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">last_modified</span><span class="p">)))</span>
+
+        <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;uid&#39;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">uid</span><span class="p">)</span>
+        <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;url&#39;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">url</span><span class="p">)</span>
+
+        <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;summary&#39;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">title</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">description</span><span class="p">:</span>
+            <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;description&#39;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">description</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">whole_day</span><span class="p">:</span>
+            <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;dtstart&#39;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">date</span><span class="p">())</span>
+            <span class="c"># RFC5545, 3.6.1</span>
+            <span class="c"># For cases where a &quot;VEVENT&quot; calendar component</span>
+            <span class="c"># specifies a &quot;DTSTART&quot; property with a DATE value type but no</span>
+            <span class="c"># &quot;DTEND&quot; nor &quot;DURATION&quot; property, the event&#39;s duration is taken to</span>
+            <span class="c"># be one day.</span>
+            <span class="c">#</span>
+            <span class="c"># RFC5545 doesn&#39;t define clearly, if all-day events should have</span>
+            <span class="c"># a end date on the same date or one day after the start day at</span>
+            <span class="c"># 0:00. Most icalendar libraries use the latter method.</span>
+            <span class="c"># Internally, whole_day events end on the same day one second</span>
+            <span class="c"># before midnight. Using the RFC5545 preferred method for</span>
+            <span class="c"># plone.app.event seems not appropriate, since we would have to fix</span>
+            <span class="c"># the date to end a day before for displaying.</span>
+            <span class="c"># For exporting, we let whole_day events end on the next day at</span>
+            <span class="c"># midnight.</span>
+            <span class="c"># See:</span>
+            <span class="c"># http://stackoverflow.com/questions/1716237/single-day-all-day</span>
+            <span class="c"># -appointments-in-ics-files</span>
+            <span class="c"># http://icalevents.com/1778-all-day-events-adding-a-day-or-not/</span>
+            <span class="c"># http://www.innerjoin.org/iCalendar/all-day-events.html</span>
+            <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;dtend&#39;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">date</span><span class="p">()</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">event</span><span class="o">.</span><span class="n">open_end</span><span class="p">:</span>
+            <span class="c"># RFC5545, 3.6.1</span>
+            <span class="c"># For cases where a &quot;VEVENT&quot; calendar component</span>
+            <span class="c"># specifies a &quot;DTSTART&quot; property with a DATE-TIME value type but no</span>
+            <span class="c"># &quot;DTEND&quot; property, the event ends on the same calendar date and</span>
+            <span class="c"># time of day specified by the &quot;DTSTART&quot; property.</span>
+            <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;dtstart&#39;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">start</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;dtstart&#39;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">start</span><span class="p">)</span>
+            <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;dtend&#39;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">recurrence</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">recdef</span> <span class="ow">in</span> <span class="n">event</span><span class="o">.</span><span class="n">recurrence</span><span class="o">.</span><span class="n">split</span><span class="p">():</span>
+                <span class="n">prop</span><span class="p">,</span> <span class="n">val</span> <span class="o">=</span> <span class="n">recdef</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;:&#39;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">prop</span> <span class="o">==</span> <span class="s">&#39;RRULE&#39;</span><span class="p">:</span>
+                    <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">prop</span><span class="o">.</span><span class="n">vRecur</span><span class="o">.</span><span class="n">from_ical</span><span class="p">(</span><span class="n">val</span><span class="p">))</span>
+                <span class="k">elif</span> <span class="n">prop</span> <span class="ow">in</span> <span class="p">(</span><span class="s">&#39;EXDATE&#39;</span><span class="p">,</span> <span class="s">&#39;RDATE&#39;</span><span class="p">):</span>
+                    <span class="n">factory</span> <span class="o">=</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">prop</span><span class="o">.</span><span class="n">vDDDLists</span>
+
+                    <span class="c"># localize ex/rdate</span>
+                    <span class="c"># TODO: should better already be localized by event object</span>
+                    <span class="n">tzid</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">timezone</span>
+                    <span class="c"># get list of datetime values from ical string</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">dtlist</span> <span class="o">=</span> <span class="n">factory</span><span class="o">.</span><span class="n">from_ical</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">timezone</span><span class="o">=</span><span class="n">tzid</span><span class="p">)</span>
+                    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                        <span class="c"># TODO: caused by a bug in plone.formwidget.recurrence,</span>
+                        <span class="c"># where the recurrencewidget or plone.event fails with</span>
+                        <span class="c"># COUNT=1 and a extra RDATE.</span>
+                        <span class="c"># TODO: REMOVE this workaround, once this failure is</span>
+                        <span class="c"># fixed in recurrence widget.</span>
+                        <span class="k">continue</span>
+                    <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">dtlist</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">location</span><span class="p">:</span>
+            <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;location&#39;</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">location</span><span class="p">)</span>
+
+        <span class="c"># TODO: revisit and implement attendee export according to RFC</span>
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">attendees</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">attendee</span> <span class="ow">in</span> <span class="n">event</span><span class="o">.</span><span class="n">attendees</span><span class="p">:</span>
+                <span class="n">att</span> <span class="o">=</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">prop</span><span class="o">.</span><span class="n">vCalAddress</span><span class="p">(</span><span class="n">attendee</span><span class="p">)</span>
+                <span class="n">att</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s">&#39;cn&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">prop</span><span class="o">.</span><span class="n">vText</span><span class="p">(</span><span class="n">attendee</span><span class="p">)</span>
+                <span class="n">att</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s">&#39;ROLE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">prop</span><span class="o">.</span><span class="n">vText</span><span class="p">(</span><span class="s">&#39;REQ-PARTICIPANT&#39;</span><span class="p">)</span>
+                <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;attendee&#39;</span><span class="p">,</span> <span class="n">att</span><span class="p">)</span>
+
+        <span class="n">cn</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">contact_name</span><span class="p">:</span>
+            <span class="n">cn</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">contact_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">contact_phone</span><span class="p">:</span>
+            <span class="n">cn</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">contact_phone</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">contact_email</span><span class="p">:</span>
+            <span class="n">cn</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">contact_email</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">event_url</span><span class="p">:</span>
+            <span class="n">cn</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">event_url</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cn</span><span class="p">:</span>
+            <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;contact&#39;</span><span class="p">,</span> <span class="s">u&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cn</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">subjects</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">subject</span> <span class="ow">in</span> <span class="n">event</span><span class="o">.</span><span class="n">subjects</span><span class="p">:</span>
+                <span class="n">ical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&#39;categories&#39;</span><span class="p">,</span> <span class="n">subject</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">ical</span>
+
+</div>
+<div class="viewcode-block" id="EventsICal"><a class="viewcode-back" href="../../../../../api/ical/exporter.html#plone.app.event.ical.exporter.EventsICal">[docs]</a><span class="k">class</span> <span class="nc">EventsICal</span><span class="p">(</span><span class="n">BrowserView</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns events in iCal format.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">get_ical_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">cal</span> <span class="o">=</span> <span class="n">IICalendar</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cal</span><span class="o">.</span><span class="n">to_ical</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">.ics&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">getId</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">RESPONSE</span><span class="o">.</span><span class="n">setHeader</span><span class="p">(</span><span class="s">&#39;Content-Type&#39;</span><span class="p">,</span> <span class="s">&#39;text/calendar&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">RESPONSE</span><span class="o">.</span><span class="n">setHeader</span><span class="p">(</span>
+            <span class="s">&#39;Content-Disposition&#39;</span><span class="p">,</span>
+            <span class="s">&#39;attachment; filename=&quot;</span><span class="si">%s</span><span class="s">&quot;&#39;</span> <span class="o">%</span> <span class="n">name</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">RESPONSE</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_ical_string</span><span class="p">())</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Plone Foundation.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

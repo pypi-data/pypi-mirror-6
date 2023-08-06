@@ -1,0 +1,928 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>plone.app.event.base &mdash; plone.app.event 1.0dev documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '1.0dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="plone.app.event 1.0dev documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for plone.app.event.base</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">Acquisition</span> <span class="kn">import</span> <span class="n">aq_inner</span>
+<span class="kn">from</span> <span class="nn">Acquisition</span> <span class="kn">import</span> <span class="n">aq_parent</span>
+<span class="kn">from</span> <span class="nn">DateTime</span> <span class="kn">import</span> <span class="n">DateTime</span>
+<span class="kn">from</span> <span class="nn">Products.CMFCore.utils</span> <span class="kn">import</span> <span class="n">getToolByName</span>
+<span class="kn">from</span> <span class="nn">Products.CMFPlone.i18nl10n</span> <span class="kn">import</span> <span class="n">ulocalized_time</span> <span class="k">as</span> <span class="n">orig_ulocalized_time</span>
+<span class="kn">from</span> <span class="nn">Products.CMFPlone.interfaces.siteroot</span> <span class="kn">import</span> <span class="n">IPloneSiteRoot</span>
+<span class="kn">from</span> <span class="nn">Products.CMFPlone.utils</span> <span class="kn">import</span> <span class="n">safe_callable</span>
+<span class="kn">from</span> <span class="nn">calendar</span> <span class="kn">import</span> <span class="n">monthrange</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">date</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">timedelta</span>
+<span class="kn">from</span> <span class="nn">persistent.dict</span> <span class="kn">import</span> <span class="n">PersistentDict</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.interfaces</span> <span class="kn">import</span> <span class="n">IEventSettings</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.interfaces</span> <span class="kn">import</span> <span class="n">ISO_DATE_FORMAT</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.vocabularies</span> <span class="kn">import</span> <span class="n">replacement_zones</span>
+<span class="kn">from</span> <span class="nn">plone.app.layout.navigation.root</span> <span class="kn">import</span> <span class="n">getNavigationRootObject</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IEvent</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IEventAccessor</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IEventRecurrence</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IRecurrenceSupport</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">default_timezone</span> <span class="k">as</span> <span class="n">fallback_default_timezone</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">is_date</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">is_datetime</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">is_same_day</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">is_same_time</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">pydt</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">validated_timezone</span>
+<span class="kn">from</span> <span class="nn">plone.registry.interfaces</span> <span class="kn">import</span> <span class="n">IRegistry</span>
+<span class="kn">from</span> <span class="nn">zope.annotation.interfaces</span> <span class="kn">import</span> <span class="n">IAnnotations</span>
+<span class="kn">from</span> <span class="nn">zope.component</span> <span class="kn">import</span> <span class="n">getUtility</span>
+<span class="kn">from</span> <span class="nn">zope.component</span> <span class="kn">import</span> <span class="n">queryUtility</span>
+<span class="kn">from</span> <span class="nn">zope.component.hooks</span> <span class="kn">import</span> <span class="n">getSite</span>
+<span class="kn">from</span> <span class="nn">zope.component.interfaces</span> <span class="kn">import</span> <span class="n">ISite</span>
+
+
+<span class="kn">import</span> <span class="nn">pytz</span>
+
+
+<span class="n">DEFAULT_END_DELTA</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c"># hours</span>
+<span class="n">FALLBACK_TIMEZONE</span> <span class="o">=</span> <span class="s">&#39;UTC&#39;</span>
+
+
+<span class="c"># RETRIEVE EVENTS</span>
+
+<div class="viewcode-block" id="get_events"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.get_events">[docs]</a><span class="k">def</span> <span class="nf">get_events</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+               <span class="n">ret_mode</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+               <span class="n">sort</span><span class="o">=</span><span class="s">&#39;start&#39;</span><span class="p">,</span> <span class="n">sort_reverse</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return all events as catalog brains, possibly within a given</span>
+<span class="sd">    timeframe.</span>
+
+<span class="sd">    :param context: [required] A context object.</span>
+<span class="sd">    :type context: Content object</span>
+
+<span class="sd">    :param start: Date, from which on events should be searched.</span>
+<span class="sd">    :type start: Python datetime.</span>
+
+<span class="sd">    :param end: Date, until which events should be searched.</span>
+<span class="sd">    :type end: Python datetime</span>
+
+<span class="sd">    :param limit: Number of items to be returned.</span>
+<span class="sd">    :type limit: integer</span>
+
+<span class="sd">    :param ret_mode: Return type of search results. These options are</span>
+<span class="sd">                     available:</span>
+<span class="sd">                         * 1 (brains): Return results as catalog brains.</span>
+<span class="sd">                         * 2 (objects): Return results as IEvent and/or</span>
+<span class="sd">                                        IOccurrence objects.</span>
+<span class="sd">                         * 3 (accessors): Return results as IEventAccessor</span>
+<span class="sd">                                          wrapper objects.</span>
+<span class="sd">    :type ret_mode: integer [1|2|3]</span>
+
+<span class="sd">    :param expand: Expand the results to all occurrences (within a timeframe,</span>
+<span class="sd">                   if given). With this option set to True, the resultset also</span>
+<span class="sd">                   includes the event&#39;s recurrence occurrences and is sorted by</span>
+<span class="sd">                   the start date.</span>
+<span class="sd">                   Only available in ret_mode 2 (objects) and 3 (accessors).</span>
+<span class="sd">    :type expand: boolean</span>
+
+<span class="sd">    :param sort: Catalog index id to sort on. Not available with expand=True.</span>
+<span class="sd">    :type sort: string</span>
+
+<span class="sd">    :param sort_reverse: Change the order of the sorting.</span>
+<span class="sd">    :type sort_reverse: boolean</span>
+
+<span class="sd">    :returns: Portal events, matching the search criteria.</span>
+<span class="sd">    :rtype: catalog brains</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="o">=</span> <span class="n">_prepare_range</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span>
+
+    <span class="n">query</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">query</span><span class="p">[</span><span class="s">&#39;object_provides&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">IEvent</span><span class="o">.</span><span class="n">__identifier__</span>
+
+    <span class="k">if</span> <span class="s">&#39;path&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kw</span><span class="p">:</span>
+        <span class="c"># limit to the current navigation root, usually (not always) site</span>
+        <span class="n">portal</span> <span class="o">=</span> <span class="n">getSite</span><span class="p">()</span>
+        <span class="n">navroot</span> <span class="o">=</span> <span class="n">getNavigationRootObject</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">portal</span><span class="p">)</span>
+        <span class="n">query</span><span class="p">[</span><span class="s">&#39;path&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;/&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">navroot</span><span class="o">.</span><span class="n">getPhysicalPath</span><span class="p">())</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">query</span><span class="p">[</span><span class="s">&#39;path&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kw</span><span class="p">[</span><span class="s">&#39;path&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">start</span><span class="p">:</span>
+        <span class="c"># All events from start date ongoing:</span>
+        <span class="c"># The minimum end date of events is the date from which we search.</span>
+        <span class="n">query</span><span class="p">[</span><span class="s">&#39;end&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;query&#39;</span><span class="p">:</span> <span class="n">start</span><span class="p">,</span> <span class="s">&#39;range&#39;</span><span class="p">:</span> <span class="s">&#39;min&#39;</span><span class="p">}</span>
+    <span class="k">if</span> <span class="n">end</span><span class="p">:</span>
+        <span class="c"># All events until end date:</span>
+        <span class="c"># The maximum start date must be the date until we search.</span>
+        <span class="n">query</span><span class="p">[</span><span class="s">&#39;start&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;query&#39;</span><span class="p">:</span> <span class="n">end</span><span class="p">,</span> <span class="s">&#39;range&#39;</span><span class="p">:</span> <span class="s">&#39;max&#39;</span><span class="p">}</span>
+
+    <span class="c"># Sorting</span>
+    <span class="c"># In expand mode we sort after calculation of recurrences again. But we</span>
+    <span class="c"># need to leave this sorting here in place, since no sort definition could</span>
+    <span class="c"># lead to arbitrary results when limiting with sort_limit.</span>
+    <span class="n">query</span><span class="p">[</span><span class="s">&#39;sort_on&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sort</span>
+    <span class="k">if</span> <span class="n">sort_reverse</span><span class="p">:</span>
+        <span class="n">query</span><span class="p">[</span><span class="s">&#39;sort_order&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;reverse&#39;</span>
+
+    <span class="c"># No sort_limit here! See below.</span>
+
+    <span class="n">query</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kw</span><span class="p">)</span>
+
+    <span class="n">cat</span> <span class="o">=</span> <span class="n">getToolByName</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;portal_catalog&#39;</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">cat</span><span class="p">(</span><span class="o">**</span><span class="n">query</span><span class="p">)</span>
+
+    <span class="c"># Helper functions</span>
+    <span class="k">def</span> <span class="nf">_obj_or_acc</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">ret_mode</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">ret_mode</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">obj</span>
+        <span class="k">elif</span> <span class="n">ret_mode</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">IEventAccessor</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_compare_attr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">safe_callable</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">val</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">DateTime</span><span class="p">):</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">pydt</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">val</span>
+
+    <span class="k">if</span> <span class="n">ret_mode</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span> <span class="ow">and</span> <span class="n">expand</span> <span class="ow">is</span> <span class="bp">False</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="n">_obj_or_acc</span><span class="p">(</span><span class="n">it</span><span class="o">.</span><span class="n">getObject</span><span class="p">(),</span> <span class="n">ret_mode</span><span class="p">)</span> <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">result</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="n">ret_mode</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span> <span class="ow">and</span> <span class="n">expand</span> <span class="ow">is</span> <span class="bp">True</span><span class="p">:</span>
+        <span class="n">exp_result</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+            <span class="n">obj</span> <span class="o">=</span> <span class="n">it</span><span class="o">.</span><span class="n">getObject</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">IEventRecurrence</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+                <span class="n">occurrences</span> <span class="o">=</span> <span class="p">[</span><span class="n">_obj_or_acc</span><span class="p">(</span><span class="n">occ</span><span class="p">,</span> <span class="n">ret_mode</span><span class="p">)</span> <span class="k">for</span> <span class="n">occ</span> <span class="ow">in</span>
+                               <span class="n">IRecurrenceSupport</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="n">occurrences</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">occurrences</span> <span class="o">=</span> <span class="p">[</span><span class="n">_obj_or_acc</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">ret_mode</span><span class="p">)]</span>
+            <span class="n">exp_result</span> <span class="o">+=</span> <span class="n">occurrences</span>
+        <span class="k">if</span> <span class="n">sort</span><span class="p">:</span>
+            <span class="c"># support AT and DX without wrapped by IEventAccessor (mainly for</span>
+            <span class="c"># sorting after &quot;start&quot; or &quot;end&quot;).</span>
+            <span class="n">exp_result</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">_get_compare_attr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">sort</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">sort_reverse</span><span class="p">:</span>
+            <span class="n">exp_result</span><span class="o">.</span><span class="n">reverse</span><span class="p">()</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">exp_result</span>
+
+    <span class="k">if</span> <span class="n">limit</span><span class="p">:</span>
+        <span class="c"># Limiting the result set can only happen here, after possibly exanding</span>
+        <span class="c"># the result set with it&#39;s occurrences.</span>
+        <span class="c"># Otherwise we might get wrong results - see :</span>
+        <span class="c"># p.a.event.tests.test_base_module.TestGetEventsDX.test_get_event_limit</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="p">[:</span><span class="n">limit</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+
+</div>
+<div class="viewcode-block" id="construct_calendar"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.construct_calendar">[docs]</a><span class="k">def</span> <span class="nf">construct_calendar</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a dictionary with dates in a given timeframe as keys and the</span>
+<span class="sd">    actual occurrences for that date for building calendars.</span>
+<span class="sd">    Long lasting events will occur on every day until their end.</span>
+
+<span class="sd">    :param events: List of IEvent and/or IOccurrence objects, to construct a</span>
+<span class="sd">                   calendar data structure from.</span>
+<span class="sd">    :type events: list</span>
+
+<span class="sd">    :param start: An optional start range date.</span>
+<span class="sd">    :type start: Python datetime or date</span>
+
+<span class="sd">    :param end: An optional start range date.</span>
+<span class="sd">    :type end: Python datetime or date</span>
+
+<span class="sd">    :returns: Dictionary with isoformat date strings as keys and event</span>
+<span class="sd">              occurrences as values.</span>
+<span class="sd">    :rtype: dict</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">start</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">is_datetime</span><span class="p">(</span><span class="n">start</span><span class="p">):</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">start</span><span class="o">.</span><span class="n">date</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="n">is_date</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">end</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">is_datetime</span><span class="p">(</span><span class="n">end</span><span class="p">):</span>
+            <span class="n">end</span> <span class="o">=</span> <span class="n">end</span><span class="o">.</span><span class="n">date</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="n">is_date</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
+
+    <span class="n">cal</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">def</span> <span class="nf">_add_to_cal</span><span class="p">(</span><span class="n">cal_data</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">date</span><span class="p">):</span>
+        <span class="n">date_str</span> <span class="o">=</span> <span class="n">date</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">date_str</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cal_data</span><span class="p">:</span>
+            <span class="n">cal_data</span><span class="p">[</span><span class="n">date_str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">event</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">cal_data</span><span class="p">[</span><span class="n">date_str</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cal_data</span>
+
+    <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+        <span class="n">acc</span> <span class="o">=</span> <span class="n">IEventAccessor</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+        <span class="n">start_date</span> <span class="o">=</span> <span class="n">acc</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">date</span><span class="p">()</span>
+        <span class="n">end_date</span> <span class="o">=</span> <span class="n">acc</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">date</span><span class="p">()</span>
+
+        <span class="c"># day span between start and end + 1 for the initial date</span>
+        <span class="n">range_days</span> <span class="o">=</span> <span class="p">(</span><span class="n">end_date</span> <span class="o">-</span> <span class="n">start_date</span><span class="p">)</span><span class="o">.</span><span class="n">days</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">add_day</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">range_days</span><span class="p">):</span>
+            <span class="n">next_start_date</span> <span class="o">=</span> <span class="n">start_date</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">add_day</span><span class="p">)</span>  <span class="c"># initial = 0</span>
+
+            <span class="c"># avoid long loops</span>
+            <span class="k">if</span> <span class="n">start</span> <span class="ow">and</span> <span class="n">end_date</span> <span class="o">&lt;</span> <span class="n">start</span><span class="p">:</span>
+                <span class="k">break</span>  <span class="c"># if the date is completly outside the range</span>
+            <span class="k">if</span> <span class="n">start</span> <span class="ow">and</span> <span class="n">next_start_date</span> <span class="o">&lt;=</span> <span class="n">start</span><span class="p">:</span>
+                <span class="k">continue</span>  <span class="c"># if start is outside but end reaches into range</span>
+            <span class="k">if</span> <span class="n">end</span> <span class="ow">and</span> <span class="n">next_start_date</span> <span class="o">&gt;</span> <span class="n">end</span><span class="p">:</span>
+                <span class="k">break</span>  <span class="c"># if date is outside range</span>
+
+            <span class="n">_add_to_cal</span><span class="p">(</span><span class="n">cal</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">next_start_date</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">cal</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_prepare_range</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Prepare a date-range to contain timezone info and set end to next day,</span>
+<span class="sd">    if end is a date.</span>
+
+<span class="sd">    :param context: [required] Context object.</span>
+<span class="sd">    :type context: Content object</span>
+
+<span class="sd">    :param start: [required] Range start.</span>
+<span class="sd">    :type start: Python date or datetime</span>
+
+<span class="sd">    :param end: [required] Range end.</span>
+<span class="sd">    :type end: Python date or datetime</span>
+
+<span class="sd">    :returns: Localized start and end datetime.</span>
+<span class="sd">    :rtype: tuple</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">tz</span> <span class="o">=</span> <span class="n">default_timezone</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">as_tzinfo</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">pydt</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">missing_zone</span><span class="o">=</span><span class="n">tz</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">is_date</span><span class="p">(</span><span class="n">end</span><span class="p">):</span>
+        <span class="c"># set range_end to the next day, time will be 0:00</span>
+        <span class="c"># so the whole previous day is also used for search</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">end</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">end</span> <span class="o">=</span> <span class="n">pydt</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="n">missing_zone</span><span class="o">=</span><span class="n">tz</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span>
+
+
+<span class="c"># TIMEZONE HANDLING</span>
+
+<div class="viewcode-block" id="default_timezone"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.default_timezone">[docs]</a><span class="k">def</span> <span class="nf">default_timezone</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">as_tzinfo</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the timezone from the portal or user.</span>
+
+<span class="sd">    :param context: Optional context. If not given, the current Site is used.</span>
+<span class="sd">    :type context: Content object</span>
+
+<span class="sd">    :param as_tzinfo: Return the default timezone as tzinfo object.</span>
+<span class="sd">    :type as_tzinfo: boolean</span>
+
+<span class="sd">    :returns: Timezone identifier or tzinfo object.</span>
+<span class="sd">    :rtype: string or tzinfo object</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># TODO: test member timezone</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">context</span><span class="p">:</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="n">getSite</span><span class="p">()</span>
+
+    <span class="n">membership</span> <span class="o">=</span> <span class="n">getToolByName</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;portal_membership&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">membership</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">membership</span><span class="o">.</span><span class="n">isAnonymousUser</span><span class="p">():</span>  <span class="c"># user not logged in</span>
+        <span class="n">member</span> <span class="o">=</span> <span class="n">membership</span><span class="o">.</span><span class="n">getAuthenticatedMember</span><span class="p">()</span>
+        <span class="n">member_timezone</span> <span class="o">=</span> <span class="n">member</span><span class="o">.</span><span class="n">getProperty</span><span class="p">(</span><span class="s">&#39;timezone&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">member_timezone</span><span class="p">:</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="n">pytz</span><span class="o">.</span><span class="n">timezone</span><span class="p">(</span><span class="n">member_timezone</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">info</span> <span class="k">if</span> <span class="n">as_tzinfo</span> <span class="k">else</span> <span class="n">info</span><span class="o">.</span><span class="n">zone</span>
+
+    <span class="n">portal_timezone</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">reg</span> <span class="o">=</span> <span class="n">queryUtility</span><span class="p">(</span><span class="n">IRegistry</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">reg</span><span class="p">:</span>
+        <span class="n">portal_timezone</span> <span class="o">=</span> <span class="n">reg</span><span class="o">.</span><span class="n">forInterface</span><span class="p">(</span>
+            <span class="n">IEventSettings</span><span class="p">,</span>
+            <span class="n">prefix</span><span class="o">=</span><span class="s">&quot;plone.app.event&quot;</span><span class="p">,</span>
+            <span class="n">check</span><span class="o">=</span><span class="bp">False</span>  <span class="c"># Don&#39;t fail, if portal_timezone isn&#39;t set.</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">portal_timezone</span>
+
+    <span class="c"># fallback to what plone.event is doing</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">portal_timezone</span><span class="p">:</span>
+        <span class="n">portal_timezone</span> <span class="o">=</span> <span class="n">fallback_default_timezone</span><span class="p">()</span>
+
+    <span class="c"># Change any ambiguous timezone abbreviations to their most common</span>
+    <span class="c"># non-ambigious timezone name.</span>
+    <span class="k">if</span> <span class="n">portal_timezone</span> <span class="ow">in</span> <span class="n">replacement_zones</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="n">portal_timezone</span> <span class="o">=</span> <span class="n">replacement_zones</span><span class="p">[</span><span class="n">portal_timezone</span><span class="p">]</span>
+    <span class="n">portal_timezone</span> <span class="o">=</span> <span class="n">validated_timezone</span><span class="p">(</span><span class="n">portal_timezone</span><span class="p">,</span> <span class="n">FALLBACK_TIMEZONE</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">as_tzinfo</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">pytz</span><span class="o">.</span><span class="n">timezone</span><span class="p">(</span><span class="n">portal_timezone</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">portal_timezone</span>
+
+</div>
+<div class="viewcode-block" id="localized_now"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.localized_now">[docs]</a><span class="k">def</span> <span class="nf">localized_now</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the current datetime localized to the default timezone.</span>
+
+<span class="sd">    :param context: Context object.</span>
+<span class="sd">    :type context: Content object</span>
+<span class="sd">    :returns: Localized current datetime.</span>
+<span class="sd">    :rtype: Python datetime</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">context</span><span class="p">:</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="n">getSite</span><span class="p">()</span>
+    <span class="n">tzinfo</span> <span class="o">=</span> <span class="n">default_timezone</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">,</span> <span class="n">as_tzinfo</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tzinfo</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="localized_today"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.localized_today">[docs]</a><span class="k">def</span> <span class="nf">localized_today</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the current date localized to the default timezone.</span>
+
+<span class="sd">    :param context: Context object.</span>
+<span class="sd">    :type context: Content object</span>
+<span class="sd">    :returns: Localized current date.</span>
+<span class="sd">    :rtype: Python date</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">now</span> <span class="o">=</span> <span class="n">localized_now</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">date</span><span class="p">(</span><span class="n">now</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">now</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">now</span><span class="o">.</span><span class="n">day</span><span class="p">)</span>
+
+
+<span class="c"># DATETIME HELPERS</span>
+</div>
+<div class="viewcode-block" id="first_weekday"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.first_weekday">[docs]</a><span class="k">def</span> <span class="nf">first_weekday</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Returns the number of the first Weekday in a Week, as defined in</span>
+<span class="sd">    the registry. 0 is Monday, 6 is Sunday, as expected by Python&#39;s datetime.</span>
+
+<span class="sd">    PLEASE NOTE: strftime %w interprets 0 as Sunday unlike the calendar module!</span>
+
+<span class="sd">    :returns: Index of first weekday [0(Monday)..6(Sunday)]</span>
+<span class="sd">    :rtype: integer</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">controlpanel</span> <span class="o">=</span> <span class="n">getUtility</span><span class="p">(</span><span class="n">IRegistry</span><span class="p">)</span><span class="o">.</span><span class="n">forInterface</span><span class="p">(</span><span class="n">IEventSettings</span><span class="p">,</span>
+                                                      <span class="n">prefix</span><span class="o">=</span><span class="s">&quot;plone.app.event&quot;</span><span class="p">)</span>
+    <span class="n">first_wd</span> <span class="o">=</span> <span class="n">controlpanel</span><span class="o">.</span><span class="n">first_weekday</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">first_wd</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">first_wd</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="wkday_to_mon0"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.wkday_to_mon0">[docs]</a><span class="k">def</span> <span class="nf">wkday_to_mon0</span><span class="p">(</span><span class="n">day</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts an integer weekday number to a representation where Monday is 0</span>
+<span class="sd">    and Sunday is 6 (the datetime default), from a representation where Sunday</span>
+<span class="sd">    is 0, Monday is 1 and Saturday is 6 (the strftime behavior).</span>
+
+<span class="sd">    :param day: The weekday number [0(Sunday)..6]</span>
+<span class="sd">    :type day: integer</span>
+
+<span class="sd">    :returns: The weekday number [0(Monday)..6]</span>
+<span class="sd">    :rtype: integer</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">day</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">6</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">day</span> <span class="o">-</span> <span class="mi">1</span>
+
+</div>
+<div class="viewcode-block" id="wkday_to_mon1"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.wkday_to_mon1">[docs]</a><span class="k">def</span> <span class="nf">wkday_to_mon1</span><span class="p">(</span><span class="n">day</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts an integer weekday number to a representation where Monday is</span>
+<span class="sd">    1, Saturday is 6 and Sunday is 0 (the strftime behavior), from a</span>
+<span class="sd">    representation where Monday is 0 and Sunday is 6 (the datetime default).</span>
+
+<span class="sd">    :param day: The weekday number [0(Monday)..6]</span>
+<span class="sd">    :type day: integer</span>
+
+<span class="sd">    :returns: The weekday number [0(Sunday)..6]</span>
+<span class="sd">    :rtype: integer</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">day</span> <span class="o">==</span> <span class="mi">6</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">day</span> <span class="o">+</span> <span class="mi">1</span>
+
+</div>
+<div class="viewcode-block" id="DT"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.DT">[docs]</a><span class="k">def</span> <span class="nf">DT</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a Zope DateTime instance from a Python datetime instance.</span>
+
+<span class="sd">    :param dt: Python datetime, Python date, Zope DateTime instance or string.</span>
+<span class="sd">    :param exact: If True, the resolution goes down to microseconds. If False,</span>
+<span class="sd">                  the resolution are seconds. Defaul is False.</span>
+<span class="sd">    :type exact: Boolean</span>
+<span class="sd">    :returns: Zope DateTime</span>
+<span class="sd">    :rtype: Zope DateTime</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">_adjust_DT</span><span class="p">(</span><span class="n">DT</span><span class="p">,</span> <span class="n">exact</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">exact</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="n">DT</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="n">DateTime</span><span class="p">(</span>
+                <span class="n">DT</span><span class="o">.</span><span class="n">year</span><span class="p">(),</span>
+                <span class="n">DT</span><span class="o">.</span><span class="n">month</span><span class="p">(),</span>
+                <span class="n">DT</span><span class="o">.</span><span class="n">day</span><span class="p">(),</span>
+                <span class="n">DT</span><span class="o">.</span><span class="n">hour</span><span class="p">(),</span>
+                <span class="n">DT</span><span class="o">.</span><span class="n">minute</span><span class="p">(),</span>
+                <span class="nb">int</span><span class="p">(</span><span class="n">DT</span><span class="o">.</span><span class="n">second</span><span class="p">()),</span>
+                <span class="n">DT</span><span class="o">.</span><span class="n">timezone</span><span class="p">()</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">ret</span>
+
+    <span class="n">tz</span> <span class="o">=</span> <span class="n">default_timezone</span><span class="p">(</span><span class="n">getSite</span><span class="p">())</span>
+    <span class="n">ret</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">if</span> <span class="n">is_datetime</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
+        <span class="n">zone_id</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">tzinfo</span><span class="p">,</span> <span class="s">&#39;zone&#39;</span><span class="p">,</span> <span class="n">tz</span><span class="p">)</span>
+        <span class="n">tz</span> <span class="o">=</span> <span class="n">validated_timezone</span><span class="p">(</span><span class="n">zone_id</span><span class="p">,</span> <span class="n">tz</span><span class="p">)</span>
+        <span class="n">second</span> <span class="o">=</span> <span class="n">dt</span><span class="o">.</span><span class="n">second</span>
+        <span class="k">if</span> <span class="n">exact</span><span class="p">:</span>
+            <span class="n">second</span> <span class="o">+=</span> <span class="n">dt</span><span class="o">.</span><span class="n">microsecond</span> <span class="o">/</span> <span class="mf">1000000.0</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">DateTime</span><span class="p">(</span>
+            <span class="n">dt</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">dt</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">dt</span><span class="o">.</span><span class="n">day</span><span class="p">,</span>
+            <span class="n">dt</span><span class="o">.</span><span class="n">hour</span><span class="p">,</span> <span class="n">dt</span><span class="o">.</span><span class="n">minute</span><span class="p">,</span> <span class="n">second</span><span class="p">,</span>
+            <span class="n">tz</span>
+        <span class="p">)</span>
+    <span class="k">elif</span> <span class="n">is_date</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">DateTime</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">dt</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">dt</span><span class="o">.</span><span class="n">day</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tz</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">DateTime</span><span class="p">):</span>
+        <span class="c"># No timezone validation. DateTime knows how to handle it&#39;s zones.</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">_adjust_DT</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="n">exact</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c"># Try to convert by DateTime itself</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">_adjust_DT</span><span class="p">(</span><span class="n">DateTime</span><span class="p">(</span><span class="n">dt</span><span class="p">),</span> <span class="n">exact</span><span class="o">=</span><span class="n">exact</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ret</span>
+
+</div>
+<div class="viewcode-block" id="guess_date_from"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.guess_date_from">[docs]</a><span class="k">def</span> <span class="nf">guess_date_from</span><span class="p">(</span><span class="n">datestr</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns a timezone aware date object if an arbitrary ASCII string is</span>
+<span class="sd">    formatted in an ISO date format, otherwise None is returned.</span>
+
+<span class="sd">    Used for traversing and Occurence ids.</span>
+
+<span class="sd">    :param datestr: Date string in an ISO format.</span>
+<span class="sd">    :type datestr: string</span>
+<span class="sd">    :param context: Context object (for retrieving the timezone).</span>
+<span class="sd">    :type context: Content object</span>
+<span class="sd">    :returns: Localized date object.</span>
+<span class="sd">    :rtype: Python date</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">dateobj</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">datestr</span><span class="p">,</span> <span class="n">ISO_DATE_FORMAT</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="n">ret</span> <span class="o">=</span> <span class="n">pytz</span><span class="o">.</span><span class="n">timezone</span><span class="p">(</span><span class="n">default_timezone</span><span class="p">(</span><span class="n">context</span><span class="p">))</span><span class="o">.</span><span class="n">localize</span><span class="p">(</span><span class="n">dateobj</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ret</span>
+
+</div>
+<div class="viewcode-block" id="dt_start_of_day"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.dt_start_of_day">[docs]</a><span class="k">def</span> <span class="nf">dt_start_of_day</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns a Python datetime instance set to the start time of the given</span>
+<span class="sd">    day (00:00:00).</span>
+
+<span class="sd">    :param dt: datetime to set to the start time of the day.</span>
+<span class="sd">    :type dt: Python datetime</span>
+<span class="sd">    :returns: datetime set to the start time of the day (00:00:00).</span>
+<span class="sd">    :rtype: Python datetime</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">datetime</span><span class="p">):</span>
+        <span class="c"># is a date</span>
+        <span class="n">dt</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromordinal</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">toordinal</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">dt</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">hour</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="dt_end_of_day"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.dt_end_of_day">[docs]</a><span class="k">def</span> <span class="nf">dt_end_of_day</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns a Python datetime instance set to the end time of the given day</span>
+<span class="sd">    (23:59:59).</span>
+
+<span class="sd">    :param dt: datetime to set to the end time of the day.</span>
+<span class="sd">    :type dt: Python datetime</span>
+<span class="sd">    :returns: datetime set to the end time of the day (23:59:59).</span>
+<span class="sd">    :rtype: Python datetime</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">datetime</span><span class="p">):</span>
+        <span class="c"># is a date</span>
+        <span class="n">dt</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromordinal</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">toordinal</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">dt</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">hour</span><span class="o">=</span><span class="mi">23</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">59</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">59</span><span class="p">,</span> <span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="start_end_from_mode"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.start_end_from_mode">[docs]</a><span class="k">def</span> <span class="nf">start_end_from_mode</span><span class="p">(</span><span class="n">mode</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a start and end date from a given mode string, like</span>
+<span class="sd">    &quot;today&quot;, &quot;past&quot; or &quot;future&quot;. This can be used in event retrieval</span>
+<span class="sd">    functions.</span>
+
+<span class="sd">    :param mode: One of the following modes:</span>
+<span class="sd">                    &#39;all&#39; Show all events.</span>
+<span class="sd">                    &#39;past&#39;: Show only past events with descending sorting.</span>
+<span class="sd">                    &#39;future&#39;: Show only future events (default).</span>
+<span class="sd">                    &#39;today&#39;: Show todays events.</span>
+<span class="sd">                    &#39;now&#39;: Show todays upcoming events.</span>
+<span class="sd">                    &#39;7days&#39;: Show events until 7 days in future.</span>
+<span class="sd">                    &#39;day&#39;: Return all events on the given day (dt parameter</span>
+<span class="sd">                           required)</span>
+<span class="sd">                    &#39;week&#39;: Show a weeks events, optionally from a given date.</span>
+<span class="sd">                 These settings override the start and end parameters.</span>
+<span class="sd">                    Not implemented yet:</span>
+<span class="sd">                    &#39;month&#39;: Show this month&#39;s events.</span>
+<span class="sd">    :type mode: string</span>
+
+<span class="sd">    :param dt: Optional datetime for day mode.</span>
+<span class="sd">    :type dt: Python datetime</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">context</span><span class="p">:</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="n">getSite</span><span class="p">()</span>
+    <span class="n">now</span> <span class="o">=</span> <span class="n">localized_now</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">end</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;all&#39;</span><span class="p">:</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;past&#39;</span><span class="p">:</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">now</span>
+
+    <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;future&#39;</span><span class="p">:</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">now</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;now&#39;</span><span class="p">:</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">now</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">dt_end_of_day</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;7days&#39;</span><span class="p">:</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">now</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">dt_end_of_day</span><span class="p">(</span><span class="n">now</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">6</span><span class="p">))</span>
+
+    <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;day&#39;</span> <span class="ow">or</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;today&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">dt</span><span class="p">:</span>
+            <span class="n">dt</span> <span class="o">=</span> <span class="n">now</span>  <span class="c"># show today</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">dt_start_of_day</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">dt_end_of_day</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;week&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">dt</span><span class="p">:</span>
+            <span class="n">dt</span> <span class="o">=</span> <span class="n">now</span>  <span class="c"># show this week</span>
+        <span class="n">wkd</span> <span class="o">=</span> <span class="n">dt</span><span class="o">.</span><span class="n">weekday</span><span class="p">()</span>
+        <span class="n">first</span> <span class="o">=</span> <span class="n">first_weekday</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">first</span> <span class="o">&lt;=</span> <span class="n">wkd</span><span class="p">:</span>
+            <span class="n">delta</span> <span class="o">=</span> <span class="n">wkd</span> <span class="o">-</span> <span class="n">first</span>  <span class="c"># &gt;= 0</span>
+        <span class="k">if</span> <span class="n">first</span> <span class="o">&gt;</span> <span class="n">wkd</span><span class="p">:</span>
+            <span class="n">delta</span> <span class="o">=</span> <span class="n">wkd</span> <span class="o">+</span> <span class="mi">7</span> <span class="o">-</span> <span class="n">first</span>  <span class="c"># &gt; 0</span>
+
+        <span class="n">start</span> <span class="o">=</span> <span class="n">dt_start_of_day</span><span class="p">(</span><span class="n">dt</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="n">delta</span><span class="p">))</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">dt_end_of_day</span><span class="p">(</span><span class="n">start</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">6</span><span class="p">))</span>
+
+    <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;month&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">dt</span><span class="p">:</span>
+            <span class="n">dt</span> <span class="o">=</span> <span class="n">now</span>  <span class="c"># show this month</span>
+        <span class="n">year</span> <span class="o">=</span> <span class="n">dt</span><span class="o">.</span><span class="n">year</span>
+        <span class="n">month</span> <span class="o">=</span> <span class="n">dt</span><span class="o">.</span><span class="n">month</span>
+        <span class="n">last_day</span> <span class="o">=</span> <span class="n">monthrange</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>  <span class="c"># (wkday, days)</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">dt_start_of_day</span><span class="p">(</span><span class="n">datetime</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">dt_end_of_day</span><span class="p">(</span><span class="n">datetime</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">last_day</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span>
+
+
+<span class="c"># DISPLAY HELPERS</span>
+</div>
+<div class="viewcode-block" id="dates_for_display"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.dates_for_display">[docs]</a><span class="k">def</span> <span class="nf">dates_for_display</span><span class="p">(</span><span class="n">occurrence</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Return a dictionary containing pre-calculated information for building</span>
+<span class="sd">    &lt;start&gt;-&lt;end&gt; date strings.</span>
+
+<span class="sd">    Keys are:</span>
+<span class="sd">        &#39;start_date&#39; - date string of the start date</span>
+<span class="sd">        &#39;start_time&#39; - time string of the start date</span>
+<span class="sd">        &#39;end_date&#39;   - date string of the end date</span>
+<span class="sd">        &#39;end_time&#39;   - time string of the end date</span>
+<span class="sd">        &#39;start_iso&#39;  - start date in iso format</span>
+<span class="sd">        &#39;end_iso&#39;    - end date in iso format</span>
+<span class="sd">        &#39;same_day&#39;   - event ends on the same day</span>
+<span class="sd">        &#39;same_time&#39;  - event ends at same time</span>
+<span class="sd">        &#39;whole_day&#39;  - whole day events</span>
+<span class="sd">        &#39;open_end&#39;   - events without end time</span>
+
+
+<span class="sd">    The behavior os ulocalized_time() with time_only is odd.</span>
+<span class="sd">    Setting time_only=False should return the date part only and *not*</span>
+<span class="sd">    the time</span>
+
+<span class="sd">    &gt;&gt;&gt; from DateTime import DateTime</span>
+<span class="sd">    &gt;&gt;&gt; start = DateTime(2010,3,16,14,40)</span>
+<span class="sd">    &gt;&gt;&gt; from zope.componen.hooks import getSite</span>
+<span class="sd">    &gt;&gt;&gt; site = getSite()</span>
+<span class="sd">    &gt;&gt;&gt; ulocalized_time(start, False,  time_only=True, context=site)</span>
+<span class="sd">    u&#39;14:40&#39;</span>
+<span class="sd">    &gt;&gt;&gt; ulocalized_time(start, False,  time_only=False, context=site)</span>
+<span class="sd">    u&#39;14:40&#39;</span>
+<span class="sd">    &gt;&gt;&gt; ulocalized_time(start, False,  time_only=None, context=site)</span>
+<span class="sd">    u&#39;16.03.2010&#39;</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">acc</span> <span class="o">=</span> <span class="n">IEventAccessor</span><span class="p">(</span><span class="n">occurrence</span><span class="p">)</span>
+
+    <span class="c"># this needs to separate date and time as ulocalized_time does</span>
+    <span class="n">DT_start</span> <span class="o">=</span> <span class="n">DT</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">start</span><span class="p">)</span>
+    <span class="n">DT_end</span> <span class="o">=</span> <span class="n">DT</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+    <span class="n">start_date</span> <span class="o">=</span> <span class="n">ulocalized_time</span><span class="p">(</span>
+        <span class="n">DT_start</span><span class="p">,</span> <span class="n">long_format</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">time_only</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">occurrence</span>
+    <span class="p">)</span>
+    <span class="n">start_time</span> <span class="o">=</span> <span class="n">ulocalized_time</span><span class="p">(</span>
+        <span class="n">DT_start</span><span class="p">,</span> <span class="n">long_format</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">time_only</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">occurrence</span>
+    <span class="p">)</span>
+    <span class="n">end_date</span> <span class="o">=</span> <span class="n">ulocalized_time</span><span class="p">(</span>
+        <span class="n">DT_end</span><span class="p">,</span> <span class="n">long_format</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">time_only</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">occurrence</span>
+    <span class="p">)</span>
+    <span class="n">end_time</span> <span class="o">=</span> <span class="n">ulocalized_time</span><span class="p">(</span>
+        <span class="n">DT_end</span><span class="p">,</span> <span class="n">long_format</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">time_only</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">occurrence</span>
+    <span class="p">)</span>
+
+    <span class="n">same_day</span> <span class="o">=</span> <span class="n">is_same_day</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">acc</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+    <span class="n">same_time</span> <span class="o">=</span> <span class="n">is_same_time</span><span class="p">(</span><span class="n">acc</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">acc</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+
+    <span class="c"># set time fields to None for whole day events</span>
+    <span class="k">if</span> <span class="n">acc</span><span class="o">.</span><span class="n">whole_day</span><span class="p">:</span>
+        <span class="n">start_time</span> <span class="o">=</span> <span class="n">end_time</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">if</span> <span class="n">acc</span><span class="o">.</span><span class="n">open_end</span><span class="p">:</span>
+        <span class="n">end_time</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="n">start_iso</span> <span class="o">=</span> <span class="n">acc</span><span class="o">.</span><span class="n">whole_day</span> <span class="ow">and</span> <span class="n">acc</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">date</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>\
+        <span class="ow">or</span> <span class="n">acc</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+    <span class="n">end_iso</span> <span class="o">=</span> <span class="n">acc</span><span class="o">.</span><span class="n">whole_day</span> <span class="ow">and</span> <span class="n">acc</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">date</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>\
+        <span class="ow">or</span> <span class="n">acc</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="c"># Start</span>
+        <span class="n">start_date</span><span class="o">=</span><span class="n">start_date</span><span class="p">,</span>
+        <span class="n">start_time</span><span class="o">=</span><span class="n">start_time</span><span class="p">,</span>
+        <span class="n">start_iso</span><span class="o">=</span><span class="n">start_iso</span><span class="p">,</span>
+
+        <span class="c"># End</span>
+        <span class="n">end_date</span><span class="o">=</span><span class="n">end_date</span><span class="p">,</span>
+        <span class="n">end_time</span><span class="o">=</span><span class="n">end_time</span><span class="p">,</span>
+        <span class="n">end_iso</span><span class="o">=</span><span class="n">end_iso</span><span class="p">,</span>
+
+        <span class="c"># Meta</span>
+        <span class="n">same_day</span><span class="o">=</span><span class="n">same_day</span><span class="p">,</span>
+        <span class="n">same_time</span><span class="o">=</span><span class="n">same_time</span><span class="p">,</span>
+        <span class="n">whole_day</span><span class="o">=</span><span class="n">acc</span><span class="o">.</span><span class="n">whole_day</span><span class="p">,</span>
+        <span class="n">open_end</span><span class="o">=</span><span class="n">acc</span><span class="o">.</span><span class="n">open_end</span><span class="p">,</span>
+    <span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="date_speller"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.date_speller">[docs]</a><span class="k">def</span> <span class="nf">date_speller</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a dictionary with localized and readably formatted date parts.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dt</span> <span class="o">=</span> <span class="n">DT</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+    <span class="n">util</span> <span class="o">=</span> <span class="n">getToolByName</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;translation_service&#39;</span><span class="p">)</span>
+    <span class="n">dom</span> <span class="o">=</span> <span class="s">&#39;plonelocales&#39;</span>
+
+    <span class="k">def</span> <span class="nf">zero_pad</span><span class="p">(</span><span class="n">num</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;</span><span class="si">%02d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">num</span>
+
+    <span class="n">date_dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">year</span><span class="o">=</span><span class="n">dt</span><span class="o">.</span><span class="n">year</span><span class="p">(),</span>
+
+        <span class="n">month</span><span class="o">=</span><span class="n">util</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span>
+            <span class="n">util</span><span class="o">.</span><span class="n">month_msgid</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">month</span><span class="p">()),</span>
+            <span class="n">domain</span><span class="o">=</span><span class="n">dom</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span>
+        <span class="p">),</span>
+
+        <span class="n">month_abbr</span><span class="o">=</span><span class="n">util</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span>
+            <span class="n">util</span><span class="o">.</span><span class="n">month_msgid</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">month</span><span class="p">(),</span> <span class="s">&#39;a&#39;</span><span class="p">),</span>
+            <span class="n">domain</span><span class="o">=</span><span class="n">dom</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span>
+        <span class="p">),</span>
+
+        <span class="n">wkday</span><span class="o">=</span><span class="n">util</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span>
+            <span class="n">util</span><span class="o">.</span><span class="n">day_msgid</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">dow</span><span class="p">()),</span>
+            <span class="n">domain</span><span class="o">=</span><span class="n">dom</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span>
+        <span class="p">),</span>
+
+        <span class="n">wkday_abbr</span><span class="o">=</span><span class="n">util</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span>
+            <span class="n">util</span><span class="o">.</span><span class="n">day_msgid</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">dow</span><span class="p">(),</span> <span class="s">&#39;a&#39;</span><span class="p">),</span>
+            <span class="n">domain</span><span class="o">=</span><span class="n">dom</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span>
+        <span class="p">),</span>
+
+        <span class="n">day</span><span class="o">=</span><span class="n">dt</span><span class="o">.</span><span class="n">day</span><span class="p">(),</span>
+        <span class="n">day2</span><span class="o">=</span><span class="n">zero_pad</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">day</span><span class="p">()),</span>
+
+        <span class="n">hour</span><span class="o">=</span><span class="n">dt</span><span class="o">.</span><span class="n">hour</span><span class="p">(),</span>
+        <span class="n">hour2</span><span class="o">=</span><span class="n">zero_pad</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">hour</span><span class="p">()),</span>
+
+        <span class="n">minute</span><span class="o">=</span><span class="n">dt</span><span class="o">.</span><span class="n">minute</span><span class="p">(),</span>
+        <span class="n">minute2</span><span class="o">=</span><span class="n">zero_pad</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">minute</span><span class="p">()),</span>
+
+        <span class="n">second</span><span class="o">=</span><span class="n">dt</span><span class="o">.</span><span class="n">second</span><span class="p">(),</span>
+        <span class="n">second2</span><span class="o">=</span><span class="n">zero_pad</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">second</span><span class="p">())</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">date_dict</span>
+
+</div>
+<div class="viewcode-block" id="default_start"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.default_start">[docs]</a><span class="k">def</span> <span class="nf">default_start</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the default start as python datetime for prefilling forms.</span>
+
+<span class="sd">    :returns: Default start datetime.</span>
+<span class="sd">    :rtype: Python datetime</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">now</span> <span class="o">=</span> <span class="n">localized_now</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">now</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="default_end"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.default_end">[docs]</a><span class="k">def</span> <span class="nf">default_end</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the default end as python datetime for prefilling forms.</span>
+
+<span class="sd">    :returns: Default end datetime.</span>
+<span class="sd">    :rtype: Python datetime</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">default_start</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">)</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="n">DEFAULT_END_DELTA</span><span class="p">)</span>
+
+
+<span class="c"># General utils</span>
+<span class="c"># TODO: Better fits to CMFPlone. (Taken from CMFPlone&#39;s new syndication tool)</span>
+</div>
+<div class="viewcode-block" id="AnnotationAdapter"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.AnnotationAdapter">[docs]</a><span class="k">class</span> <span class="nc">AnnotationAdapter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Abstract Base Class for an annotation storage.</span>
+
+<span class="sd">    If the annotation wasn&#39;t set, it won&#39;t be created until the first attempt</span>
+<span class="sd">    to set a property on this adapter.</span>
+<span class="sd">    So, the context doesn&#39;t get polluted with annotations by accident.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ANNOTATION_KEY</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">context</span>
+        <span class="n">annotations</span> <span class="o">=</span> <span class="n">IAnnotations</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="o">=</span> <span class="n">annotations</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ANNOTATION_KEY</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s">&#39;context&#39;</span><span class="p">,</span> <span class="s">&#39;_data&#39;</span><span class="p">,</span> <span class="s">&#39;ANNOTATION_KEY&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="o">=</span> <span class="n">PersistentDict</span><span class="p">()</span>
+                <span class="n">annotations</span> <span class="o">=</span> <span class="n">IAnnotations</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+                <span class="n">annotations</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ANNOTATION_KEY</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">None</span>
+
+</div>
+<div class="viewcode-block" id="find_context"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.find_context">[docs]</a><span class="k">def</span> <span class="nf">find_context</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">viewname</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">iface</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">as_url</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">append_view</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Find the next context with a given view name or interface, up in the</span>
+<span class="sd">    content tree, starting from the given context. This might not be the</span>
+<span class="sd">    IPloneSiteRoot, but another subsite.</span>
+
+<span class="sd">    :param context: The context to start the search from.</span>
+<span class="sd">    :param viewname: (optional) The name of a view which a context should have</span>
+<span class="sd">                     configured as defaultView.</span>
+<span class="sd">    :param iface: (optional) The interface, the context to search for should</span>
+<span class="sd">                  implement.</span>
+<span class="sd">    :param as_url: (optional) Return the URL of the context found.</span>
+<span class="sd">    :param append_view: (optional) In case of a given viewname and called with</span>
+<span class="sd">                        as_url, append the viewname to the url, if the context</span>
+<span class="sd">                        hasn&#39;t configured it as defaultView. Otherwise ignore</span>
+<span class="sd">                        this parameter.</span>
+<span class="sd">    :returns: A context with the given view name, inteface or ISite root.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="n">aq_inner</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+    <span class="n">ret</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">if</span> <span class="n">viewname</span> <span class="ow">and</span> <span class="n">context</span><span class="o">.</span><span class="n">defaultView</span><span class="p">()</span> <span class="o">==</span> <span class="n">viewname</span>\
+       <span class="ow">or</span> <span class="n">iface</span> <span class="ow">and</span> <span class="n">iface</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>\
+       <span class="ow">or</span> <span class="n">IPloneSiteRoot</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+        <span class="c"># Search for viewname or interface but stop at IPloneSiteRoot</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">context</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">find_context</span><span class="p">(</span><span class="n">aq_parent</span><span class="p">(</span><span class="n">context</span><span class="p">),</span> <span class="n">viewname</span><span class="o">=</span><span class="n">viewname</span><span class="p">,</span> <span class="n">iface</span><span class="o">=</span><span class="n">iface</span><span class="p">,</span>
+                           <span class="n">as_url</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">append_view</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">as_url</span><span class="p">:</span>
+        <span class="n">url</span> <span class="o">=</span> <span class="n">ret</span><span class="o">.</span><span class="n">absolute_url</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">viewname</span> <span class="ow">and</span> <span class="n">append_view</span> <span class="ow">and</span> <span class="n">ret</span><span class="o">.</span><span class="n">defaultView</span><span class="p">()</span> <span class="o">!=</span> <span class="n">viewname</span><span class="p">:</span>
+            <span class="n">url</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">/</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">viewname</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">url</span>
+    <span class="k">return</span> <span class="n">ret</span>
+
+</div>
+<span class="k">def</span> <span class="nf">find_site</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">as_url</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">find_context</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">iface</span><span class="o">=</span><span class="n">ISite</span><span class="p">,</span> <span class="n">as_url</span><span class="o">=</span><span class="n">as_url</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">find_ploneroot</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">as_url</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">find_context</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">iface</span><span class="o">=</span><span class="n">IPloneSiteRoot</span><span class="p">,</span> <span class="n">as_url</span><span class="o">=</span><span class="n">as_url</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">find_event_listing</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">as_url</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">find_context</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">viewname</span><span class="o">=</span><span class="s">&#39;event_listing&#39;</span><span class="p">,</span> <span class="n">iface</span><span class="o">=</span><span class="n">ISite</span><span class="p">,</span>
+                        <span class="n">as_url</span><span class="o">=</span><span class="n">as_url</span><span class="p">,</span> <span class="n">append_view</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+
+<span class="c"># Workaround for buggy strftime with timezone handling in DateTime.</span>
+<span class="c"># See: https://github.com/plone/plone.app.event/pull/47</span>
+<span class="c"># TODO: should land in CMFPlone or fixed in DateTime.</span>
+<span class="n">_strftime</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">v</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="n">pydt</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">fmt</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">PatchedDateTime</span><span class="p">(</span><span class="n">DateTime</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">strftime</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fmt</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_strftime</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fmt</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ulocalized_time"><a class="viewcode-back" href="../../../../api/base.html#plone.app.event.base.ulocalized_time">[docs]</a><span class="k">def</span> <span class="nf">ulocalized_time</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Corrects for DateTime bugs doing wrong thing with timezones&quot;&quot;&quot;</span>
+    <span class="n">wrapped_time</span> <span class="o">=</span> <span class="n">PatchedDateTime</span><span class="p">(</span><span class="n">time</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">orig_ulocalized_time</span><span class="p">(</span><span class="n">wrapped_time</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Plone Foundation.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

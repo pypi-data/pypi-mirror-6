@@ -1,0 +1,325 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>plone.app.event.portlets.portlet_calendar &mdash; plone.app.event 1.0dev documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '1.0dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="plone.app.event 1.0dev documentation" href="../../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for plone.app.event.portlets.portlet_calendar</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">Acquisition</span> <span class="kn">import</span> <span class="n">aq_inner</span>
+<span class="kn">from</span> <span class="nn">Products.CMFCore.utils</span> <span class="kn">import</span> <span class="n">getToolByName</span>
+<span class="kn">from</span> <span class="nn">Products.Five.browser.pagetemplatefile</span> <span class="kn">import</span> <span class="n">ViewPageTemplateFile</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">find_site</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">first_weekday</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">get_events</span><span class="p">,</span> <span class="n">construct_calendar</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">localized_today</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">wkday_to_mon1</span>
+<span class="kn">from</span> <span class="nn">plone.app.form.widgets.uberselectionwidget</span> <span class="kn">import</span> <span class="n">UberSelectionWidget</span>
+<span class="kn">from</span> <span class="nn">plone.app.portlets</span> <span class="kn">import</span> <span class="n">PloneMessageFactory</span> <span class="k">as</span> <span class="n">_</span>
+<span class="kn">from</span> <span class="nn">plone.app.portlets.portlets</span> <span class="kn">import</span> <span class="n">base</span>
+<span class="kn">from</span> <span class="nn">plone.app.vocabularies.catalog</span> <span class="kn">import</span> <span class="n">SearchableTextSourceBinder</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IEventAccessor</span>
+<span class="kn">from</span> <span class="nn">plone.portlets.interfaces</span> <span class="kn">import</span> <span class="n">IPortletDataProvider</span>
+<span class="kn">from</span> <span class="nn">zope</span> <span class="kn">import</span> <span class="n">schema</span>
+<span class="kn">from</span> <span class="nn">zope.formlib</span> <span class="kn">import</span> <span class="n">form</span>
+<span class="kn">from</span> <span class="nn">zope.i18nmessageid</span> <span class="kn">import</span> <span class="n">MessageFactory</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implements</span>
+
+<span class="kn">import</span> <span class="nn">calendar</span>
+
+
+<span class="n">PLMF</span> <span class="o">=</span> <span class="n">MessageFactory</span><span class="p">(</span><span class="s">&#39;plonelocales&#39;</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">ICalendarPortlet</span><span class="p">(</span><span class="n">IPortletDataProvider</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A portlet displaying a calendar</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">state</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Tuple</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&quot;Workflow state&quot;</span><span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&quot;Items in which workflow state to show.&quot;</span><span class="p">),</span>
+        <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">value_type</span><span class="o">=</span><span class="n">schema</span><span class="o">.</span><span class="n">Choice</span><span class="p">(</span>
+            <span class="n">vocabulary</span><span class="o">=</span><span class="s">&quot;plone.app.vocabularies.WorkflowStates&quot;</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="n">search_base</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Choice</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&#39;portlet_label_search_base&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Search base&#39;</span><span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;portlet_help_search_base&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Select search base folder to search for events. This &#39;</span>
+                    <span class="s">u&#39;folder will also be used to link to in calendar &#39;</span>
+                    <span class="s">u&#39;searches. If empty, the whole site will be searched and &#39;</span>
+                    <span class="s">u&#39;the event listing view will be called on the site root.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">source</span><span class="o">=</span><span class="n">SearchableTextSourceBinder</span><span class="p">(</span>
+            <span class="p">{</span><span class="s">&#39;is_folderish&#39;</span><span class="p">:</span> <span class="bp">True</span><span class="p">},</span>
+            <span class="n">default_query</span><span class="o">=</span><span class="s">&#39;path:&#39;</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+
+
+<div class="viewcode-block" id="Assignment"><a class="viewcode-back" href="../../../../../api/portlets/portlet_calendar.html#plone.app.event.portlets.portlet_calendar.Assignment">[docs]</a><span class="k">class</span> <span class="nc">Assignment</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">Assignment</span><span class="p">):</span>
+    <span class="n">implements</span><span class="p">(</span><span class="n">ICalendarPortlet</span><span class="p">)</span>
+    <span class="n">title</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&#39;Calendar&#39;</span><span class="p">)</span>
+
+    <span class="c"># reduce upgrade pain</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">search_base</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">search_base</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">state</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">search_base</span> <span class="o">=</span> <span class="n">search_base</span>
+
+</div>
+<div class="viewcode-block" id="Renderer"><a class="viewcode-back" href="../../../../../api/portlets/portlet_calendar.html#plone.app.event.portlets.portlet_calendar.Renderer">[docs]</a><span class="k">class</span> <span class="nc">Renderer</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">Renderer</span><span class="p">):</span>
+    <span class="n">render</span> <span class="o">=</span> <span class="n">ViewPageTemplateFile</span><span class="p">(</span><span class="s">&#39;portlet_calendar.pt&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="n">aq_inner</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+        <span class="n">sb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">search_base</span>
+        <span class="n">site_url</span> <span class="o">=</span> <span class="n">find_site</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">as_url</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">calendar_url</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">site_url</span><span class="p">,</span> <span class="n">sb</span> <span class="ow">and</span> <span class="n">sb</span> <span class="ow">or</span> <span class="s">&#39;/event_listing&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">month</span> <span class="o">=</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">year_month_display</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prev_year</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_month</span> <span class="o">=</span> <span class="n">prev_year</span><span class="p">,</span> <span class="n">prev_month</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_previous_month</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">next_year</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">next_month</span> <span class="o">=</span> <span class="n">next_year</span><span class="p">,</span> <span class="n">next_month</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_next_month</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">))</span>
+        <span class="c"># TODO: respect current url-query string</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prev_query</span> <span class="o">=</span> <span class="s">&#39;?month=</span><span class="si">%s</span><span class="s">&amp;year=</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">prev_month</span><span class="p">,</span> <span class="n">prev_year</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">next_query</span> <span class="o">=</span> <span class="s">&#39;?month=</span><span class="si">%s</span><span class="s">&amp;year=</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">next_month</span><span class="p">,</span> <span class="n">next_year</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">cal</span> <span class="o">=</span> <span class="n">calendar</span><span class="o">.</span><span class="n">Calendar</span><span class="p">(</span><span class="n">first_weekday</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ts</span> <span class="o">=</span> <span class="n">getToolByName</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;translation_service&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">month_name</span> <span class="o">=</span> <span class="n">PLMF</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ts</span><span class="o">.</span><span class="n">month_msgid</span><span class="p">(</span><span class="n">month</span><span class="p">),</span>
+            <span class="n">default</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_ts</span><span class="o">.</span><span class="n">month_english</span><span class="p">(</span><span class="n">month</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c"># strftime %w interprets 0 as Sunday unlike the calendar.</span>
+        <span class="n">strftime_wkdays</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">wkday_to_mon1</span><span class="p">(</span><span class="n">day</span><span class="p">)</span> <span class="k">for</span> <span class="n">day</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cal</span><span class="o">.</span><span class="n">iterweekdays</span><span class="p">()</span>
+        <span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weekdays</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">PLMF</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ts</span><span class="o">.</span><span class="n">day_msgid</span><span class="p">(</span><span class="n">day</span><span class="p">,</span> <span class="n">format</span><span class="o">=</span><span class="s">&#39;s&#39;</span><span class="p">),</span>
+                 <span class="n">default</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_ts</span><span class="o">.</span><span class="n">weekday_english</span><span class="p">(</span><span class="n">day</span><span class="p">,</span> <span class="n">format</span><span class="o">=</span><span class="s">&#39;a&#39;</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">day</span> <span class="ow">in</span> <span class="n">strftime_wkdays</span>
+        <span class="p">]</span>
+
+<div class="viewcode-block" id="Renderer.year_month_display"><a class="viewcode-back" href="../../../../../api/portlets/portlet_calendar.html#plone.app.event.portlets.portlet_calendar.Renderer.year_month_display">[docs]</a>    <span class="k">def</span> <span class="nf">year_month_display</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return the year and month to display in the calendar.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="n">aq_inner</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">request</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span>
+
+        <span class="c"># Try to get year and month from request</span>
+        <span class="n">year</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;year&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">month</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;month&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+        <span class="c"># Or use current date</span>
+        <span class="n">today</span> <span class="o">=</span> <span class="n">localized_today</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">year</span><span class="p">:</span>
+            <span class="n">year</span> <span class="o">=</span> <span class="n">today</span><span class="o">.</span><span class="n">year</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">month</span><span class="p">:</span>
+            <span class="n">month</span> <span class="o">=</span> <span class="n">today</span><span class="o">.</span><span class="n">month</span>
+
+        <span class="c"># try to transform to number but fall back to current</span>
+        <span class="c"># date if this is ambiguous</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">year</span><span class="p">,</span> <span class="n">month</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">year</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">month</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+            <span class="n">year</span><span class="p">,</span> <span class="n">month</span> <span class="o">=</span> <span class="n">today</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">today</span><span class="o">.</span><span class="n">month</span>
+
+        <span class="k">return</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span>
+</div>
+    <span class="k">def</span> <span class="nf">get_previous_month</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">month</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">month</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">month</span><span class="p">,</span> <span class="n">year</span> <span class="o">=</span> <span class="mi">12</span><span class="p">,</span> <span class="n">year</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">month</span> <span class="o">-=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">get_next_month</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">month</span> <span class="o">==</span> <span class="mi">12</span><span class="p">:</span>
+            <span class="n">month</span><span class="p">,</span> <span class="n">year</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">year</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">month</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">date_events_url</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">date</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">?mode=day&amp;date=</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">calendar_url</span><span class="p">,</span> <span class="n">date</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="Renderer.cal_data"><a class="viewcode-back" href="../../../../../api/portlets/portlet_calendar.html#plone.app.event.portlets.portlet_calendar.Renderer.cal_data">[docs]</a>    <span class="k">def</span> <span class="nf">cal_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Calendar iterator over weeks and days of the month to display.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="n">aq_inner</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">today</span> <span class="o">=</span> <span class="n">localized_today</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">year</span><span class="p">,</span> <span class="n">month</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">year_month_display</span><span class="p">()</span>
+        <span class="n">monthdates</span> <span class="o">=</span> <span class="p">[</span><span class="n">dat</span> <span class="k">for</span> <span class="n">dat</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cal</span><span class="o">.</span><span class="n">itermonthdates</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">)]</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span>
+        <span class="n">query_kw</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">search_base</span><span class="p">:</span>
+            <span class="n">portal</span> <span class="o">=</span> <span class="n">getToolByName</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;portal_url&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">getPortalObject</span><span class="p">()</span>
+            <span class="n">query_kw</span><span class="p">[</span><span class="s">&#39;path&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;query&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%s%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="s">&#39;/&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">portal</span><span class="o">.</span><span class="n">getPhysicalPath</span><span class="p">()),</span> <span class="n">data</span><span class="o">.</span><span class="n">search_base</span><span class="p">)}</span>
+
+        <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">state</span><span class="p">:</span>
+            <span class="n">query_kw</span><span class="p">[</span><span class="s">&#39;review_state&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">state</span>
+
+        <span class="n">start</span> <span class="o">=</span> <span class="n">monthdates</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">monthdates</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="n">get_events</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">end</span><span class="p">,</span>
+                            <span class="n">ret_mode</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="o">**</span><span class="n">query_kw</span><span class="p">)</span>
+        <span class="n">cal_dict</span> <span class="o">=</span> <span class="n">construct_calendar</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">end</span><span class="p">)</span>
+
+        <span class="c"># [[day1week1, day2week1, ... day7week1], [day1week2, ...]]</span>
+        <span class="n">caldata</span> <span class="o">=</span> <span class="p">[[]]</span>
+        <span class="k">for</span> <span class="n">dat</span> <span class="ow">in</span> <span class="n">monthdates</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">caldata</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">==</span> <span class="mi">7</span><span class="p">:</span>
+                <span class="n">caldata</span><span class="o">.</span><span class="n">append</span><span class="p">([])</span>
+            <span class="n">date_events</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="n">isodat</span> <span class="o">=</span> <span class="n">dat</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">isodat</span> <span class="ow">in</span> <span class="n">cal_dict</span><span class="p">:</span>
+                <span class="n">date_events</span> <span class="o">=</span> <span class="n">cal_dict</span><span class="p">[</span><span class="n">isodat</span><span class="p">]</span>
+
+            <span class="n">events_string</span> <span class="o">=</span> <span class="s">u&quot;&quot;</span>
+            <span class="k">if</span> <span class="n">date_events</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">occ</span> <span class="ow">in</span> <span class="n">date_events</span><span class="p">:</span>
+                    <span class="n">accessor</span> <span class="o">=</span> <span class="n">IEventAccessor</span><span class="p">(</span><span class="n">occ</span><span class="p">)</span>
+                    <span class="n">location</span> <span class="o">=</span> <span class="n">accessor</span><span class="o">.</span><span class="n">location</span>
+                    <span class="n">whole_day</span> <span class="o">=</span> <span class="n">accessor</span><span class="o">.</span><span class="n">whole_day</span>
+                    <span class="n">time</span> <span class="o">=</span> <span class="n">accessor</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s">&#39;%H:%M&#39;</span><span class="p">)</span>
+                    <span class="c"># TODO: make 24/12 hr format configurable</span>
+                    <span class="n">base</span> <span class="o">=</span> <span class="s">u&#39;&lt;a href=&quot;</span><span class="si">%s</span><span class="s">&quot;&gt;&lt;span class=&quot;title&quot;&gt;</span><span class="si">%s</span><span class="s">&lt;/span&gt;&#39;</span>\
+                           <span class="s">u&#39;</span><span class="si">%s%s%s</span><span class="s">&lt;/a&gt;&#39;</span>
+                    <span class="n">events_string</span> <span class="o">+=</span> <span class="n">base</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">accessor</span><span class="o">.</span><span class="n">url</span><span class="p">,</span>
+                        <span class="n">accessor</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+                        <span class="ow">not</span> <span class="n">whole_day</span> <span class="ow">and</span> <span class="s">u&#39; </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">time</span> <span class="ow">or</span> <span class="s">u&#39;&#39;</span><span class="p">,</span>
+                        <span class="ow">not</span> <span class="n">whole_day</span> <span class="ow">and</span> <span class="n">location</span> <span class="ow">and</span> <span class="s">u&#39;, &#39;</span> <span class="ow">or</span> <span class="s">u&#39;&#39;</span><span class="p">,</span>
+                        <span class="n">location</span> <span class="ow">and</span> <span class="s">u&#39; </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">location</span> <span class="ow">or</span> <span class="s">u&#39;&#39;</span><span class="p">)</span>
+
+            <span class="n">caldata</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span><span class="s">&#39;date&#39;</span><span class="p">:</span> <span class="n">dat</span><span class="p">,</span>
+                 <span class="s">&#39;day&#39;</span><span class="p">:</span> <span class="n">dat</span><span class="o">.</span><span class="n">day</span><span class="p">,</span>
+                 <span class="s">&#39;prev_month&#39;</span><span class="p">:</span> <span class="n">dat</span><span class="o">.</span><span class="n">month</span> <span class="o">&lt;</span> <span class="n">month</span><span class="p">,</span>
+                 <span class="s">&#39;next_month&#39;</span><span class="p">:</span> <span class="n">dat</span><span class="o">.</span><span class="n">month</span> <span class="o">&gt;</span> <span class="n">month</span><span class="p">,</span>
+                 <span class="s">&#39;today&#39;</span><span class="p">:</span> <span class="n">dat</span><span class="o">.</span><span class="n">year</span> <span class="o">==</span> <span class="n">today</span><span class="o">.</span><span class="n">year</span> <span class="ow">and</span>\
+                          <span class="n">dat</span><span class="o">.</span><span class="n">month</span> <span class="o">==</span> <span class="n">today</span><span class="o">.</span><span class="n">month</span> <span class="ow">and</span>\
+                          <span class="n">dat</span><span class="o">.</span><span class="n">day</span> <span class="o">==</span> <span class="n">today</span><span class="o">.</span><span class="n">day</span><span class="p">,</span>
+                 <span class="s">&#39;date_string&#39;</span><span class="p">:</span> <span class="s">u&quot;</span><span class="si">%s</span><span class="s">-</span><span class="si">%s</span><span class="s">-</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">dat</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">dat</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">dat</span><span class="o">.</span><span class="n">day</span><span class="p">),</span>
+                 <span class="s">&#39;events_string&#39;</span><span class="p">:</span> <span class="n">events_string</span><span class="p">,</span>
+                 <span class="s">&#39;events&#39;</span><span class="p">:</span> <span class="n">date_events</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">caldata</span>
+
+</div></div>
+<span class="k">class</span> <span class="nc">AddForm</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">AddForm</span><span class="p">):</span>
+    <span class="n">form_fields</span> <span class="o">=</span> <span class="n">form</span><span class="o">.</span><span class="n">Fields</span><span class="p">(</span><span class="n">ICalendarPortlet</span><span class="p">)</span>
+    <span class="n">label</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&quot;Add Calendar Portlet&quot;</span><span class="p">)</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&quot;This portlet displays events in a calendar.&quot;</span><span class="p">)</span>
+    <span class="n">form_fields</span> <span class="o">=</span> <span class="n">form</span><span class="o">.</span><span class="n">Fields</span><span class="p">(</span><span class="n">ICalendarPortlet</span><span class="p">)</span>
+    <span class="n">form_fields</span><span class="p">[</span><span class="s">&#39;search_base&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">custom_widget</span> <span class="o">=</span> <span class="n">UberSelectionWidget</span>
+
+    <span class="k">def</span> <span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Assignment</span><span class="p">(</span><span class="n">state</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;state&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+                          <span class="n">search_base</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;search_base&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">))</span>
+
+
+<span class="k">class</span> <span class="nc">EditForm</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">EditForm</span><span class="p">):</span>
+    <span class="n">form_fields</span> <span class="o">=</span> <span class="n">form</span><span class="o">.</span><span class="n">Fields</span><span class="p">(</span><span class="n">ICalendarPortlet</span><span class="p">)</span>
+    <span class="n">label</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&quot;Edit Calendar Portlet&quot;</span><span class="p">)</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&quot;This portlet displays events in a calendar.&quot;</span><span class="p">)</span>
+    <span class="n">form_fields</span> <span class="o">=</span> <span class="n">form</span><span class="o">.</span><span class="n">Fields</span><span class="p">(</span><span class="n">ICalendarPortlet</span><span class="p">)</span>
+    <span class="n">form_fields</span><span class="p">[</span><span class="s">&#39;search_base&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">custom_widget</span> <span class="o">=</span> <span class="n">UberSelectionWidget</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Plone Foundation.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

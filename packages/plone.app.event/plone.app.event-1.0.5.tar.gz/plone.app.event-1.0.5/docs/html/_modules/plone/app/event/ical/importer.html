@@ -1,0 +1,409 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>plone.app.event.ical.importer &mdash; plone.app.event 1.0dev documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '1.0dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="plone.app.event 1.0dev documentation" href="../../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for plone.app.event.ical.importer</h1><div class="highlight"><pre>
+<span class="c"># TODO:</span>
+<span class="c">#  - implement sync strategies,</span>
+<span class="c">#  - cleanup,</span>
+<span class="c">#  - tests</span>
+<span class="kn">from</span> <span class="nn">Products.CMFPlone.utils</span> <span class="kn">import</span> <span class="n">safe_unicode</span>
+<span class="kn">from</span> <span class="nn">plone.app.event</span> <span class="kn">import</span> <span class="n">base</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IEventAccessor</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">date_to_datetime</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">is_date</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">is_datetime</span>
+<span class="kn">from</span> <span class="nn">zope.container.interfaces</span> <span class="kn">import</span> <span class="n">INameChooser</span>
+<span class="kn">from</span> <span class="nn">zope.event</span> <span class="kn">import</span> <span class="n">notify</span>
+<span class="kn">from</span> <span class="nn">zope.lifecycleevent</span> <span class="kn">import</span> <span class="n">ObjectModifiedEvent</span>
+
+<span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">icalendar</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">transaction</span>
+<span class="kn">import</span> <span class="nn">urllib2</span>
+
+
+<span class="k">def</span> <span class="nf">ical_import</span><span class="p">(</span><span class="n">container</span><span class="p">,</span> <span class="n">ics_resource</span><span class="p">,</span> <span class="n">event_type</span><span class="p">):</span>
+    <span class="n">cal</span> <span class="o">=</span> <span class="n">icalendar</span><span class="o">.</span><span class="n">Calendar</span><span class="o">.</span><span class="n">from_ical</span><span class="p">(</span><span class="n">ics_resource</span><span class="p">)</span>
+    <span class="n">events</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="s">&#39;VEVENT&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_prop</span><span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="n">prop</span> <span class="ow">in</span> <span class="n">item</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">decoded</span><span class="p">(</span><span class="n">prop</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">ret</span>
+
+    <span class="k">def</span> <span class="nf">_from_list</span><span class="p">(</span><span class="n">ical</span><span class="p">,</span> <span class="n">prop</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;For EXDATE and RDATE recurrence component properties, the dates can</span>
+<span class="sd">        be defined within one EXDATE/RDATE line or for each date an individual</span>
+<span class="sd">        line.</span>
+<span class="sd">        In the latter case, icalendar creates a list.</span>
+<span class="sd">        This method handles this case.</span>
+
+<span class="sd">        TODO: component property parameters like TZID are not used here.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="n">prop</span> <span class="ow">in</span> <span class="n">ical</span> <span class="ow">and</span> <span class="n">ical</span><span class="p">[</span><span class="n">prop</span><span class="p">]</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="p">[</span><span class="n">val</span><span class="p">]</span>
+        <span class="c">#ret = &#39;&#39;</span>
+        <span class="c">#for item in val:</span>
+        <span class="c">#    ret = ret and &#39;%s\n&#39; % ret or ret  # insert linebreak</span>
+        <span class="c">#    ret = &#39;%s%s:%s&#39; % (ret, prop, item.to_ical())</span>
+        <span class="c">#return ret</span>
+
+        <span class="c"># Zip multiple lines into one, since jquery.recurrenceinput.js does</span>
+        <span class="c"># not support multiple lines here</span>
+        <span class="c"># https://github.com/collective/jquery.recurrenceinput.js/issues/15</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">val</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="n">ret</span> <span class="ow">and</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">,&#39;</span> <span class="o">%</span> <span class="n">ret</span> <span class="ow">or</span> <span class="n">ret</span>  <span class="c"># insert linebreak</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="n">item</span><span class="o">.</span><span class="n">to_ical</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">ret</span> <span class="ow">and</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">:</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">prop</span><span class="p">,</span> <span class="n">ret</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">None</span>
+
+    <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;DTSTART&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;DTEND&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">end</span><span class="p">:</span>
+            <span class="n">duration</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;DURATION&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">duration</span><span class="p">:</span>
+                <span class="n">end</span> <span class="o">=</span> <span class="n">start</span> <span class="o">+</span> <span class="n">duration</span>
+            <span class="c"># else: whole day or open end</span>
+
+        <span class="n">timezone</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="s">&#39;tzinfo&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span> <span class="s">&#39;zone&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">or</span>\
+            <span class="n">base</span><span class="o">.</span><span class="n">default_timezone</span><span class="p">(</span><span class="n">container</span><span class="p">)</span>
+
+        <span class="n">whole_day</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="n">open_end</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">if</span> <span class="n">is_date</span><span class="p">(</span><span class="n">start</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">is_date</span><span class="p">(</span><span class="n">end</span><span class="p">)</span> <span class="ow">or</span> <span class="n">end</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">):</span>
+            <span class="c"># All day / whole day events</span>
+            <span class="c"># End must be same type as start (RFC5545, 3.8.2.2)</span>
+            <span class="n">whole_day</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">if</span> <span class="n">end</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">end</span> <span class="o">=</span> <span class="n">start</span>
+            <span class="k">if</span> <span class="n">start</span> <span class="o">&lt;</span> <span class="n">end</span><span class="p">:</span>
+                <span class="c"># RFC5545 doesn&#39;t define clearly, if all day events should have</span>
+                <span class="c"># a end date one day after the start day at 0:00.</span>
+                <span class="c"># Internally, we handle all day events with start=0:00,</span>
+                <span class="c"># end=:23:59:59, so we substract one day here.</span>
+                <span class="n">end</span> <span class="o">=</span> <span class="n">end</span> <span class="o">-</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">dt_start_of_day</span><span class="p">(</span><span class="n">date_to_datetime</span><span class="p">(</span><span class="n">start</span><span class="p">))</span>
+            <span class="n">end</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">dt_end_of_day</span><span class="p">(</span><span class="n">date_to_datetime</span><span class="p">(</span><span class="n">end</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">is_datetime</span><span class="p">(</span><span class="n">start</span><span class="p">)</span> <span class="ow">and</span> <span class="n">end</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="c"># Open end event, see RFC 5545, 3.6.1</span>
+            <span class="n">open_end</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="n">end</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">dt_end_of_day</span><span class="p">(</span><span class="n">date_to_datetime</span><span class="p">(</span><span class="n">start</span><span class="p">))</span>
+        <span class="k">assert</span><span class="p">(</span><span class="n">is_datetime</span><span class="p">(</span><span class="n">start</span><span class="p">))</span>
+        <span class="k">assert</span><span class="p">(</span><span class="n">is_datetime</span><span class="p">(</span><span class="n">end</span><span class="p">))</span>
+
+        <span class="n">title</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;SUMMARY&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+        <span class="n">description</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;DESCRIPTION&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+        <span class="n">location</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;LOCATION&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+
+        <span class="n">url</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;URL&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+
+        <span class="n">rrule</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;RRULE&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+        <span class="n">rrule</span> <span class="o">=</span> <span class="n">rrule</span> <span class="ow">and</span> <span class="s">&#39;RRULE:</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">rrule</span><span class="o">.</span><span class="n">to_ical</span><span class="p">()</span> <span class="ow">or</span> <span class="s">&#39;&#39;</span>
+        <span class="n">rdates</span> <span class="o">=</span> <span class="n">_from_list</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="s">&#39;RDATE&#39;</span><span class="p">)</span>
+        <span class="n">exdates</span> <span class="o">=</span> <span class="n">_from_list</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="s">&#39;EXDATE&#39;</span><span class="p">)</span>
+        <span class="n">rrule</span> <span class="o">=</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">it</span> <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="p">[</span><span class="n">rrule</span><span class="p">,</span> <span class="n">rdates</span><span class="p">,</span> <span class="n">exdates</span><span class="p">]</span> <span class="k">if</span> <span class="n">it</span><span class="p">])</span>
+
+        <span class="c"># TODO: attendee-lists are not decoded properly and contain only</span>
+        <span class="c"># vCalAddress values</span>
+        <span class="n">attendees</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;ATTENDEE&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+
+        <span class="n">contact</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;CONTACT&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+        <span class="n">categories</span> <span class="o">=</span> <span class="n">_get_prop</span><span class="p">(</span><span class="s">&#39;CATEGORIES&#39;</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">categories</span><span class="p">,</span> <span class="s">&#39;__iter__&#39;</span><span class="p">):</span>
+            <span class="n">categories</span> <span class="o">=</span> <span class="p">[</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">it</span><span class="p">)</span> <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">categories</span><span class="p">]</span>
+
+        <span class="c">## for sync</span>
+        <span class="c">#created = _get_prop(&#39;CREATED&#39;, item)</span>
+        <span class="c">#modified = _get_prop(&#39;LAST-MODIFIED&#39;, item)</span>
+
+        <span class="c"># TODO: better use plone.api, from which some of the code here is</span>
+        <span class="c"># copied</span>
+        <span class="n">content_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">99999999</span><span class="p">))</span>
+
+        <span class="c"># TODO: if AT had the same attrs like IDXEventBase, we could set</span>
+        <span class="c"># everything within this invokeFactory call.</span>
+        <span class="n">container</span><span class="o">.</span><span class="n">invokeFactory</span><span class="p">(</span><span class="n">event_type</span><span class="p">,</span>
+                                <span class="nb">id</span><span class="o">=</span><span class="n">content_id</span><span class="p">,</span>
+                                <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">,</span>
+                                <span class="n">description</span><span class="o">=</span><span class="n">description</span><span class="p">)</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">container</span><span class="p">[</span><span class="n">content_id</span><span class="p">]</span>
+
+        <span class="n">event</span> <span class="o">=</span> <span class="n">IEventAccessor</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">start</span> <span class="o">=</span> <span class="n">start</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">end</span> <span class="o">=</span> <span class="n">end</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">timezone</span> <span class="o">=</span> <span class="n">timezone</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">whole_day</span> <span class="o">=</span> <span class="n">whole_day</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">open_end</span> <span class="o">=</span> <span class="n">open_end</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">location</span> <span class="o">=</span> <span class="n">location</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">event_url</span> <span class="o">=</span> <span class="n">url</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">recurrence</span> <span class="o">=</span> <span class="n">rrule</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">attendees</span> <span class="o">=</span> <span class="n">attendees</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">contact_name</span> <span class="o">=</span> <span class="n">contact</span>
+        <span class="n">event</span><span class="o">.</span><span class="n">subjects</span> <span class="o">=</span> <span class="n">categories</span>
+        <span class="n">notify</span><span class="p">(</span><span class="n">ObjectModifiedEvent</span><span class="p">(</span><span class="n">content</span><span class="p">))</span>
+
+        <span class="c"># Archetypes specific code</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="s">&#39;processForm&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">):</span>
+            <span class="c"># Will finish Archetypes content item creation process,</span>
+            <span class="c"># rename-after-creation and such</span>
+            <span class="n">content</span><span class="o">.</span><span class="n">processForm</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">content_id</span> <span class="ow">in</span> <span class="n">container</span><span class="p">:</span>
+            <span class="c"># Rename with new id from title, if processForm didn&#39;t do it.</span>
+            <span class="n">chooser</span> <span class="o">=</span> <span class="n">INameChooser</span><span class="p">(</span><span class="n">container</span><span class="p">)</span>
+            <span class="n">new_id</span> <span class="o">=</span> <span class="n">chooser</span><span class="o">.</span><span class="n">chooseName</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+            <span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="n">optimistic</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>  <span class="c"># Commit before renaming</span>
+            <span class="n">content</span><span class="o">.</span><span class="n">aq_parent</span><span class="o">.</span><span class="n">manage_renameObject</span><span class="p">(</span><span class="n">content_id</span><span class="p">,</span> <span class="n">new_id</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="n">optimistic</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">return</span> <span class="p">{</span><span class="s">&#39;count&#39;</span><span class="p">:</span> <span class="n">count</span><span class="p">}</span>
+
+
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">Interface</span>
+<span class="kn">from</span> <span class="nn">zope</span> <span class="kn">import</span> <span class="n">schema</span>
+<span class="kn">from</span> <span class="nn">plone.app.event</span> <span class="kn">import</span> <span class="n">messageFactory</span> <span class="k">as</span> <span class="n">_</span>
+<span class="kn">from</span> <span class="nn">plone.namedfile.field</span> <span class="kn">import</span> <span class="n">NamedFile</span>
+
+
+<span class="k">class</span> <span class="nc">IIcalendarImportSettings</span><span class="p">(</span><span class="n">Interface</span><span class="p">):</span>
+
+    <span class="n">event_type</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Choice</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&#39;Event Type&#39;</span><span class="p">),</span>
+        <span class="n">vocabulary</span><span class="o">=</span><span class="s">&#39;plone.app.event.EventTypes&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">True</span>
+    <span class="p">)</span>
+
+    <span class="n">ical_url</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">URI</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&#39;Icalendar URL&#39;</span><span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span>
+    <span class="p">)</span>
+
+    <span class="n">ical_file</span> <span class="o">=</span> <span class="n">NamedFile</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&quot;Icalendar File&quot;</span><span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span>
+    <span class="p">)</span>
+
+    <span class="c"># TODO: to implement</span>
+    <span class="c">#sync_strategy = schema.Choice(</span>
+    <span class="c">#    title=_(u&quot;Synchronization Strategy&quot;),</span>
+    <span class="c">#    vocabulary=&#39;plone.app.event.SynchronizationStrategies&#39;,</span>
+    <span class="c">#    required=True</span>
+    <span class="c">#)</span>
+
+
+<span class="kn">from</span> <span class="nn">zope.component</span> <span class="kn">import</span> <span class="n">adapts</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implements</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">AnnotationAdapter</span>
+<span class="c">#from plone.folder.interfaces import IFolder</span>
+
+
+<div class="viewcode-block" id="IcalendarImportSettings"><a class="viewcode-back" href="../../../../../api/ical/importer.html#plone.app.event.ical.importer.IcalendarImportSettings">[docs]</a><span class="k">class</span> <span class="nc">IcalendarImportSettings</span><span class="p">(</span><span class="n">AnnotationAdapter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Annotation Adapter for IIcalendarImportSettings.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">implements</span><span class="p">(</span><span class="n">IIcalendarImportSettings</span><span class="p">)</span>
+    <span class="n">adapts</span><span class="p">(</span><span class="n">Interface</span><span class="p">)</span>
+
+    <span class="c">#adapts(IFolder) ## ?? TODO: when adapting this in z3c.form, why is a</span>
+                     <span class="c">## ATFolder not adaptable to this adapter, when it</span>
+                     <span class="c">## implements IFolder?</span>
+
+    <span class="n">ANNOTATION_KEY</span> <span class="o">=</span> <span class="s">&quot;icalendar_import_settings&quot;</span>
+
+</div>
+<span class="kn">from</span> <span class="nn">Products.Five.browser</span> <span class="kn">import</span> <span class="n">BrowserView</span>
+<span class="kn">from</span> <span class="nn">plone.folder.interfaces</span> <span class="kn">import</span> <span class="n">IFolder</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.interfaces</span> <span class="kn">import</span> <span class="n">IICalendarImportEnabled</span>
+
+
+<span class="k">class</span> <span class="nc">IcalendarImportTool</span><span class="p">(</span><span class="n">BrowserView</span><span class="p">):</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">IFolder</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">available_disabled</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">available</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">enabled</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">enabled</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">IICalendarImportEnabled</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+
+<span class="kn">from</span> <span class="nn">Products.statusmessages.interfaces</span> <span class="kn">import</span> <span class="n">IStatusMessage</span>
+<span class="kn">from</span> <span class="nn">z3c.form</span> <span class="kn">import</span> <span class="n">button</span>
+<span class="kn">from</span> <span class="nn">z3c.form</span> <span class="kn">import</span> <span class="n">form</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">alsoProvides</span><span class="p">,</span> <span class="n">noLongerProvides</span>
+
+
+<span class="k">class</span> <span class="nc">IcalendarImportSettingsForm</span><span class="p">(</span><span class="n">form</span><span class="o">.</span><span class="n">Form</span><span class="p">):</span>
+
+    <span class="n">fields</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">Fields</span><span class="p">(</span><span class="n">IIcalendarImportSettings</span><span class="p">)</span>
+    <span class="n">ignoreContext</span> <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="c">#TODO: needed?</span>
+    <span class="k">def</span> <span class="nf">updateWidgets</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">IcalendarImportSettingsForm</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">updateWidgets</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">getContent</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">settings</span> <span class="o">=</span> <span class="n">IIcalendarImportSettings</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">data</span><span class="p">[</span><span class="s">&#39;event_type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">event_type</span>
+        <span class="n">data</span><span class="p">[</span><span class="s">&#39;ical_url&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">ical_url</span>
+        <span class="c">#data[&#39;sync_strategy&#39;] = settings.sync_strategy</span>
+        <span class="k">return</span> <span class="n">data</span>
+
+    <span class="nd">@button.buttonAndHandler</span><span class="p">(</span><span class="s">u&#39;Save and Import&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">handleSave</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+        <span class="n">data</span><span class="p">,</span> <span class="n">errors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extractData</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="n">settings</span> <span class="o">=</span> <span class="n">IIcalendarImportSettings</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+        <span class="n">ical_file</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;ical_file&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">ical_file</span><span class="p">:</span>
+            <span class="c"># File upload is not saved in settings</span>
+            <span class="n">ical_resource</span> <span class="o">=</span> <span class="n">ical_file</span><span class="o">.</span><span class="n">data</span>
+            <span class="n">ical_import_from</span> <span class="o">=</span> <span class="n">ical_file</span><span class="o">.</span><span class="n">filename</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ical_url</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">ical_url</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;ical_url&#39;</span><span class="p">]</span>
+            <span class="n">ical_resource</span> <span class="o">=</span> <span class="n">urllib2</span><span class="o">.</span><span class="n">urlopen</span><span class="p">(</span><span class="n">ical_url</span><span class="p">,</span> <span class="s">&#39;rb&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            <span class="n">ical_import_from</span> <span class="o">=</span> <span class="n">ical_url</span>
+        <span class="n">event_type</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">event_type</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;event_type&#39;</span><span class="p">]</span>
+
+        <span class="n">import_metadata</span> <span class="o">=</span> <span class="n">ical_import</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span>
+            <span class="n">ics_resource</span><span class="o">=</span><span class="n">ical_resource</span><span class="p">,</span>
+            <span class="n">event_type</span><span class="o">=</span><span class="n">event_type</span>
+        <span class="p">)</span>
+
+        <span class="n">count</span> <span class="o">=</span> <span class="n">import_metadata</span><span class="p">[</span><span class="s">&#39;count&#39;</span><span class="p">]</span>
+
+        <span class="n">IStatusMessage</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">)</span><span class="o">.</span><span class="n">addStatusMessage</span><span class="p">(</span>
+            <span class="s">&quot;</span><span class="si">%s</span><span class="s"> events imported from </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="n">ical_import_from</span><span class="p">),</span>
+            <span class="s">&#39;info&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">redirect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">absolute_url</span><span class="p">())</span>
+
+    <span class="nd">@button.buttonAndHandler</span><span class="p">(</span><span class="s">u&#39;Cancel&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">handleCancel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">redirect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">absolute_url</span><span class="p">())</span>
+
+
+<span class="kn">from</span> <span class="nn">plone.z3cform.layout</span> <span class="kn">import</span> <span class="n">FormWrapper</span>
+
+
+<span class="k">class</span> <span class="nc">IcalendarImportSettingsFormView</span><span class="p">(</span><span class="n">FormWrapper</span><span class="p">):</span>
+    <span class="n">form</span> <span class="o">=</span> <span class="n">IcalendarImportSettingsForm</span>
+
+    <span class="k">def</span> <span class="nf">enable</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Enable icalendar import on this context.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">alsoProvides</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="n">IICalendarImportEnabled</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">reindexObject</span><span class="p">(</span><span class="n">idxs</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;object_provides&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">redirect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">absolute_url</span><span class="p">())</span>
+
+    <span class="k">def</span> <span class="nf">disable</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Disable icalendar import on this context.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">noLongerProvides</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="n">IICalendarImportEnabled</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">reindexObject</span><span class="p">(</span><span class="n">idxs</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;object_provides&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">redirect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">absolute_url</span><span class="p">())</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Plone Foundation.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

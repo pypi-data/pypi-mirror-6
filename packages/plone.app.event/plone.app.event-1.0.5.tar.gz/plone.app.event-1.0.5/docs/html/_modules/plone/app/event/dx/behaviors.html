@@ -1,0 +1,713 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>plone.app.event.dx.behaviors &mdash; plone.app.event 1.0dev documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '1.0dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="plone.app.event 1.0dev documentation" href="../../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for plone.app.event.dx.behaviors</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;Behaviors to enable calendarish event extension to dexterity content types.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">Products.CMFCore.utils</span> <span class="kn">import</span> <span class="n">getToolByName</span>
+<span class="kn">from</span> <span class="nn">Products.CMFPlone.utils</span> <span class="kn">import</span> <span class="n">safe_unicode</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">timedelta</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">tzinfo</span>
+<span class="kn">from</span> <span class="nn">plone.app.dexterity.behaviors.metadata</span> <span class="kn">import</span> <span class="n">ICategorization</span>
+<span class="kn">from</span> <span class="nn">plone.app.event</span> <span class="kn">import</span> <span class="n">messageFactory</span> <span class="k">as</span> <span class="n">_</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">DT</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">default_end</span> <span class="k">as</span> <span class="n">default_end_dt</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">default_start</span> <span class="k">as</span> <span class="n">default_start_dt</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">default_timezone</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">dt_end_of_day</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">dt_start_of_day</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">first_weekday</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">wkday_to_mon1</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.dx.interfaces</span> <span class="kn">import</span> <span class="n">IDXEvent</span>
+<span class="kn">from</span> <span class="nn">plone.app.textfield</span> <span class="kn">import</span> <span class="n">RichText</span>
+<span class="kn">from</span> <span class="nn">plone.app.textfield.value</span> <span class="kn">import</span> <span class="n">RichTextValue</span>
+<span class="kn">from</span> <span class="nn">plone.autoform</span> <span class="kn">import</span> <span class="n">directives</span> <span class="k">as</span> <span class="n">form</span>
+<span class="kn">from</span> <span class="nn">plone.autoform.interfaces</span> <span class="kn">import</span> <span class="n">IFormFieldProvider</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IEventAccessor</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">tzdel</span><span class="p">,</span> <span class="n">utc</span><span class="p">,</span> <span class="n">dt_to_zone</span>
+<span class="kn">from</span> <span class="nn">plone.formwidget.datetime.z3cform.widget</span> <span class="kn">import</span> <span class="n">DatetimeFieldWidget</span>
+<span class="kn">from</span> <span class="nn">plone.formwidget.recurrence.z3cform.field</span> <span class="kn">import</span> <span class="n">RecurrenceField</span>
+<span class="kn">from</span> <span class="nn">plone.formwidget.recurrence.z3cform.widget</span> <span class="kn">import</span> <span class="n">RecurrenceFieldWidget</span>
+<span class="kn">from</span> <span class="nn">plone.indexer</span> <span class="kn">import</span> <span class="n">indexer</span>
+<span class="kn">from</span> <span class="nn">plone.supermodel</span> <span class="kn">import</span> <span class="n">model</span>
+<span class="kn">from</span> <span class="nn">plone.uuid.interfaces</span> <span class="kn">import</span> <span class="n">IUUID</span>
+<span class="kn">from</span> <span class="nn">z3c.form.widget</span> <span class="kn">import</span> <span class="n">ComputedWidgetAttribute</span>
+<span class="kn">from</span> <span class="nn">zope</span> <span class="kn">import</span> <span class="n">schema</span>
+<span class="kn">from</span> <span class="nn">zope.component</span> <span class="kn">import</span> <span class="n">adapts</span>
+<span class="kn">from</span> <span class="nn">zope.component</span> <span class="kn">import</span> <span class="n">provideAdapter</span>
+<span class="kn">from</span> <span class="nn">zope.event</span> <span class="kn">import</span> <span class="n">notify</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">Invalid</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">alsoProvides</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implements</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">invariant</span>
+<span class="kn">from</span> <span class="nn">zope.lifecycleevent</span> <span class="kn">import</span> <span class="n">ObjectModifiedEvent</span>
+
+<span class="kn">import</span> <span class="nn">pytz</span>
+
+
+<span class="c"># TODO: altern., for backwards compat., we could import from plone.z3cform</span>
+<span class="kn">from</span> <span class="nn">z3c.form.browser.textlines</span> <span class="kn">import</span> <span class="n">TextLinesFieldWidget</span>
+
+
+<span class="k">def</span> <span class="nf">first_weekday_sun0</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">wkday_to_mon1</span><span class="p">(</span><span class="n">first_weekday</span><span class="p">())</span>
+
+
+<div class="viewcode-block" id="StartBeforeEnd"><a class="viewcode-back" href="../../../../../api/dx/behaviors.html#plone.app.event.dx.behaviors.StartBeforeEnd">[docs]</a><span class="k">class</span> <span class="nc">StartBeforeEnd</span><span class="p">(</span><span class="n">Invalid</span><span class="p">):</span>
+    <span class="n">__doc__</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">&quot;error_invalid_date&quot;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&quot;Invalid start or end date&quot;</span><span class="p">)</span>
+
+</div>
+<span class="k">class</span> <span class="nc">IEventBasic</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">Schema</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Basic event schema.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">form</span><span class="o">.</span><span class="n">widget</span><span class="p">(</span><span class="s">&#39;start&#39;</span><span class="p">,</span> <span class="n">DatetimeFieldWidget</span><span class="p">,</span> <span class="n">first_day</span><span class="o">=</span><span class="n">first_weekday_sun0</span><span class="p">)</span>
+    <span class="n">form</span><span class="o">.</span><span class="n">widget</span><span class="p">(</span><span class="s">&#39;end&#39;</span><span class="p">,</span> <span class="n">DatetimeFieldWidget</span><span class="p">,</span> <span class="n">first_day</span><span class="o">=</span><span class="n">first_weekday_sun0</span><span class="p">)</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">fieldset</span><span class="p">(</span><span class="s">&#39;dates&#39;</span><span class="p">,</span> <span class="n">fields</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;timezone&#39;</span><span class="p">])</span>
+
+    <span class="n">start</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Datetime</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_start&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Event Starts&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_start&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Date and Time, when the event begins.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">True</span>
+    <span class="p">)</span>
+
+    <span class="n">end</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Datetime</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_end&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Event Ends&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_end&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Date and Time, when the event ends.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">True</span>
+    <span class="p">)</span>
+
+    <span class="n">whole_day</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Bool</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_whole_day&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Whole Day&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_whole_day&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Event lasts whole day.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span>
+    <span class="p">)</span>
+
+    <span class="n">open_end</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Bool</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_open_end&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Open End&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_open_end&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&quot;This event is open ended.&quot;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span>
+    <span class="p">)</span>
+
+    <span class="c"># TODO: form.order_before(timezone=&quot;IPublication.effective&quot;)</span>
+    <span class="n">timezone</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Choice</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_timezone&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Timezone&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_timezone&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Select the Timezone, where this event happens.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">vocabulary</span><span class="o">=</span><span class="s">&quot;plone.app.event.AvailableTimezones&quot;</span>
+    <span class="p">)</span>
+
+    <span class="nd">@invariant</span>
+    <span class="k">def</span> <span class="nf">validate_start_end</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">start</span> <span class="o">&gt;</span> <span class="n">data</span><span class="o">.</span><span class="n">end</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">StartBeforeEnd</span><span class="p">(</span>
+                <span class="n">_</span><span class="p">(</span><span class="s">&quot;error_end_must_be_after_start_date&quot;</span><span class="p">,</span>
+                  <span class="n">default</span><span class="o">=</span><span class="s">u&quot;End date must be after start date.&quot;</span><span class="p">)</span>
+            <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">default_start</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">default_start_dt</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+<span class="n">provideAdapter</span><span class="p">(</span><span class="n">ComputedWidgetAttribute</span><span class="p">(</span>
+    <span class="n">default_start</span><span class="p">,</span> <span class="n">field</span><span class="o">=</span><span class="n">IEventBasic</span><span class="p">[</span><span class="s">&#39;start&#39;</span><span class="p">]),</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;default&#39;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">default_end</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">default_end_dt</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+<span class="n">provideAdapter</span><span class="p">(</span><span class="n">ComputedWidgetAttribute</span><span class="p">(</span>
+    <span class="n">default_end</span><span class="p">,</span> <span class="n">field</span><span class="o">=</span><span class="n">IEventBasic</span><span class="p">[</span><span class="s">&#39;end&#39;</span><span class="p">]),</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;default&#39;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">default_tz</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">default_timezone</span><span class="p">()</span>
+<span class="n">provideAdapter</span><span class="p">(</span><span class="n">ComputedWidgetAttribute</span><span class="p">(</span>
+    <span class="n">default_tz</span><span class="p">,</span> <span class="n">field</span><span class="o">=</span><span class="n">IEventBasic</span><span class="p">[</span><span class="s">&#39;timezone&#39;</span><span class="p">]),</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;default&#39;</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">IEventRecurrence</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">Schema</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Recurring Event Schema.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># Please note: If you create a new behavior with superclasses IEventBasic</span>
+    <span class="c"># and IRecurrence, then you have to reconfigure the dotted path value of</span>
+    <span class="c"># the start_field parameter for the RecurrenceFieldWidget to the new</span>
+    <span class="c"># behavior name, like: IMyNewBehaviorName.start.</span>
+    <span class="n">form</span><span class="o">.</span><span class="n">widget</span><span class="p">(</span>
+        <span class="s">&#39;recurrence&#39;</span><span class="p">,</span>
+        <span class="n">RecurrenceFieldWidget</span><span class="p">,</span>
+        <span class="n">start_field</span><span class="o">=</span><span class="s">&#39;IEventBasic.start&#39;</span><span class="p">,</span>
+        <span class="n">first_day</span><span class="o">=</span><span class="n">first_weekday_sun0</span>
+    <span class="p">)</span>
+    <span class="n">recurrence</span> <span class="o">=</span> <span class="n">RecurrenceField</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_recurrence&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Recurrence&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_recurrence&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Define the event recurrence rule.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span>
+    <span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">IEventLocation</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">Schema</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Event Location Schema.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">location</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">TextLine</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_location&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Location&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_location&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Location of the event.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span>
+    <span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">IEventAttendees</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">Schema</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Event Attendees Schema.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">attendees</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Tuple</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_attendees&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Attendees&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_attendees&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;List of attendees.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">value_type</span><span class="o">=</span><span class="n">schema</span><span class="o">.</span><span class="n">TextLine</span><span class="p">(),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">missing_value</span><span class="o">=</span><span class="p">(),</span>
+    <span class="p">)</span>
+    <span class="n">form</span><span class="o">.</span><span class="n">widget</span><span class="p">(</span><span class="n">attendees</span><span class="o">=</span><span class="n">TextLinesFieldWidget</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">IEventContact</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">Schema</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Event Contact Schema.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">contact_name</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">TextLine</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_contact_name&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Contact Name&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_contact_name&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Name of a person to contact about this event.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span>
+    <span class="p">)</span>
+
+    <span class="n">contact_email</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">TextLine</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_contact_email&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Contact E-mail&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_contact_email&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Email address to contact about this event.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span>
+    <span class="p">)</span>
+
+    <span class="n">contact_phone</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">TextLine</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_contact_phone&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Contact Phone&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_contact_phone&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Phone number to contact about this event.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span>
+    <span class="p">)</span>
+
+    <span class="n">event_url</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">TextLine</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_url&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Event URL&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_url&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Web address with more info about the event. &#39;</span>
+                    <span class="s">u&#39;Add http:// for external links.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span>
+    <span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">IEventSummary</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">Schema</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Event summary (body text) schema.&quot;&quot;&quot;</span>
+
+    <span class="n">text</span> <span class="o">=</span> <span class="n">RichText</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;label_event_announcement&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Event body text&#39;</span>
+        <span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;help_event_announcement&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="c"># Mark these interfaces as form field providers</span>
+<span class="n">alsoProvides</span><span class="p">(</span><span class="n">IEventBasic</span><span class="p">,</span> <span class="n">IFormFieldProvider</span><span class="p">)</span>
+<span class="n">alsoProvides</span><span class="p">(</span><span class="n">IEventRecurrence</span><span class="p">,</span> <span class="n">IFormFieldProvider</span><span class="p">)</span>
+<span class="n">alsoProvides</span><span class="p">(</span><span class="n">IEventLocation</span><span class="p">,</span> <span class="n">IFormFieldProvider</span><span class="p">)</span>
+<span class="n">alsoProvides</span><span class="p">(</span><span class="n">IEventAttendees</span><span class="p">,</span> <span class="n">IFormFieldProvider</span><span class="p">)</span>
+<span class="n">alsoProvides</span><span class="p">(</span><span class="n">IEventContact</span><span class="p">,</span> <span class="n">IFormFieldProvider</span><span class="p">)</span>
+<span class="n">alsoProvides</span><span class="p">(</span><span class="n">IEventSummary</span><span class="p">,</span> <span class="n">IFormFieldProvider</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="FakeZone"><a class="viewcode-back" href="../../../../../api/dx/behaviors.html#plone.app.event.dx.behaviors.FakeZone">[docs]</a><span class="k">class</span> <span class="nc">FakeZone</span><span class="p">(</span><span class="n">tzinfo</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Fake timezone to be applied to EventBasic start and end dates before</span>
+<span class="sd">    data_postprocessing event handler sets the correct one.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">utcoffset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">timedelta</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">tzname</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&quot;FAKEZONE&quot;</span>
+
+    <span class="k">def</span> <span class="nf">dst</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">timedelta</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+</div>
+<span class="k">class</span> <span class="nc">EventBasic</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">context</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_dt_get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">start</span><span class="p">)</span>
+    <span class="nd">@start.setter</span>
+    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">start</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_dt_set</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">end</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_dt_get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+    <span class="nd">@end.setter</span>
+    <span class="k">def</span> <span class="nf">end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">end</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_dt_set</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">timezone</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;timezone&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="nd">@timezone.setter</span>
+    <span class="k">def</span> <span class="nf">timezone</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">timezone</span><span class="p">:</span>
+            <span class="c"># The event is edited and not newly created, otherwise the timezone</span>
+            <span class="c"># info wouldn&#39;t exist.</span>
+            <span class="c"># In order to treat user datetime input as localized, so that the</span>
+            <span class="c"># values aren&#39;t converted to the target timezone, we have to set</span>
+            <span class="c"># start and end too. Then that a temporary fake zone is applied and</span>
+            <span class="c"># the data_postprocessing event subscriber can do it&#39;s job.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">timezone</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="c"># TODO: whole day - and other attributes - might not be set at this time!</span>
+    <span class="c"># TODO: how to provide default values?</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">whole_day</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;whole_day&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+    <span class="nd">@whole_day.setter</span>
+    <span class="k">def</span> <span class="nf">whole_day</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">whole_day</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">open_end</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;open_end&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+    <span class="nd">@open_end.setter</span>
+    <span class="k">def</span> <span class="nf">open_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">open_end</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">duration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">end</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">start</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_dt_get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+        <span class="c"># always get the date in event&#39;s timezone</span>
+        <span class="k">return</span> <span class="n">dt_to_zone</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">timezone</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_prepare_dt_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+        <span class="c"># Dates are always set in UTC, saving the actual timezone in another</span>
+        <span class="c"># field. But since the timezone value isn&#39;t known at time of saving the</span>
+        <span class="c"># form, we have to save it with a fake zone first and replace it with</span>
+        <span class="c"># the target zone afterwards. So, it&#39;s not timezone naive and can be</span>
+        <span class="c"># compared to timezone aware Dates.</span>
+
+        <span class="c"># return with fake zone and without microseconds</span>
+        <span class="k">return</span> <span class="n">dt</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">FakeZone</span><span class="p">())</span>
+
+
+<span class="k">class</span> <span class="nc">EventRecurrence</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">context</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">recurrence</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">recurrence</span>
+    <span class="nd">@recurrence.setter</span>
+    <span class="k">def</span> <span class="nf">recurrence</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">recurrence</span> <span class="o">=</span> <span class="n">value</span>
+
+
+<span class="c">## Event handlers</span>
+
+<span class="k">def</span> <span class="nf">data_postprocessing</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+
+    <span class="c"># newly created object, without start/end/timezone (e.g. invokeFactory()</span>
+    <span class="c"># called without data from add form), ignore event; it will be notified</span>
+    <span class="c"># again later:</span>
+    <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s">&#39;start&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="c"># We handle date inputs as floating dates without timezones and apply</span>
+    <span class="c"># timezones afterwards.</span>
+    <span class="k">def</span> <span class="nf">_fix_zone</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">zone</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="n">dt</span><span class="o">.</span><span class="n">tzinfo</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">tzinfo</span><span class="p">,</span> <span class="n">FakeZone</span><span class="p">):</span>
+            <span class="c"># Delete the tzinfo only, if it was set by IEventBasic setter.</span>
+            <span class="c"># Only in this case the start value on the object itself is what</span>
+            <span class="c"># was entered by the user. After running this event subscriber,</span>
+            <span class="c"># it&#39;s in UTC then.</span>
+            <span class="c"># If tzinfo it&#39;s not available at all, a naive datetime was set</span>
+            <span class="c"># probably by invokeFactory in tests.</span>
+            <span class="n">dt</span> <span class="o">=</span> <span class="n">tzdel</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dt</span><span class="o">.</span><span class="n">tzinfo</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="c"># In case the tzinfo was deleted above or was not present, we can</span>
+            <span class="c"># localize the dt value to the target timezone.</span>
+            <span class="n">dt</span> <span class="o">=</span> <span class="n">tz</span><span class="o">.</span><span class="n">localize</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c"># In this case, no changes to start, end or the timezone were made.</span>
+            <span class="c"># Just return the object&#39;s datetime (which is in UTC) localized to</span>
+            <span class="c"># the target timezone.</span>
+            <span class="n">dt</span> <span class="o">=</span> <span class="n">dt</span><span class="o">.</span><span class="n">astimezone</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">dt</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="n">behavior</span> <span class="o">=</span> <span class="n">IEventBasic</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+    <span class="n">tz</span> <span class="o">=</span> <span class="n">pytz</span><span class="o">.</span><span class="n">timezone</span><span class="p">(</span><span class="n">behavior</span><span class="o">.</span><span class="n">timezone</span><span class="p">)</span>
+
+    <span class="c"># Fix zones</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">_fix_zone</span><span class="p">(</span><span class="n">obj</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">tz</span><span class="p">)</span>
+    <span class="n">end</span> <span class="o">=</span> <span class="n">_fix_zone</span><span class="p">(</span><span class="n">obj</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="n">tz</span><span class="p">)</span>
+
+    <span class="c"># Adapt for whole day</span>
+    <span class="k">if</span> <span class="n">behavior</span><span class="o">.</span><span class="n">whole_day</span><span class="p">:</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">dt_start_of_day</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">behavior</span><span class="o">.</span><span class="n">open_end</span><span class="p">:</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">start</span>  <span class="c"># Open end events end on same day</span>
+    <span class="k">if</span> <span class="n">behavior</span><span class="o">.</span><span class="n">open_end</span> <span class="ow">or</span> <span class="n">behavior</span><span class="o">.</span><span class="n">whole_day</span><span class="p">:</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">dt_end_of_day</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
+
+    <span class="c"># Save back</span>
+    <span class="n">obj</span><span class="o">.</span><span class="n">start</span> <span class="o">=</span> <span class="n">utc</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+    <span class="n">obj</span><span class="o">.</span><span class="n">end</span> <span class="o">=</span> <span class="n">utc</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
+
+    <span class="c"># Reindex</span>
+    <span class="n">obj</span><span class="o">.</span><span class="n">reindexObject</span><span class="p">()</span>
+
+
+<span class="c">## Attribute indexer</span>
+
+<span class="c"># Start indexer</span>
+<span class="nd">@indexer</span><span class="p">(</span><span class="n">IDXEvent</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">start_indexer</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+    <span class="n">event</span> <span class="o">=</span> <span class="n">IEventBasic</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">start</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">None</span>
+    <span class="k">return</span> <span class="n">DT</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">start</span><span class="p">)</span>
+
+
+<span class="c"># End indexer</span>
+<span class="nd">@indexer</span><span class="p">(</span><span class="n">IDXEvent</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">end_indexer</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+    <span class="n">event</span> <span class="o">=</span> <span class="n">IEventBasic</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">end</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">None</span>
+    <span class="k">return</span> <span class="n">DT</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+
+
+<span class="c"># Body text indexing</span>
+<span class="nd">@indexer</span><span class="p">(</span><span class="n">IDXEvent</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">searchable_text_indexer</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+    <span class="n">acc</span> <span class="o">=</span> <span class="n">IEventAccessor</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="s">u&#39;&#39;</span>
+    <span class="n">text</span> <span class="o">+=</span> <span class="s">u&#39;</span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">acc</span><span class="o">.</span><span class="n">title</span>
+    <span class="n">text</span> <span class="o">+=</span> <span class="s">u&#39;</span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">acc</span><span class="o">.</span><span class="n">description</span>
+    <span class="n">behavior</span> <span class="o">=</span> <span class="n">IEventSummary</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">behavior</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">behavior</span><span class="o">.</span><span class="n">text</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">behavior</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">output</span>
+    <span class="n">transforms</span> <span class="o">=</span> <span class="n">getToolByName</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s">&#39;portal_transforms&#39;</span><span class="p">)</span>
+    <span class="n">body_plain</span> <span class="o">=</span> <span class="n">transforms</span><span class="o">.</span><span class="n">convertTo</span><span class="p">(</span>
+        <span class="s">&#39;text/plain&#39;</span><span class="p">,</span>
+        <span class="n">output</span><span class="p">,</span>
+        <span class="n">mimetype</span><span class="o">=</span><span class="s">&#39;text/html&#39;</span><span class="p">,</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">getData</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">body_plain</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">body_plain</span> <span class="o">=</span> <span class="n">body_plain</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span>
+    <span class="n">text</span> <span class="o">+=</span> <span class="n">body_plain</span>
+    <span class="k">return</span> <span class="n">text</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span>
+
+
+<span class="c"># Object adapters</span>
+
+<div class="viewcode-block" id="EventAccessor"><a class="viewcode-back" href="../../../../../api/dx/behaviors.html#plone.app.event.dx.behaviors.EventAccessor">[docs]</a><span class="k">class</span> <span class="nc">EventAccessor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Generic event accessor adapter implementation for Dexterity content</span>
+<span class="sd">        objects.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">implements</span><span class="p">(</span><span class="n">IEventAccessor</span><span class="p">)</span>
+    <span class="n">adapts</span><span class="p">(</span><span class="n">IDXEvent</span><span class="p">)</span>
+    <span class="n">event_type</span> <span class="o">=</span> <span class="s">&#39;plone.app.event.dx.event&#39;</span>  <span class="c"># If you use a custom type,</span>
+                                             <span class="c"># override this.</span>
+
+    <span class="c"># Unified create method via Accessor</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">create</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">container</span><span class="p">,</span> <span class="n">content_id</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+               <span class="n">start</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">timezone</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+               <span class="n">whole_day</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">open_end</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">container</span><span class="o">.</span><span class="n">invokeFactory</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">event_type</span><span class="p">,</span>
+                                <span class="nb">id</span><span class="o">=</span><span class="n">content_id</span><span class="p">,</span>
+                                <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">,</span>
+                                <span class="n">description</span><span class="o">=</span><span class="n">description</span><span class="p">,</span>
+                                <span class="n">start</span><span class="o">=</span><span class="n">start</span><span class="p">,</span>
+                                <span class="n">end</span><span class="o">=</span><span class="n">end</span><span class="p">,</span>
+                                <span class="n">whole_day</span><span class="o">=</span><span class="n">whole_day</span><span class="p">,</span>
+                                <span class="n">open_end</span><span class="o">=</span><span class="n">open_end</span><span class="p">,</span>
+                                <span class="n">timezone</span><span class="o">=</span><span class="n">timezone</span><span class="p">)</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">container</span><span class="p">[</span><span class="n">content_id</span><span class="p">]</span>
+        <span class="n">acc</span> <span class="o">=</span> <span class="n">IEventAccessor</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+        <span class="n">acc</span><span class="o">.</span><span class="n">edit</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">acc</span>
+
+    <span class="k">def</span> <span class="nf">edit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="n">notify</span><span class="p">(</span><span class="n">ObjectModifiedEvent</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="nb">object</span><span class="o">.</span><span class="n">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;context&#39;</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+
+        <span class="n">bm</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">=</span><span class="n">IEventBasic</span><span class="p">,</span>
+            <span class="n">end</span><span class="o">=</span><span class="n">IEventBasic</span><span class="p">,</span>
+            <span class="n">whole_day</span><span class="o">=</span><span class="n">IEventBasic</span><span class="p">,</span>
+            <span class="n">open_end</span><span class="o">=</span><span class="n">IEventBasic</span><span class="p">,</span>
+            <span class="n">timezone</span><span class="o">=</span><span class="n">IEventBasic</span><span class="p">,</span>
+            <span class="n">recurrence</span><span class="o">=</span><span class="n">IEventRecurrence</span><span class="p">,</span>
+            <span class="n">location</span><span class="o">=</span><span class="n">IEventLocation</span><span class="p">,</span>
+            <span class="n">attendees</span><span class="o">=</span><span class="n">IEventAttendees</span><span class="p">,</span>
+            <span class="n">contact_name</span><span class="o">=</span><span class="n">IEventContact</span><span class="p">,</span>
+            <span class="n">contact_email</span><span class="o">=</span><span class="n">IEventContact</span><span class="p">,</span>
+            <span class="n">contact_phone</span><span class="o">=</span><span class="n">IEventContact</span><span class="p">,</span>
+            <span class="n">event_url</span><span class="o">=</span><span class="n">IEventContact</span><span class="p">,</span>
+            <span class="n">subjects</span><span class="o">=</span><span class="n">ICategorization</span><span class="p">,</span>
+            <span class="n">text</span><span class="o">=</span><span class="n">IEventSummary</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="nb">object</span><span class="o">.</span><span class="n">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&#39;_behavior_map&#39;</span><span class="p">,</span> <span class="n">bm</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="n">bm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_behavior_map</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">bm</span><span class="p">:</span>  <span class="c"># adapt object with behavior and return the attribute</span>
+            <span class="n">behavior</span> <span class="o">=</span> <span class="n">bm</span><span class="p">[</span><span class="n">name</span><span class="p">](</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">behavior</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">behavior</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="bp">None</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">bm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_behavior_map</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">bm</span><span class="p">:</span>  <span class="c"># set the attributes on behaviors</span>
+            <span class="n">behavior</span> <span class="o">=</span> <span class="n">bm</span><span class="p">[</span><span class="n">name</span><span class="p">](</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">behavior</span><span class="p">:</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">behavior</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__delattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="n">bm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_behavior_map</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">bm</span><span class="p">:</span>
+            <span class="n">behavior</span> <span class="o">=</span> <span class="n">bm</span><span class="p">[</span><span class="n">name</span><span class="p">](</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">behavior</span><span class="p">:</span>
+                <span class="nb">delattr</span><span class="p">(</span><span class="n">behavior</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+
+    <span class="c"># ro properties</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">uid</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">IUUID</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">url</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">absolute_url</span><span class="p">())</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">created</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">utc</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">creation_date</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">last_modified</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">utc</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">modification_date</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">duration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span>
+
+    <span class="c"># rw properties not in behaviors (yet) # TODO revisit</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">title</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;title&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">))</span>
+    <span class="nd">@title.setter</span>
+    <span class="k">def</span> <span class="nf">title</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;title&#39;</span><span class="p">,</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">description</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;description&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">))</span>
+    <span class="nd">@description.setter</span>
+    <span class="k">def</span> <span class="nf">description</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;description&#39;</span><span class="p">,</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">text</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">behavior</span> <span class="o">=</span> <span class="n">IEventSummary</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">textvalue</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">behavior</span><span class="p">,</span> <span class="s">&#39;text&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">textvalue</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s">u&#39;&#39;</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="n">textvalue</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+    <span class="nd">@text.setter</span>
+    <span class="k">def</span> <span class="nf">text</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">behavior</span> <span class="o">=</span> <span class="n">IEventSummary</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">behavior</span><span class="o">.</span><span class="n">text</span> <span class="o">=</span> <span class="n">RichTextValue</span><span class="p">(</span><span class="n">raw</span><span class="o">=</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Plone Foundation.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

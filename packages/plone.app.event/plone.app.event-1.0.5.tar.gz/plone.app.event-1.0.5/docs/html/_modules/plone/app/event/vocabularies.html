@@ -1,0 +1,242 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>plone.app.event.vocabularies &mdash; plone.app.event 1.0dev documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '1.0dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="plone.app.event 1.0dev documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for plone.app.event.vocabularies</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">Products.CMFCore.utils</span> <span class="kn">import</span> <span class="n">getToolByName</span>
+<span class="kn">from</span> <span class="nn">collective.elephantvocabulary</span> <span class="kn">import</span> <span class="n">wrap_vocabulary</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IEvent</span>
+<span class="kn">from</span> <span class="nn">plone.memoize</span> <span class="kn">import</span> <span class="n">forever</span>
+<span class="kn">from</span> <span class="nn">zope.component</span> <span class="kn">import</span> <span class="n">getUtility</span>
+<span class="kn">from</span> <span class="nn">zope.component.hooks</span> <span class="kn">import</span> <span class="n">getSite</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">directlyProvides</span>
+<span class="kn">from</span> <span class="nn">zope.schema.interfaces</span> <span class="kn">import</span> <span class="n">IVocabularyFactory</span>
+<span class="kn">from</span> <span class="nn">zope.schema.vocabulary</span> <span class="kn">import</span> <span class="n">SimpleTerm</span>
+<span class="kn">from</span> <span class="nn">zope.schema.vocabulary</span> <span class="kn">import</span> <span class="n">SimpleVocabulary</span>
+
+<span class="kn">import</span> <span class="nn">pytz</span>
+<span class="kn">import</span> <span class="nn">random</span>
+
+
+<span class="c"># Map for ambiguous timezone abbreviations to their most common non-ambigious</span>
+<span class="c"># timezone name. E.g CST is ambiguous and is used for U.S./Canada Central</span>
+<span class="c"># Standard Time, Australian Central Standard Time, China Standard Time.</span>
+<span class="c"># TODO: incomplete map.</span>
+<span class="c"># TODO: do we need this at all or shouldn&#39;t we just fail with ambiguous</span>
+<span class="c">#       timezones?</span>
+<span class="n">replacement_zones</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;CET&#39;</span><span class="p">:</span> <span class="s">&#39;Europe/Vienna&#39;</span><span class="p">,</span>    <span class="c"># Central European Time</span>
+    <span class="s">&#39;MET&#39;</span><span class="p">:</span> <span class="s">&#39;Europe/Vienna&#39;</span><span class="p">,</span>    <span class="c"># Middle European Time</span>
+    <span class="s">&#39;EET&#39;</span><span class="p">:</span> <span class="s">&#39;Europe/Helsinki&#39;</span><span class="p">,</span>  <span class="c"># East European Time</span>
+    <span class="s">&#39;WET&#39;</span><span class="p">:</span> <span class="s">&#39;Europe/Lisbon&#39;</span><span class="p">,</span>    <span class="c"># West European Time</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="Timezones"><a class="viewcode-back" href="../../../../api/vocabularies.html#plone.app.event.vocabularies.Timezones">[docs]</a><span class="k">def</span> <span class="nf">Timezones</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Vocabulary for all timezones.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">rpl_keys</span> <span class="o">=</span> <span class="n">replacement_zones</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+    <span class="n">tz_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">it</span> <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="n">pytz</span><span class="o">.</span><span class="n">all_timezones</span> <span class="k">if</span> <span class="n">it</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">rpl_keys</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">SimpleVocabulary</span><span class="o">.</span><span class="n">fromValues</span><span class="p">(</span><span class="n">tz_list</span><span class="p">)</span>
+</div>
+<span class="n">directlyProvides</span><span class="p">(</span><span class="n">Timezones</span><span class="p">,</span> <span class="n">IVocabularyFactory</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="AvailableTimezones"><a class="viewcode-back" href="../../../../api/vocabularies.html#plone.app.event.vocabularies.AvailableTimezones">[docs]</a><span class="k">def</span> <span class="nf">AvailableTimezones</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Vocabulary for available timezones, as set by in the controlpanel.</span>
+
+<span class="sd">    This vocabulary is based on collective.elephantvocabulary. The reason is,</span>
+<span class="sd">    that if timezones are used in events or in user&#39;s settings and later</span>
+<span class="sd">    retracted by the portal manager, they should still be usable for those</span>
+<span class="sd">    objects but not selectable in forms.</span>
+
+<span class="sd">    Note: after setting available_timezones, this vocabulary must be</span>
+<span class="sd">    reinstantiated to reflect the changes.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># TODO: if the portal_timezone is not in available_timezones, also put it</span>
+    <span class="c">#       in AvailableTimezone vocab.</span>
+    <span class="n">tzvocab</span> <span class="o">=</span> <span class="n">getUtility</span><span class="p">(</span><span class="n">IVocabularyFactory</span><span class="p">,</span>
+                         <span class="s">&#39;plone.app.event.Timezones&#39;</span><span class="p">)(</span><span class="n">context</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">wrap_vocabulary</span><span class="p">(</span>
+        <span class="n">tzvocab</span><span class="p">,</span>
+        <span class="n">visible_terms_from_registry</span><span class="o">=</span><span class="s">&#39;plone.app.event.available_timezones&#39;</span>
+    <span class="p">)(</span><span class="n">context</span><span class="p">)</span>
+</div>
+<span class="n">directlyProvides</span><span class="p">(</span><span class="n">AvailableTimezones</span><span class="p">,</span> <span class="n">IVocabularyFactory</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="Weekdays"><a class="viewcode-back" href="../../../../api/vocabularies.html#plone.app.event.vocabularies.Weekdays">[docs]</a><span class="k">def</span> <span class="nf">Weekdays</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Vocabulary for Weekdays.</span>
+
+<span class="sd">    PLEASE NOTE: strftime %w interprets 0 as Sunday unlike the calendar module!</span>
+
+<span class="sd">        Note: Context is here a RecordProxy and cannot be used to get the site</span>
+<span class="sd">              root. zope.i18n.translate seems not to respect the portal</span>
+<span class="sd">              language.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c"># TODO: revisit, use zope.i18n</span>
+    <span class="c"># see: http://weblion.psu.edu/chatlogs/%23plone/2012/08/15.txt</span>
+    <span class="c"># avoid using:</span>
+    <span class="c"># translate = getSite().translate</span>
+    <span class="c"># it breaks tests. it&#39;s defined in:</span>
+    <span class="c"># Products.CMFPlone.skins.plone_scripts.translate.py</span>
+    <span class="c"># better use:</span>
+    <span class="c"># from zope.i18n import translate</span>
+    <span class="n">translate</span> <span class="o">=</span> <span class="n">getToolByName</span><span class="p">(</span><span class="n">getSite</span><span class="p">(),</span> <span class="s">&#39;translation_service&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">translate</span>
+
+    <span class="n">domain</span> <span class="o">=</span> <span class="s">&#39;plonelocales&#39;</span>
+    <span class="n">items</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="n">translate</span><span class="p">(</span><span class="s">u&#39;weekday_mon&#39;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Monday&#39;</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">translate</span><span class="p">(</span><span class="s">u&#39;weekday_tue&#39;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Tuesday&#39;</span><span class="p">),</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">translate</span><span class="p">(</span><span class="s">u&#39;weekday_wed&#39;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Wednesday&#39;</span><span class="p">),</span> <span class="mi">2</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">translate</span><span class="p">(</span><span class="s">u&#39;weekday_thu&#39;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Thursday&#39;</span><span class="p">),</span> <span class="mi">3</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">translate</span><span class="p">(</span><span class="s">u&#39;weekday_fri&#39;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Friday&#39;</span><span class="p">),</span> <span class="mi">4</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">translate</span><span class="p">(</span><span class="s">u&#39;weekday_sat&#39;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Saturday&#39;</span><span class="p">),</span> <span class="mi">5</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">translate</span><span class="p">(</span><span class="s">u&#39;weekday_sun&#39;</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Sunday&#39;</span><span class="p">),</span> <span class="mi">6</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">items</span> <span class="o">=</span> <span class="p">[</span><span class="n">SimpleTerm</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">i</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">items</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">SimpleVocabulary</span><span class="p">(</span><span class="n">items</span><span class="p">)</span>
+</div>
+<span class="n">directlyProvides</span><span class="p">(</span><span class="n">Weekdays</span><span class="p">,</span> <span class="n">IVocabularyFactory</span><span class="p">)</span>
+
+
+<span class="nd">@forever.memoize</span>
+<span class="k">def</span> <span class="nf">EventTypes</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Vocabulary for available event types.</span>
+
+<span class="sd">    Insane stuff: All types are created temporary and checked if the provide</span>
+<span class="sd">    the IEvent interface. At least, this function is cached forever the Zope</span>
+<span class="sd">    process lives.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># TODO: I&#39;d love to query the factory for types, who&#39;s instances are</span>
+    <span class="c"># implementing a specific interface via the portal_factory API.</span>
+
+    <span class="n">portal</span> <span class="o">=</span> <span class="n">getSite</span><span class="p">()</span>
+    <span class="n">tmp_folder_id</span> <span class="o">=</span> <span class="s">&#39;event_types_temp_folder__</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">99999999</span><span class="p">)</span>
+    <span class="n">portal</span><span class="o">.</span><span class="n">invokeFactory</span><span class="p">(</span><span class="s">&#39;Folder&#39;</span><span class="p">,</span> <span class="n">tmp_folder_id</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">tmp_folder</span> <span class="o">=</span> <span class="n">portal</span><span class="o">.</span><span class="n">_getOb</span><span class="p">(</span><span class="n">tmp_folder_id</span><span class="p">)</span>
+        <span class="n">portal_types</span> <span class="o">=</span> <span class="n">getToolByName</span><span class="p">(</span><span class="n">portal</span><span class="p">,</span> <span class="s">&#39;portal_types&#39;</span><span class="p">)</span>
+        <span class="n">all_types</span> <span class="o">=</span> <span class="n">portal_types</span><span class="o">.</span><span class="n">listTypeInfo</span><span class="p">(</span><span class="n">portal</span><span class="p">)</span>
+        <span class="n">event_types</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">cnt</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">fti</span> <span class="ow">in</span> <span class="n">all_types</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">fti</span><span class="p">,</span> <span class="s">&#39;global_allow&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">cnt</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">tmp_id</span> <span class="o">=</span> <span class="s">&#39;temporary__event_types__</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">cnt</span>
+            <span class="n">tmp_obj</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="n">fti</span><span class="o">.</span><span class="n">constructInstance</span><span class="p">(</span><span class="n">tmp_folder</span><span class="p">,</span> <span class="n">tmp_id</span><span class="p">)</span>
+            <span class="n">tmp_obj</span> <span class="o">=</span> <span class="n">tmp_folder</span><span class="o">.</span><span class="n">_getOb</span><span class="p">(</span><span class="n">tmp_id</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">tmp_obj</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">IEvent</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">tmp_obj</span><span class="p">):</span>
+                    <span class="n">event_types</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fti</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="c"># Delete the tmp_folder again</span>
+        <span class="n">tmp_folder</span><span class="o">.</span><span class="n">__parent__</span><span class="o">.</span><span class="n">manage_delObjects</span><span class="p">([</span><span class="n">tmp_folder_id</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">SimpleVocabulary</span><span class="o">.</span><span class="n">fromValues</span><span class="p">(</span><span class="n">event_types</span><span class="p">)</span>
+<span class="n">directlyProvides</span><span class="p">(</span><span class="n">EventTypes</span><span class="p">,</span> <span class="n">IVocabularyFactory</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="SynchronizationStrategies"><a class="viewcode-back" href="../../../../api/vocabularies.html#plone.app.event.vocabularies.SynchronizationStrategies">[docs]</a><span class="k">def</span> <span class="nf">SynchronizationStrategies</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Vocabulary for icalendar synchronization strategies.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># TODO: translate</span>
+    <span class="n">items</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;none&#39;</span><span class="p">,</span> <span class="s">&#39;keep_newer&#39;</span><span class="p">,</span> <span class="s">&#39;keep_mine&#39;</span><span class="p">,</span> <span class="s">&#39;keep_theirs&#39;</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">SimpleVocabulary</span><span class="o">.</span><span class="n">fromValues</span><span class="p">(</span><span class="n">items</span><span class="p">)</span></div>
+<span class="n">directlyProvides</span><span class="p">(</span><span class="n">SynchronizationStrategies</span><span class="p">,</span> <span class="n">IVocabularyFactory</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Plone Foundation.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

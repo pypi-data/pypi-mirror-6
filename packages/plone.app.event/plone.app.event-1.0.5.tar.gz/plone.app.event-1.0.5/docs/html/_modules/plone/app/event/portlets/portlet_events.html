@@ -1,0 +1,240 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>plone.app.event.portlets.portlet_events &mdash; plone.app.event 1.0dev documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '1.0dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="plone.app.event 1.0dev documentation" href="../../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for plone.app.event.portlets.portlet_events</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">Acquisition</span> <span class="kn">import</span> <span class="n">aq_inner</span>
+<span class="kn">from</span> <span class="nn">Products.Five.browser.pagetemplatefile</span> <span class="kn">import</span> <span class="n">ViewPageTemplateFile</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">find_site</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">get_events</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">localized_now</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.browser.event_view</span> <span class="kn">import</span> <span class="n">get_location</span>
+<span class="kn">from</span> <span class="nn">plone.app.form.widgets.uberselectionwidget</span> <span class="kn">import</span> <span class="n">UberSelectionWidget</span>
+<span class="kn">from</span> <span class="nn">plone.app.portlets</span> <span class="kn">import</span> <span class="n">PloneMessageFactory</span> <span class="k">as</span> <span class="n">_</span>
+<span class="kn">from</span> <span class="nn">plone.app.portlets.portlets</span> <span class="kn">import</span> <span class="n">base</span>
+<span class="kn">from</span> <span class="nn">plone.app.vocabularies.catalog</span> <span class="kn">import</span> <span class="n">SearchableTextSourceBinder</span>
+<span class="kn">from</span> <span class="nn">plone.memoize.compress</span> <span class="kn">import</span> <span class="n">xhtml_compress</span>
+<span class="kn">from</span> <span class="nn">plone.memoize.instance</span> <span class="kn">import</span> <span class="n">memoize</span>
+<span class="kn">from</span> <span class="nn">plone.portlets.interfaces</span> <span class="kn">import</span> <span class="n">IPortletDataProvider</span>
+<span class="kn">from</span> <span class="nn">zope</span> <span class="kn">import</span> <span class="n">schema</span>
+<span class="kn">from</span> <span class="nn">zope.component</span> <span class="kn">import</span> <span class="n">getMultiAdapter</span>
+<span class="kn">from</span> <span class="nn">zope.contentprovider.interfaces</span> <span class="kn">import</span> <span class="n">IContentProvider</span>
+<span class="kn">from</span> <span class="nn">zope.formlib</span> <span class="kn">import</span> <span class="n">form</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implements</span>
+
+
+<span class="k">class</span> <span class="nc">IEventsPortlet</span><span class="p">(</span><span class="n">IPortletDataProvider</span><span class="p">):</span>
+
+    <span class="n">count</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Int</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&#39;Number of items to display&#39;</span><span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&#39;How many items to list.&#39;</span><span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">5</span>
+    <span class="p">)</span>
+
+    <span class="n">state</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Tuple</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&quot;Workflow state&quot;</span><span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&quot;Items in which workflow state to show.&quot;</span><span class="p">),</span>
+        <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">value_type</span><span class="o">=</span><span class="n">schema</span><span class="o">.</span><span class="n">Choice</span><span class="p">(</span>
+            <span class="n">vocabulary</span><span class="o">=</span><span class="s">&quot;plone.app.vocabularies.WorkflowStates&quot;</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="n">search_base</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">Choice</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">_</span><span class="p">(</span><span class="s">u&#39;portlet_label_search_base&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Search base&#39;</span><span class="p">),</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+            <span class="s">u&#39;portlet_help_search_base&#39;</span><span class="p">,</span>
+            <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Select search base folder to search for events. This &#39;</span>
+                    <span class="s">u&#39;folder will also be used to link to in calendar &#39;</span>
+                    <span class="s">u&#39;searches. If empty, the whole site will be searched and &#39;</span>
+                    <span class="s">u&#39;the event listing view will be called on the site root.&#39;</span>
+        <span class="p">),</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">source</span><span class="o">=</span><span class="n">SearchableTextSourceBinder</span><span class="p">(</span>
+            <span class="p">{</span><span class="s">&#39;is_folderish&#39;</span><span class="p">:</span> <span class="bp">True</span><span class="p">},</span>
+            <span class="n">default_query</span><span class="o">=</span><span class="s">&#39;path:&#39;</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+
+
+<div class="viewcode-block" id="Assignment"><a class="viewcode-back" href="../../../../../api/portlets/portlet_events.html#plone.app.event.portlets.portlet_events.Assignment">[docs]</a><span class="k">class</span> <span class="nc">Assignment</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">Assignment</span><span class="p">):</span>
+    <span class="n">implements</span><span class="p">(</span><span class="n">IEventsPortlet</span><span class="p">)</span>
+
+    <span class="c"># reduce upgrade pain</span>
+    <span class="n">search_base</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">search_base</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">count</span> <span class="o">=</span> <span class="n">count</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">state</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">search_base</span> <span class="o">=</span> <span class="n">search_base</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">title</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_</span><span class="p">(</span><span class="s">u&quot;Events&quot;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="Renderer"><a class="viewcode-back" href="../../../../../api/portlets/portlet_events.html#plone.app.event.portlets.portlet_events.Renderer">[docs]</a><span class="k">class</span> <span class="nc">Renderer</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">Renderer</span><span class="p">):</span>
+
+    <span class="n">_template</span> <span class="o">=</span> <span class="n">ViewPageTemplateFile</span><span class="p">(</span><span class="s">&#39;portlet_events.pt&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="n">base</span><span class="o">.</span><span class="n">Renderer</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
+
+        <span class="n">context</span> <span class="o">=</span> <span class="n">aq_inner</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+
+        <span class="n">sb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">search_base</span>
+        <span class="n">site_url</span> <span class="o">=</span> <span class="n">find_site</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">as_url</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">calendar_url</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">site_url</span><span class="p">,</span> <span class="n">sb</span> <span class="ow">and</span> <span class="n">sb</span> <span class="ow">or</span> <span class="s">&#39;/event_listing&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">next_url</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">?mode=future&#39;</span> <span class="o">%</span> <span class="n">calendar_url</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prev_url</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">?mode=past&#39;</span> <span class="o">%</span> <span class="n">calendar_url</span>
+
+        <span class="n">portal_state</span> <span class="o">=</span> <span class="n">getMultiAdapter</span><span class="p">(</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">),</span>
+            <span class="n">name</span><span class="o">=</span><span class="s">&#39;plone_portal_state&#39;</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">portal</span> <span class="o">=</span> <span class="n">portal_state</span><span class="o">.</span><span class="n">portal</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">xhtml_compress</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_template</span><span class="p">())</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">count</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">events</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="nd">@memoize</span>
+    <span class="k">def</span> <span class="nf">events</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="n">aq_inner</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">)</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span>
+
+        <span class="n">kw</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">search_base</span><span class="p">:</span>
+            <span class="n">kw</span><span class="p">[</span><span class="s">&#39;path&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;query&#39;</span><span class="p">:</span> <span class="s">&#39;</span><span class="si">%s%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="s">&#39;/&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">portal</span><span class="o">.</span><span class="n">getPhysicalPath</span><span class="p">()),</span> <span class="n">data</span><span class="o">.</span><span class="n">search_base</span><span class="p">)}</span>
+        <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">state</span><span class="p">:</span>
+            <span class="n">kw</span><span class="p">[</span><span class="s">&#39;review_state&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">state</span>
+
+        <span class="k">return</span> <span class="n">get_events</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">localized_now</span><span class="p">(</span><span class="n">context</span><span class="p">),</span>
+                          <span class="n">ret_mode</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">count</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">formatted_date</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="n">provider</span> <span class="o">=</span> <span class="n">getMultiAdapter</span><span class="p">(</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">,</span> <span class="bp">self</span><span class="p">),</span>
+            <span class="n">IContentProvider</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;formatted_date&#39;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">provider</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">get_location</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_location</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+
+</div>
+<span class="k">class</span> <span class="nc">AddForm</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">AddForm</span><span class="p">):</span>
+    <span class="n">form_fields</span> <span class="o">=</span> <span class="n">form</span><span class="o">.</span><span class="n">Fields</span><span class="p">(</span><span class="n">IEventsPortlet</span><span class="p">)</span>
+    <span class="n">label</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&quot;Add Events Portlet&quot;</span><span class="p">)</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&quot;This portlet lists upcoming Events.&quot;</span><span class="p">)</span>
+    <span class="n">form_fields</span> <span class="o">=</span> <span class="n">form</span><span class="o">.</span><span class="n">Fields</span><span class="p">(</span><span class="n">IEventsPortlet</span><span class="p">)</span>
+    <span class="n">form_fields</span><span class="p">[</span><span class="s">&#39;search_base&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">custom_widget</span> <span class="o">=</span> <span class="n">UberSelectionWidget</span>
+
+    <span class="k">def</span> <span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Assignment</span><span class="p">(</span><span class="n">count</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;count&#39;</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
+                          <span class="n">state</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;state&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+                          <span class="n">search_base</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;search_base&#39;</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+
+
+<span class="k">class</span> <span class="nc">EditForm</span><span class="p">(</span><span class="n">base</span><span class="o">.</span><span class="n">EditForm</span><span class="p">):</span>
+    <span class="n">form_fields</span> <span class="o">=</span> <span class="n">form</span><span class="o">.</span><span class="n">Fields</span><span class="p">(</span><span class="n">IEventsPortlet</span><span class="p">)</span>
+    <span class="n">label</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&quot;Edit Events Portlet&quot;</span><span class="p">)</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&quot;This portlet lists upcoming Events.&quot;</span><span class="p">)</span>
+    <span class="n">form_fields</span> <span class="o">=</span> <span class="n">form</span><span class="o">.</span><span class="n">Fields</span><span class="p">(</span><span class="n">IEventsPortlet</span><span class="p">)</span>
+    <span class="n">form_fields</span><span class="p">[</span><span class="s">&#39;search_base&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">custom_widget</span> <span class="o">=</span> <span class="n">UberSelectionWidget</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Plone Foundation.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

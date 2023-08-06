@@ -1,0 +1,906 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>plone.app.event.at.content &mdash; plone.app.event 1.0dev documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '1.0dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="plone.app.event 1.0dev documentation" href="../../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for plone.app.event.at.content</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">AccessControl</span> <span class="kn">import</span> <span class="n">ClassSecurityInfo</span>
+<span class="kn">from</span> <span class="nn">DateTime</span> <span class="kn">import</span> <span class="n">DateTime</span>
+<span class="kn">from</span> <span class="nn">Products.Archetypes.interfaces</span> <span class="kn">import</span> <span class="n">IObjectPostValidation</span>
+<span class="kn">from</span> <span class="nn">Products.ATContentTypes.configuration</span> <span class="kn">import</span> <span class="n">zconf</span>
+<span class="kn">from</span> <span class="nn">Products.ATContentTypes.content.base</span> <span class="kn">import</span> <span class="n">ATCTContent</span>
+<span class="kn">from</span> <span class="nn">Products.ATContentTypes.content.base</span> <span class="kn">import</span> <span class="n">registerATCT</span>
+<span class="kn">from</span> <span class="nn">Products.ATContentTypes.content.schemata</span> <span class="kn">import</span> <span class="n">ATContentTypeSchema</span>
+<span class="kn">from</span> <span class="nn">Products.ATContentTypes.content.schemata</span> <span class="kn">import</span> <span class="n">finalizeATCTSchema</span>
+<span class="kn">from</span> <span class="nn">Products.ATContentTypes.lib.historyaware</span> <span class="kn">import</span> <span class="n">HistoryAwareMixin</span>
+<span class="kn">from</span> <span class="nn">Products.CMFCore.permissions</span> <span class="kn">import</span> <span class="n">ModifyPortalContent</span>
+<span class="kn">from</span> <span class="nn">Products.CMFCore.permissions</span> <span class="kn">import</span> <span class="n">View</span>
+<span class="kn">from</span> <span class="nn">Products.CMFPlone.utils</span> <span class="kn">import</span> <span class="n">safe_unicode</span>
+<span class="kn">from</span> <span class="nn">plone.app.event</span> <span class="kn">import</span> <span class="n">messageFactory</span> <span class="k">as</span> <span class="n">_</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.at</span> <span class="kn">import</span> <span class="n">atapi</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.at</span> <span class="kn">import</span> <span class="n">packageName</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.at.interfaces</span> <span class="kn">import</span> <span class="n">IATEvent</span><span class="p">,</span> <span class="n">IATEventRecurrence</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">DT</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">default_end</span> <span class="k">as</span> <span class="n">default_end_dt</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">default_start</span> <span class="k">as</span> <span class="n">default_start_dt</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">default_timezone</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">first_weekday</span>
+<span class="kn">from</span> <span class="nn">plone.app.event.base</span> <span class="kn">import</span> <span class="n">wkday_to_mon1</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IEvent</span>
+<span class="kn">from</span> <span class="nn">plone.event.interfaces</span> <span class="kn">import</span> <span class="n">IEventAccessor</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">pydt</span>
+<span class="kn">from</span> <span class="nn">plone.event.utils</span> <span class="kn">import</span> <span class="n">utc</span>
+<span class="kn">from</span> <span class="nn">plone.formwidget.datetime.at</span> <span class="kn">import</span> <span class="n">DatetimeWidget</span>
+<span class="kn">from</span> <span class="nn">plone.formwidget.recurrence.at.widget</span> <span class="kn">import</span> <span class="n">RecurrenceWidget</span>
+<span class="kn">from</span> <span class="nn">plone.uuid.interfaces</span> <span class="kn">import</span> <span class="n">IUUID</span>
+<span class="kn">from</span> <span class="nn">zope.component</span> <span class="kn">import</span> <span class="n">adapts</span>
+<span class="kn">from</span> <span class="nn">zope.event</span> <span class="kn">import</span> <span class="n">notify</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implements</span>
+<span class="kn">from</span> <span class="nn">zope.lifecycleevent</span> <span class="kn">import</span> <span class="n">ObjectModifiedEvent</span>
+
+
+<span class="k">def</span> <span class="nf">default_start</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">DT</span><span class="p">(</span><span class="n">default_start_dt</span><span class="p">())</span>
+
+
+<span class="k">def</span> <span class="nf">default_end</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">DT</span><span class="p">(</span><span class="n">default_end_dt</span><span class="p">())</span>
+
+
+<span class="k">def</span> <span class="nf">first_weekday_sun0</span><span class="p">():</span>
+    <span class="k">return</span> <span class="n">wkday_to_mon1</span><span class="p">(</span><span class="n">first_weekday</span><span class="p">())</span>
+
+
+<span class="n">ATEventSchema</span> <span class="o">=</span> <span class="n">ATContentTypeSchema</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="o">+</span> <span class="n">atapi</span><span class="o">.</span><span class="n">Schema</span><span class="p">((</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">DateTimeField</span><span class="p">(</span>
+        <span class="s">&#39;startDate&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">searchable</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">accessor</span><span class="o">=</span><span class="s">&#39;start&#39;</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">default_method</span><span class="o">=</span><span class="n">default_start</span><span class="p">,</span>
+        <span class="n">languageIndependent</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">DatetimeWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_start&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Event Starts&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_start&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&quot;Date and Time, when the event begins.&quot;</span>
+            <span class="p">),</span>
+            <span class="n">with_time</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="n">first_day</span><span class="o">=</span><span class="n">first_weekday_sun0</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">DateTimeField</span><span class="p">(</span>
+        <span class="s">&#39;endDate&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">searchable</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">accessor</span><span class="o">=</span><span class="s">&#39;end&#39;</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">default_method</span><span class="o">=</span><span class="n">default_end</span><span class="p">,</span>
+        <span class="n">languageIndependent</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">DatetimeWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_end&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Event Ends&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_end&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&quot;Date and Time, when the event ends.&quot;</span>
+            <span class="p">),</span>
+            <span class="n">with_time</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="n">first_day</span><span class="o">=</span><span class="n">first_weekday_sun0</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">BooleanField</span><span class="p">(</span>
+        <span class="s">&#39;wholeDay&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">languageIndependent</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">BooleanWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_whole_day&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Whole Day&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_whole_day&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&quot;Event lasts whole day.&quot;</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">BooleanField</span><span class="p">(</span>
+        <span class="s">&#39;openEnd&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">BooleanWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_open_end&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&quot;Open End&quot;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_open_end&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&quot;This event is open ended.&quot;</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">StringField</span><span class="p">(</span>
+        <span class="s">&#39;timezone&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">searchable</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">languageIndependent</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">vocabulary_factory</span><span class="o">=</span><span class="s">u&quot;plone.app.event.AvailableTimezones&quot;</span><span class="p">,</span>
+        <span class="n">enforceVocabulary</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">default_method</span><span class="o">=</span><span class="n">default_timezone</span><span class="p">,</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">SelectionWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_timezone&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&quot;Timezone&quot;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_timezone&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&quot;Select the Timezone, where this event happens.&quot;</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">StringField</span><span class="p">(</span>
+        <span class="s">&#39;recurrence&#39;</span><span class="p">,</span>
+        <span class="n">languageIndependent</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">validators</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;isRecurrence&#39;</span><span class="p">,),</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">RecurrenceWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_recurrence&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Recurrence&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_recurrence&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">&#39;Define the event recurrence rule.&#39;</span>
+            <span class="p">),</span>
+            <span class="n">startFieldYear</span><span class="o">=</span><span class="s">&#39;startDate-year&#39;</span><span class="p">,</span>
+            <span class="n">startFieldMonth</span><span class="o">=</span><span class="s">&#39;startDate-month&#39;</span><span class="p">,</span>
+            <span class="n">startFieldDay</span><span class="o">=</span><span class="s">&#39;startDate-day&#39;</span><span class="p">,</span>
+            <span class="n">first_day</span><span class="o">=</span><span class="n">first_weekday_sun0</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">StringField</span><span class="p">(</span>
+        <span class="s">&#39;location&#39;</span><span class="p">,</span>
+        <span class="n">searchable</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">StringWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_location&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Location&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_location&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&quot;Location of the event.&quot;</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">LinesField</span><span class="p">(</span>
+        <span class="s">&#39;attendees&#39;</span><span class="p">,</span>
+        <span class="n">languageIndependent</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">searchable</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">LinesWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_attendees&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Attendees&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_attendees&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;List of attendees.&#39;</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">StringField</span><span class="p">(</span>
+        <span class="s">&#39;contactName&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">searchable</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">accessor</span><span class="o">=</span><span class="s">&#39;contact_name&#39;</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">StringWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_contact_name&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Contact Name&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_contact_name&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Name of a person to contact about this event.&#39;</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">StringField</span><span class="p">(</span>
+        <span class="s">&#39;contactEmail&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">searchable</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">accessor</span><span class="o">=</span><span class="s">&#39;contact_email&#39;</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">validators</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;isEmail&#39;</span><span class="p">,),</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">StringWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_contact_email&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Contact E-mail&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_contact_email&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Email address to contact about this event.&#39;</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">StringField</span><span class="p">(</span>
+        <span class="s">&#39;contactPhone&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">searchable</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">accessor</span><span class="o">=</span><span class="s">&#39;contact_phone&#39;</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">validators</span><span class="o">=</span><span class="p">(),</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">StringWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_contact_phone&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Contact Phone&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_contact_phone&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Phone number to contact about this event.&#39;</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">StringField</span><span class="p">(</span>
+        <span class="s">&#39;eventUrl&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">searchable</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">accessor</span><span class="o">=</span><span class="s">&#39;event_url&#39;</span><span class="p">,</span>
+        <span class="n">write_permission</span><span class="o">=</span><span class="n">ModifyPortalContent</span><span class="p">,</span>
+        <span class="n">validators</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;isURL&#39;</span><span class="p">,),</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">StringWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_url&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Event URL&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_url&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&quot;Web address with more info about the event. &quot;</span>
+                        <span class="s">u&quot;Add http:// for external links.&quot;</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+    <span class="n">atapi</span><span class="o">.</span><span class="n">TextField</span><span class="p">(</span>
+        <span class="s">&#39;text&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+        <span class="n">searchable</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">primary</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">storage</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">AnnotationStorage</span><span class="p">(</span><span class="n">migrate</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span>
+        <span class="n">validators</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;isTidyHtmlWithCleanup&#39;</span><span class="p">,),</span>
+        <span class="n">default_output_type</span><span class="o">=</span><span class="s">&#39;text/x-html-safe&#39;</span><span class="p">,</span>
+        <span class="n">widget</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">RichWidget</span><span class="p">(</span>
+            <span class="n">label</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;label_event_announcement&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Event body text&#39;</span>
+            <span class="p">),</span>
+            <span class="n">description</span><span class="o">=</span><span class="n">_</span><span class="p">(</span>
+                <span class="s">u&#39;help_event_announcement&#39;</span><span class="p">,</span>
+                <span class="n">default</span><span class="o">=</span><span class="s">u&#39;&#39;</span>
+            <span class="p">),</span>
+            <span class="n">rows</span><span class="o">=</span><span class="mi">25</span><span class="p">,</span>
+            <span class="n">allow_file_upload</span><span class="o">=</span><span class="n">zconf</span><span class="o">.</span><span class="n">ATDocument</span><span class="o">.</span><span class="n">allow_document_upload</span>
+        <span class="p">),</span>
+    <span class="p">),</span>
+
+<span class="p">),</span> <span class="n">marshall</span><span class="o">=</span><span class="n">atapi</span><span class="o">.</span><span class="n">RFC822Marshaller</span><span class="p">())</span>
+
+
+<span class="c"># Repurpose the subject field for the event type</span>
+<span class="n">ATEventSchema</span><span class="o">.</span><span class="n">moveField</span><span class="p">(</span><span class="s">&#39;subject&#39;</span><span class="p">,</span> <span class="n">before</span><span class="o">=</span><span class="s">&#39;eventUrl&#39;</span><span class="p">)</span>
+<span class="n">ATEventSchema</span><span class="p">[</span><span class="s">&#39;subject&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">write_permission</span> <span class="o">=</span> <span class="n">ModifyPortalContent</span>
+<span class="n">ATEventSchema</span><span class="p">[</span><span class="s">&#39;subject&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">widget</span><span class="o">.</span><span class="n">size</span> <span class="o">=</span> <span class="mi">6</span>
+<span class="n">ATEventSchema</span><span class="o">.</span><span class="n">changeSchemataForField</span><span class="p">(</span><span class="s">&#39;subject&#39;</span><span class="p">,</span> <span class="s">&#39;default&#39;</span><span class="p">)</span>
+
+<span class="n">ATEventSchema</span><span class="o">.</span><span class="n">changeSchemataForField</span><span class="p">(</span><span class="s">&#39;timezone&#39;</span><span class="p">,</span> <span class="s">&#39;dates&#39;</span><span class="p">)</span>
+<span class="n">ATEventSchema</span><span class="o">.</span><span class="n">moveField</span><span class="p">(</span><span class="s">&#39;timezone&#39;</span><span class="p">,</span> <span class="n">before</span><span class="o">=</span><span class="s">&#39;effectiveDate&#39;</span><span class="p">)</span>
+
+<span class="n">finalizeATCTSchema</span><span class="p">(</span><span class="n">ATEventSchema</span><span class="p">)</span>
+<span class="c"># finalizeATCTSchema moves &#39;location&#39; into &#39;categories&#39;, we move it back:</span>
+<span class="n">ATEventSchema</span><span class="o">.</span><span class="n">changeSchemataForField</span><span class="p">(</span><span class="s">&#39;location&#39;</span><span class="p">,</span> <span class="s">&#39;default&#39;</span><span class="p">)</span>
+<span class="n">ATEventSchema</span><span class="o">.</span><span class="n">moveField</span><span class="p">(</span><span class="s">&#39;location&#39;</span><span class="p">,</span> <span class="n">before</span><span class="o">=</span><span class="s">&#39;attendees&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ATEvent"><a class="viewcode-back" href="../../../../../api/at/content.html#plone.app.event.at.content.ATEvent">[docs]</a><span class="k">class</span> <span class="nc">ATEvent</span><span class="p">(</span><span class="n">ATCTContent</span><span class="p">,</span> <span class="n">HistoryAwareMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Information about an upcoming event, which can be displayed in the</span>
+<span class="sd">    calendar.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">implements</span><span class="p">(</span><span class="n">IATEvent</span><span class="p">,</span> <span class="n">IATEventRecurrence</span><span class="p">)</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">ATEventSchema</span>
+    <span class="n">security</span> <span class="o">=</span> <span class="n">ClassSecurityInfo</span><span class="p">()</span>
+    <span class="n">portal_type</span> <span class="o">=</span> <span class="n">archetype_name</span> <span class="o">=</span> <span class="s">&#39;Event&#39;</span>
+
+    <span class="n">cmf_edit_kws</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;effectiveDay&#39;</span><span class="p">,</span> <span class="s">&#39;effectiveMo&#39;</span><span class="p">,</span> <span class="s">&#39;effectiveYear&#39;</span><span class="p">,</span>
+                    <span class="s">&#39;expirationDay&#39;</span><span class="p">,</span> <span class="s">&#39;expirationMo&#39;</span><span class="p">,</span> <span class="s">&#39;expirationYear&#39;</span><span class="p">,</span>
+                    <span class="s">&#39;start_time&#39;</span><span class="p">,</span> <span class="s">&#39;startAMPM&#39;</span><span class="p">,</span> <span class="s">&#39;stop_time&#39;</span><span class="p">,</span> <span class="s">&#39;stopAMPM&#39;</span><span class="p">,</span>
+                    <span class="s">&#39;start_date&#39;</span><span class="p">,</span> <span class="s">&#39;end_date&#39;</span><span class="p">,</span> <span class="s">&#39;contact_name&#39;</span><span class="p">,</span> <span class="s">&#39;contact_email&#39;</span><span class="p">,</span>
+                    <span class="s">&#39;contact_phone&#39;</span><span class="p">,</span> <span class="s">&#39;event_url&#39;</span><span class="p">)</span>
+    <span class="n">security</span><span class="o">.</span><span class="n">declarePrivate</span><span class="p">(</span><span class="s">&#39;cmf_edit&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">cmf_edit</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">effectiveDay</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+        <span class="n">effectiveMo</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">effectiveYear</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">expirationDay</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+        <span class="n">expirationMo</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">expirationYear</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">start_date</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+        <span class="n">start_time</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">startAMPM</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">end_date</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+        <span class="n">stop_time</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">stopAMPM</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">location</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+        <span class="n">contact_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">contact_email</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">contact_phone</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+        <span class="n">event_url</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="n">effectiveDay</span> <span class="ow">and</span> <span class="n">effectiveMo</span> <span class="ow">and</span> <span class="n">effectiveYear</span> <span class="ow">and</span> <span class="n">start_time</span><span class="p">:</span>
+            <span class="n">sdate</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">-</span><span class="si">%s</span><span class="s">-</span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">effectiveDay</span><span class="p">,</span> <span class="n">effectiveMo</span><span class="p">,</span> <span class="n">effectiveYear</span><span class="p">,</span>
+                <span class="n">start_time</span><span class="p">,</span> <span class="n">startAMPM</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">start_date</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">start_time</span><span class="p">:</span>
+                <span class="n">start_time</span> <span class="o">=</span> <span class="s">&#39;00:00:00&#39;</span>
+            <span class="n">sdate</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">start_date</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sdate</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="n">expirationDay</span> <span class="ow">and</span> <span class="n">expirationMo</span> <span class="ow">and</span> <span class="n">expirationYear</span> <span class="ow">and</span> <span class="n">stop_time</span><span class="p">:</span>
+            <span class="n">edate</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">-</span><span class="si">%s</span><span class="s">-</span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">expirationDay</span><span class="p">,</span> <span class="n">expirationMo</span><span class="p">,</span>
+                                        <span class="n">expirationYear</span><span class="p">,</span> <span class="n">stop_time</span><span class="p">,</span> <span class="n">stopAMPM</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">end_date</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">stop_time</span><span class="p">:</span>
+                <span class="n">stop_time</span> <span class="o">=</span> <span class="s">&#39;00:00:00&#39;</span>
+            <span class="n">edate</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">end_date</span><span class="p">,</span> <span class="n">stop_time</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">edate</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="n">sdate</span> <span class="ow">and</span> <span class="n">edate</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">edate</span> <span class="o">&lt;</span> <span class="n">sdate</span><span class="p">:</span>
+                <span class="n">edate</span> <span class="o">=</span> <span class="n">sdate</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setStartDate</span><span class="p">(</span><span class="n">sdate</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setEndDate</span><span class="p">(</span><span class="n">edate</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+            <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="n">description</span><span class="p">,</span> <span class="n">location</span><span class="o">=</span><span class="n">location</span><span class="p">,</span>
+            <span class="n">contactName</span><span class="o">=</span><span class="n">contact_name</span><span class="p">,</span> <span class="n">contactEmail</span><span class="o">=</span><span class="n">contact_email</span><span class="p">,</span>
+            <span class="n">contactPhone</span><span class="o">=</span><span class="n">contact_phone</span><span class="p">,</span> <span class="n">eventUrl</span><span class="o">=</span><span class="n">event_url</span><span class="p">)</span>
+
+    <span class="c">###</span>
+    <span class="c"># Timezone / start / end getter / setter</span>
+    <span class="n">security</span><span class="o">.</span><span class="n">declareProtected</span><span class="p">(</span><span class="n">ModifyPortalContent</span><span class="p">,</span> <span class="s">&#39;setTimezone&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">setTimezone</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">tz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getField</span><span class="p">(</span><span class="s">&#39;timezone&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">tz</span><span class="p">:</span>
+            <span class="c"># The event is edited and not newly created, otherwise the timezone</span>
+            <span class="c"># info wouldn&#39;t exist.</span>
+            <span class="c"># In order to avoid converting the datetime input to the new target</span>
+            <span class="c"># zone after changing the zone but to treat user datetime input as</span>
+            <span class="c"># localized, we have to store the old timezone. This way we can</span>
+            <span class="c"># restore the datetime input from the context&#39;s UTC value before</span>
+            <span class="c"># applying the new zone in the data_postprocessing event</span>
+            <span class="c"># subscriber.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">previous_timezone</span> <span class="o">=</span> <span class="n">tz</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">getField</span><span class="p">(</span><span class="s">&#39;timezone&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="n">security</span><span class="o">.</span><span class="n">declarePrivate</span><span class="p">(</span><span class="s">&#39;_dt_getter&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_dt_getter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">):</span>
+        <span class="c"># Always get the date in event&#39;s timezone</span>
+        <span class="n">timezone</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getField</span><span class="p">(</span><span class="s">&#39;timezone&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">dt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getField</span><span class="p">(</span><span class="n">field</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dt</span><span class="o">.</span><span class="n">toZone</span><span class="p">(</span><span class="n">timezone</span><span class="p">)</span>
+
+    <span class="n">security</span><span class="o">.</span><span class="n">declarePrivate</span><span class="p">(</span><span class="s">&#39;_dt_setter&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_dt_setter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fieldtoset</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Always set the date in UTC, saving the timezone in another field.</span>
+<span class="sd">        But since the timezone value isn&#39;t known at the time of saving the</span>
+<span class="sd">        form, we have to save it timezone-naive first and let</span>
+<span class="sd">        timezone_handler convert it to the target zone afterwards.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># Note: The name of the first parameter shouldn&#39;t be field, because</span>
+        <span class="c"># it&#39;s already in kwargs in some case.</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">DateTime</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">DT</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+        <span class="c"># This way, we set DateTime timezoneNaive</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">DateTime</span><span class="p">(</span>
+            <span class="s">&#39;</span><span class="si">%04d</span><span class="s">-</span><span class="si">%02d</span><span class="s">-</span><span class="si">%02d</span><span class="s">T</span><span class="si">%02d</span><span class="s">:</span><span class="si">%02d</span><span class="s">:</span><span class="si">%02d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">value</span><span class="o">.</span><span class="n">year</span><span class="p">(),</span>
+                <span class="n">value</span><span class="o">.</span><span class="n">month</span><span class="p">(),</span>
+                <span class="n">value</span><span class="o">.</span><span class="n">day</span><span class="p">(),</span>
+                <span class="n">value</span><span class="o">.</span><span class="n">hour</span><span class="p">(),</span>
+                <span class="n">value</span><span class="o">.</span><span class="n">minute</span><span class="p">(),</span>
+                <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">second</span><span class="p">())</span>  <span class="c"># No microseconds</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">getField</span><span class="p">(</span><span class="n">fieldtoset</span><span class="p">)</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="n">security</span><span class="o">.</span><span class="n">declareProtected</span><span class="p">(</span><span class="s">&#39;View&#39;</span><span class="p">,</span> <span class="s">&#39;start&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dt_getter</span><span class="p">(</span><span class="s">&#39;startDate&#39;</span><span class="p">)</span>
+
+    <span class="n">security</span><span class="o">.</span><span class="n">declareProtected</span><span class="p">(</span><span class="s">&#39;View&#39;</span><span class="p">,</span> <span class="s">&#39;end&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">end</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dt_getter</span><span class="p">(</span><span class="s">&#39;endDate&#39;</span><span class="p">)</span>
+
+    <span class="n">security</span><span class="o">.</span><span class="n">declareProtected</span><span class="p">(</span><span class="n">ModifyPortalContent</span><span class="p">,</span> <span class="s">&#39;setStartDate&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">setStartDate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dt_setter</span><span class="p">(</span><span class="s">&#39;startDate&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="n">security</span><span class="o">.</span><span class="n">declareProtected</span><span class="p">(</span><span class="n">ModifyPortalContent</span><span class="p">,</span> <span class="s">&#39;setEndDate&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">setEndDate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dt_setter</span><span class="p">(</span><span class="s">&#39;endDate&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="n">security</span><span class="o">.</span><span class="n">declareProtected</span><span class="p">(</span><span class="n">View</span><span class="p">,</span> <span class="s">&#39;start_date&#39;</span><span class="p">)</span>
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="ATEvent.start_date"><a class="viewcode-back" href="../../../../../api/at/content.html#plone.app.event.at.content.ATEvent.start_date">[docs]</a>    <span class="k">def</span> <span class="nf">start_date</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return start date as Python datetime.</span>
+
+<span class="sd">        :returns: Start of the event.</span>
+<span class="sd">        :rtype: Python datetime</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">pydt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">(),</span> <span class="n">exact</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</div>
+    <span class="n">security</span><span class="o">.</span><span class="n">declareProtected</span><span class="p">(</span><span class="n">View</span><span class="p">,</span> <span class="s">&#39;end_date&#39;</span><span class="p">)</span>
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="ATEvent.end_date"><a class="viewcode-back" href="../../../../../api/at/content.html#plone.app.event.at.content.ATEvent.end_date">[docs]</a>    <span class="k">def</span> <span class="nf">end_date</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return end date as Python datetime.</span>
+
+<span class="sd">        Please note, the end date marks only the end of an individual</span>
+<span class="sd">        occurrence and not the end of a recurrence sequence.</span>
+
+<span class="sd">        :returns: End of the event.</span>
+<span class="sd">        :rtype: Python datetime</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">pydt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">end</span><span class="p">(),</span> <span class="n">exact</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</div>
+    <span class="n">security</span><span class="o">.</span><span class="n">declareProtected</span><span class="p">(</span><span class="n">View</span><span class="p">,</span> <span class="s">&#39;duration&#39;</span><span class="p">)</span>
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="ATEvent.duration"><a class="viewcode-back" href="../../../../../api/at/content.html#plone.app.event.at.content.ATEvent.duration">[docs]</a>    <span class="k">def</span> <span class="nf">duration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Return duration of the event as Python timedelta.</span>
+
+<span class="sd">        :returns: Duration of the event.</span>
+<span class="sd">        :rtype: Python timedelta</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">end_date</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_date</span>
+
+
+    <span class="c"># TODO: Why is this needed?</span>
+    <span class="c">#</span></div>
+    <span class="n">security</span><span class="o">.</span><span class="n">declareProtected</span><span class="p">(</span><span class="n">ModifyPortalContent</span><span class="p">,</span> <span class="s">&#39;update&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="c"># Clashes with BaseObject.update, so</span>
+        <span class="c"># we handle gracefully</span>
+        <span class="n">info</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">event</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">event</span><span class="o">.</span><span class="n">Schema</span><span class="p">()</span><span class="o">.</span><span class="n">fields</span><span class="p">():</span>
+                <span class="n">info</span><span class="p">[</span><span class="n">field</span><span class="o">.</span><span class="n">getName</span><span class="p">()]</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="n">field</span><span class="o">.</span><span class="n">getName</span><span class="p">()]</span>
+        <span class="k">elif</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="n">kwargs</span>
+        <span class="n">ATCTContent</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">info</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__cmp__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Compare method.</span>
+
+<span class="sd">        If other is based on ATEvent, compare start, duration and title.</span>
+<span class="sd">        #If other is a number, compare duration and number</span>
+<span class="sd">        If other is a DateTime instance, compare start date with date</span>
+<span class="sd">        In all other cases there is no specific order.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># TODO: maybe also include location to compate two events.</span>
+
+        <span class="c"># Please note that we can not use self.Title() here: the generated</span>
+        <span class="c"># edit accessor uses getToolByName, which ends up in</span>
+        <span class="c"># five.localsitemanager looking for a parent using a comparison</span>
+        <span class="c"># on this object -&gt; infinite recursion.</span>
+        <span class="k">if</span> <span class="n">IATEvent</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">cmp</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">start_date</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">),</span>
+                       <span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">start_date</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">title</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">DateTime</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">cmp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">(),</span> <span class="n">other</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c"># TODO come up with a nice cmp for types</span>
+            <span class="k">return</span> <span class="nb">cmp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">hash</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">start_date</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">))</span>
+
+</div>
+<span class="n">registerATCT</span><span class="p">(</span><span class="n">ATEvent</span><span class="p">,</span> <span class="n">packageName</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="StartEndDateValidator"><a class="viewcode-back" href="../../../../../api/at/content.html#plone.app.event.at.content.StartEndDateValidator">[docs]</a><span class="k">class</span> <span class="nc">StartEndDateValidator</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Checks whether startDate is before endDate. In case the event is</span>
+<span class="sd">    openEnded this check is skipped.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">implements</span><span class="p">(</span><span class="n">IObjectPostValidation</span><span class="p">)</span>
+    <span class="n">adapts</span><span class="p">(</span><span class="n">IATEvent</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">context</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">):</span>
+        <span class="n">rstartDate</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">form</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;startDate&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">rendDate</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">form</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;endDate&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+        <span class="n">errors</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">if</span> <span class="n">rstartDate</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">start</span> <span class="o">=</span> <span class="n">DateTime</span><span class="p">(</span><span class="n">rstartDate</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="n">errors</span><span class="p">[</span><span class="s">&#39;startDate&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&#39;error_invalid_start_date&#39;</span><span class="p">,</span>
+                                        <span class="n">default</span><span class="o">=</span><span class="s">u&#39;Start date is not valid.&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+        <span class="n">openEnd</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">form</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;openEnd&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">openEnd</span><span class="p">:</span>
+            <span class="c"># In case the event has an open end, enddate is set automatically</span>
+            <span class="c"># later and we need not check it</span>
+            <span class="k">return</span> <span class="n">errors</span>
+
+        <span class="k">if</span> <span class="n">rendDate</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">end</span> <span class="o">=</span> <span class="n">DateTime</span><span class="p">(</span><span class="n">rendDate</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="n">errors</span><span class="p">[</span><span class="s">&#39;endDate&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&#39;error_invalid_end_date&#39;</span><span class="p">,</span>
+                                      <span class="n">default</span><span class="o">=</span><span class="s">u&#39;End date is not valid.&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">end</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="s">&#39;startDate&#39;</span> <span class="ow">in</span> <span class="n">errors</span> <span class="ow">or</span> <span class="s">&#39;endDate&#39;</span> <span class="ow">in</span> <span class="n">errors</span><span class="p">:</span>
+            <span class="c"># No point in validating bad input</span>
+            <span class="k">return</span> <span class="n">errors</span>
+
+        <span class="k">if</span> <span class="n">start</span> <span class="o">&gt;</span> <span class="n">end</span><span class="p">:</span>
+            <span class="n">errors</span><span class="p">[</span><span class="s">&#39;endDate&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">u&#39;error_end_must_be_after_start_date&#39;</span><span class="p">,</span>
+                              <span class="n">default</span><span class="o">=</span><span class="s">u&#39;End date must be after start date.&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">errors</span> <span class="ow">and</span> <span class="n">errors</span> <span class="ow">or</span> <span class="bp">None</span>
+
+
+<span class="c">## Event handlers</span>
+</div>
+<div class="viewcode-block" id="data_postprocessing"><a class="viewcode-back" href="../../../../../api/at/content.html#plone.app.event.at.content.data_postprocessing">[docs]</a><span class="k">def</span> <span class="nf">data_postprocessing</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;When setting the startDate and endDate, the value of the timezone field</span>
+<span class="sd">    isn&#39;t known, so we have to convert those timezone-naive dates into</span>
+<span class="sd">    timezone-aware ones afterwards.</span>
+
+<span class="sd">    For whole day events, set start time to 0:00:00 and end time to 23:59:59.</span>
+<span class="sd">    For open end events, set end time to 23:59:59.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">IEvent</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+        <span class="c"># don&#39;t run me, if i&#39;m not installed</span>
+        <span class="k">return</span>
+
+    <span class="n">timezone</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">getField</span><span class="p">(</span><span class="s">&#39;timezone&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+    <span class="n">start_field</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">getField</span><span class="p">(</span><span class="s">&#39;startDate&#39;</span><span class="p">)</span>
+    <span class="n">end_field</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">getField</span><span class="p">(</span><span class="s">&#39;endDate&#39;</span><span class="p">)</span>
+
+    <span class="c"># The previous_timezone is set, when the timezone has changed to another</span>
+    <span class="c"># value. In this case we need to convert the UTC dt values to the</span>
+    <span class="c"># previous_timezone, so that we get the datetime values, as the user</span>
+    <span class="c"># entered them. However, this value might be always set, even when creating</span>
+    <span class="c"># an event, since ObjectModifiedEvent is called several times when editing.</span>
+    <span class="n">prev_tz</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s">&#39;previous_timezone&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">prev_tz</span><span class="p">:</span>
+        <span class="nb">delattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s">&#39;previous_timezone&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_fix_zone</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">tz</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">dt</span><span class="o">.</span><span class="n">timezoneNaive</span><span class="p">():</span>
+            <span class="c"># The object is edited and the value alreadty stored in UTC on the</span>
+            <span class="c"># object. In this case we want the value converted to the given</span>
+            <span class="c"># timezone, in which the user entered the data.</span>
+            <span class="n">dt</span> <span class="o">=</span> <span class="n">dt</span><span class="o">.</span><span class="n">toZone</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dt</span>
+
+    <span class="n">start</span> <span class="o">=</span> <span class="n">_fix_zone</span><span class="p">(</span><span class="n">start_field</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">obj</span><span class="p">),</span> <span class="n">prev_tz</span> <span class="ow">and</span> <span class="n">prev_tz</span> <span class="ow">or</span> <span class="n">timezone</span><span class="p">)</span>
+    <span class="n">end</span> <span class="o">=</span> <span class="n">_fix_zone</span><span class="p">(</span><span class="n">end_field</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">obj</span><span class="p">),</span> <span class="n">prev_tz</span> <span class="ow">and</span> <span class="n">prev_tz</span> <span class="ow">or</span> <span class="n">timezone</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">make_DT</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">timezone</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">DateTime</span><span class="p">(</span>
+            <span class="n">value</span><span class="o">.</span><span class="n">year</span><span class="p">(),</span>
+            <span class="n">value</span><span class="o">.</span><span class="n">month</span><span class="p">(),</span>
+            <span class="n">value</span><span class="o">.</span><span class="n">day</span><span class="p">(),</span>
+            <span class="n">value</span><span class="o">.</span><span class="n">hour</span><span class="p">(),</span>
+            <span class="n">value</span><span class="o">.</span><span class="n">minute</span><span class="p">(),</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">second</span><span class="p">()),</span>  <span class="c"># No microseconds</span>
+            <span class="n">timezone</span><span class="p">)</span>
+
+    <span class="n">start</span> <span class="o">=</span> <span class="n">make_DT</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">timezone</span><span class="p">)</span>
+    <span class="n">end</span> <span class="o">=</span> <span class="n">make_DT</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="n">timezone</span><span class="p">)</span>
+
+    <span class="n">whole_day</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">getWholeDay</span><span class="p">()</span>
+    <span class="n">open_end</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">getOpenEnd</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">whole_day</span><span class="p">:</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">DateTime</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> 0:00:00 </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">start</span><span class="o">.</span><span class="n">Date</span><span class="p">(),</span> <span class="n">timezone</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">open_end</span><span class="p">:</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">start</span>  <span class="c"># Open end events end on same day</span>
+    <span class="k">if</span> <span class="n">open_end</span> <span class="ow">or</span> <span class="n">whole_day</span><span class="p">:</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">DateTime</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> 23:59:59 </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">end</span><span class="o">.</span><span class="n">Date</span><span class="p">(),</span> <span class="n">timezone</span><span class="p">))</span>
+
+    <span class="n">start_field</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">start</span><span class="o">.</span><span class="n">toZone</span><span class="p">(</span><span class="s">&#39;UTC&#39;</span><span class="p">))</span>
+    <span class="n">end_field</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">end</span><span class="o">.</span><span class="n">toZone</span><span class="p">(</span><span class="s">&#39;UTC&#39;</span><span class="p">))</span>
+
+    <span class="n">obj</span><span class="o">.</span><span class="n">reindexObject</span><span class="p">()</span>
+
+
+<span class="c">## Object adapters</span>
+</div>
+<div class="viewcode-block" id="EventAccessor"><a class="viewcode-back" href="../../../../../api/at/content.html#plone.app.event.at.content.EventAccessor">[docs]</a><span class="k">class</span> <span class="nc">EventAccessor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Generic event accessor adapter implementation for Archetypes content</span>
+<span class="sd">        objects.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">implements</span><span class="p">(</span><span class="n">IEventAccessor</span><span class="p">)</span>
+    <span class="n">adapts</span><span class="p">(</span><span class="n">IATEvent</span><span class="p">)</span>
+    <span class="n">event_type</span> <span class="o">=</span> <span class="s">&#39;Event&#39;</span>  <span class="c"># If you use a custom content-type, override this.</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">context</span>
+
+    <span class="c"># Unified create method via Accessor</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">create</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">container</span><span class="p">,</span> <span class="n">content_id</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+               <span class="n">start</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">timezone</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">whole_day</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+               <span class="n">open_end</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">container</span><span class="o">.</span><span class="n">invokeFactory</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">event_type</span><span class="p">,</span>
+                                <span class="nb">id</span><span class="o">=</span><span class="n">content_id</span><span class="p">,</span>
+                                <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">,</span>
+                                <span class="n">description</span><span class="o">=</span><span class="n">description</span><span class="p">,</span>
+                                <span class="n">startDate</span><span class="o">=</span><span class="n">start</span><span class="p">,</span>
+                                <span class="n">endDate</span><span class="o">=</span><span class="n">end</span><span class="p">,</span>
+                                <span class="n">wholeDay</span><span class="o">=</span><span class="n">whole_day</span><span class="p">,</span>
+                                <span class="n">open_end</span><span class="o">=</span><span class="n">open_end</span><span class="p">,</span>
+                                <span class="n">timezone</span><span class="o">=</span><span class="n">timezone</span><span class="p">)</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">container</span><span class="p">[</span><span class="n">content_id</span><span class="p">]</span>
+        <span class="n">acc</span> <span class="o">=</span> <span class="n">IEventAccessor</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+        <span class="n">acc</span><span class="o">.</span><span class="n">edit</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">acc</span>
+
+    <span class="k">def</span> <span class="nf">edit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="n">notify</span><span class="p">(</span><span class="n">ObjectModifiedEvent</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">))</span>
+
+
+    <span class="c"># RO PROPERTIES</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">uid</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">IUUID</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">url</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">absolute_url</span><span class="p">())</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">created</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">utc</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">creation_date</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">last_modified</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">utc</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">modification_date</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">duration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">end</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start</span>
+
+    <span class="c"># rw properties not in behaviors (yet) # TODO revisit</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">title</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;title&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">))</span>
+    <span class="nd">@title.setter</span>
+    <span class="k">def</span> <span class="nf">title</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">,</span> <span class="s">&#39;title&#39;</span><span class="p">,</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">description</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">Description</span><span class="p">())</span>
+    <span class="nd">@description.setter</span>
+    <span class="k">def</span> <span class="nf">description</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setDescription</span><span class="p">(</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">start_date</span>
+    <span class="nd">@start.setter</span>
+    <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setStartDate</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">end</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">end_date</span>
+    <span class="nd">@end.setter</span>
+    <span class="k">def</span> <span class="nf">end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setEndDate</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">whole_day</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">getWholeDay</span><span class="p">()</span>
+    <span class="nd">@whole_day.setter</span>
+    <span class="k">def</span> <span class="nf">whole_day</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setWholeDay</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">open_end</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">getOpenEnd</span><span class="p">()</span>
+    <span class="nd">@open_end.setter</span>
+    <span class="k">def</span> <span class="nf">open_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setOpenEnd</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">timezone</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">getTimezone</span><span class="p">())</span>
+    <span class="nd">@timezone.setter</span>
+    <span class="k">def</span> <span class="nf">timezone</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setTimezone</span><span class="p">(</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">recurrence</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">getRecurrence</span><span class="p">())</span>
+    <span class="nd">@recurrence.setter</span>
+    <span class="k">def</span> <span class="nf">recurrence</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setRecurrence</span><span class="p">(</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">location</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">getLocation</span><span class="p">())</span>
+    <span class="nd">@location.setter</span>
+    <span class="k">def</span> <span class="nf">location</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setLocation</span><span class="p">(</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">attendees</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">getAttendees</span><span class="p">()</span>
+    <span class="nd">@attendees.setter</span>
+    <span class="k">def</span> <span class="nf">attendees</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setAttendees</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">contact_name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">contact_name</span><span class="p">())</span>
+    <span class="nd">@contact_name.setter</span>
+    <span class="k">def</span> <span class="nf">contact_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setContactName</span><span class="p">(</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">contact_email</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">contact_email</span><span class="p">())</span>
+    <span class="nd">@contact_email.setter</span>
+    <span class="k">def</span> <span class="nf">contact_email</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setContactEmail</span><span class="p">(</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">contact_phone</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">contact_phone</span><span class="p">())</span>
+    <span class="nd">@contact_phone.setter</span>
+    <span class="k">def</span> <span class="nf">contact_phone</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setContactPhone</span><span class="p">(</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">event_url</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">event_url</span><span class="p">())</span>
+    <span class="nd">@event_url.setter</span>
+    <span class="k">def</span> <span class="nf">event_url</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setEventUrl</span><span class="p">(</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">subjects</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">Subject</span><span class="p">()</span>
+    <span class="nd">@subjects.setter</span>
+    <span class="k">def</span> <span class="nf">subjects</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setSubject</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">text</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">safe_unicode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">getText</span><span class="p">())</span>
+    <span class="nd">@text.setter</span>
+    <span class="k">def</span> <span class="nf">text</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="n">safe_unicode</span><span class="p">(</span><span class="n">value</span><span class="p">))</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../index.html">plone.app.event 1.0dev documentation</a> &raquo;</li>
+          <li><a href="../../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Plone Foundation.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
