@@ -1,0 +1,186 @@
+ufal.nametag
+============
+
+The ``ufal.nametag`` is a Python binding to NameTag library <http://ufal.mff.cuni.cz/nametag>.
+
+The bindings is a straightforward conversion of the ``C++`` bindings API.
+In Python 2, strings can be both ``unicode`` and UTF-8 encoded ``str``, and the
+library always produces ``unicode``. In Python 3, strings must be only ``str``.
+
+
+Wrapped C++ API
+---------------
+
+The C++ API being wrapped follows. For a API reference of the original
+C++ API, see <http://ufal.mff.cuni.cz/nametag/api-reference>.
+
+::
+
+  Helper Structures
+  -----------------
+  
+    typedef vector<string> Forms;
+    
+    struct TokenRange {
+      size_t start;
+      size_t length;
+    };
+    typedef vector<TokenRange> TokenRanges;
+    
+    struct NamedEntity {
+      size_t start;
+      size_t length;
+      string type;
+    
+      NamedEntity();
+      NamedEntity(size_t start, size_t length, const string& type);
+    };
+  
+  
+  Main Classes
+  ------------
+  
+    class Version {
+     public:
+      unsigned major;
+      unsigned minor;
+      unsigned patch;
+    
+      static Version current();
+    };
+    
+    class Tokenizer {
+     public:
+      virtual void setText(const char* text);
+      virtual bool nextSentence(Forms* forms, TokenRanges* tokens);
+    
+      static Tokenizer* newVerticalTokenizer();
+    };
+    
+    class Ner {
+      static ner* load(const char* fname);
+    
+      virtual void recognize(Forms& forms, NamedEntities& entities) const;
+    
+      virtual Tokenizer* newTokenizer() const;
+    };
+
+
+Examples
+========
+
+run_ner
+-------
+
+Simple example performing named entity recognition::
+
+  
+  from ufal.nametag import *
+  
+  def encode_entities(text):
+    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+  
+  def sort_entities(entities):
+    return sorted(entities, key=lambda entity: (entity.start, -entity.length))
+  
+  # In Python2, wrap sys.stdin and sys.stdout to work with unicode.
+  if sys.version_info[0] < 3:
+    import codecs
+    import locale
+    encoding = locale.getpreferredencoding()
+    sys.stdin = codecs.getreader(encoding)(sys.stdin)
+    sys.stdout = codecs.getwriter(encoding)(sys.stdout)
+  
+  if len(sys.argv) == 1:
+    sys.stderr.write('Usage: %s recognizer_model\n' % sys.argv[0])
+    sys.exit(1)
+  
+  sys.stderr.write('Loading ner: ')
+  ner = Ner.load(sys.argv[1])
+  if not ner:
+    sys.stderr.write("Cannot load recognizer from file '%s'\n" % sys.argv[1])
+    sys.exit(1)
+  sys.stderr.write('done\n')
+  
+  forms = Forms()
+  tokens = TokenRanges()
+  entities = NamedEntities()
+  sortedEntities = []
+  openEntities = []
+  tokenizer = ner.newTokenizer()
+  if tokenizer is None:
+    sys.stderr.write("No tokenizer is defined for the supplied model!")
+    sys.exit(1)
+  
+  not_eof = True
+  while not_eof:
+    text = ''
+  
+    # Read block
+    while True:
+      line = sys.stdin.readline()
+      not_eof = bool(line)
+      if not not_eof: break
+      line = line.rstrip('\r\n')
+      text += line
+      text += '\n';
+      if not line: break
+  
+    # Tokenize and recognize
+    tokenizer.setText(text)
+    t = 0
+    while tokenizer.nextSentence(forms, tokens):
+      ner.recognize(forms, entities)
+      sortedEntities = sort_entities(entities)
+  
+      # Write entities
+      e = 0
+      for i in range(len(tokens)):
+        sys.stdout.write(encode_entities(text[t:tokens[i].start]))
+        if (i == 0): sys.stdout.write("<sentence>")
+  
+        # Open entities starting at current token
+        while (e < len(sortedEntities) and sortedEntities[e].start == i):
+          sys.stdout.write('<ne type="%s">' % encode_entities(sortedEntities[e].type))
+          openEntities.append(sortedEntities[e].start + sortedEntities[e].length - 1)
+          e = e + 1
+  
+        # The token itself
+        sys.stdout.write('<token>%s</token>' % encode_entities(text[tokens[i].start : tokens[i].start + tokens[i].length]))
+  
+        # Close entities ending after current token
+        while openEntities and openEntities[-1] == i:
+          sys.stdout.write('</ne>')
+          openEntities.pop()
+        if (i + 1 == len(tokens)): sys.stdout.write("</sentence>")
+        t = tokens[i].start + tokens[i].length
+    # Write rest of the text
+    sys.stdout.write(encode_entities(text[t:]))
+
+
+AUTHORS
+=======
+
+Milan Straka <straka@ufal.mff.cuni.cz>
+
+Jana Straková <strakova@ufal.mff.cuni.cz>
+
+
+COPYRIGHT AND LICENCE
+=====================
+
+Copyright 2014 by Institute of Formal and Applied Linguistics, Faculty of
+Mathematics and Physics, Charles University in Prague, Czech Republic.
+
+NameTag is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as
+published by the Free Software Foundation, either version 3 of
+the License, or (at your option) any later version.
+
+NameTag is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with NameTag.  If not, see <http://www.gnu.org/licenses/>.
