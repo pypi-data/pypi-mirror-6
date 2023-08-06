@@ -1,0 +1,10 @@
+__version__ = "0.1.24"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.1.24)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'f93c03ebaf3976bb6e4c2869cee9f1f4e8a9723a'
+__git_head_subject__ = 'Finished release v0.1.24.'
+__git_head_message__ = '* release/v0.1.24:\n  STORAGEMODEL-268 fixing tests\n  STORAGEMODEL-268 saving dm_name for MultipathDevice\n  buildout.cfg: adding setuptools to requirements\n  buildout.cfg: remove distribute from requirements\n  update dependencies'
+__git_dirty_diff__ = ''
