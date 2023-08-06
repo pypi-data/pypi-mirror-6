@@ -1,0 +1,652 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>aleph.aleph</title>
+    
+    <link rel="stylesheet" href="../../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="" href="../../index.html" />
+    <link rel="up" title="aleph" href="../aleph.html" /> 
+  </head>
+  <body>
+      <div class="header"><img class="rightlogo" src="../../_static/nkp_logo.png" alt="Logo"/><h1 class="heading"><a href="../../index.html">
+          <span></span></a></h1>
+        <h2 class="heading"><span>aleph.aleph</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for aleph.aleph</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c">#</span>
+<span class="c"># Interpreter version: python 2.7</span>
+<span class="c">#</span>
+<span class="c">#= Imports ====================================================================</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Aleph X-Service wrapper.</span>
+
+<span class="sd">This module allows you to query Aleph&#39;s X-Services module (Aleph server is</span>
+<span class="sd">defined by ALEPH_URL in settings.py).</span>
+
+<span class="sd">There are two levels of abstraction:</span>
+
+<span class="sd">Lowlevel</span>
+<span class="sd">========</span>
+
+<span class="sd">You can use this functions to access Aleph::</span>
+
+<span class="sd">    searchInAleph(base, phrase, considerSimilar, field)</span>
+<span class="sd">    getDocumentIDs(aleph_search_result, [number_of_docs])</span>
+<span class="sd">    downloadMARCXML(doc_id, library)</span>
+<span class="sd">    downloadMARCOAI(doc_id, base)</span>
+
+<span class="sd">Workflow</span>
+<span class="sd">********</span>
+
+<span class="sd">Aleph works in strange way, that he won&#39;t allow you to access desired</span>
+<span class="sd">information directly.</span>
+
+<span class="sd">You have to create search request by calling searchInAleph() first, which</span>
+<span class="sd">will return dictionary with few imporant informations about session.</span>
+
+<span class="sd">This dictionary can be later used as parameter to function getDocumentIDs(),</span>
+<span class="sd">which will give you list of DocumentID named tuples.</span>
+
+<span class="sd">Named tuples are used, because to access your document, you won&#39;t need just</span>
+<span class="sd">document ID number, but also library ID string.</span>
+
+<span class="sd">Depending on your system, there may be just only one accessible library, or</span>
+<span class="sd">mutiple ones, and then you will be glad, that you get both of this</span>
+<span class="sd">informations together.</span>
+
+<span class="sd">DocumentID can be used as parameter to :func:`downloadMARCXML`.</span>
+
+<span class="sd">Lets look at some code::</span>
+
+<span class="sd">    ids = getDocumentIDs(searchInAleph(&quot;nkc&quot;, &quot;test&quot;, False, &quot;wrd&quot;))</span>
+<span class="sd">    for id_num, library in ids:</span>
+<span class="sd">        XML = downloadMARCXML(id_num, library)</span>
+
+<span class="sd">        # processDocument(XML)</span>
+
+<span class="sd">Highlevel</span>
+<span class="sd">=========</span>
+
+<span class="sd">So far, there are only getter wrappers::</span>
+
+<span class="sd">    getISBNsIDs()</span>
+<span class="sd">    getAuthorsBooksIDs()</span>
+<span class="sd">    getPublishersBooksIDs()</span>
+
+<span class="sd">And counting functions (they are one request to aleph faster than just</span>
+<span class="sd">counting results from getters)::</span>
+
+<span class="sd">    getISBNCount()</span>
+<span class="sd">    getAuthorsBooksCount()</span>
+<span class="sd">    getPublishersBooksCount()</span>
+
+<span class="sd">Other noteworthy properties</span>
+<span class="sd">===========================</span>
+
+<span class="sd">List of valid bases can be obtained by calling :func:`_getListOfBases`, which</span>
+<span class="sd">returns list of strings.</span>
+
+<span class="sd">There is also defined exception tree - see :class:`AlephException` docstring</span>
+<span class="sd">for details.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">namedtuple</span>
+<span class="kn">from</span> <span class="nn">string</span> <span class="kn">import</span> <span class="n">Template</span>
+<span class="kn">from</span> <span class="nn">urllib</span> <span class="kn">import</span> <span class="n">quote_plus</span>
+
+
+<span class="kn">import</span> <span class="nn">dhtmlparser</span>
+<span class="kn">from</span> <span class="nn">httpkie</span> <span class="kn">import</span> <span class="n">Downloader</span>
+
+
+<span class="kn">from</span> <span class="nn">settings</span> <span class="kn">import</span> <span class="o">*</span>
+
+
+<span class="c">#= Variables ==================================================================</span>
+<span class="c"># String.Template() variable convention is used</span>
+<span class="n">ALEPH_SEARCH_URL_TEMPLATE</span> <span class="o">=</span> <span class="s">&quot;/X?op=find&amp;request=$FIELD=$PHRASE&amp;base=$BASE&amp;adjacent=$SIMILAR&quot;</span>
+<span class="n">ALEPH_GET_SET_URL_TEMPLATE</span> <span class="o">=</span> <span class="s">&quot;/X?op=ill_get_set&amp;set_number=$SET_NUMBER&amp;start_point=1&amp;no_docs=$NUMBER_OF_DOCS&quot;</span>
+<span class="n">ALEPH_GET_DOC_URL_TEMPLATE</span> <span class="o">=</span> <span class="s">&quot;/X?op=ill_get_doc&amp;doc_number=$DOC_ID&amp;library=$LIBRARY&quot;</span>
+<span class="n">ALEPH_GET_OAI_DOC_URL_TEMPLATE</span> <span class="o">=</span> <span class="s">&quot;/X?op=find_doc&amp;doc_num=$DOC_ID&amp;base=$BASE&quot;</span>
+
+
+<span class="n">VALID_ALEPH_FIELDS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s">&quot;wrd&quot;</span><span class="p">,</span>  <span class="c"># slova ze všech popisných údaju</span>
+    <span class="s">&quot;wtl&quot;</span><span class="p">,</span>  <span class="c"># slova z názvových údajů (název, název části, edice, originál atd)</span>
+    <span class="s">&quot;wau&quot;</span><span class="p">,</span>  <span class="c"># slova z údajů o autorech</span>
+    <span class="s">&quot;wpb&quot;</span><span class="p">,</span>  <span class="c"># slova z údajů o nakladateli</span>
+    <span class="s">&quot;wpp&quot;</span><span class="p">,</span>  <span class="c"># slova z údajů o místě vydání</span>
+    <span class="s">&quot;wyr&quot;</span><span class="p">,</span>  <span class="c"># rok vydání</span>
+    <span class="s">&quot;wkw&quot;</span><span class="p">,</span>  <span class="c"># předmět (klíčová slova)</span>
+    <span class="s">&quot;sbn&quot;</span><span class="p">,</span>  <span class="c"># ISBN/ISMN</span>
+    <span class="s">&quot;ssn&quot;</span><span class="p">,</span>  <span class="c"># ISSN</span>
+    <span class="s">&quot;icz&quot;</span><span class="p">,</span>  <span class="c"># identifikační číslo záznamu</span>
+    <span class="s">&quot;cnb&quot;</span><span class="p">,</span>  <span class="c"># číslo ČNB</span>
+    <span class="s">&quot;sg&quot;</span>  <span class="c"># signatura</span>
+<span class="p">]</span>
+
+<span class="n">dhtmlparser</span><span class="o">.</span><span class="n">NONPAIR_TAGS</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c"># used for parsing XML - see documentation</span>
+
+
+<span class="c">#= Functions &amp; objects ========================================================</span>
+<div class="viewcode-block" id="AlephException"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.AlephException">[docs]</a><span class="k">class</span> <span class="nc">AlephException</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Exception tree::</span>
+
+<span class="sd">        - AlephException</span>
+<span class="sd">          |- InvalidAlephBaseException</span>
+<span class="sd">          |- InvalidAlephFieldException</span>
+<span class="sd">          |- LibraryNotFoundException</span>
+<span class="sd">          `- DocumentNotFoundException</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="ne">Exception</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="InvalidAlephBaseException"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.InvalidAlephBaseException">[docs]</a><span class="k">class</span> <span class="nc">InvalidAlephBaseException</span><span class="p">(</span><span class="n">AlephException</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">InvalidAlephBaseException</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="InvalidAlephFieldException"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.InvalidAlephFieldException">[docs]</a><span class="k">class</span> <span class="nc">InvalidAlephFieldException</span><span class="p">(</span><span class="n">AlephException</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">InvalidAlephFieldException</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="LibraryNotFoundException"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.LibraryNotFoundException">[docs]</a><span class="k">class</span> <span class="nc">LibraryNotFoundException</span><span class="p">(</span><span class="n">AlephException</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">LibraryNotFoundException</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="DocumentNotFoundException"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.DocumentNotFoundException">[docs]</a><span class="k">class</span> <span class="nc">DocumentNotFoundException</span><span class="p">(</span><span class="n">AlephException</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">DocumentNotFoundException</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="DocumentID"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.DocumentID">[docs]</a><span class="k">class</span> <span class="nc">DocumentID</span><span class="p">(</span><span class="n">namedtuple</span><span class="p">(</span><span class="s">&quot;DocumentID&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;id&quot;</span><span class="p">,</span> <span class="s">&quot;library&quot;</span><span class="p">,</span> <span class="s">&quot;base&quot;</span><span class="p">])):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This structure is used to store pointer to document in aleph.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        id (int): id of document</span>
+<span class="sd">        library (str): can be different for each document</span>
+<span class="sd">        base (str): default &quot;nkc&quot;, but really depends at what bases you have</span>
+<span class="sd">                    defined in your aleph</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_getListOfBases</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is here mainly for purposes of unittest</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        list: valid bases as they are used as URL parameters in links at aleph</span>
+<span class="sd">              main page.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">downer</span> <span class="o">=</span> <span class="n">Downloader</span><span class="p">()</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">downer</span><span class="o">.</span><span class="n">download</span><span class="p">(</span><span class="n">ALEPH_URL</span> <span class="o">+</span> <span class="s">&quot;/F/?func=file&amp;file_name=base-list&quot;</span><span class="p">)</span>
+    <span class="n">dom</span> <span class="o">=</span> <span class="n">dhtmlparser</span><span class="o">.</span><span class="n">parseString</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+
+    <span class="c"># from default aleph page filter links containing local_base in their href</span>
+    <span class="n">base_links</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="s">&quot;href&quot;</span> <span class="ow">in</span> <span class="n">x</span><span class="o">.</span><span class="n">params</span> <span class="ow">and</span> <span class="s">&quot;local_base&quot;</span> <span class="ow">in</span> <span class="n">x</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s">&quot;href&quot;</span><span class="p">],</span>
+        <span class="n">dom</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;a&quot;</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="c"># split links by &amp; - we will need only XXX from link.tld/..&amp;local_base=XXX</span>
+    <span class="n">base_links</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s">&quot;href&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&quot;?&quot;</span><span class="p">,</span> <span class="s">&quot;&amp;&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;&amp;&quot;</span><span class="p">),</span>
+        <span class="n">base_links</span>
+    <span class="p">)</span>
+
+    <span class="c"># filter only sections containing bases</span>
+    <span class="n">bases</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">link</span><span class="p">:</span> <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">base</span><span class="p">:</span> <span class="s">&quot;local_base=&quot;</span> <span class="ow">in</span> <span class="n">base</span><span class="p">,</span> <span class="n">link</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">base_links</span>
+    <span class="p">)</span>
+
+    <span class="c"># filter bases from base sections</span>
+    <span class="n">bases</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;=&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+        <span class="n">bases</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">bases</span><span class="p">))</span>  <span class="c"># list(set()) is same as unique()</span>
+
+
+<span class="k">def</span> <span class="nf">_tryConvertToInt</span><span class="p">(</span><span class="n">s</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Try convert value from |s| to int.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        int(s): if the value was successfully converted, or `s` when conversion</span>
+<span class="sd">                failed.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">s</span>
+
+
+<span class="k">def</span> <span class="nf">_alephResultToDict</span><span class="p">(</span><span class="n">dom</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert part of non-nested XML to dict.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        dom (HTMLElement tree): pre-parsed XML (see dhtmlparser).</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        dict: with python data</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">dom</span><span class="o">.</span><span class="n">childs</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">i</span><span class="o">.</span><span class="n">isOpeningTag</span><span class="p">():</span>
+            <span class="n">keyword</span> <span class="o">=</span> <span class="n">i</span><span class="o">.</span><span class="n">getTagName</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">_tryConvertToInt</span><span class="p">(</span><span class="n">i</span><span class="o">.</span><span class="n">getContent</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+
+            <span class="c"># if there are multiple tags with same keyword, add values into</span>
+            <span class="c"># array, instead of rewriting existing value at given keyword</span>
+            <span class="k">if</span> <span class="n">keyword</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>  <span class="c"># if it is not in result, add it</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">keyword</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+            <span class="k">else</span><span class="p">:</span>  <span class="c"># if it is already there ..</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="n">keyword</span><span class="p">],</span> <span class="nb">list</span><span class="p">):</span>  <span class="c"># and it is list ..</span>
+                    <span class="n">result</span><span class="p">[</span><span class="n">keyword</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>  <span class="c"># add it to list</span>
+                <span class="k">else</span><span class="p">:</span>  <span class="c"># or make it array</span>
+                    <span class="n">result</span><span class="p">[</span><span class="n">keyword</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">result</span><span class="p">[</span><span class="n">keyword</span><span class="p">],</span> <span class="n">value</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+
+
+<div class="viewcode-block" id="searchInAleph"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.searchInAleph">[docs]</a><span class="k">def</span> <span class="nf">searchInAleph</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">phrase</span><span class="p">,</span> <span class="n">considerSimilar</span><span class="p">,</span> <span class="n">field</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Send request to the aleph search engine.</span>
+
+<span class="sd">    Request itself is pretty useless, but it can be later used as parameter</span>
+<span class="sd">    for :func:`getAlephRecords`, which can fetch records from Aleph.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        base (str): which database you want to use</span>
+<span class="sd">        phrase (str): what do you want to search</span>
+<span class="sd">        considerSimilar (bool): fuzzy search, which is not working at all, so</span>
+<span class="sd">                               don&#39;t use it</span>
+<span class="sd">        field (str): where you want to look (see `VALID_ALEPH_FIELDS`)</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        aleph_search_record, which is dictionary consisting from those fields:</span>
+
+<span class="sd">            | error (optional): present if there was some form of error</span>
+<span class="sd">            | no_entries (int): number of entries that can be fetch from aleph</span>
+<span class="sd">            | no_records (int): no idea what is this, but it is always &gt;= than</span>
+<span class="sd">                                `no_entries`</span>
+<span class="sd">            | set_number (int): important - something like ID of your request</span>
+<span class="sd">            | session-id (str): used to count users for licensing purposes</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">      Returned dict::</span>
+
+<span class="sd">        {</span>
+<span class="sd">         &#39;session-id&#39;: &#39;YLI54HBQJESUTS678YYUNKEU4BNAUJDKA914GMF39J6K89VSCB&#39;,</span>
+<span class="sd">         &#39;set_number&#39;: 36520,</span>
+<span class="sd">         &#39;no_records&#39;: 1,</span>
+<span class="sd">         &#39;no_entries&#39;: 1</span>
+<span class="sd">        }</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        AlephException: if Aleph doesn&#39;t return any information</span>
+<span class="sd">        InvalidAlephFieldException: if specified field is not valid</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">downer</span> <span class="o">=</span> <span class="n">Downloader</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">VALID_ALEPH_FIELDS</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">InvalidAlephFieldException</span><span class="p">(</span><span class="s">&quot;Unknown field &#39;&quot;</span> <span class="o">+</span> <span class="n">field</span> <span class="o">+</span> <span class="s">&quot;&#39;!&quot;</span><span class="p">)</span>
+
+    <span class="n">param_url</span> <span class="o">=</span> <span class="n">Template</span><span class="p">(</span><span class="n">ALEPH_SEARCH_URL_TEMPLATE</span><span class="p">)</span><span class="o">.</span><span class="n">substitute</span><span class="p">(</span>
+        <span class="n">PHRASE</span><span class="o">=</span><span class="n">quote_plus</span><span class="p">(</span><span class="n">phrase</span><span class="p">),</span>  <span class="c"># urlencode phrase</span>
+        <span class="n">BASE</span><span class="o">=</span><span class="n">base</span><span class="p">,</span>
+        <span class="n">FIELD</span><span class="o">=</span><span class="n">field</span><span class="p">,</span>
+        <span class="n">SIMILAR</span><span class="o">=</span><span class="s">&quot;Y&quot;</span> <span class="k">if</span> <span class="n">considerSimilar</span> <span class="k">else</span> <span class="s">&quot;N&quot;</span>
+    <span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">downer</span><span class="o">.</span><span class="n">download</span><span class="p">(</span><span class="n">ALEPH_URL</span> <span class="o">+</span> <span class="n">param_url</span><span class="p">)</span>
+
+    <span class="n">dom</span> <span class="o">=</span> <span class="n">dhtmlparser</span><span class="o">.</span><span class="n">parseString</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="n">find</span> <span class="o">=</span> <span class="n">dom</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;find&quot;</span><span class="p">)</span>  <span class="c"># find &lt;find&gt; element :)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">find</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">AlephException</span><span class="p">(</span><span class="s">&quot;Aleph didn&#39;t returned any information.&quot;</span><span class="p">)</span>
+    <span class="n">find</span> <span class="o">=</span> <span class="n">find</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c"># convert aleph result into dictionary</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">_alephResultToDict</span><span class="p">(</span><span class="n">find</span><span class="p">)</span>
+
+    <span class="c"># add informations about base into result</span>
+    <span class="n">result</span><span class="p">[</span><span class="s">&quot;base&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">base</span>
+
+    <span class="k">if</span> <span class="s">&quot;error&quot;</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">result</span><span class="p">[</span><span class="s">&quot;error&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;empty set&quot;</span><span class="p">:</span>
+            <span class="n">result</span><span class="p">[</span><span class="s">&quot;no_entries&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c"># empty set have 0 entries</span>
+            <span class="k">return</span> <span class="n">result</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">AlephException</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s">&quot;error&quot;</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">result</span>
+
+</div>
+<div class="viewcode-block" id="getDocumentIDs"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.getDocumentIDs">[docs]</a><span class="k">def</span> <span class="nf">getDocumentIDs</span><span class="p">(</span><span class="n">aleph_search_result</span><span class="p">,</span> <span class="n">number_of_docs</span><span class="o">=-</span><span class="mi">1</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get IDs, which can be used as parameters for other functions.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        aleph_search_result (dict): returned from :func:`searchInAleph`</span>
+<span class="sd">        number_of_docs (int, optional): how many :class:`DocumentIDs` from set</span>
+<span class="sd">                          given by aleph_search_result should be returned,</span>
+<span class="sd">                          default -1 for all of them.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        list: :class:`DocumentID` named tuples to given `aleph_search_result`.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        AlephException: if Aleph returns unknown format of data</span>
+
+<span class="sd">    Note:</span>
+<span class="sd">        Returned :class:`DocumentID` can be used as parameters to</span>
+<span class="sd">        :func:`downloadMARCXML`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">downer</span> <span class="o">=</span> <span class="n">Downloader</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="s">&quot;set_number&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">aleph_search_result</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+    <span class="c"># set numbers should be probably aligned to some length</span>
+    <span class="n">set_number</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">aleph_search_result</span><span class="p">[</span><span class="s">&quot;set_number&quot;</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">set_number</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">6</span><span class="p">:</span>
+        <span class="n">set_number</span> <span class="o">=</span> <span class="p">(</span><span class="mi">6</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">set_number</span><span class="p">))</span> <span class="o">*</span> <span class="s">&quot;0&quot;</span> <span class="o">+</span> <span class="n">set_number</span>
+
+    <span class="c"># limit number of fetched documents, if -1, download all</span>
+    <span class="k">if</span> <span class="n">number_of_docs</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">number_of_docs</span> <span class="o">=</span> <span class="n">aleph_search_result</span><span class="p">[</span><span class="s">&quot;no_entries&quot;</span><span class="p">]</span>
+
+    <span class="c"># download data about given set</span>
+    <span class="n">set_data</span> <span class="o">=</span> <span class="n">downer</span><span class="o">.</span><span class="n">download</span><span class="p">(</span>
+        <span class="n">ALEPH_URL</span> <span class="o">+</span> <span class="n">Template</span><span class="p">(</span><span class="n">ALEPH_GET_SET_URL_TEMPLATE</span><span class="p">)</span><span class="o">.</span><span class="n">substitute</span><span class="p">(</span>
+            <span class="n">SET_NUMBER</span><span class="o">=</span><span class="n">set_number</span><span class="p">,</span>
+            <span class="n">NUMBER_OF_DOCS</span><span class="o">=</span><span class="n">number_of_docs</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="c"># parse data</span>
+    <span class="n">dom</span> <span class="o">=</span> <span class="n">dhtmlparser</span><span class="o">.</span><span class="n">parseString</span><span class="p">(</span><span class="n">set_data</span><span class="p">)</span>
+    <span class="n">set_data</span> <span class="o">=</span> <span class="n">dom</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;ill-get-set&quot;</span><span class="p">)</span>
+
+    <span class="c"># there should be at least one &lt;ill-get-set&gt; field</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">set_data</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">AlephException</span><span class="p">(</span><span class="s">&quot;Aleph didn&#39;t returned set data.&quot;</span><span class="p">)</span>
+
+    <span class="n">ids</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">library</span> <span class="ow">in</span> <span class="n">set_data</span><span class="p">:</span>
+        <span class="n">documents</span> <span class="o">=</span> <span class="n">_alephResultToDict</span><span class="p">(</span><span class="n">library</span><span class="p">)</span>
+
+        <span class="c"># convert all document records to DocumentID named tuple and extend</span>
+        <span class="c"># them to &#39;ids&#39; array</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">documents</span><span class="p">[</span><span class="s">&quot;doc-number&quot;</span><span class="p">],</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="n">ids</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+                <span class="nb">map</span><span class="p">(</span>
+                    <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">DocumentID</span><span class="p">(</span>
+                        <span class="n">x</span><span class="p">,</span>
+                        <span class="n">documents</span><span class="p">[</span><span class="s">&quot;set-library&quot;</span><span class="p">],</span>
+                        <span class="n">aleph_search_result</span><span class="p">[</span><span class="s">&quot;base&quot;</span><span class="p">]</span>
+                    <span class="p">),</span>
+                    <span class="nb">set</span><span class="p">(</span><span class="n">documents</span><span class="p">[</span><span class="s">&quot;doc-number&quot;</span><span class="p">])</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">DocumentID</span><span class="p">(</span>
+                    <span class="n">documents</span><span class="p">[</span><span class="s">&quot;doc-number&quot;</span><span class="p">],</span>
+                    <span class="n">documents</span><span class="p">[</span><span class="s">&quot;set-library&quot;</span><span class="p">],</span>
+                    <span class="n">aleph_search_result</span><span class="p">[</span><span class="s">&quot;base&quot;</span><span class="p">]</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">ids</span>
+
+</div>
+<div class="viewcode-block" id="downloadMARCXML"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.downloadMARCXML">[docs]</a><span class="k">def</span> <span class="nf">downloadMARCXML</span><span class="p">(</span><span class="n">doc_id</span><span class="p">,</span> <span class="n">library</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Download MARC XML document with given `doc_id` from given `library`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        doc_id (DocumentID): you will get this from :func:`getDocumentIDs`</span>
+<span class="sd">        library (str): &quot;NKC01&quot; in our case, but don&#39;t worry,</span>
+<span class="sd">                   :func:`getDocumentIDs` adds library specification into</span>
+<span class="sd">                   :class:`DocumentID` named tuple.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        str: MARC XML unicode string.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        LibraryNotFoundException</span>
+<span class="sd">        DocumentNotFoundException</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">downer</span> <span class="o">=</span> <span class="n">Downloader</span><span class="p">()</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="n">downer</span><span class="o">.</span><span class="n">download</span><span class="p">(</span>
+        <span class="n">ALEPH_URL</span> <span class="o">+</span> <span class="n">Template</span><span class="p">(</span><span class="n">ALEPH_GET_DOC_URL_TEMPLATE</span><span class="p">)</span><span class="o">.</span><span class="n">substitute</span><span class="p">(</span>
+            <span class="n">DOC_ID</span><span class="o">=</span><span class="n">doc_id</span><span class="p">,</span>
+            <span class="n">LIBRARY</span><span class="o">=</span><span class="n">library</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="n">dom</span> <span class="o">=</span> <span class="n">dhtmlparser</span><span class="o">.</span><span class="n">parseString</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="c"># check if there are any errors</span>
+    <span class="c"># bad library error</span>
+    <span class="n">error</span> <span class="o">=</span> <span class="n">dom</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;login&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">error</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">error</span> <span class="o">=</span> <span class="n">error</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;error&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">error</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">LibraryNotFoundException</span><span class="p">(</span>
+                <span class="s">&quot;Can&#39;t download document doc_id: &#39;&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">doc_id</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot;&#39; &quot;</span> <span class="o">+</span>
+                <span class="s">&quot;(probably bad library: &#39;&quot;</span> <span class="o">+</span> <span class="n">library</span> <span class="o">+</span> <span class="s">&quot;&#39;)!</span><span class="se">\n</span><span class="s">Message: &quot;</span> <span class="o">+</span>
+                <span class="n">error</span><span class="o">.</span><span class="n">getContent</span><span class="p">()</span>
+            <span class="p">)</span>
+
+    <span class="c"># another error - document not found</span>
+    <span class="n">error</span> <span class="o">=</span> <span class="n">dom</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;ill-get-doc&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">error</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">error</span> <span class="o">=</span> <span class="n">error</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;error&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">error</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">DocumentNotFoundException</span><span class="p">(</span>
+                <span class="n">error</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">getContent</span><span class="p">()</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data</span>  <span class="c"># MARCxml of document with given doc_id</span>
+
+</div>
+<div class="viewcode-block" id="downloadMARCOAI"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.downloadMARCOAI">[docs]</a><span class="k">def</span> <span class="nf">downloadMARCOAI</span><span class="p">(</span><span class="n">doc_id</span><span class="p">,</span> <span class="n">base</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Download MARC OAI document with given `doc_id` from given (logical) `base`.</span>
+
+<span class="sd">    Funny part is, that some documents can be obtained only with this function</span>
+<span class="sd">    in their full text.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        doc_id (str):         you will get this from :func:`getDocumentIDs`</span>
+<span class="sd">        base (str, optional): Base from which you want to download Aleph </span>
+<span class="sd">                              document.</span>
+<span class="sd">                              This seems to be duplicite with</span>
+<span class="sd">                              :func:`searchInAleph` parameters, but it&#39;s just</span>
+<span class="sd">                              somethin Aleph&#39;s X-Services wants, so ..</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        str: MARC XML unicode string.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        InvalidAlephBaseException</span>
+<span class="sd">        DocumentNotFoundException</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">downer</span> <span class="o">=</span> <span class="n">Downloader</span><span class="p">()</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="n">downer</span><span class="o">.</span><span class="n">download</span><span class="p">(</span>
+        <span class="n">ALEPH_URL</span> <span class="o">+</span> <span class="n">Template</span><span class="p">(</span><span class="n">ALEPH_GET_OAI_DOC_URL_TEMPLATE</span><span class="p">)</span><span class="o">.</span><span class="n">substitute</span><span class="p">(</span>
+            <span class="n">DOC_ID</span><span class="o">=</span><span class="n">doc_id</span><span class="p">,</span>
+            <span class="n">BASE</span><span class="o">=</span><span class="n">base</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="n">dom</span> <span class="o">=</span> <span class="n">dhtmlparser</span><span class="o">.</span><span class="n">parseString</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="c"># check for errors</span>
+    <span class="n">error</span> <span class="o">=</span> <span class="n">dom</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;error&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">error</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">if</span> <span class="s">&quot;Error reading document&quot;</span> <span class="ow">in</span> <span class="n">error</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">getContent</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="n">DocumentNotFoundException</span><span class="p">(</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">getContent</span><span class="p">())</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InvalidAlephBaseException</span><span class="p">(</span>
+                <span class="n">error</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">getContent</span><span class="p">()</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">+</span>
+                <span class="s">&quot;The base you are trying to access probably doesn&#39;t exist.&quot;</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data</span>
+
+</div>
+<div class="viewcode-block" id="getISBNsIDs"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.getISBNsIDs">[docs]</a><span class="k">def</span> <span class="nf">getISBNsIDs</span><span class="p">(</span><span class="n">isbn</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="n">ALEPH_DEFAULT_BASE</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get list of :class:`DocumentID` objects of documents with given `isbn`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        isbn (str): ISBN string</span>
+<span class="sd">        base (str, optional): base on which will be search performed. Default</span>
+<span class="sd">                              ``settings.ALEPH_DEFAULT_BASE``</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        list: of :class:`DocumentID` objects</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">getDocumentIDs</span><span class="p">(</span><span class="n">searchInAleph</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">isbn</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="s">&quot;sbn&quot;</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="getAuthorsBooksIDs"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.getAuthorsBooksIDs">[docs]</a><span class="k">def</span> <span class="nf">getAuthorsBooksIDs</span><span class="p">(</span><span class="n">author</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="n">ALEPH_DEFAULT_BASE</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get list of :class:`DocumentID` objects of documents with given `author`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        author (str): Authors name/lastname in UTF</span>
+<span class="sd">        base (str, optional): base on which will be search performed. Default</span>
+<span class="sd">                              ``settings.ALEPH_DEFAULT_BASE``</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        list: of :class:`DocumentID` objects</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">getDocumentIDs</span><span class="p">(</span><span class="n">searchInAleph</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">author</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="s">&quot;wau&quot;</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="getPublishersBooksIDs"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.getPublishersBooksIDs">[docs]</a><span class="k">def</span> <span class="nf">getPublishersBooksIDs</span><span class="p">(</span><span class="n">publisher</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="n">ALEPH_DEFAULT_BASE</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get list of :class:`DocumentID` objects of documents with given</span>
+<span class="sd">    `publisher`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        publisher (str): name of publisher which will be used to search Aleph</span>
+<span class="sd">        base (str, optional): base on which will be search performed. Default</span>
+<span class="sd">                              ``settings.ALEPH_DEFAULT_BASE``</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        list: of :class:`DocumentID` objects</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">getDocumentIDs</span><span class="p">(</span><span class="n">searchInAleph</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">publisher</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="s">&quot;wpb&quot;</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="getISBNCount"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.getISBNCount">[docs]</a><span class="k">def</span> <span class="nf">getISBNCount</span><span class="p">(</span><span class="n">isbn</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="n">ALEPH_DEFAULT_BASE</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get number of records in Aleph which match given `isbn`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        isbn (str): ISBN string</span>
+<span class="sd">        base (str, optional): base on which will be search performed. Default</span>
+<span class="sd">                              ``settings.ALEPH_DEFAULT_BASE``</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        int: Number of matching documents in Aleph.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">searchInAleph</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">isbn</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="s">&quot;sbn&quot;</span><span class="p">)[</span><span class="s">&quot;no_entries&quot;</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="getAuthorsBooksCount"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.getAuthorsBooksCount">[docs]</a><span class="k">def</span> <span class="nf">getAuthorsBooksCount</span><span class="p">(</span><span class="n">author</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="n">ALEPH_DEFAULT_BASE</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get number of records in Aleph which match given `author`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        isbn (str): Authors name/lastname in UTF</span>
+<span class="sd">        base (str, optional): base on which will be search performed. Default</span>
+<span class="sd">                              ``settings.ALEPH_DEFAULT_BASE``</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        int: Number of matching documents in Aleph.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">searchInAleph</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">author</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="s">&quot;wau&quot;</span><span class="p">)[</span><span class="s">&quot;no_entries&quot;</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="getPublishersBooksCount"><a class="viewcode-back" href="../../api/aleph.aleph.html#aleph.aleph.getPublishersBooksCount">[docs]</a><span class="k">def</span> <span class="nf">getPublishersBooksCount</span><span class="p">(</span><span class="n">publisher</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="n">ALEPH_DEFAULT_BASE</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get number of records in Aleph which match given `publisher`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        isbn (str): name of publisher which will be used to search Aleph</span>
+<span class="sd">        base (str, optional): base on which will be search performed. Default</span>
+<span class="sd">                              ``settings.ALEPH_DEFAULT_BASE``</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        int: Number of matching documents in Aleph.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">searchInAleph</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">publisher</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="s">&quot;wpb&quot;</span><span class="p">)[</span><span class="s">&quot;no_entries&quot;</span><span class="p">]</span></div>
+</pre></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

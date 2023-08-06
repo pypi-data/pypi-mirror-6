@@ -1,0 +1,255 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>aleph.convertors</title>
+    
+    <link rel="stylesheet" href="../../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="" href="../../index.html" />
+    <link rel="up" title="aleph" href="../aleph.html" /> 
+  </head>
+  <body>
+      <div class="header"><img class="rightlogo" src="../../_static/nkp_logo.png" alt="Logo"/><h1 class="heading"><a href="../../index.html">
+          <span></span></a></h1>
+        <h2 class="heading"><span>aleph.convertors</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for aleph.convertors</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c">#</span>
+<span class="c"># Interpreter version: python 2.7</span>
+<span class="c">#</span>
+<span class="c">#= Imports ====================================================================</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This module exists to provide ability to convert from AMQP data structures to</span>
+<span class="sd">Aleph&#39;s data structures.</span>
+
+<span class="sd">It can convert MARCXMLRecord to EPublication simplified data structure. It can</span>
+<span class="sd">also serialize any namedtuple to JSON.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">json</span>
+
+
+<span class="kn">from</span> <span class="nn">marcxml</span> <span class="kn">import</span> <span class="n">MARCXMLRecord</span>
+<span class="kn">from</span> <span class="nn">datastructures</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">__init__</span> <span class="kn">import</span> <span class="o">*</span>
+
+
+<span class="c">#= Functions &amp; objects ========================================================</span>
+<div class="viewcode-block" id="toEPublication"><a class="viewcode-back" href="../../api/aleph.convertors.html#aleph.convertors.toEPublication">[docs]</a><span class="k">def</span> <span class="nf">toEPublication</span><span class="p">(</span><span class="n">marcxml</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert MARCXMLRecord object to EPublication named tuple (see __init__.py).</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        marcxml (str/MARCXMLRecord): MarcXML which will be converted to</span>
+<span class="sd">                EPublication. In case of str, &lt;record&gt; tag is required.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        EPublication: named tuple with data about publication.</span>
+
+<span class="sd">    See Also:</span>
+<span class="sd">        :class:`aleph.datastructures.epublication` for details of EPublication</span>
+<span class="sd">        structure.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">parsed</span> <span class="o">=</span> <span class="n">marcxml</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">marcxml</span><span class="p">,</span> <span class="n">MARCXMLRecord</span><span class="p">):</span>
+        <span class="n">parsed</span> <span class="o">=</span> <span class="n">MARCXMLRecord</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">marcxml</span><span class="p">))</span>
+
+    <span class="c"># distributor = &quot;&quot;  # FUTURE</span>
+    <span class="c"># mistoDistribuce = &quot;&quot;</span>
+    <span class="c"># datumDistribuce = &quot;&quot;</span>
+
+    <span class="c"># # parse information about distributors</span>
+    <span class="c"># distributors = parsed.getCorporations(&quot;dst&quot;)</span>
+    <span class="c"># if len(distributors) &gt;= 1:</span>
+    <span class="c">#     mistoDistribuce = distributors[0].place</span>
+    <span class="c">#     datumDistribuce = distributors[0].date</span>
+    <span class="c">#     distributor = distributors[0].name</span>
+
+    <span class="c"># zpracovatel</span>
+    <span class="n">zpracovatel</span> <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getDataRecords</span><span class="p">(</span><span class="s">&quot;040&quot;</span><span class="p">,</span> <span class="s">&quot;a&quot;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+    <span class="n">zpracovatel</span> <span class="o">=</span> <span class="n">zpracovatel</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">zpracovatel</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+
+    <span class="c"># url</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getDataRecords</span><span class="p">(</span><span class="s">&quot;856&quot;</span><span class="p">,</span> <span class="s">&quot;u&quot;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="n">url</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">url</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+
+    <span class="n">binding</span> <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getBinding</span><span class="p">()</span>
+
+    <span class="c"># i know, that this is not PEP8, but you dont want to see it without proper</span>
+    <span class="c"># formating (it looks bad, really bad)</span>
+    <span class="k">return</span> <span class="n">EPublication</span><span class="p">(</span>
+        <span class="n">ISBN</span>                <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getISBNs</span><span class="p">(),</span>
+        <span class="n">nazev</span>               <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getName</span><span class="p">(),</span>
+        <span class="n">podnazev</span>            <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getSubname</span><span class="p">(),</span>
+        <span class="n">vazba</span>               <span class="o">=</span> <span class="n">binding</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">binding</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">cena</span>                <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getPrice</span><span class="p">(),</span>
+        <span class="n">castDil</span>             <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getPart</span><span class="p">(),</span>
+        <span class="n">nazevCasti</span>          <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getPartName</span><span class="p">(),</span>
+        <span class="n">nakladatelVydavatel</span> <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getPublisher</span><span class="p">(),</span>
+        <span class="n">datumVydani</span>         <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getPubDate</span><span class="p">(),</span>
+        <span class="n">poradiVydani</span>        <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getPubOrder</span><span class="p">(),</span>
+        <span class="n">zpracovatelZaznamu</span>  <span class="o">=</span> <span class="n">zpracovatel</span><span class="p">,</span>
+        <span class="c"># mistoDistribuce     = mistoDistribuce,  # FUTURE</span>
+        <span class="c"># distributor         = distributor,</span>
+        <span class="c"># datumDistribuce     = datumDistribuce,</span>
+        <span class="c"># datumProCopyright   = &quot;&quot;,</span>
+        <span class="n">format</span>              <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getFormat</span><span class="p">(),</span>
+        <span class="n">url</span>                 <span class="o">=</span> <span class="n">url</span><span class="p">,</span>
+        <span class="n">mistoVydani</span>         <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getPubPlace</span><span class="p">(),</span>
+        <span class="n">ISBNSouboruPublikaci</span><span class="o">=</span> <span class="p">[],</span>
+        <span class="n">autori</span>              <span class="o">=</span> <span class="nb">map</span><span class="p">(</span>  <span class="c"># convert Persons to amqp&#39;s Authors</span>
+            <span class="k">lambda</span> <span class="n">a</span><span class="p">:</span> <span class="n">Author</span><span class="p">(</span>
+                <span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&quot; &quot;</span> <span class="o">+</span> <span class="n">a</span><span class="o">.</span><span class="n">second_name</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+                <span class="n">a</span><span class="o">.</span><span class="n">surname</span><span class="p">,</span>
+                <span class="n">a</span><span class="o">.</span><span class="n">title</span>
+            <span class="p">),</span>
+            <span class="n">parsed</span><span class="o">.</span><span class="n">getAuthors</span><span class="p">()</span>
+        <span class="p">),</span>
+        <span class="n">originaly</span>           <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">getOriginals</span><span class="p">(),</span>
+        <span class="n">internal_url</span>        <span class="o">=</span> <span class="s">&quot;&quot;</span>  <span class="c"># TODO</span>
+    <span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_serializeNT</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Serialize namedtuples (and other basic python types) to dictionary with</span>
+<span class="sd">    some special properties.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        data (namedtuple/other python types): Data which will be serialized to</span>
+<span class="sd">             dict.</span>
+
+<span class="sd">    Data can be later automatically de-serialized by calling _deserializeNT().</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">_serializeNT</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">data</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s">&quot;_fields&quot;</span><span class="p">):</span>  <span class="c"># is namedtuple</span>
+        <span class="n">serialized</span> <span class="o">=</span> <span class="n">_serializeNT</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">_asdict</span><span class="p">()))</span>
+        <span class="n">serialized</span><span class="p">[</span><span class="s">&quot;__nt_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+
+        <span class="k">return</span> <span class="n">serialized</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">_serializeNT</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">data</span><span class="p">))</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="nb">map</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">key</span><span class="p">:</span> <span class="p">[</span><span class="n">key</span><span class="p">,</span> <span class="n">_serializeNT</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">key</span><span class="p">])],</span>
+                <span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data</span>
+
+
+<div class="viewcode-block" id="toJSON"><a class="viewcode-back" href="../../api/aleph.convertors.html#aleph.convertors.toJSON">[docs]</a><span class="k">def</span> <span class="nf">toJSON</span><span class="p">(</span><span class="n">structure</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert structure to json.</span>
+
+<span class="sd">    This is necessary, because standard JSON module can&#39;t serialize</span>
+<span class="sd">    namedtuples.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        structure (namedtuple/basic python types): data which will be</span>
+<span class="sd">                  serialized to JSON.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        str: with serialized data.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">_serializeNT</span><span class="p">(</span><span class="n">structure</span><span class="p">))</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_deserializeNT</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Deserialize special kinds of dicts from _serializeNT().</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">_deserializeNT</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">data</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">_deserializeNT</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">data</span><span class="p">))</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="s">&quot;__nt_name&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>  <span class="c"># is namedtuple</span>
+        <span class="n">class_name</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s">&quot;__nt_name&quot;</span><span class="p">]</span>
+        <span class="k">del</span> <span class="n">data</span><span class="p">[</span><span class="s">&quot;__nt_name&quot;</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="nb">globals</span><span class="p">()[</span><span class="n">class_name</span><span class="p">](</span>
+            <span class="o">**</span><span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">_deserializeNT</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">())))</span>
+        <span class="p">)</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="nb">map</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">key</span><span class="p">:</span> <span class="p">[</span><span class="n">key</span><span class="p">,</span> <span class="n">_deserializeNT</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">key</span><span class="p">])],</span>
+                <span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">unicode</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&quot;utf-8&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data</span>
+
+
+<div class="viewcode-block" id="fromJSON"><a class="viewcode-back" href="../../api/aleph.convertors.html#aleph.convertors.fromJSON">[docs]</a><span class="k">def</span> <span class="nf">fromJSON</span><span class="p">(</span><span class="n">json_data</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert JSON string back to python structures.</span>
+
+<span class="sd">    This is necessary, because standard JSON module can&#39;t serialize</span>
+<span class="sd">    namedtuples.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        json_data (str): JSON string.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        python data/nameduple: with deserialized data.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_deserializeNT</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">json_data</span><span class="p">))</span></div>
+</pre></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

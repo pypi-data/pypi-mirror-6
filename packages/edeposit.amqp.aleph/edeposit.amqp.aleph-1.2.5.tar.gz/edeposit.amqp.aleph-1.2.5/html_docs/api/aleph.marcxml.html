@@ -1,0 +1,802 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>aleph.marcxml module</title>
+    
+    <link rel="stylesheet" href="../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="" href="../index.html" /> 
+  </head>
+  <body>
+      <div class="header"><img class="rightlogo" src="../_static/nkp_logo.png" alt="Logo"/><h1 class="heading"><a href="../index.html">
+          <span></span></a></h1>
+        <h2 class="heading"><span>aleph.marcxml module</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="module-aleph.marcxml">
+<span id="aleph-marcxml-module"></span><h1>aleph.marcxml module<a class="headerlink" href="#module-aleph.marcxml" title="Permalink to this headline">¶</a></h1>
+<p>Module for parsing and high-level processing of MARC XML records.</p>
+<p>About format and how the class work; Standard MARC record is made from
+three parts:</p>
+<ul class="simple">
+<li><cite>leader</cite> - binary something, you can probably ignore it</li>
+<li><cite>controlfileds</cite> - marc fields &lt; 10</li>
+<li><cite>datafields</cite> - important information you actually want</li>
+</ul>
+<p>Basic MARC XML scheme uses this structure:</p>
+<div class="highlight-python"><div class="highlight"><pre>&lt;record xmlns=definition..&gt;
+    &lt;leader&gt;optional_binary_something&lt;/leader&gt;
+    &lt;controlfield tag=&quot;001&quot;&gt;data&lt;/controlfield&gt;
+    ...
+    &lt;controlfield tag=&quot;010&quot;&gt;data&lt;/controlfield&gt;
+    &lt;datafield tag=&quot;011&quot; ind1=&quot; &quot; ind2=&quot; &quot;&gt;
+        &lt;subfield code=&quot;scode&quot;&gt;data&lt;/subfield&gt;
+        &lt;subfield code=&quot;a&quot;&gt;data&lt;/subfield&gt;
+        &lt;subfield code=&quot;a&quot;&gt;another data, but same code!&lt;/subfield&gt;
+        ...
+        &lt;subfield code&quot;scode+&quot;&gt;another data&lt;/subfield&gt;
+    &lt;/datafield&gt;
+    ...
+    &lt;datafield tag=&quot;999&quot; ind1=&quot; &quot; ind2=&quot; &quot;&gt;
+    ...
+    &lt;/datafield&gt;
+&lt;/record&gt;
+</pre></div>
+</div>
+<p><cite>&lt;leader&gt;</cite> is optional and it is parsed into <a class="reference internal" href="#aleph.marcxml.MARCXMLRecord.leader" title="aleph.marcxml.MARCXMLRecord.leader"><tt class="xref py py-class docutils literal"><span class="pre">MARCXMLRecord.leader</span></tt></a> as
+string.</p>
+<p><cite>&lt;controlfield&gt;s</cite> are optional and parsed as dictionary into
+<a class="reference internal" href="#aleph.marcxml.MARCXMLRecord.controlfields" title="aleph.marcxml.MARCXMLRecord.controlfields"><tt class="xref py py-class docutils literal"><span class="pre">MARCXMLRecord.controlfields</span></tt></a>, and dictionary for data from example
+would look like this:</p>
+<div class="highlight-python"><div class="highlight"><pre>MARCXMLRecord.controlfields = {
+    &quot;001&quot;: &quot;data&quot;,
+    ...
+    &quot;010&quot;: &quot;data&quot;
+}
+</pre></div>
+</div>
+<p><cite>&lt;datafield&gt;s</cite> are non-optional and are parsed into
+<a class="reference internal" href="#aleph.marcxml.MARCXMLRecord.datafields" title="aleph.marcxml.MARCXMLRecord.datafields"><tt class="xref py py-class docutils literal"><span class="pre">MARCXMLRecord.datafields</span></tt></a>, which is little bit more complicated
+dictionary. Complicated is mainly because tag parameter is not unique, so there
+can be more <cite>&lt;datafield&gt;s</cite> with same tag!</p>
+<p><cite>scode</cite> (subfield code) is always one character (ASCII lowercase), or number.</p>
+<p>Example dict:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">MARCXMLRecord</span><span class="o">.</span><span class="n">datafields</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&quot;011&quot;</span><span class="p">:</span> <span class="p">[{</span>
+        <span class="s">&quot;ind1&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+        <span class="s">&quot;ind2&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+        <span class="s">&quot;scode&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;data&quot;</span><span class="p">],</span>
+        <span class="s">&quot;scode+&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;another data&quot;</span><span class="p">]</span>
+    <span class="p">}],</span>
+
+    <span class="c"># real example</span>
+    <span class="s">&quot;928&quot;</span><span class="p">:</span> <span class="p">[{</span>
+        <span class="s">&quot;ind1&quot;</span><span class="p">:</span> <span class="s">&quot;1&quot;</span><span class="p">,</span>
+        <span class="s">&quot;ind2&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+        <span class="s">&quot;a&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;Portál&quot;</span><span class="p">]</span>
+    <span class="p">}],</span>
+
+    <span class="s">&quot;910&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s">&quot;ind1&quot;</span><span class="p">:</span> <span class="s">&quot;1&quot;</span><span class="p">,</span>
+            <span class="s">&quot;ind2&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+            <span class="s">&quot;a&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;ABA001&quot;</span><span class="p">]</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s">&quot;ind1&quot;</span><span class="p">:</span> <span class="s">&quot;2&quot;</span><span class="p">,</span>
+            <span class="s">&quot;ind2&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+            <span class="s">&quot;a&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;BOA001&quot;</span><span class="p">],</span>
+            <span class="s">&quot;b&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;2-1235.975&quot;</span><span class="p">]</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s">&quot;ind1&quot;</span><span class="p">:</span> <span class="s">&quot;3&quot;</span><span class="p">,</span>
+            <span class="s">&quot;ind2&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+            <span class="s">&quot;a&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;OLA001&quot;</span><span class="p">],</span>
+            <span class="s">&quot;b&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;1-218.844&quot;</span><span class="p">]</span>
+        <span class="p">}</span>
+    <span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>As you can see in <tt class="docutils literal"><span class="pre">910</span></tt> record example, sometimes there are multiple records
+in a list!</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">NOTICE, THAT RECORDS ARE STORED IN ARRAY, NO MATTER IF IT IS JUST ONE
+RECORD, OR MULTIPLE RECORDS. SAME APPLY TO SUBFIELDS.</p>
+</div>
+<p>Example above corresponds with this piece of code from real world:</p>
+<div class="highlight-python"><div class="highlight"><pre>&lt;datafield tag=&quot;910&quot; ind1=&quot;1&quot; ind2=&quot; &quot;&gt;
+&lt;subfield code=&quot;a&quot;&gt;ABA001&lt;/subfield&gt;
+&lt;/datafield&gt;
+&lt;datafield tag=&quot;910&quot; ind1=&quot;2&quot; ind2=&quot; &quot;&gt;
+&lt;subfield code=&quot;a&quot;&gt;BOA001&lt;/subfield&gt;
+&lt;subfield code=&quot;b&quot;&gt;2-1235.975&lt;/subfield&gt;
+&lt;/datafield&gt;
+&lt;datafield tag=&quot;910&quot; ind1=&quot;3&quot; ind2=&quot; &quot;&gt;
+&lt;subfield code=&quot;a&quot;&gt;OLA001&lt;/subfield&gt;
+&lt;subfield code=&quot;b&quot;&gt;1-218.844&lt;/subfield&gt;
+&lt;/datafield&gt;
+</pre></div>
+</div>
+<div class="section" id="oai">
+<h2>OAI<a class="headerlink" href="#oai" title="Permalink to this headline">¶</a></h2>
+<p>To prevent things to be too much simple, there is also another type of MARC
+XML document - OAI format.</p>
+<p>OAI documents are little bit different, but almost same in structure.</p>
+<p><cite>leader</cite> is optional and is stored in <tt class="docutils literal"><span class="pre">MARCXMLRecord.controlfields[&quot;LDR&quot;]</span></tt>,
+but also in <tt class="docutils literal"><span class="pre">MARCXMLRecord.leader</span></tt> for backward compatibility.</p>
+<p><cite>&lt;controlfield&gt;</cite> is renamed to <cite>&lt;fixfield&gt;</cite> and its &#8220;tag&#8221; parameter to &#8220;label&#8221;.</p>
+<p><cite>&lt;datafield&gt;</cite> tag is not named datafield, but <cite>&lt;varfield&gt;</cite>, &#8220;tag&#8221; parameter is
+&#8220;id&#8221; and ind1/ind2 are named i1/i2, but works the same way.</p>
+<p><cite>&lt;subfield&gt;s</cite> parameter &#8220;code&#8221; is renamed to &#8220;label&#8221;.</p>
+<p>Real world example:</p>
+<div class="highlight-python"><div class="highlight"><pre>&lt;oai_marc&gt;
+&lt;fixfield id=&quot;LDR&quot;&gt;-----nam-a22------aa4500&lt;/fixfield&gt;
+&lt;fixfield id=&quot;FMT&quot;&gt;BK&lt;/fixfield&gt;
+&lt;fixfield id=&quot;001&quot;&gt;cpk19990652691&lt;/fixfield&gt;
+&lt;fixfield id=&quot;003&quot;&gt;CZ-PrNK&lt;/fixfield&gt;
+&lt;fixfield id=&quot;005&quot;&gt;20130513104801.0&lt;/fixfield&gt;
+&lt;fixfield id=&quot;007&quot;&gt;tu&lt;/fixfield&gt;
+&lt;fixfield id=&quot;008&quot;&gt;990330m19981999xr-af--d------000-1-cze--&lt;/fixfield&gt;
+&lt;varfield id=&quot;015&quot; i1=&quot; &quot; i2=&quot; &quot;&gt;
+&lt;subfield label=&quot;a&quot;&gt;cnb000652691&lt;/subfield&gt;
+&lt;/varfield&gt;
+&lt;varfield id=&quot;020&quot; i1=&quot; &quot; i2=&quot; &quot;&gt;
+&lt;subfield label=&quot;a&quot;&gt;80-7174-091-8 (sv. 1 : váz.) :&lt;/subfield&gt;
+&lt;subfield label=&quot;c&quot;&gt;Kč 182,00&lt;/subfield&gt;
+&lt;/varfield&gt;
+...
+&lt;/oai_marc&gt;
+</pre></div>
+</div>
+</div>
+<div class="section" id="full-documentation">
+<h2>Full documentation<a class="headerlink" href="#full-documentation" title="Permalink to this headline">¶</a></h2>
+<p>Description of simplified MARCXML schema can be found at
+<a class="reference external" href="http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd">http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd</a></p>
+<p>Full description of MARCXML with definition of each element can be found at
+<a class="reference external" href="http://www.loc.gov/standards/marcxml/mrcbxmlfile.dtd">http://www.loc.gov/standards/marcxml/mrcbxmlfile.dtd</a> (19492 lines of code)</p>
+<p>Description of MARC OAI can be found at
+<a class="reference external" href="http://www.openarchives.org/OAI/oai_marc.xsd">http://www.openarchives.org/OAI/oai_marc.xsd</a></p>
+<dl class="class">
+<dt id="aleph.marcxml.Corporation">
+<em class="property">class </em><tt class="descclassname">aleph.marcxml.</tt><tt class="descname">Corporation</tt><a class="reference internal" href="../_modules/aleph/marcxml.html#Corporation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.Corporation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.marcxml.Corporation" title="aleph.marcxml.Corporation"><tt class="xref py py-class docutils literal"><span class="pre">aleph.marcxml.Corporation</span></tt></a></p>
+<p>Some informations about corporations (fields 110, 610, 710, 810).</p>
+<dl class="docutils">
+<dt>Properties:</dt>
+<dd>.name
+.place
+.date</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.marcxml.MARCXMLRecord">
+<em class="property">class </em><tt class="descclassname">aleph.marcxml.</tt><tt class="descname">MARCXMLRecord</tt><big>(</big><em>xml=None</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord" title="Permalink to this definition">¶</a></dt>
+<dd><p>Class for serialization/deserialization of MARCXML and MARC OAI
+documents.</p>
+<p>This class parses everything between <cite>&lt;root&gt;</cite> elements. It checks, if
+there is root element, so please, give it full XML.</p>
+<p>Internal format is described in module docstring. You can access
+internal data directly, or using few handy methods on two different
+levels of abstraction:</p>
+<p><strong>No abstraction at all</strong></p>
+<p>You can choose to access data directly and for this use, there is few
+important properties:</p>
+<dl class="attribute">
+<dt id="aleph.marcxml.MARCXMLRecord.leader">
+<tt class="descname">leader</tt><em class="property"> string</em><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.leader" title="Permalink to this definition">¶</a></dt>
+<dd><p>leader of MARC XML document</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.marcxml.MARCXMLRecord.oai_marc">
+<tt class="descname">oai_marc</tt><em class="property"> bool</em><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.oai_marc" title="Permalink to this definition">¶</a></dt>
+<dd><p>True/False, depending if doc is OAI doc or not</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.marcxml.MARCXMLRecord.controlfields">
+<tt class="descname">controlfields</tt><em class="property"> dict</em><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.controlfields" title="Permalink to this definition">¶</a></dt>
+<dd><p>Controlfields stored in dict.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.marcxml.MARCXMLRecord.datafields">
+<tt class="descname">datafields</tt><em class="property"> dict of arrays of dict of arrays of strings ^-^</em><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.datafields" title="Permalink to this definition">¶</a></dt>
+<dd><p>Datafileds stored in nested dicts/arrays.</p>
+</dd></dl>
+
+<p><cite>controlfields</cite> is simple and easy to use dictionary, where keys are
+field identificators (string, 3 chars, all chars digits). Value is
+always string.</p>
+<p><cite>datafields</cite> is little bit complicated; it is dictionary made of arrays of
+dictionaries, which consists of arrays of strings and two special
+parameters.</p>
+<p>It sounds horrible, but it is not that hard to understand:</p>
+<div class="highlight-python"><div class="highlight"><pre>.datafields = {
+    &quot;011&quot;: [&quot;ind1&quot;: &quot; &quot;, &quot;ind2&quot;: &quot; &quot;]  # array of 0 or more dicts
+    &quot;012&quot;: [
+        {
+            &quot;a&quot;: [&quot;a) subsection value&quot;],
+            &quot;b&quot;: [&quot;b) subsection value&quot;],
+            &quot;ind1&quot;: &quot; &quot;,
+            &quot;ind2&quot;: &quot; &quot;
+        },
+        {
+            &quot;a&quot;: [
+                &quot;multiple values in a) subsections are possible!&quot;,
+                &quot;another value in a) subsection&quot;
+            ],
+            &quot;c&quot;: [
+                &quot;subsection identificator is always one character long&quot;
+            ],
+            &quot;ind1&quot;: &quot; &quot;,
+            &quot;ind2&quot;: &quot; &quot;
+        }
+    ]
+}
+</pre></div>
+</div>
+<p>Notice <cite>ind1</cite>/<cite>ind2</cite> keywords, which are reserved indicators and used in
+few cases thru MARC standard.</p>
+<p>Dict structure is not that hard to understand, but kinda long to access,
+so there is also little bit more high-level abstraction access methods.</p>
+<p><strong>Lowlevel abstraction</strong></p>
+<p>To access data little bit easier, there are defined two methods to
+access and two methods to add data to internal dictionaries:</p>
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord..addControlField">
+<tt class="descclassname">.</tt><tt class="descname">addControlField</tt><big>(</big><em>name</em>, <em>value</em><big>)</big><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord..addControlField" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord..addDataField">
+<tt class="descclassname">.</tt><tt class="descname">addDataField</tt><big>(</big><em>name</em>, <em>i1</em>, <em>i2</em>, <em>subfields_dict</em><big>)</big><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord..addDataField" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>Names imho selfdescribing. <cite>subfields_dict</cite> is expected en enforced to be
+dictionary with one character long keys and list of strings as values.</p>
+<p>Getters are also simple to use:</p>
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord..getControlRecord">
+<tt class="descclassname">.</tt><tt class="descname">getControlRecord</tt><big>(</big><em>controlfield</em><big>)</big><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord..getControlRecord" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord..getDataRecords">
+<tt class="descclassname">.</tt><tt class="descname">getDataRecords</tt><big>(</big><em>datafield</em>, <em>subfield</em>, <em>throw_exceptions</em><big>)</big><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord..getDataRecords" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p><tt class="docutils literal"><span class="pre">.getControlRecord()</span></tt> is basically just wrapper over .controlfields and
+works same way as accessing .controlfields[controlfield]</p>
+<p><tt class="docutils literal"><span class="pre">.getDataRecords(datafield,</span> <span class="pre">subfield,</span> <span class="pre">throw_exceptions)</span></tt> return list of
+<tt class="docutils literal"><span class="pre">MarcSubrecord</span></tt> objects* with informations from section <cite>datafield</cite>
+subsection <cite>subfield</cite>.</p>
+<p>If throw_exceptions parameter is set to False, method returns empty list
+instead of throwing <tt class="docutils literal"><span class="pre">KeyError</span></tt>.</p>
+<p><a href="#id1"><span class="problematic" id="id2">*</span></a>As I said, function returns list of MarcSubrecord objects. They are
+almost same thing as normal strings (they are actually subclassed
+strings), but defines few important methods, which can make your life
+little bit easier:</p>
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord..getI1">
+<tt class="descclassname">.</tt><tt class="descname">getI1</tt><big>(</big><big>)</big><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord..getI1" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord..getI2">
+<tt class="descclassname">.</tt><tt class="descname">getI2</tt><big>(</big><big>)</big><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord..getI2" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord..getOtherSubfiedls">
+<tt class="descclassname">.</tt><tt class="descname">getOtherSubfiedls</tt><big>(</big><big>)</big><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord..getOtherSubfiedls" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p><cite>.getOtherSubfiedls()</cite> returns dictionary with other subsections, as
+subfield requested by calling .getDataRecords().</p>
+<p><strong>Highlevel abstractions</strong></p>
+<p>There is also lot of highlevel getters:</p>
+<div class="highlight-python"><div class="highlight"><pre>.getName()
+.getSubname()
+.getPrice()
+.getPart()
+.getPartName()
+.getPublisher()
+.getPubDate()
+.getPubOrder()
+.getFormat()
+.getPubPlace()
+.getAuthors()
+.getCorporations()
+.getDistributors()
+.getISBNs()
+.getBinding()
+.getOriginals()
+</pre></div>
+</div>
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.addControlField">
+<tt class="descname">addControlField</tt><big>(</big><em>name</em>, <em>value</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.addControlField"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.addControlField" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.addDataField">
+<tt class="descname">addDataField</tt><big>(</big><em>name</em>, <em>i1</em>, <em>i2</em>, <em>subfields_dict</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.addDataField"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.addDataField" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add new datafield into self.datafields.</p>
+<p>name &#8211; name of datafield
+i1 &#8211; value of i1/ind1 parameter
+i2 &#8211; value of i2/ind2 parameter
+subfields_dict &#8211; dictionary containing subfields in this format:</p>
+<dl class="docutils">
+<dt>{</dt>
+<dd>&#8220;field_id&#8221;: [&#8220;subfield data&#8221;,],
+...
+&#8220;z&#8221;: [&#8220;X0456b&#8221;]</dd>
+</dl>
+<p>}</p>
+<p>field_id can be only one characted long!</p>
+<p>Function takes care of OAI MARC.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getAuthors">
+<tt class="descname">getAuthors</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getAuthors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getAuthors" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+authors represented as Person objects</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getBinding">
+<tt class="descname">getBinding</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getBinding"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getBinding" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+array of strings with bindings ([&#8220;brož.&#8221;]) or blank list</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getControlRecord">
+<tt class="descname">getControlRecord</tt><big>(</big><em>controlfield</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getControlRecord"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getControlRecord" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return record from given <cite>controlfield</cite>. Returned type: str.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getCorporations">
+<tt class="descname">getCorporations</tt><big>(</big><em>roles=['dst']</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getCorporations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getCorporations" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>roles</strong> (<em>list, optional</em>) &#8211;
+specify which types of corporations you
+need. Set to [&#8220;any&#8221;] for any role, [&#8220;dst&#8221;] for distributors,
+etc.. See <a class="reference external" href="http://www.loc.gov/marc/relators/relaterm.html">http://www.loc.gov/marc/relators/relaterm.html</a> for
+details.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+<a class="reference internal" href="#aleph.marcxml.Corporation" title="aleph.marcxml.Corporation"><tt class="xref py py-class docutils literal"><span class="pre">Corporation</span></tt></a> objects specified by roles parameter.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getDataRecords">
+<tt class="descname">getDataRecords</tt><big>(</big><em>datafield</em>, <em>subfield</em>, <em>throw_exceptions=True</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getDataRecords"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getDataRecords" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return content of given subfield in datafield.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>datafield</strong> (<em>str</em>) &#8211;
+Section name (for example &#8220;001&#8221;, &#8220;100&#8221;, &#8220;700&#8221;)</li>
+<li><strong>subfield</strong> (<em>str</em>) &#8211;
+Subfield name (for example &#8220;a&#8221;, &#8220;1&#8221;, etc..)</li>
+<li><strong>throw_exceptions</strong> (<em>bool</em>) &#8211;
+If True, KeyError is raised if method
+couldnt found given datafield/subfield. If
+false, blank array [] is returned.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Returns list of <a class="reference internal" href="#aleph.marcxml.MarcSubrecord" title="aleph.marcxml.MarcSubrecord"><tt class="xref py py-class docutils literal"><span class="pre">MarcSubrecord</span></tt></a>. MarcSubrecord is practically
+same thing as string, but has defined <cite>.getI1()</cite> and <cite>.getI2()</cite>
+properties. Believe me, you will need to be able to get this, because
+MARC XML depends on them from time to time (name of authors for
+example).</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getDistributors">
+<tt class="descname">getDistributors</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getDistributors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getDistributors" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+distributors represented as <a class="reference internal" href="#aleph.marcxml.Corporation" title="aleph.marcxml.Corporation"><tt class="xref py py-class docutils literal"><span class="pre">Corporation</span></tt></a> object</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getFormat">
+<tt class="descname">getFormat</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getFormat"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getFormat" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+dimensions of the book (&#8216;23 cm&#8217; for example)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getI">
+<tt class="descname">getI</tt><big>(</big><em>num</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getI"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getI" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method is used mainly internally, but it can be handy if you work
+with with raw MARC XML object and not using getters.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+current name of i1/ind1 parameter based on <tt class="docutils literal"><span class="pre">self.oai_marc</span></tt>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getISBNs">
+<tt class="descname">getISBNs</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getISBNs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getISBNs" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+array with ISBN strings</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getName">
+<tt class="descname">getName</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getName"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getName" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+Name of the book.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body"><tt class="xref py py-exc docutils literal"><span class="pre">KeyError</span></tt> &#8211; 
+when name is not specified.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getOriginals">
+<tt class="descname">getOriginals</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getOriginals"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getOriginals" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+of original names</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPart">
+<tt class="descname">getPart</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getPart"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPart" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+Which part of the book series is this record.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPartName">
+<tt class="descname">getPartName</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getPartName"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPartName" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+Name of the part of the series.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPrice">
+<tt class="descname">getPrice</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getPrice"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPrice" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+Price of the book (with currency).</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPubDate">
+<tt class="descname">getPubDate</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getPubDate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPubDate" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+date of publication (month and year usually)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPubOrder">
+<tt class="descname">getPubOrder</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getPubOrder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPubOrder" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+information about order in which was the book published</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPubPlace">
+<tt class="descname">getPubPlace</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getPubPlace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPubPlace" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+name of city/country where the book was published</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPublisher">
+<tt class="descname">getPublisher</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getPublisher"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPublisher" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+name of the publisher (&#8220;Grada&#8221; for example)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getSubname">
+<tt class="descname">getSubname</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.getSubname"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getSubname" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+Subname of the book.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.toXML">
+<tt class="descname">toXML</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MARCXMLRecord.toXML"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.toXML" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert object back to XML string.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+string which should be same as original, parsed input, if<blockquote>
+<div>everything works as expected</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.marcxml.MarcSubrecord">
+<em class="property">class </em><tt class="descclassname">aleph.marcxml.</tt><tt class="descname">MarcSubrecord</tt><big>(</big><em>arg</em>, <em>ind1</em>, <em>ind2</em>, <em>other_subfields</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MarcSubrecord"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MarcSubrecord" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">str</span></tt></p>
+<p>This class is used to stored data returned from <tt class="docutils literal"><span class="pre">.getDataRecords()</span></tt>
+method from MARCXMLRecord.</p>
+<p>It looks kinda like overshot, but when you are parsing the MARC XML,
+values from subrecords, you need to know the context in which the subrecord
+is put.</p>
+<p>Specifically the i1/i2 values, but sometimes is usefull to have acces even
+to the other subfields from this subrecord.</p>
+<p>This class provides this acces thru .getI1()/.getI2() and
+.getOtherSubfiedls() getters. As a bonus, it is also fully convertable to
+string, in which case only the value of subrecord is preserved.</p>
+<dl class="attribute">
+<dt id="aleph.marcxml.MarcSubrecord.arg">
+<tt class="descname">arg</tt><em class="property"> str</em><a class="headerlink" href="#aleph.marcxml.MarcSubrecord.arg" title="Permalink to this definition">¶</a></dt>
+<dd><p>value of subrecord</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.marcxml.MarcSubrecord.ind1">
+<tt class="descname">ind1</tt><em class="property"> char</em><a class="headerlink" href="#aleph.marcxml.MarcSubrecord.ind1" title="Permalink to this definition">¶</a></dt>
+<dd><p>indicator one</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.marcxml.MarcSubrecord.ind2">
+<tt class="descname">ind2</tt><em class="property"> char</em><a class="headerlink" href="#aleph.marcxml.MarcSubrecord.ind2" title="Permalink to this definition">¶</a></dt>
+<dd><p>indicator two</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.marcxml.MarcSubrecord.other_subfields">
+<tt class="descname">other_subfields</tt><em class="property"> dict</em><a class="headerlink" href="#aleph.marcxml.MarcSubrecord.other_subfields" title="Permalink to this definition">¶</a></dt>
+<dd><p>dictionary with other subfields from the same
+subrecord</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MarcSubrecord.getI1">
+<tt class="descname">getI1</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MarcSubrecord.getI1"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MarcSubrecord.getI1" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MarcSubrecord.getI2">
+<tt class="descname">getI2</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MarcSubrecord.getI2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MarcSubrecord.getI2" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MarcSubrecord.getOtherSubfiedls">
+<tt class="descname">getOtherSubfiedls</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#MarcSubrecord.getOtherSubfiedls"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MarcSubrecord.getOtherSubfiedls" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.marcxml.Person">
+<em class="property">class </em><tt class="descclassname">aleph.marcxml.</tt><tt class="descname">Person</tt><a class="reference internal" href="../_modules/aleph/marcxml.html#Person"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.Person" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.marcxml.Person" title="aleph.marcxml.Person"><tt class="xref py py-class docutils literal"><span class="pre">aleph.marcxml.Person</span></tt></a></p>
+<p>This class represents informations about persons as they are defined in
+MARC standards.</p>
+<dl class="attribute">
+<dt id="aleph.marcxml.Person.name">
+<tt class="descname">name</tt><em class="property"> str</em><a class="headerlink" href="#aleph.marcxml.Person.name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.marcxml.Person.second_name">
+<tt class="descname">second_name</tt><em class="property"> str</em><a class="headerlink" href="#aleph.marcxml.Person.second_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.marcxml.Person.surname">
+<tt class="descname">surname</tt><em class="property"> str</em><a class="headerlink" href="#aleph.marcxml.Person.surname" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.marcxml.Person.title">
+<tt class="descname">title</tt><em class="property"> str</em><a class="headerlink" href="#aleph.marcxml.Person.title" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.marcxml.resorted">
+<tt class="descclassname">aleph.marcxml.</tt><tt class="descname">resorted</tt><big>(</big><em>values</em><big>)</big><a class="reference internal" href="../_modules/aleph/marcxml.html#resorted"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.resorted" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sort values, but put numbers after alphabetically sorted words.</p>
+<p>This function is here for outputs, to be diff-compatible with aleph.</p>
+<p>Example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">([</span><span class="s">&quot;b&quot;</span><span class="p">,</span> <span class="s">&quot;1&quot;</span><span class="p">,</span> <span class="s">&quot;a&quot;</span><span class="p">])</span>
+<span class="go">[&#39;1&#39;, &#39;a&#39;, &#39;b&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">resorted</span><span class="p">([</span><span class="s">&quot;b&quot;</span><span class="p">,</span> <span class="s">&quot;1&quot;</span><span class="p">,</span> <span class="s">&quot;a&quot;</span><span class="p">])</span>
+<span class="go">[&#39;a&#39;, &#39;b&#39;, &#39;1&#39;]</span>
+</pre></div>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>values</strong> (<em>iterable</em>) &#8211;
+any iterable object/list/tuple/whatever.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">list of sorted values, but with numbers after words</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
