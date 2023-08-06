@@ -1,0 +1,94 @@
+#!/usr/bin/python
+
+import sys
+import os
+import argparse
+import cx_Oracle
+
+classes = ('external', 'brain', 'csf', 'gm', 'wm') 
+
+progname = os.path.basename(sys.argv[0])
+
+description = 'Store structural QA results in an NDAR database.'
+parser = argparse.ArgumentParser(description=description)
+
+parser.add_argument('--file-name', 
+                    required=True, 
+                    help='original file name (from image03)')
+parser.add_argument('qa_dir', 
+                    help='path to QA directory')
+
+args = parser.parse_args()
+
+for var in ('DB_HOST', 'DB_SERVICE', 'DB_USER', 'DB_PASSWORD'):
+    if var not in os.environ:
+        sys.stderr.write('%s: %s not set\n' % (progname, var))
+        sys.exit(1)
+
+if not os.path.isdir(args.qa_dir):
+    sys.stderr.write('%s: %s: not a directory\n' % (progname, args.first_dir))
+    sys.exit(1)
+
+# vals[tissue class] = values
+vals = {}
+for c in classes:
+    fname = os.path.join(args.qa_dir, '%s.stats' % c)
+    print 'reading %s...' % fname
+    try:
+        fo = open(fname)
+    except IOError, data:
+        sys.stderr.write('%s: %s\n' % (progname, str(data)))
+        sys.exit(1)
+    str_vals = fo.readline().split()
+    fo.close()
+    vals[c] = {'min': float(str_vals[0]), 
+               'max': float(str_vals[1]), 
+               'robust_min': float(str_vals[2]), 
+               'robust_max': float(str_vals[3]), 
+               'mean': float(str_vals[4]), 
+               'std': float(str_vals[5]), 
+               'voxels': int(str_vals[6]), 
+               'volume': float(str_vals[7])}
+
+try:
+    snr = vals['brain']['mean'] / vals['external']['std']
+except ZeroDivisionError:
+    snr = None
+
+print 'updating database...'
+
+dsn = cx_Oracle.makedsn(os.environ['DB_HOST'], 1521, os.environ['DB_SERVICE'])
+try:
+    db = cx_Oracle.connect(os.environ['DB_USER'], 
+                           os.environ['DB_PASSWORD'], 
+                           dsn)
+except Exception, data:
+    sys.stderr.write('%s: %s\n' % (progname, str(data)))
+    sys.exit(1)
+
+query_cols = ['file_source', 'snr']
+query_params = {'file_source': args.file_name, 
+                'snr': snr}
+
+for c in classes:
+    for val_type in vals[c]:
+        col = '%s_%s' % (c, val_type)
+        query_cols.append(col)
+        query_params[col] = vals[c][val_type]
+
+query = 'INSERT INTO imaging_qa01'
+query += '(%s) ' % ', '.join(query_cols)
+query += 'VALUES '
+query += '(%s)' % ', '.join([':%s' % col for col in query_cols])
+
+c = db.cursor()
+c.execute(query, query_params)
+c.close()
+
+db.commit()
+
+db.close()
+
+print 'done'
+
+# eof

@@ -1,0 +1,158 @@
+#!/usr/bin/python
+
+import sys
+import os
+import argparse
+import cx_Oracle
+
+# FreeSurfer structure name -> database column name
+cols = {'Left-Lateral-Ventricle': 'left_lateral_ventricle',
+        'Left-Inf-Lat-Vent': 'left_inf_lat_vent',
+        'Left-Cerebellum-Cortex': 'left_cerebellum_cortex',
+        'Left-Thalamus-Proper': 'left_thalamus_proper',
+        'Left-Caudate': 'left_caudate',
+        'Left-Putamen': 'left_putamen',
+        'Left-Pallidum': 'left_pallidum',
+        'Brain-Stem': 'brain_stem',
+        'Left-Hippocampus': 'left_hippocampus',
+        'Left-Amygdala': 'left_amygdala',
+        'CSF': 'csf',
+        'Left-Accumbens-area': 'left_accumbens_area',
+        'Left-VentralDC': 'left_ventraldc',
+        'Right-Lateral-Ventricle': 'right_lateral_ventricle',
+        'Right-Inf-Lat-Vent': 'right_inf_lat_vent',
+        'Right-Cerebellum-Cortex': 'right_cerebellum_cortex',
+        'Right-Thalamus-Proper': 'right_thalamus_proper',
+        'Right-Caudate': 'right_caudate',
+        'Right-Putamen': 'right_putamen',
+        'Right-Pallidum': 'right_pallidum',
+        'Right-Hippocampus': 'right_hippocampus',
+        'Right-Amygdala': 'right_amygdala',
+        'Right-Accumbens-area': 'right_accumbens_area',
+        'Right-VentralDC': 'right_ventraldc',
+        'Optic-Chiasm': 'optic_chiasm', 
+        'Left-Cerebellum-White-Matter': 'left_cerebellum_wht_mtr', 
+        '3rd-Ventricle': 'third_ventricle', 
+        '4th-Ventricle': 'fourth_ventricle', 
+        'Right-Cerebellum-White-Matter': 'right_cerebellum_wht_mtr', 
+        '5th-Ventricle': 'fifth_ventricle'}
+
+progname = os.path.basename(sys.argv[0])
+
+description = 'Store FreeSurfer results in an NDAR database.'
+parser = argparse.ArgumentParser(description=description)
+
+parser.add_argument('--pipeline', 
+                    required=True, 
+                    choices=('NITRC', 'LONI'), 
+                    help='pipeline method')
+parser.add_argument('--file-name', 
+                    required=True, 
+                    help='original file name (from image03)')
+parser.add_argument('--subjectkey', 
+                    required=True)
+parser.add_argument('--interview-age', 
+                    required=True, 
+                    type=int)
+parser.add_argument('--image03-id', 
+                    required=True, 
+                    type=int)
+parser.add_argument('aseg_stats_file', 
+                    help='path to aseg.stats')
+
+args = parser.parse_args()
+
+for var in ('DB_HOST', 'DB_SERVICE', 'DB_USER', 'DB_PASSWORD'):
+    if var not in os.environ:
+        sys.stderr.write('%s: %s not set\n' % (progname, var))
+        sys.exit(1)
+
+print 'reading %s...' % args.aseg_stats_file
+
+try:
+    fo = open(args.aseg_stats_file)
+except Exception, data:
+    sys.stderr.write('%s: %s\n' % (progname, str(data)))
+    sys.exit(1)
+
+vols = {}
+headers = None
+for (line_no, line) in enumerate(fo):
+    if line.startswith('# ColHeaders'):
+        headers = line.split()[2:]
+        for col in ('StructName', 'Volume_mm3'):
+            if col not in headers:
+                sys.stderr.write('%s: %s not in ColHeaders\n' % (progname, col))
+                sys.exit(1)
+    elif line.startswith('#'):
+        pass
+    else:
+        row = line.split()
+        if not headers:
+            fmt = '%s: data before ColHeaders on line %d of %s\n'
+            sys.stderr.write(fmt % (progname, line_no+1, args.aseg_stats_file))
+            sys.exit(1)
+        row_dict = dict(zip(headers, row))
+        try:
+            col = cols[row_dict['StructName']]
+        except KeyError:
+            continue
+        try:
+            vol = float(row_dict['Volume_mm3'])
+        except ValueError:
+            fmt = '%s: bad volume on line %d of %s\n'
+            sys.stderr.write(fmt % (progname, line_no+1, args.aseg_stats_file))
+            sys.exit(1)
+        vols[col] = vol
+
+missing_structures = []
+for (fs, col) in cols.iteritems():
+    if col not in vols:
+        missing_structures.append(fs)
+        vols[col] = None
+if len(missing_structures) == len(cols):
+    fmt = '%s: no structures of interest found in %s\n'
+    sys.stderr.write(fmt % (progname, args.aseg_stats_file))
+    sys.exit(1)
+if missing_structures:
+    print 'WARNING: not found in %s:' % args.aseg_stats_file
+    for s in missing_structures:
+        print '    %s' % s
+
+fo.close()
+
+print 'updating database...'
+
+dsn = cx_Oracle.makedsn(os.environ['DB_HOST'], 1521, os.environ['DB_SERVICE'])
+db = cx_Oracle.connect(os.environ['DB_USER'], os.environ['DB_PASSWORD'], dsn)
+
+query_cols = ['file_name', 
+              'pipeline', 
+              'subjectkey', 
+              'interview_age', 
+              'image03_id']
+query_cols.extend(cols.itervalues())
+
+query = 'INSERT INTO freesurfer_structures '
+query += '(%s) ' % ', '.join(query_cols)
+query += 'VALUES '
+query += '(%s)' % ', '.join([':%s' % col for col in query_cols])
+
+query_params = dict(vols)
+query_params['file_name'] = args.file_name
+query_params['pipeline'] = args.pipeline
+query_params['subjectkey'] = args.subjectkey
+query_params['interview_age'] = args.interview_age
+query_params['image03_id'] = args.image03_id
+
+c = db.cursor()
+c.execute(query, query_params)
+c.close()
+
+db.commit()
+
+db.close()
+
+print 'done'
+
+# eof

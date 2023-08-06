@@ -1,0 +1,186 @@
+#!/usr/bin/python
+
+import sys
+import os
+import argparse
+import cx_Oracle
+
+# FIRST structure name -> database column name
+cols = {'Left-Thalamus-Proper': 'left_thalamus_proper',
+        'Left-Caudate': 'left_caudate',
+        'Left-Putamen': 'left_putamen',
+        'Left-Pallidum': 'left_pallidum',
+        'Brain-Stem': 'brain_stem',
+        'Left-Hippocampus': 'left_hippocampus',
+        'Left-Amygdala': 'left_amygdala',
+        'CSF': 'csf',
+        'Left-Accumbens-area': 'left_accumbens_area',
+        'Right-Thalamus-Proper': 'right_thalamus_proper',
+        'Right-Caudate': 'right_caudate',
+        'Right-Putamen': 'right_putamen',
+        'Right-Pallidum': 'right_pallidum',
+        'Right-Hippocampus': 'right_hippocampus',
+        'Right-Amygdala': 'right_amygdala',
+        'Right-Accumbens-area': 'right_accumbens_area'}
+
+# database column name -> file name
+files = (['brain_stem_file', 'first-BrStem_first.vtk'], 
+         ['left_accumbens_area_file', 'first-L_Accu_first.vtk'], 
+         ['left_amygdala_file', 'first-L_Amyg_first.vtk'], 
+         ['left_caudate_file', 'first-L_Caud_first.vtk'], 
+         ['left_hippocampus_file', 'first-L_Hipp_first.vtk'], 
+         ['left_pallidum_file', 'first-L_Pall_first.vtk'], 
+         ['left_putamen_file', 'first-L_Puta_first.vtk'], 
+         ['left_thalamus_proper_file', 'first-L_Thal_first.vtk'], 
+         ['right_accumbens_area_file', 'first-R_Accu_first.vtk'], 
+         ['right_amygdala_file', 'first-R_Amyg_first.vtk'], 
+         ['right_caudate_file', 'first-R_Caud_first.vtk'], 
+         ['right_hippocampus_file', 'first-R_Hipp_first.vtk'], 
+         ['right_pallidum_file', 'first-R_Pall_first.vtk'], 
+         ['right_putamen_file', 'first-R_Puta_first.vtk'], 
+         ['right_thalamus_proper_file', 'first-R_Thal_first.vtk'])
+
+progname = os.path.basename(sys.argv[0])
+
+description = 'Store FIRST results in an NDAR database.'
+parser = argparse.ArgumentParser(description=description)
+
+parser.add_argument('--pipeline', 
+                    required=True, 
+                    choices=('NITRC', 'LONI'), 
+                    help='pipeline method')
+parser.add_argument('--file-name', 
+                    required=True, 
+                    help='original file name (from image03)')
+parser.add_argument('--subjectkey', 
+                    required=True)
+parser.add_argument('--interview-age', 
+                    required=True, 
+                    type=int)
+parser.add_argument('--image03-id', 
+                    required=True, 
+                    type=int)
+parser.add_argument('first_dir', 
+                    help='path to FIRST directory')
+
+args = parser.parse_args()
+
+for var in ('DB_HOST', 'DB_SERVICE', 'DB_USER', 'DB_PASSWORD'):
+    if var not in os.environ:
+        sys.stderr.write('%s: %s not set\n' % (progname, var))
+        sys.exit(1)
+
+if not os.path.isdir(args.first_dir):
+    sys.stderr.write('%s: %s: not a directory\n' % (progname, args.first_dir))
+    sys.exit(1)
+
+stats_file = os.path.join(args.first_dir, 'first.stats')
+
+missing_files = []
+for i in xrange(len(files)):
+    (col, fname) = files[i]
+    full_fname = os.path.join(args.first_dir, fname)
+    if not os.path.exists(full_fname):
+        missing_files.append(fname)
+        files[i][1] = None
+
+if missing_files:
+    print 'WARNING: missing files:'
+    for f in missing_files:
+        print '    %s' % f
+
+print 'reading first.stats...'
+
+try:
+    fo = open(os.path.join(args.first_dir, 'first.stats'))
+except Exception, data:
+    sys.stderr.write('%s: %s\n' % (progname, str(data)))
+    sys.exit(1)
+
+vols = {}
+headers = None
+for (line_no, line) in enumerate(fo):
+    if line.startswith('# ColHeaders'):
+        headers = line.split()[2:]
+        for col in ('StructName', 'Volume_mm3'):
+            if col not in headers:
+                sys.stderr.write('%s: %s not in ColHeaders\n' % (progname, col))
+                sys.exit(1)
+    elif line.startswith('#'):
+        pass
+    else:
+        row = line.split()
+        if not headers:
+            fmt = '%s: data before ColHeaders on line %d of %s\n'
+            sys.stderr.write(fmt % (progname, line_no+1, stats_file))
+            sys.exit(1)
+        row_dict = dict(zip(headers, row))
+        try:
+            col = cols[row_dict['StructName']]
+        except KeyError:
+            continue
+        try:
+            vol = float(row_dict['Volume_mm3'])
+        except ValueError:
+            fmt = '%s: bad volume on line %d of %s\n'
+            sys.stderr.write(fmt % (progname, line_no+1, stats_file))
+            sys.exit(1)
+        vols[col] = vol
+
+missing_structures = []
+for (fs, col) in cols.iteritems():
+    if col not in vols:
+        missing_structures.append(fs)
+        vols[col] = None
+if len(missing_structures) == len(cols):
+    fmt = '%s: no structures of interest found in %s\n'
+    sys.stderr.write(fmt % (progname, stats_file))
+    sys.exit(1)
+if missing_structures:
+    print 'WARNING: not found in %s:' % stats_file
+    for s in missing_structures:
+        print '    %s' % s
+
+fo.close()
+
+print 'updating database...'
+
+dsn = cx_Oracle.makedsn(os.environ['DB_HOST'], 1521, os.environ['DB_SERVICE'])
+db = cx_Oracle.connect(os.environ['DB_USER'], os.environ['DB_PASSWORD'], dsn)
+
+c = db.cursor()
+
+query_cols = ['file_name', 
+              'pipeline', 
+              'subjectkey', 
+              'interview_age', 
+              'image03_id']
+query_cols.extend(cols.itervalues())
+query_cols.extend([ el[0] for el in files ])
+
+query = 'INSERT INTO first_structures '
+query += '(%s) ' % ', '.join(query_cols)
+query += 'VALUES '
+query += '(%s)' % ', '.join([':%s' % col for col in query_cols])
+
+query_params = dict(vols)
+query_params['file_name'] = args.file_name
+query_params['pipeline'] = args.pipeline
+query_params['subjectkey'] = args.subjectkey
+query_params['interview_age'] = args.interview_age
+query_params['image03_id'] = args.image03_id
+
+for (col, fname) in files:
+    query_params[col] = fname
+
+c.execute(query, query_params)
+
+c.close()
+
+db.commit()
+
+db.close()
+
+print 'done'
+
+# eof
