@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load url from future %}
+{% load gravatar %}
+{% load hk_generic %}
+
+
+{% block title %}
+Search results for "{{ query }}"{% if mlist %} - {{ mlist.display_name|default:mlist.name|escapeemail }} {% endif %} - {{ app_name|title }}
+{% endblock %}
+
+{% block content %}
+
+<div class="row-fluid">
+
+{% include 'threads/month_list.html' %}
+
+    <div id="thread-list" class="span8">
+
+        <div class="thread-list-header page-header">
+            {% if mlist %}
+            <h1>{{ mlist.display_name|default:mlist.name|escapeemail }}
+                <small>Search results for query "{{ query }}"</small>
+            </h1>
+            {% else %}
+            <h1>Search results
+            <small>for query "{{ query }}"</small>
+            </h1>
+            {% endif %}
+            <ul class="thread-list-info">
+                {% if mlist.display_name %}
+                <li class="list-address">
+                    {{ mlist.name|escapeemail }}
+                </li>
+                {% endif %}
+                <li class="discussion">
+                    {{ total }} messages
+                </li>
+            </ul>
+
+            <form method="get" action="{% url 'search' %}" class="form-inline">
+                <input type="hidden" name="query" value="{{ query|escape }}" />
+                <input type="hidden" name="page" value="{{ messages.number }}" />
+                {% if mlist %}<input type="hidden" name="list" value="{{ mlist.name }}" />{% endif %}
+                <p>
+                Sort mode:
+                <select name="sort">
+                    <option value="score"
+                        {% if sort_mode == "score" %}selected{% endif %}
+                        >score</option>
+                    <option value="date-desc"
+                        {% if sort_mode == "date-desc" %}selected{% endif %}
+                        >latest first</option>
+                    <option value="date-asc"
+                        {% if sort_mode == "date-asc" %}selected{% endif %}
+                        >earliest first</option>
+                </select>
+                <button type="submit" class="btn btn-small">Update</button>
+                </p>
+            </form>
+
+        </div>
+
+
+        {% if query %}
+            {% for message in messages %}
+                {% include "messages/summary_message.html" %}
+            {% empty %}
+                <p>Sorry no email could be found for this query.</p>
+            {% endfor %}
+        {% else %}
+            <p>Sorry but your query looks empty.</p>
+            <p style="font-style:italic;font-size:small;color:#ccc">these are not the messages you are looking for</p>
+        {% endif %}
+
+        {% include "paginator.html" with pager=messages notbydate=True %}
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block additionaljs %}
+<script>
+$(document).ready(function() {
+    $('span.expander').expander({
+        slicePoint: 500,
+        userCollapseText : '\n[View Less]',
+        expandText : '\n[View More]',
+        beforeExpand: function() {
+            $(this).removeClass("collapsed");
+            $(this).addClass("expanded");
+        },
+        onCollapse: function() {
+            $(this).removeClass("expanded");
+            $(this).addClass("collapsed");
+        }
+    });
+});
+</script>
+{% endblock %}
