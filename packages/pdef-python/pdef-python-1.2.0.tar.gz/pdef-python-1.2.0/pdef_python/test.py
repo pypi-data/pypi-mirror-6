@@ -1,0 +1,164 @@
+# encoding: utf-8
+import unittest
+from pdefc.lang.packages import Package
+from pdef_python import PythonGenerator, _PythonFilters, PYTHON_NATIVE_REFS
+from pdefc.generators import ModuleMapper
+from pdefc.lang import *
+
+
+class TestPythonGenerator(unittest.TestCase):
+    def test_filename(self):
+        package = Package('test')
+        module = Module('service.module')
+        module.package = package
+
+        generator = PythonGenerator('/tmp')
+        filename = generator._filename(module)
+        assert filename == 'test/service/module/protocol.py'
+
+    def test_render_module(self):
+        msg = Message('Message')
+        iface = Interface('Interface')
+        enum = Enum('Enum')
+        imported = Module('imported.module')
+
+        module = Module('test', definitions=[msg, iface, enum])
+        module.add_imported_module(imported)
+        module.link()
+
+        generator = PythonGenerator('/dev/null')
+        code = generator._render_module(module)
+        assert code
+
+    def test_render_message(self):
+        enum = Enum('Type')
+        type0 = enum.create_value('MESSAGE')
+
+        base = Message('Base')
+        base.create_field('type', enum, is_discriminator=True)
+
+        msg = Message('Message', base=base, discriminator_value=type0)
+        msg.create_field('field', NativeType.BOOL)
+
+        generator = PythonGenerator('/dev/null')
+        code = generator._render_definition(msg)
+        assert code
+
+    def test_render_enum(self):
+        enum = Enum('Number')
+        enum.create_value('ONE')
+        enum.create_value('TWO')
+        enum.create_value('THREE')
+        module = Module('test', definitions=[enum])
+        module.link()
+
+        generator = PythonGenerator('/dev/null')
+        code = generator._render_definition(enum)
+        assert code
+
+    def test_render_interface(self):
+        exc = Message('Exception', is_exception=True)
+
+        base = Interface('Base')
+        iface = Interface('Interface', base=base, exc=exc)
+        iface.create_method('method0', NativeType.INT32, [('arg', NativeType.INT32)])
+        iface.create_method('method1', NativeType.STRING, [('name', NativeType.STRING)])
+
+        generator = PythonGenerator('/dev/null')
+        code = generator._render_definition(iface)
+        assert code
+
+
+class TestPythonFilters(unittest.TestCase):
+    def setUp(self):
+        self.filters = _PythonFilters(ModuleMapper())
+
+    def test_pydoc(self):
+        assert self.filters.pydoc(None) == ''
+        assert self.filters.pydoc(' one-line ') == 'one-line'
+        assert self.filters.pydoc(' \n\nmulti-\nline\n\n\n ') == '\nmulti-\nline\n\n'
+
+    def test_pymodule(self):
+        module = Module('my_test.module')
+        self.filters.module_mapper = ModuleMapper([('my_test', 'my.test')])
+
+        assert self.filters.pymodule(module) == 'my.test.module.protocol'
+
+    def test_pyref__native(self):
+        for ntype in NativeType.all():
+            ref = self.filters.pyref(ntype)
+            assert ref is PYTHON_NATIVE_REFS[ntype.type]
+
+    def test_pylist(self):
+        list0 = List(NativeType.INT32)
+        ref = self.filters.pyref(list0)
+
+        assert ref.name == 'list'
+        assert ref.descriptor == 'descriptors.list0(descriptors.int32)'
+
+    def test_pyset(self):
+        set0 = Set(NativeType.INT32)
+        ref = self.filters.pyref(set0)
+
+        assert ref.name == 'set'
+        assert ref.descriptor == 'descriptors.set0(descriptors.int32)'
+
+    def test_pymap(self):
+        map0 = Map(NativeType.INT32, NativeType.INT64)
+        ref = self.filters.pyref(map0)
+
+        assert ref.name == 'dict'
+        assert ref.descriptor == 'descriptors.map0(descriptors.int32, descriptors.int64)'
+
+    def test_pyenum_value(self):
+        enum = Enum('Number')
+        enum.create_value('ONE')
+        two = enum.create_value('TWO')
+
+        module = Module('test', definitions=[enum])
+        module.link()
+
+        ref = self.filters.pyref(two)
+        assert ref.name == 'test.protocol.Number.TWO'
+        assert ref.descriptor is None
+
+    def test_pydefintion__enum(self):
+        enum = Enum('Number')
+
+        module = Module('test', definitions=[enum])
+        module.link()
+
+        ref = self.filters.pyref(enum)
+        assert ref.name == 'test.protocol.Number'
+        assert ref.descriptor == 'test.protocol.Number.descriptor'
+
+    def test_pydefinition__message(self):
+        def0 = Message('Message')
+
+        module = Module('test', definitions=[def0])
+        module.link()
+
+        ref = self.filters.pyref(def0)
+        assert ref.name == 'test.protocol.Message'
+        assert ref.descriptor == 'test.protocol.Message.descriptor'
+
+    def test_pydefinition__interface(self):
+        def0 = Interface('Interface')
+
+        module = Module('test', definitions=[def0])
+        module.link()
+
+        ref = self.filters.pyref(def0)
+        assert ref.name == 'test.protocol.Interface'
+        assert ref.descriptor == 'test.protocol.Interface.descriptor'
+
+    def test_pydefinition__in_current_module(self):
+        def0 = Message('Message')
+
+        module = Module('test', definitions=[def0])
+        module.link()
+
+        self.filters.current_module = module
+        ref = self.filters.pyref(def0)
+        assert ref.name == 'Message'
+        assert ref.descriptor == 'Message.descriptor'
