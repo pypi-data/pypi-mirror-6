@@ -1,0 +1,468 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:browser="http://namespaces.zope.org/browser"
+    xmlns:meta="http://namespaces.zope.org/meta"
+    i18n_domain="dm_zope_reseller"
+>
+
+    <include package="plone.z3cform" />
+
+    <!-- 'reseller' Zope 3 browser layer -->
+    <interface
+        interface=".interfaces.ILayer"
+        type="zope.publisher.interfaces.browser.IBrowserSkinType"
+        name="reseller"
+        />
+
+    <browser:page
+      for="OFS.interfaces.IApplication"
+      permission="dm.zope.reseller:manage"
+      class=".root.Root"
+      name="reseller"
+      />
+
+    <!-- ****** menus ***************************************************** -->
+    <!-- fix for `Products.Five.browser:meta.zcml` which forgot to
+         define `subMenuItem` -->
+    <meta:directive
+      namespace="http://namespaces.zope.org/browser"
+      name="subMenuItem"
+      schema="zope.browsermenu.metadirectives.ISubMenuItemDirective"
+      handler="zope.browsermenu.metaconfigure.subMenuItemDirective"
+      />
+    <meta:complexDirective
+	namespace="http://namespaces.zope.org/browser"
+        name="menuItems"
+        schema="zope.browsermenu.metadirectives.IMenuItemsDirective"
+        handler="zope.browsermenu.metaconfigure.menuItemsDirective"
+        >
+
+      <meta:subdirective
+          name="menuItem"
+          schema="zope.browsermenu.metadirectives.IMenuItemSubdirective"
+          />
+
+      <meta:subdirective
+          name="subMenuItem"
+          schema="zope.browsermenu.metadirectives.ISubMenuItemSubdirective"
+          />
+
+    </meta:complexDirective>
+
+    <browser:menu
+      id="dm_zope_reseller__menu_bar"
+      class=".browsermenu.BrowserMenu"
+      title="Menu bar"
+      />
+
+    <!-- ************************* clients ************************** -->
+    <browser:menu
+      id="dm_zope_reseller__clients"
+      class=".browsermenu.BrowserMenu"
+      title="Clients"
+      />
+
+    <browser:menuItems
+      for="*"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__clients">
+      <browser:menuItem title="manage" action="clients/crud" item_class=".menu.BrowserMenuItemD0" />
+      <browser:menuItem title="search" action="clients/search" item_class=".menu.BrowserMenuItemD0" />
+    </browser:menuItems>
+
+    <browser:menu
+      id="dm_zope_reseller__client"
+      class=".browsermenu.BrowserMenu"
+      />
+
+    <browser:menuItems
+      for=".client.Client"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__client">
+      <browser:menuItem title="Deliveries" action="crud" item_class=".menu.BrowserMenuItemD2" />
+      <browser:menuItem title="Unassigned orders" action="crud" item_class=".menu.BrowserMenuItemD2" />
+    </browser:menuItems>
+
+    <browser:subMenuItem
+      for=".client.Client"
+      title="@client"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__menu_bar"
+      submenu="dm_zope_reseller__client"
+      item_class=".menu.ContextSubMenuItemD2"
+      />
+
+
+    <!-- ************************* articles ************************** -->
+    <browser:menu
+      id="dm_zope_reseller__articles"
+      class=".browsermenu.BrowserMenu"
+      title="Articles"
+      />
+
+    <browser:menuItems
+      for="*"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__articles">
+      <browser:menuItem title="manage" action="articles/crud" item_class=".menu.BrowserMenuItemD0" />
+      <browser:menuItem title="search" action="articles/search" item_class=".menu.BrowserMenuItemD0" />
+    </browser:menuItems>
+
+
+
+    <!-- ************************* orders ************************** -->
+    <browser:menu
+      id="dm_zope_reseller__orders"
+      class=".browsermenu.BrowserMenu"
+      title="Orders"
+      />
+
+    <browser:menuItems
+      for="*"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__orders">
+      <browser:menuItem title="manage" action="orders/crud" item_class=".menu.BrowserMenuItemD0" />
+    </browser:menuItems>
+
+    <browser:menu
+      id="dm_zope_reseller__order"
+      class=".browsermenu.BrowserMenu"
+      />
+
+    <!-- must provide the items for `*` (rather than `order.Order`)
+         because we want them also for "subobjects" of `Order`.
+	 The menu determines when it should be shown
+    -->
+    <browser:menuItems
+      for="*"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__order">
+      <browser:menuItem title="manage" action="crud" item_class=".menu.BrowserMenuItemD2" />
+      <!-- this stupidly does not work; due to a registration name clash
+      <browser:menuItem title="export" action="export" item_class=".menu.BrowserMenuItemD2" />
+      -->
+      <browser:menuItem title="Clients" action="clients" item_class=".menu.BrowserMenuItemD2" />
+      <browser:menuItem title="export" action="doexport" item_class=".menu.BrowserMenuItemD2" filter="context/open" />
+      <browser:menuItem title="adjust" action="doadjust" item_class=".menu.BrowserMenuItemD2" filter="context/open" />
+      <browser:menuItem title="order" action="doorder" item_class=".menu.BrowserMenuItemD2" filter="context/open" />
+      <browser:menuItem title="Delivery" action="todelivery" item_class=".menu.BrowserMenuItemD2" filter="context/has_delivery" />
+      <browser:menuItem title="add Delivery" action="adddelivery" item_class=".menu.BrowserMenuItemD2" filter="context/delivery_addable" />
+    </browser:menuItems>
+
+    <browser:subMenuItem
+      for="*"
+      title="@order.Order"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__menu_bar"
+      submenu="dm_zope_reseller__order"
+      item_class=".menu.AncestorSubMenuItemD2"
+      />
+
+    <browser:menu
+      id="dm_zope_reseller__client_in_order"
+      class=".browsermenu.BrowserMenu"
+      />
+
+    <browser:menuItems
+      for=".order.Client"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__client_in_order">
+      <browser:menuItem title="assigned order items" action="assigned" item_class=".menu.BrowserMenuItemD3" />
+      <browser:menuItem title="unassigned order items" action="unassigned" item_class=".menu.BrowserMenuItemD3" filter="context/has_unassigned_order_items" />
+    </browser:menuItems>
+
+    <browser:subMenuItem
+      for=".order.Client"
+      title="@Client"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__menu_bar"
+      submenu="dm_zope_reseller__client_in_order"
+      item_class=".menu.ContextSubMenuItemD3"
+      />
+
+
+
+    <!-- ************************* deliveries ************************** -->
+    <browser:menu
+      id="dm_zope_reseller__deliveries"
+      class=".browsermenu.BrowserMenu"
+      title="Deliveries"
+      />
+
+    <browser:menuItems
+      for="*"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__deliveries">
+      <browser:menuItem title="manage" action="deliveries/crud" item_class=".menu.BrowserMenuItemD0" />
+    </browser:menuItems>
+
+    <browser:menu
+      id="dm_zope_reseller__delivery"
+      class=".browsermenu.BrowserMenu"
+      />
+
+    <!-- must provide the items for `*` (rather than `delivery.Delivery`)
+         because we want them also for "subobjects" of `Delivery`.
+	 The menu determines when it should be shown
+    -->
+    <browser:menuItems
+      for="*"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__delivery">
+      <browser:menuItem title="manage" action="crud" item_class=".menu.BrowserMenuItemD2" />
+      <browser:menuItem title="Clients" action="clients" item_class=".menu.BrowserMenuItemD2" />
+    </browser:menuItems>
+
+    <browser:subMenuItem
+      for="*"
+      title="@delivery.Delivery"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__menu_bar"
+      submenu="dm_zope_reseller__delivery"
+      item_class=".menu.AncestorSubMenuItemD2"
+      />
+
+
+    <!-- ************************* menu bar ************************** -->
+    <browser:menuItems
+      for="*"
+      layer=".interfaces.ILayer"
+      permission="dm.zope.reseller:manage"
+      menu="dm_zope_reseller__menu_bar">
+      <browser:subMenuItem title="@Orders" submenu="dm_zope_reseller__orders" item_class=".menu.BrowserSubMenuItemD0" />
+      <browser:subMenuItem title="@Deliveries" submenu="dm_zope_reseller__deliveries" item_class=".menu.BrowserSubMenuItemD0" />
+      <browser:subMenuItem title="@Clients" submenu="dm_zope_reseller__clients" item_class=".menu.BrowserSubMenuItemD0" />
+      <browser:subMenuItem title="@Articles" submenu="dm_zope_reseller__articles" item_class=".menu.BrowserSubMenuItemD0" />
+    </browser:menuItems>
+
+    <adapter
+      for="* .interfaces.ILayer *"
+      factory=".menu.MenuBarProvider"
+      provides="zope.contentprovider.interfaces.IContentProvider"
+      name="dm_zope_reseller__menu_bar"
+      />
+
+ 
+
+  <browser:page
+    for="*"
+    layer=".interfaces.ILayer"
+    name="five_template"
+    permission="zope.Public"
+    template="standard_macros.pt"
+    />
+
+
+    <!-- ************************* clients ************************** -->
+  <browser:page
+    for=".client.Clients"
+    permission="dm.zope.reseller:manage"
+    class=".client.ClientsCrud"
+    name="crud"
+    />
+
+  <browser:page
+    for=".client.Clients"
+    permission="dm.zope.reseller:manage"
+    class=".client.ClientsSearch"
+    name="search"
+    />
+
+  <browser:page
+    for=".client.Client"
+    permission="dm.zope.reseller:manage"
+    class=".client.ClientCrud"
+    name="crud"
+    />
+
+
+    <!-- ************************* articles ************************** -->
+  <browser:page
+    for=".article.Articles"
+    permission="dm.zope.reseller:manage"
+    class=".article.ArticlesCrud"
+    name="crud"
+    />
+
+  <browser:page
+    for=".article.Articles"
+    permission="dm.zope.reseller:manage"
+    class=".article.ArticlesSearch"
+    name="search"
+    />
+
+    <!-- ************************* orders ************************** -->
+  <browser:page
+    for=".order.Orders"
+    permission="dm.zope.reseller:manage"
+    class=".order.OrdersCrud"
+    name="crud"
+    />
+
+  <browser:page
+    for=".order.Order"
+    permission="dm.zope.reseller:manage"
+    class=".order.OrderCrud"
+    name="crud"
+    />
+
+  <browser:page
+    for=".order.Order"
+    permission="dm.zope.reseller:manage"
+    class=".order.OrderCrud"
+    attribute="order"
+    name="doorder"
+    />
+
+  <browser:page
+    for=".order.Order"
+    permission="dm.zope.reseller:manage"
+    class=".order.OrderCrud"
+    attribute="adjust"
+    name="doadjust"
+    />
+
+  <browser:page
+    for=".order.Order"
+    permission="dm.zope.reseller:manage"
+    class=".order.OrderCrud"
+    attribute="export"
+    name="doexport"
+    />
+
+  <browser:page
+    for=".order.Order"
+    permission="dm.zope.reseller:manage"
+    class=".order.OrderCrud"
+    attribute="to_delivery"
+    name="todelivery"
+    />
+
+  <browser:page
+    for=".order.Order"
+    permission="dm.zope.reseller:manage"
+    class=".order.OrderCrud"
+    attribute="add_delivery"
+    name="adddelivery"
+    />
+
+  <browser:page
+    for=".order.Order"
+    permission="dm.zope.reseller:manage"
+    class=".order.OrderClients"
+    name="clients"
+    />
+
+
+  <browser:page
+    for=".order.Client"
+    permission="dm.zope.reseller:manage"
+    class=".order.ClientAssignedOrderItems"
+    name="assigned"
+    />
+
+  <browser:page
+    for=".order.Client"
+    permission="dm.zope.reseller:manage"
+    class=".order.ClientUnassignedOrderItems"
+    name="unassigned"
+    />
+
+  <browser:page
+    for=".order.Article"
+    permission="dm.zope.reseller:manage"
+    class=".order.ArticleUd"
+    name="crud"
+    />
+
+    <!-- ************************* deliveries ************************** -->
+  <browser:page
+    for=".delivery.Deliveries"
+    permission="dm.zope.reseller:manage"
+    class=".delivery.DeliveriesCrud"
+    name="crud"
+    />
+
+  <browser:page
+    for=".delivery.Delivery"
+    permission="dm.zope.reseller:manage"
+    class=".delivery.DeliveryCrud"
+    name="crud"
+    />
+
+  <browser:page
+    for=".delivery.ProviderDeliveryItem"
+    permission="dm.zope.reseller:manage"
+    class=".delivery.ProviderDeliveryItemUd"
+    name="crud"
+    />
+
+  <adapter
+    for="..client.ClientDeliveryItem"
+    provides=".delivery.IChangeSchema"
+    factory=".delivery.NoneAdapter"
+    />
+
+  <browser:page
+    for=".delivery.Delivery"
+    permission="dm.zope.reseller:manage"
+    class=".delivery.ClientsUd"
+    name="clients"
+    />
+
+  <browser:page
+    for=".delivery.Client"
+    permission="dm.zope.reseller:manage"
+    class=".delivery.ClientUd"
+    name="crud"
+    />
+
+    <!-- ************************* resources ************************** -->
+  <browser:resourceDirectory
+    name="dm_zope_reseller"
+    directory="resource"
+    />
+
+  <!-- level 1 objects -->
+  <adapter for=".root.Root" provides=".interfaces.IContained" factory=".client.Clients" name="clients" />
+  <adapter for=".root.Root" provides=".interfaces.IContained" factory=".article.Articles" name="articles" />
+  <adapter for=".root.Root" provides=".interfaces.IContained" factory=".order.Orders" name="orders" />
+  <adapter for=".root.Root" provides=".interfaces.IContained" factory=".delivery.Deliveries" name="deliveries" />
+
+
+  <!-- namespaces -->
+  <adapter factory=".traversal.ChildNamespace" name="child" />
+  <adapter factory=".order.ClientNamespace" name="client" />
+  <adapter factory=".delivery.ClientNamespace" name="client" />
+
+
+  <!-- proxy adapter (for traversal) -->
+  <adapter for=".client.Clients ..client.Client" factory=".client.Client" provides=".interfaces.IProxy" />
+  <adapter for=".order.Orders ..order.Order" factory=".order.Order" provides=".interfaces.IProxy" />
+  <adapter for=".order.Order ..order.ClientInOrder" factory=".order.Client" provides=".interfaces.IProxy" />
+  <adapter for=".order.Order ..order.ProviderOrderItem" factory=".order.Article" provides=".interfaces.IProxy" />
+  <adapter for=".delivery.Deliveries ..delivery.ProviderDelivery" factory=".delivery.Delivery" provides=".interfaces.IProxy" />
+  <adapter for=".delivery.Delivery ..delivery.ProviderDeliveryItem" factory=".delivery.Article" provides=".interfaces.IProxy" />
+  <adapter for=".delivery.Delivery ..delivery.ClientInDelivery" factory=".delivery.Client" provides=".interfaces.IProxy" />
+
+
+  <!-- work around a bug in `z3c.form.button.ImageButtonAction` which insists that a site has been set up. -->
+  <adapter factory=".view.rooturl" for=".root.Root .interfaces.ILayer" provides="zope.interface.Interface" name="absolute_url" />
+  
+
+  <!-- work around bug in `plone.z3cform.templates` -->
+  <adapter factory=".view.wrapped_form_factory" />
+
+</configure>
