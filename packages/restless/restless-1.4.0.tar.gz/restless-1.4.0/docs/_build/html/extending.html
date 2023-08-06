@@ -1,0 +1,565 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Extending Restless &mdash; restless 1.3.1-dev documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.3.1-dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="restless 1.3.1-dev documentation" href="index.html" />
+    <link rel="next" title="Cookbook" href="cookbook.html" />
+    <link rel="prev" title="Philosophy Behind Restless" href="philosophy.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="cookbook.html" title="Cookbook"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="philosophy.html" title="Philosophy Behind Restless"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">restless 1.3.1-dev documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="extending-restless">
+<span id="extending"></span><h1>Extending Restless<a class="headerlink" href="#extending-restless" title="Permalink to this headline">¶</a></h1>
+<p>Restless is meant to handle many simpler cases well &amp; have enough extensibility
+to handle more complex API tasks.</p>
+<p>However, a specific goal of the project is to not expand the scope much &amp; simply
+give you, the expert on your API, the freedom to build what you need.</p>
+<p>We&#8217;ll be covering:</p>
+<ul class="simple">
+<li>Custom endpoints</li>
+<li>Customizing data output</li>
+<li>Adding data validation</li>
+<li>Providing different serialization formats</li>
+</ul>
+<div class="section" id="custom-endpoints">
+<h2>Custom Endpoints<a class="headerlink" href="#custom-endpoints" title="Permalink to this headline">¶</a></h2>
+<p>Sometimes you need to provide more than just the typical HTTP verbs. Restless
+allows you to hook up custom endpoints that can take advantage of much of the
+<tt class="docutils literal"><span class="pre">Resource</span></tt>.</p>
+<p>Implementing these views requires a couple simple steps:</p>
+<ul class="simple">
+<li>Writing the method</li>
+<li>Adding to the <tt class="docutils literal"><span class="pre">Resource.http_methods</span></tt> mapping</li>
+<li>Adding to your URL routing</li>
+</ul>
+<p>For instance, if you wanted to added a schema view (<tt class="docutils literal"><span class="pre">/api/posts/schema/</span></tt>)
+that responded to <tt class="docutils literal"><span class="pre">GET</span></tt> requests, you&#8217;d first write the method:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+
+
+<span class="k">class</span> <span class="nc">PostResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="c"># The usual methods, then...</span>
+
+    <span class="k">def</span> <span class="nf">schema</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Return your schema information.</span>
+        <span class="c"># We&#39;re keeping it simple (basic field names &amp; data types).</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s">&#39;fields&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="s">&#39;integer&#39;</span><span class="p">,</span>
+                <span class="s">&#39;title&#39;</span><span class="p">:</span> <span class="s">&#39;string&#39;</span><span class="p">,</span>
+                <span class="s">&#39;author&#39;</span><span class="p">:</span> <span class="s">&#39;string&#39;</span><span class="p">,</span>
+                <span class="s">&#39;body&#39;</span><span class="p">:</span> <span class="s">&#39;string&#39;</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+</pre></div>
+</div>
+<p>The next step is to update the <tt class="xref py py-attr docutils literal"><span class="pre">Resource.http_methods</span></tt>. This can
+either be fully written out in your class or (as I prefer) a small extension
+to your <tt class="docutils literal"><span class="pre">__init__</span></tt>...:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+
+
+<span class="k">class</span> <span class="nc">PostResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="c"># We&#39;ll lightly extend the ``__init__``.</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">PostResource</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="c"># Add on a new top-level key, then define what HTTP methods it</span>
+        <span class="c"># listens on &amp; what methods it calls for them.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">http_methods</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+            <span class="s">&#39;schema&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;GET&#39;</span><span class="p">:</span> <span class="s">&#39;schema&#39;</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">})</span>
+
+    <span class="c"># The usual methods, then...</span>
+
+    <span class="k">def</span> <span class="nf">schema</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s">&#39;fields&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="s">&#39;integer&#39;</span><span class="p">,</span>
+                <span class="s">&#39;title&#39;</span><span class="p">:</span> <span class="s">&#39;string&#39;</span><span class="p">,</span>
+                <span class="s">&#39;author&#39;</span><span class="p">:</span> <span class="s">&#39;string&#39;</span><span class="p">,</span>
+                <span class="s">&#39;body&#39;</span><span class="p">:</span> <span class="s">&#39;string&#39;</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+</pre></div>
+</div>
+<p>Finally, it&#8217;s just a matter of hooking up the URLs as well. You can do this
+manually or (once again) by extending a built-in method.:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Add the correct import here.</span>
+<span class="kn">from</span> <span class="nn">django.conf.urls</span> <span class="kn">import</span> <span class="n">patterns</span><span class="p">,</span> <span class="n">url</span>
+
+<span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+
+
+<span class="k">class</span> <span class="nc">PostResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">PostResource</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">http_methods</span><span class="o">.</span><span class="n">update</span><span class="p">({</span>
+            <span class="s">&#39;schema&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;GET&#39;</span><span class="p">:</span> <span class="s">&#39;schema&#39;</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">})</span>
+
+    <span class="c"># The usual methods, then...</span>
+
+    <span class="k">def</span> <span class="nf">schema</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s">&#39;fields&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="s">&#39;integer&#39;</span><span class="p">,</span>
+                <span class="s">&#39;title&#39;</span><span class="p">:</span> <span class="s">&#39;string&#39;</span><span class="p">,</span>
+                <span class="s">&#39;author&#39;</span><span class="p">:</span> <span class="s">&#39;string&#39;</span><span class="p">,</span>
+                <span class="s">&#39;body&#39;</span><span class="p">:</span> <span class="s">&#39;string&#39;</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+
+    <span class="c"># Finally, extend the URLs.</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">urls</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">name_prefix</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">urlpatterns</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">PostResource</span><span class="p">,</span> <span class="n">cls</span><span class="p">)</span><span class="o">.</span><span class="n">urls</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">name_prefix</span><span class="o">=</span><span class="n">name_prefix</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">urlpatterns</span> <span class="o">+</span> <span class="n">patterns</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+            <span class="c"># Note: We pass ``prepare_data=False`` here so that Restless</span>
+            <span class="c"># doesn&#39;t run ``prepare`` on the schema data.</span>
+            <span class="c"># If your custom view returns a typical ``object/dict`` (like</span>
+            <span class="c"># the ``detail`` method), you can omit this.</span>
+            <span class="n">url</span><span class="p">(</span><span class="s">r&#39;^schema/$&#39;</span><span class="p">,</span> <span class="n">cls</span><span class="o">.</span><span class="n">as_view</span><span class="p">(</span><span class="s">&#39;schema&#39;</span><span class="p">,</span> <span class="n">prepare_data</span><span class="o">=</span><span class="bp">False</span><span class="p">),</span> <span class="n">name</span><span class="o">=</span><span class="n">cls</span><span class="o">.</span><span class="n">build_url_name</span><span class="p">(</span><span class="s">&#39;schema&#39;</span><span class="p">,</span> <span class="n">name_prefix</span><span class="p">)),</span>
+        <span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This step varies from framework to framework. The code is specific to the
+<a class="reference internal" href="reference/resources.html#restless.dj.DjangoResource" title="restless.dj.DjangoResource"><tt class="xref py py-class docutils literal"><span class="pre">restless.dj.DjangoResource</span></tt></a>, but the approach is the same
+regardless.</p>
+</div>
+<p>You should now be able to hit something like <a class="reference external" href="http://127.0.0.1/api/posts/schema/">http://127.0.0.1/api/posts/schema/</a>
+in your browser &amp; get a JSON schema view!</p>
+</div>
+<div class="section" id="customizing-data-output">
+<h2>Customizing Data Output<a class="headerlink" href="#customizing-data-output" title="Permalink to this headline">¶</a></h2>
+<p>There are three approaches to customizing your data ouput.</p>
+<ol class="arabic simple">
+<li>The built-in <tt class="docutils literal"><span class="pre">fields</span></tt> (simple)</li>
+<li>Overriding <a class="reference internal" href="reference/resources.html#restless.resources.Resource.prepare" title="restless.resources.Resource.prepare"><tt class="xref py py-meth docutils literal"><span class="pre">restless.resources.Resource.prepare()</span></tt></a> (happy medium)</li>
+<li>Per-method data (flexible but most work)</li>
+</ol>
+<div class="section" id="fields">
+<h3>Fields<a class="headerlink" href="#fields" title="Permalink to this headline">¶</a></h3>
+<p>Using <tt class="docutils literal"><span class="pre">fields</span></tt> is documented elsewhere (see the <a class="reference internal" href="tutorial.html#tutorial"><em>Restless Tutorial</em></a>), but the
+basic gist is that you define a dictionary on the <strong>class</strong>. Example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">MyResource</span><span class="p">(</span><span class="n">Resource</span><span class="p">):</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="c"># Expose the same name.</span>
+        <span class="s">&quot;id&quot;</span><span class="p">:</span> <span class="s">&quot;id&quot;</span><span class="p">,</span>
+        <span class="c"># Rename a field.</span>
+        <span class="s">&quot;author&quot;</span><span class="p">:</span> <span class="s">&quot;username&quot;</span><span class="p">,</span>
+        <span class="c"># Access deeper data.</span>
+        <span class="s">&quot;type_id&quot;</span><span class="p">:</span> <span class="s">&quot;metadata.type.pk&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+</pre></div>
+</div>
+<p>This dictionary is a mapping, with keys representing the final name &amp; the
+values acting as a lookup path.</p>
+<p>If the lookup path <strong>has no</strong> periods (i.e. <tt class="docutils literal"><span class="pre">name</span></tt>) in it, it&#8217;s
+considered to be an attribute/key on the item being processed. If that item
+looks like a <tt class="docutils literal"><span class="pre">dict</span></tt>, key access is attempted. If it looks like an <tt class="docutils literal"><span class="pre">object</span></tt>,
+attribute access is used. In either case, the found value is returned.</p>
+<p>If the lookup path <strong>has</strong> periods (i.e. <tt class="docutils literal"><span class="pre">entry.title</span></tt>), it is split on the
+periods (like a Python import path) and recursively uses the previous value to
+look up the next value until a final value is found.</p>
+</div>
+<div class="section" id="overriding-prepare">
+<h3>Overriding <tt class="docutils literal"><span class="pre">prepare</span></tt><a class="headerlink" href="#overriding-prepare" title="Permalink to this headline">¶</a></h3>
+<p>For every item (<tt class="docutils literal"><span class="pre">object</span></tt> or <tt class="docutils literal"><span class="pre">dict</span></tt>) that gets serialized as output, it runs
+through a <tt class="docutils literal"><span class="pre">prepare</span></tt> method on your <tt class="docutils literal"><span class="pre">Resource</span></tt> subclass.</p>
+<p>The default behavior checks to see if you have <tt class="docutils literal"><span class="pre">fields</span></tt> defined on your class
+&amp; either just returns all the data (if there&#8217;s no <tt class="docutils literal"><span class="pre">fields</span></tt>) or uses the
+<tt class="docutils literal"><span class="pre">fields</span></tt> to extract plain data.</p>
+<p>However, you can use/abuse this method for your own nefarious purposes. For
+example, if you wanted to serve an API of users but sanitize the data, you
+could do something like:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.contrib.auth.models</span> <span class="kn">import</span> <span class="n">User</span>
+
+<span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+
+
+<span class="k">class</span> <span class="nc">UserResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="s">&#39;id&#39;</span><span class="p">,</span>
+        <span class="s">&#39;username&#39;</span><span class="p">:</span> <span class="s">&#39;username&#39;</span><span class="p">,</span>
+        <span class="c"># We&#39;re including email here, but we&#39;ll sanitize it later.</span>
+        <span class="s">&#39;email&#39;</span><span class="p">:</span> <span class="s">&#39;email&#39;</span><span class="p">,</span>
+        <span class="s">&#39;date_joined&#39;</span><span class="p">:</span> <span class="s">&#39;date_joined&#39;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="k">def</span> <span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">detail</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pk</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">prepare</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="c"># ``data`` is the object/dict to be exposed.</span>
+        <span class="c"># We&#39;ll call ``super`` to prep the data, then we&#39;ll mask the email.</span>
+        <span class="n">prepped</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">UserResource</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="n">email</span> <span class="o">=</span> <span class="n">prepped</span><span class="p">[</span><span class="s">&#39;email&#39;</span><span class="p">]</span>
+        <span class="n">at_offset</span> <span class="o">=</span> <span class="n">email</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s">&#39;@&#39;</span><span class="p">)</span>
+        <span class="n">prepped</span><span class="p">[</span><span class="s">&#39;email&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">email</span><span class="p">[:</span><span class="n">at_offset</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="s">&quot;...&quot;</span>
+
+        <span class="k">return</span> <span class="n">prepped</span>
+</pre></div>
+</div>
+<p>This example is somewhat contrived, but you can perform any kind of
+transformation you want here, as long as you return a plain, serializable
+<tt class="docutils literal"><span class="pre">dict</span></tt>.</p>
+</div>
+<div class="section" id="per-method-data">
+<h3>Per-Method Data<a class="headerlink" href="#per-method-data" title="Permalink to this headline">¶</a></h3>
+<p>Because Restless can serve plain old Python objects (anything JSON serializable
++ <tt class="docutils literal"><span class="pre">datetime</span></tt> + <tt class="docutils literal"><span class="pre">decimal</span></tt>), the ultimate form of control is simply to load
+your data however you want, then return a simple/serializable form.</p>
+<p>For example, Django&#8217;s <tt class="docutils literal"><span class="pre">models.Model</span></tt> classes are not normally
+JSON-serializable. We also may want to expose related data in a nested form.
+Here&#8217;s an example of doing something like that.:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+
+<span class="kn">from</span> <span class="nn">posts.models</span> <span class="kn">import</span> <span class="n">Post</span>
+
+
+<span class="k">class</span> <span class="nc">PostResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">detail</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="c"># We do our rich lookup here.</span>
+        <span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pk</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span><span class="o">.</span><span class="n">select_related</span><span class="p">(</span><span class="s">&#39;user&#39;</span><span class="p">)</span>
+
+        <span class="c"># Then we can simplify it &amp; include related information.</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s">&#39;title&#39;</span><span class="p">:</span> <span class="n">post</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+            <span class="s">&#39;author&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="n">post</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                <span class="s">&#39;username&#39;</span><span class="p">:</span> <span class="n">post</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+                <span class="s">&#39;date_joined&#39;</span><span class="p">:</span> <span class="n">post</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">date_joined</span><span class="p">,</span>
+                <span class="c"># We exclude things like ``password`` &amp; ``email`` here</span>
+                <span class="c"># intentionally.</span>
+            <span class="p">},</span>
+            <span class="s">&#39;body&#39;</span><span class="p">:</span> <span class="n">post</span><span class="o">.</span><span class="n">content</span><span class="p">,</span>
+            <span class="c"># ...</span>
+        <span class="p">}</span>
+</pre></div>
+</div>
+<p>While this is more verbose, it gives you all the control.</p>
+<p>If you have resources for your nested data, you can also re-use them to make the
+construction easier. For example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.contrib.auth.models</span> <span class="kn">import</span> <span class="n">User</span>
+
+<span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+
+<span class="kn">from</span> <span class="nn">posts.models</span> <span class="kn">import</span> <span class="n">Post</span>
+
+
+<span class="k">class</span> <span class="nc">UserResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="s">&#39;id&#39;</span><span class="p">,</span>
+        <span class="s">&#39;username&#39;</span><span class="p">:</span> <span class="s">&#39;username&#39;</span><span class="p">,</span>
+        <span class="s">&#39;date_joined&#39;</span><span class="p">:</span> <span class="s">&#39;date_joined&#39;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="k">def</span> <span class="nf">detail</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pk</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">PostResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">detail</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="c"># We do our rich lookup here.</span>
+        <span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pk</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span><span class="o">.</span><span class="n">select_related</span><span class="p">(</span><span class="s">&#39;user&#39;</span><span class="p">)</span>
+
+        <span class="c"># Instantiate the ``UserResource``</span>
+        <span class="n">ur</span> <span class="o">=</span> <span class="n">UserResource</span><span class="p">()</span>
+
+        <span class="c"># Then populate the data.</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s">&#39;title&#39;</span><span class="p">:</span> <span class="n">post</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+            <span class="c"># We leverage the ``prepare`` method from above to build the</span>
+            <span class="c"># nested data we want.</span>
+            <span class="s">&#39;author&#39;</span><span class="p">:</span> <span class="n">ur</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">post</span><span class="o">.</span><span class="n">user</span><span class="o">.</span><span class="n">id</span><span class="p">),</span>
+            <span class="s">&#39;body&#39;</span><span class="p">:</span> <span class="n">post</span><span class="o">.</span><span class="n">content</span><span class="p">,</span>
+            <span class="c"># ...</span>
+        <span class="p">}</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="data-validation">
+<h2>Data Validation<a class="headerlink" href="#data-validation" title="Permalink to this headline">¶</a></h2>
+<p>Validation can be a contentious issue. No one wants to risk data corruption
+or security holes in their services. However, there&#8217;s no real standard or
+consensus on doing data validation even within the <strong>individual</strong> framework
+communities themselves, let alone <em>between</em> frameworks.</p>
+<p>So unfortunately, Restless mostly ignores this issue, leaving you to do data
+validation the way you think is best.</p>
+<p>The good news is that the data you&#8217;ll need to validate is already in a
+convenient-to-work-with dictionary called <tt class="docutils literal"><span class="pre">Resource.data</span></tt> (assigned
+immediately after deserialization takes place).</p>
+<p>The recommended approach is to simply add on to your data methods themselves.
+For example, since Django <tt class="docutils literal"><span class="pre">Form</span></tt> objects are at least <em>bundled</em> with the
+framework, we&#8217;ll use those as an example...:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.forms</span> <span class="kn">import</span> <span class="n">ModelForm</span>
+
+<span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+<span class="kn">from</span> <span class="nn">restless.exceptions</span> <span class="kn">import</span> <span class="n">HttpError</span>
+
+
+<span class="k">class</span> <span class="nc">UserForm</span><span class="p">(</span><span class="n">ModelForm</span><span class="p">):</span>
+    <span class="k">class</span> <span class="nc">Meta</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">User</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;username&#39;</span><span class="p">,</span> <span class="s">&#39;first_name&#39;</span><span class="p">,</span> <span class="s">&#39;last_name&#39;</span><span class="p">,</span> <span class="s">&#39;email&#39;</span><span class="p">]</span>
+
+
+<span class="k">class</span> <span class="nc">UserResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># We can create a bound form from the get-go.</span>
+        <span class="n">form</span> <span class="o">=</span> <span class="n">UserForm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">form</span><span class="o">.</span><span class="n">is_valid</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="n">HttpError</span><span class="p">(</span><span class="s">&quot;You&#39;re a bad person &amp; you should feel bad.&quot;</span><span class="p">)</span>
+
+        <span class="c"># Continue as normal, using the form data instead.</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">form</span><span class="o">.</span><span class="n">cleaned_data</span><span class="p">[</span><span class="s">&#39;username&#39;</span><span class="p">],</span>
+            <span class="n">first_name</span><span class="o">=</span><span class="n">form</span><span class="o">.</span><span class="n">cleaned_data</span><span class="p">[</span><span class="s">&#39;first_name&#39;</span><span class="p">],</span>
+            <span class="n">last_name</span><span class="o">=</span><span class="n">form</span><span class="o">.</span><span class="n">cleaned_data</span><span class="p">[</span><span class="s">&#39;last_name&#39;</span><span class="p">],</span>
+            <span class="n">email</span><span class="o">=</span><span class="n">form</span><span class="o">.</span><span class="n">cleaned_data</span><span class="p">[</span><span class="s">&#39;email&#39;</span><span class="p">],</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">user</span>
+</pre></div>
+</div>
+<p>If you&#8217;re going to use this validation in other places, you&#8217;re welcome to DRY
+up your code into a validation method. An example of this might look like...:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.forms</span> <span class="kn">import</span> <span class="n">ModelForm</span>
+
+<span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+<span class="kn">from</span> <span class="nn">restless.exceptions</span> <span class="kn">import</span> <span class="n">HttpError</span>
+
+
+<span class="k">class</span> <span class="nc">UserForm</span><span class="p">(</span><span class="n">ModelForm</span><span class="p">):</span>
+    <span class="k">class</span> <span class="nc">Meta</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">User</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;username&#39;</span><span class="p">,</span> <span class="s">&#39;first_name&#39;</span><span class="p">,</span> <span class="s">&#39;last_name&#39;</span><span class="p">,</span> <span class="s">&#39;email&#39;</span><span class="p">]</span>
+
+
+<span class="k">class</span> <span class="nc">UserResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">validate_user</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">form</span> <span class="o">=</span> <span class="n">UserForm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">form</span><span class="o">.</span><span class="n">is_valid</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="n">HttpError</span><span class="p">(</span><span class="s">&quot;You&#39;re a bad person &amp; you should feel bad.&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">form</span><span class="o">.</span><span class="n">cleaned_data</span>
+
+    <span class="k">def</span> <span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">cleaned</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">validate_user</span><span class="p">()</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">cleaned</span><span class="p">[</span><span class="s">&#39;username&#39;</span><span class="p">],</span>
+            <span class="n">first_name</span><span class="o">=</span><span class="n">cleaned</span><span class="p">[</span><span class="s">&#39;first_name&#39;</span><span class="p">],</span>
+            <span class="n">last_name</span><span class="o">=</span><span class="n">cleaned</span><span class="p">[</span><span class="s">&#39;last_name&#39;</span><span class="p">],</span>
+            <span class="n">email</span><span class="o">=</span><span class="n">cleaned</span><span class="p">[</span><span class="s">&#39;email&#39;</span><span class="p">],</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">user</span>
+
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="n">cleaned</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">validate_user</span><span class="p">()</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pk</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span>
+        <span class="n">user</span><span class="o">.</span><span class="n">username</span> <span class="o">=</span> <span class="n">cleaned</span><span class="p">[</span><span class="s">&#39;username&#39;</span><span class="p">]</span>
+        <span class="n">user</span><span class="o">.</span><span class="n">first_name</span> <span class="o">=</span> <span class="n">cleaned</span><span class="p">[</span><span class="s">&#39;first_name&#39;</span><span class="p">]</span>
+        <span class="n">user</span><span class="o">.</span><span class="n">last_name</span> <span class="o">=</span> <span class="n">cleaned</span><span class="p">[</span><span class="s">&#39;last_name&#39;</span><span class="p">]</span>
+        <span class="n">user</span><span class="o">.</span><span class="n">email</span> <span class="o">=</span> <span class="n">cleaned</span><span class="p">[</span><span class="s">&#39;email&#39;</span><span class="p">]</span>
+        <span class="n">user</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">user</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="alternative-serialization">
+<h2>Alternative Serialization<a class="headerlink" href="#alternative-serialization" title="Permalink to this headline">¶</a></h2>
+<p>For some, Restless&#8217; JSON-only syntax might not be appealing. Fortunately,
+overriding this is not terribly difficult.</p>
+<p>For the purposes of demonstration, we&#8217;ll implement YAML in place of JSON.
+The process would be similar (but much more verbose) for XML (&amp; brings
+<a class="reference external" href="https://pypi.python.org/pypi/defusedxml">a host of problems</a> as well).</p>
+<p>Start by creating a subclass specifically for serialization. We&#8217;ll override
+a couple methods there, then all your actual API classes can inherit from it.:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">yaml</span>
+
+<span class="kn">from</span> <span class="nn">restless</span> <span class="kn">import</span> <span class="n">Resource</span>
+
+
+<span class="k">class</span> <span class="nc">YAMLResource</span><span class="p">(</span><span class="n">Resource</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">raw_deserialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">body</span><span class="p">):</span>
+        <span class="c"># Do **NOT** use ``yaml.load`` here, as it can contain things like</span>
+        <span class="c"># *functions* &amp; other dangers!</span>
+        <span class="k">return</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">raw_serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Once those methods are implemented, it&#8217;s just a matter of changing the
+inheritance on your classes.:</p>
+<div class="highlight-python"><pre># Old.
+class MyResource(Resource):
+    # ...
+
+# New.
+class MyResource(YAMLResource):
+    # ...</pre>
+</div>
+<p>You can even do things like handle multiple serialization formats, say if the
+user provides a <tt class="docutils literal"><span class="pre">?format=yaml</span></tt> GET param...:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">restless</span> <span class="kn">import</span> <span class="n">Resource</span>
+<span class="kn">from</span> <span class="nn">restless.utils</span> <span class="kn">import</span> <span class="n">json</span><span class="p">,</span> <span class="n">MoreTypesJSONEncoder</span>
+
+<span class="kn">from</span> <span class="nn">django.template</span> <span class="kn">import</span> <span class="n">Context</span><span class="p">,</span> <span class="n">Template</span>
+
+
+<span class="k">class</span> <span class="nc">MultiSerializeResource</span><span class="p">(</span><span class="n">Resource</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">raw_deserialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">body</span><span class="p">):</span>
+        <span class="c"># This is Django-specific, but all frameworks can handle GET</span>
+        <span class="c"># parameters...</span>
+        <span class="n">ct</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">GET</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;format&#39;</span><span class="p">,</span> <span class="s">&#39;json&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">ct</span> <span class="o">==</span> <span class="s">&#39;yaml&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">raw_serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="c"># Again, Django-specific.</span>
+        <span class="n">ct</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">GET</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;format&#39;</span><span class="p">,</span> <span class="s">&#39;json&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">ct</span> <span class="o">==</span> <span class="s">&#39;yaml&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="n">cls</span><span class="o">=</span><span class="n">MoreTypesJSONEncoder</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Extending Restless</a><ul>
+<li><a class="reference internal" href="#custom-endpoints">Custom Endpoints</a></li>
+<li><a class="reference internal" href="#customizing-data-output">Customizing Data Output</a><ul>
+<li><a class="reference internal" href="#fields">Fields</a></li>
+<li><a class="reference internal" href="#overriding-prepare">Overriding <tt class="docutils literal"><span class="pre">prepare</span></tt></a></li>
+<li><a class="reference internal" href="#per-method-data">Per-Method Data</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#data-validation">Data Validation</a></li>
+<li><a class="reference internal" href="#alternative-serialization">Alternative Serialization</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="philosophy.html"
+                        title="previous chapter">Philosophy Behind Restless</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="cookbook.html"
+                        title="next chapter">Cookbook</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/extending.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="cookbook.html" title="Cookbook"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="philosophy.html" title="Philosophy Behind Restless"
+             >previous</a> |</li>
+        <li><a href="index.html">restless 1.3.1-dev documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Daniel Lindsley.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.
+    </div>
+  </body>
+</html>

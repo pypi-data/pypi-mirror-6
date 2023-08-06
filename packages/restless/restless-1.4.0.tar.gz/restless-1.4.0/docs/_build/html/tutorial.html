@@ -1,0 +1,714 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Restless Tutorial &mdash; restless 1.3.1-dev documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.3.1-dev',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="restless 1.3.1-dev documentation" href="index.html" />
+    <link rel="next" title="Philosophy Behind Restless" href="philosophy.html" />
+    <link rel="prev" title="restless" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="philosophy.html" title="Philosophy Behind Restless"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="restless"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">restless 1.3.1-dev documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="restless-tutorial">
+<span id="tutorial"></span><h1>Restless Tutorial<a class="headerlink" href="#restless-tutorial" title="Permalink to this headline">¶</a></h1>
+<p>Restless is an alternative take on REST frameworks. While other frameworks
+attempt to be very complete, include special features or tie deeply to ORMs,
+Restless is a trip back to the basics.</p>
+<p>It is fast, lightweight, and works with a small (but growing) number of
+different web frameworks. If you&#8217;re interested in more of the backstory &amp;
+reasoning behind Restless, please have a gander at the <a class="reference internal" href="philosophy.html#philosophy"><em>Philosophy Behind Restless</em></a>
+documentation.</p>
+<p>You can find some complete example implementation code in <a class="reference external" href="https://github.com/toastdriven/restless/tree/master/examples">the repository</a>.</p>
+<div class="section" id="why-restless">
+<h2>Why Restless?<a class="headerlink" href="#why-restless" title="Permalink to this headline">¶</a></h2>
+<p>Restless tries to be RESTful by default, but flexible enough. The main
+<tt class="docutils literal"><span class="pre">Resource</span></tt> class has data methods (that you implement) for all the main
+RESTful actions. It also uses HTTP status codes as correctly as possible.</p>
+<p>Restless is BYOD (bring your own data) and hence, works with almost any
+ORM/data source. If you can import a module to work with the data &amp; can
+represent it as JSON, Restless can work with it.</p>
+<p>Restless is small &amp; easy to keep in your head. Common usages involve
+overridding just a few easily remembered method names. Total source code is
+a under a thousand lines of code.</p>
+<p>Restless supports Python 3 <strong>first</strong>, but has backward-compatibility to work
+with Python 2.6+ code. Because the future is here.</p>
+<p>Restless is JSON-only by default. Most everything can speak JSON, it&#8217;s a <em>data</em>
+format (not a <em>document</em> format) &amp; it&#8217;s pleasant for both computers and humans
+to work with.</p>
+<p>Restless is well-tested.</p>
+</div>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<p>Installation is a relatively simple affair. For the most recent stable release,
+simply use <a class="reference external" href="http://pip-installer.org/">pip</a> to run:</p>
+<div class="highlight-python"><pre>$ pip install restless</pre>
+</div>
+<p>Alternately, you can download the latest development source from Github:</p>
+<div class="highlight-python"><pre>$ git clone https://github.com/toastdriven/restless.git
+$ cd restless
+$ python setup.py install</pre>
+</div>
+</div>
+<div class="section" id="getting-started">
+<h2>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this headline">¶</a></h2>
+<p>Restless currently supports <a class="reference external" href="http://djangoproject.com/">Django</a>, <a class="reference external" href="http://flask.pocoo.org/">Flask</a>, <a class="reference external" href="http://www.pylonsproject.org/">Pyramid</a> &amp; <a class="reference external" href="https://pypi.python.org/pypi/itty">Itty</a>.
+For the purposes of most of this
+tutorial, we&#8217;ll assume you&#8217;re using Django. The process for developing &amp;
+interacting with the API via Flask is nearly identical (&amp; we&#8217;ll be covering the
+differences at the end of this document).</p>
+<p>There are only two steps to getting a Restless API up &amp; functional. They are:</p>
+<ol class="arabic simple">
+<li>Implement a <tt class="docutils literal"><span class="pre">restless.Resource</span></tt> subclass</li>
+<li>Hook up the resource to your URLs</li>
+</ol>
+<p>Before beginning, you should be familiar with the common understanding of the
+behavior of the various <a class="reference external" href="http://en.wikipedia.org/wiki/Representational_state_transfer#Applied_to_Web_Services">REST methods</a>.</p>
+</div>
+<div class="section" id="about-resources">
+<h2>About Resources<a class="headerlink" href="#about-resources" title="Permalink to this headline">¶</a></h2>
+<p>The main class in Restless is <a class="reference internal" href="reference/resources.html#restless.resources.Resource" title="restless.resources.Resource"><tt class="xref py py-class docutils literal"><span class="pre">restless.resources.Resource</span></tt></a>. It provides
+all the dispatching/authentication/deserialization/serialization/response
+stuff so you don&#8217;t have to.</p>
+<p>Instead, you define/implement a handful of methods that strictly do data
+access/modification. Those methods are:</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">Resource.list</span></tt> - <em>GET /</em></li>
+<li><tt class="docutils literal"><span class="pre">Resource.detail</span></tt> - <em>GET /identifier/</em></li>
+<li><tt class="docutils literal"><span class="pre">Resource.create</span></tt> - <em>POST /</em></li>
+<li><tt class="docutils literal"><span class="pre">Resource.update</span></tt> - <em>PUT /identifier/</em></li>
+<li><tt class="docutils literal"><span class="pre">Resource.delete</span></tt> - <em>DELETE /identifier/</em></li>
+</ul>
+<p>Restless also supports some less common combinations (due to their more complex
+&amp; use-specific natures):</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">Resource.create_detail</span></tt> - <em>POST /identifier/</em></li>
+<li><tt class="docutils literal"><span class="pre">Resource.update_list</span></tt> - <em>PUT /</em></li>
+<li><tt class="docutils literal"><span class="pre">Resource.delete_list</span></tt> - <em>DELETE /</em></li>
+</ul>
+<p>Restless includes modules for various web frameworks. To create a resource to
+work with Django, you&#8217;ll need to subclass from
+<a class="reference internal" href="reference/resources.html#restless.dj.DjangoResource" title="restless.dj.DjangoResource"><tt class="xref py py-class docutils literal"><span class="pre">restless.dj.DjangoResource</span></tt></a>.
+To create a resource to work with Flask, you&#8217;ll need to subclass from
+<a class="reference internal" href="reference/resources.html#restless.fl.FlaskResource" title="restless.fl.FlaskResource"><tt class="xref py py-class docutils literal"><span class="pre">restless.fl.FlaskResource</span></tt></a>.</p>
+<p><tt class="docutils literal"><span class="pre">DjangoResource</span></tt> is itself a subclass, inheriting from
+<tt class="docutils literal"><span class="pre">restless.resource.Resource</span></tt> &amp; overrides a small number of methods to make
+things work smoothly.</p>
+</div>
+<div class="section" id="the-existing-setup">
+<h2>The Existing Setup<a class="headerlink" href="#the-existing-setup" title="Permalink to this headline">¶</a></h2>
+<p>We&#8217;ll assume we&#8217;re creating an API for our super-awesome blog platform. We have
+a <tt class="docutils literal"><span class="pre">posts</span></tt> application, which has a model setup like so...:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># posts/models.py</span>
+<span class="kn">from</span> <span class="nn">django.contrib.auth.models</span> <span class="kn">import</span> <span class="n">User</span>
+<span class="kn">from</span> <span class="nn">django.db</span> <span class="kn">import</span> <span class="n">models</span>
+
+
+<span class="k">class</span> <span class="nc">Post</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">ForeignKey</span><span class="p">(</span><span class="n">User</span><span class="p">,</span> <span class="n">related_name</span><span class="o">=</span><span class="s">&#39;posts&#39;</span><span class="p">)</span>
+    <span class="n">title</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">128</span><span class="p">)</span>
+    <span class="n">slug</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">SlugField</span><span class="p">(</span><span class="n">blank</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="n">content</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">TextField</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">blank</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="n">posted_on</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">DateTimeField</span><span class="p">(</span><span class="n">auto_now_add</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="n">updated_on</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">DateTimeField</span><span class="p">(</span><span class="n">auto_now</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="k">class</span> <span class="nc">Meta</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">ordering</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;-posted_on&#39;</span><span class="p">,</span> <span class="s">&#39;title&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span>
+</pre></div>
+</div>
+<p>This is just enough to get the ORM going &amp; use some real data.</p>
+<p>The rest of the app (views, URLs, admin, forms, etc.) really aren&#8217;t important
+for the purposes of creating a basic Restless API, so we&#8217;ll ignore them for now.</p>
+</div>
+<div class="section" id="creating-a-resource">
+<h2>Creating A Resource<a class="headerlink" href="#creating-a-resource" title="Permalink to this headline">¶</a></h2>
+<p>We&#8217;ll start with defining the resource subclass. Where you put this code isn&#8217;t
+particularly important (as long as other things can import the class you
+define), but a great convention is <tt class="docutils literal"><span class="pre">&lt;myapp&gt;/api.py</span></tt>. So in case of our
+tutorial app, we&#8217;ll place this code in a new <tt class="docutils literal"><span class="pre">posts/api.py</span></tt> file.</p>
+<p>We&#8217;ll start with the most basic functional example.:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># posts/api.py</span>
+<span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+
+<span class="kn">from</span> <span class="nn">posts.models</span> <span class="kn">import</span> <span class="n">Post</span>
+
+
+<span class="k">class</span> <span class="nc">PostResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="s">&#39;id&#39;</span><span class="p">,</span>
+        <span class="s">&#39;title&#39;</span><span class="p">:</span> <span class="s">&#39;title&#39;</span><span class="p">,</span>
+        <span class="s">&#39;author&#39;</span><span class="p">:</span> <span class="s">&#39;user.username&#39;</span><span class="p">,</span>
+        <span class="s">&#39;body&#39;</span><span class="p">:</span> <span class="s">&#39;content&#39;</span><span class="p">,</span>
+        <span class="s">&#39;posted_on&#39;</span><span class="p">:</span> <span class="s">&#39;posted_on&#39;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="c"># GET /api/posts/ (but not hooked up yet)</span>
+    <span class="k">def</span> <span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+    <span class="c"># GET /api/posts/&lt;pk&gt;/ (but not hooked up yet)</span>
+    <span class="k">def</span> <span class="nf">detail</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As we&#8217;ve already covered, we&#8217;re inheriting from <tt class="docutils literal"><span class="pre">restless.dj.DjangoResource</span></tt>.
+We&#8217;re also importing our <tt class="docutils literal"><span class="pre">Post</span></tt> model, because serving data out of an API
+is kinda important.</p>
+<p>The name of the class isn&#8217;t particularly important, but it should be
+descriptive (and can play a role in hooking up URLs later on).</p>
+<div class="section" id="fields">
+<h3>Fields<a class="headerlink" href="#fields" title="Permalink to this headline">¶</a></h3>
+<p>We define a <tt class="docutils literal"><span class="pre">fields</span></tt> attribute on the class. This dictionary provides a
+mapping between what the API will return &amp; where the data is. This allows you
+to mask/rename fields, prevent some fields from being exposed or lookup
+information buried deep in the data model. The mapping is defined like...:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">fields</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;the_fieldname_exposed_to_the_user&#39;</span><span class="p">:</span> <span class="s">&#39;a_dotted_path_to_the_data&#39;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This dotted path is what allows use to drill in. For instance, the <tt class="docutils literal"><span class="pre">author</span></tt>
+field above has a path of <tt class="docutils literal"><span class="pre">user.username</span></tt>. When serializing, this will cause
+Restless to look for an attribute (or a key on a dict) called <tt class="docutils literal"><span class="pre">user</span></tt>. From
+there, it will look further into the resulting object/dict looking for a
+<tt class="docutils literal"><span class="pre">username</span></tt> attribute/key, returning it as the final value.</p>
+</div>
+<div class="section" id="methods">
+<h3>Methods<a class="headerlink" href="#methods" title="Permalink to this headline">¶</a></h3>
+<p>We&#8217;re also defining a <tt class="docutils literal"><span class="pre">list</span></tt> method &amp; a <tt class="docutils literal"><span class="pre">detail</span></tt> method. Both can take
+optional postitional/keyword parameters if necessary.</p>
+<p>These methods serve the <strong>data</strong> to present for their given endpoints. You
+don&#8217;t need to manually construct any responses/status codes/etc., just provide
+what data should be present.</p>
+<p>The <tt class="docutils literal"><span class="pre">list</span></tt> method serves the <tt class="docutils literal"><span class="pre">GET</span></tt> method on the collection. It should
+return a <tt class="docutils literal"><span class="pre">list</span></tt> (or similar iterable, like <tt class="docutils literal"><span class="pre">QuerySet</span></tt>) of data. In this
+case, we&#8217;re simply returning all of our <tt class="docutils literal"><span class="pre">Post</span></tt> model instances.</p>
+<p>The <tt class="docutils literal"><span class="pre">detail</span></tt> method also serves the <tt class="docutils literal"><span class="pre">GET</span></tt> method, but this time for single
+objects <strong>ONLY</strong>. Providing a <tt class="docutils literal"><span class="pre">pk</span></tt> in the URL allows this method to lookup
+the data that should be served.</p>
+</div>
+</div>
+<div class="section" id="hooking-up-the-urls">
+<h2>Hooking Up The URLs<a class="headerlink" href="#hooking-up-the-urls" title="Permalink to this headline">¶</a></h2>
+<p>URLs to Restless resources get hooked up much like any other class-based view.
+However, Restless&#8217;s <a class="reference internal" href="reference/resources.html#restless.dj.DjangoResource" title="restless.dj.DjangoResource"><tt class="xref py py-class docutils literal"><span class="pre">restless.dj.DjangoResource</span></tt></a> comes with a
+special method called <tt class="docutils literal"><span class="pre">urls</span></tt>, which makes hooking up URLs more convenient.</p>
+<p>You can hook the URLs for the resource up wherever you want. The recommended
+practice would be to create a URLconf just for the API portion of your site.:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># The ``settings.ROOT_URLCONF`` file</span>
+<span class="c"># myproject/urls.py</span>
+<span class="kn">from</span> <span class="nn">django.conf.urls</span> <span class="kn">import</span> <span class="n">patterns</span><span class="p">,</span> <span class="n">url</span><span class="p">,</span> <span class="n">include</span>
+
+<span class="c"># Add this!</span>
+<span class="kn">from</span> <span class="nn">posts.api</span> <span class="kn">import</span> <span class="n">PostResource</span>
+
+<span class="n">urlpatterns</span> <span class="o">=</span> <span class="n">patterns</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+    <span class="c"># The usual fare, then...</span>
+
+    <span class="c"># Add this!</span>
+    <span class="n">url</span><span class="p">(</span><span class="s">r&#39;api/posts/&#39;</span><span class="p">,</span> <span class="n">include</span><span class="p">(</span><span class="n">PostResource</span><span class="o">.</span><span class="n">urls</span><span class="p">())),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that unlike some other CBVs (admin specifically), the <tt class="docutils literal"><span class="pre">urls</span></tt> here is a
+<strong>METHOD</strong>, not an attribute/property. Those parens are important!</p>
+<div class="section" id="manual-urlconfs">
+<h3>Manual URLconfs<a class="headerlink" href="#manual-urlconfs" title="Permalink to this headline">¶</a></h3>
+<p>You can also manually hook up URLs by specifying something like:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">urlpatterns</span> <span class="o">=</span> <span class="n">patterns</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+    <span class="c"># ...</span>
+
+    <span class="c"># Identical to the above.</span>
+    <span class="n">url</span><span class="p">(</span><span class="s">r&#39;api/posts/$&#39;</span><span class="p">,</span> <span class="n">PostResource</span><span class="o">.</span><span class="n">as_list</span><span class="p">(),</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;api_post_list&#39;</span><span class="p">),</span>
+    <span class="n">url</span><span class="p">(</span><span class="s">r&#39;api/posts/(?P&lt;pk&gt;\d+)/$&#39;</span><span class="p">,</span> <span class="n">PostResource</span><span class="o">.</span><span class="n">as_detail</span><span class="p">(),</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;api_post_detail&#39;</span><span class="p">),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="testing-the-api">
+<h2>Testing the API<a class="headerlink" href="#testing-the-api" title="Permalink to this headline">¶</a></h2>
+<p>We&#8217;ve done enough to get the API (provided there&#8217;s data in the DB) going, so
+let&#8217;s make some requests!</p>
+<p>Go to a terminal &amp; run:</p>
+<div class="highlight-python"><pre>$ curl -X GET http://127.0.0.1:8000/api/posts/</pre>
+</div>
+<p>You should get something like this back...:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">{</span>
+    <span class="s">&quot;objects&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s">&quot;id&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s">&quot;title&quot;</span><span class="p">:</span> <span class="s">&quot;First Post!&quot;</span><span class="p">,</span>
+            <span class="s">&quot;author&quot;</span><span class="p">:</span> <span class="s">&quot;daniel&quot;</span><span class="p">,</span>
+            <span class="s">&quot;body&quot;</span><span class="p">:</span> <span class="s">&quot;This is the very first post on my shiny-new blog platform...&quot;</span><span class="p">,</span>
+            <span class="s">&quot;posted_on&quot;</span><span class="p">:</span> <span class="s">&quot;2014-01-12T15:23:46&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="c"># More here...</span>
+        <span class="p">}</span>
+    <span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>You can also go to the same URL in a browser (<a class="reference external" href="http://127.0.0.1:8000/api/posts/">http://127.0.0.1:8000/api/posts/</a>)
+&amp; you should also get the JSON back.</p>
+<p>You can then load up an individual object by changing the URL to include a
+<tt class="docutils literal"><span class="pre">pk</span></tt>.:</p>
+<div class="highlight-python"><pre>$ curl -X GET http://127.0.0.1:8000/api/posts/1/</pre>
+</div>
+<p>You should get back...:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">{</span>
+    <span class="s">&quot;id&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="s">&quot;title&quot;</span><span class="p">:</span> <span class="s">&quot;First Post!&quot;</span><span class="p">,</span>
+    <span class="s">&quot;author&quot;</span><span class="p">:</span> <span class="s">&quot;daniel&quot;</span><span class="p">,</span>
+    <span class="s">&quot;body&quot;</span><span class="p">:</span> <span class="s">&quot;This is the very first post on my shiny-new blog platform...&quot;</span><span class="p">,</span>
+    <span class="s">&quot;posted_on&quot;</span><span class="p">:</span> <span class="s">&quot;2014-01-12T15:23:46&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Note that the <tt class="docutils literal"><span class="pre">objects</span></tt> wrapper is no longer present &amp; we get back the JSON
+for just that single object. Hooray!</p>
+</div>
+<div class="section" id="creating-updating-deleting-data">
+<h2>Creating/Updating/Deleting Data<a class="headerlink" href="#creating-updating-deleting-data" title="Permalink to this headline">¶</a></h2>
+<p>A read-only API is nice &amp; all, but sometimes you want to be able to create data
+as well. So we&#8217;ll implement some more methods.:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># posts/api.py</span>
+<span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+
+<span class="kn">from</span> <span class="nn">posts.models</span> <span class="kn">import</span> <span class="n">Post</span>
+
+
+<span class="k">class</span> <span class="nc">PostResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="s">&#39;id&#39;</span><span class="p">,</span>
+        <span class="s">&#39;title&#39;</span><span class="p">:</span> <span class="s">&#39;title&#39;</span><span class="p">,</span>
+        <span class="s">&#39;author&#39;</span><span class="p">:</span> <span class="s">&#39;user.username&#39;</span><span class="p">,</span>
+        <span class="s">&#39;body&#39;</span><span class="p">:</span> <span class="s">&#39;content&#39;</span><span class="p">,</span>
+        <span class="s">&#39;posted_on&#39;</span><span class="p">:</span> <span class="s">&#39;posted_on&#39;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="c"># GET /api/posts/</span>
+    <span class="k">def</span> <span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+    <span class="c"># GET /api/posts/&lt;pk&gt;/</span>
+    <span class="k">def</span> <span class="nf">detail</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span>
+
+    <span class="c"># Add this!</span>
+    <span class="c"># POST /api/posts/</span>
+    <span class="k">def</span> <span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+            <span class="n">title</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;title&#39;</span><span class="p">],</span>
+            <span class="n">user</span><span class="o">=</span><span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;author&#39;</span><span class="p">]),</span>
+            <span class="n">content</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;body&#39;</span><span class="p">]</span>
+        <span class="p">)</span>
+
+    <span class="c"># Add this!</span>
+    <span class="c"># PUT /api/posts/&lt;pk&gt;/</span>
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">Post</span><span class="o">.</span><span class="n">DoesNotExist</span><span class="p">:</span>
+            <span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="p">()</span>
+
+        <span class="n">post</span><span class="o">.</span><span class="n">title</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;title&#39;</span><span class="p">]</span>
+        <span class="n">post</span><span class="o">.</span><span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;author&#39;</span><span class="p">])</span>
+        <span class="n">post</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;body&#39;</span><span class="p">]</span>
+        <span class="n">post</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">post</span>
+
+    <span class="c"># Add this!</span>
+    <span class="c"># DELETE /api/posts/&lt;pk&gt;/</span>
+    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>By adding the <tt class="docutils literal"><span class="pre">create/update/delete</span></tt> methods, we now have the ability to
+add new items, update existing ones &amp; delete individual items. Most of this
+code is relatively straightforward ORM calls, but there are a few interesting
+new things going on here.</p>
+<p>Note that the <tt class="docutils literal"><span class="pre">create</span></tt> &amp; <tt class="docutils literal"><span class="pre">update</span></tt> methods are both using a special
+<tt class="docutils literal"><span class="pre">self.data</span></tt> variable. This is created by Restless during deserialization &amp;
+is the <strong>JSON</strong> data the user sends as part of the request.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p>This data (within <tt class="docutils literal"><span class="pre">self.data</span></tt>) is mostly unsanitized (beyond standard
+JSON decoding) &amp; could contain anything (not just the <tt class="docutils literal"><span class="pre">fields</span></tt> you
+define).</p>
+<p>You know your data best &amp; validation is <strong>very</strong> non-standard between
+frameworks, so this is a place where Restless punts.</p>
+<p>Some people like cleaning the data with <tt class="docutils literal"><span class="pre">Forms</span></tt>, others prefer to
+hand-sanitize, some do model validation, etc. Do what works best for you.</p>
+<p class="last">You can refer to the <a class="reference internal" href="extending.html#extending"><em>Extending Restless</em></a> documentation for recommended
+approaches.</p>
+</div>
+<p>Also note that <tt class="docutils literal"><span class="pre">delete</span></tt> is the first method with <strong>no return value</strong>. You
+can do the same thing on <tt class="docutils literal"><span class="pre">create/update</span></tt> if you like. When there&#8217;s no
+meaningful data returned, Restless simply sends back a correct status code
+&amp; an empty body.</p>
+<p>Finally, there&#8217;s no need to hook up more URLconfs. Restless delegates based
+on a list &amp; a detail endpoint. All further dispatching is HTTP verb-based &amp;
+handled by Restless.</p>
+</div>
+<div class="section" id="testing-the-api-round-2">
+<h2>Testing the API, Round 2<a class="headerlink" href="#testing-the-api-round-2" title="Permalink to this headline">¶</a></h2>
+<p>Now let&#8217;s test out our new functionality! Go to a terminal &amp; run:</p>
+<div class="highlight-python"><pre>$ curl -X POST -H "Content-Type: application/json" -d '{"title": "New library released!", "author": "daniel", "body": "I just released a new thing!"}' http://127.0.0.1:8000/api/posts/</pre>
+</div>
+<p>You should get something like this back...:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">{</span>
+    <span class="s">&quot;error&quot;</span><span class="p">:</span> <span class="s">&quot;Unauthorized&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Wait, what?!! But we added our new methods &amp; everything!</p>
+<p>The reason you get unauthorized is that by default, <strong>only GET</strong> requests are
+allowed by Restless. It&#8217;s the only sane/safe default to have &amp; it&#8217;s very easy
+to fix.</p>
+</div>
+<div class="section" id="error-handling">
+<h2>Error Handling<a class="headerlink" href="#error-handling" title="Permalink to this headline">¶</a></h2>
+<p>By default, Restless tries to serialize any exceptions that may be encountered.
+What gets serialized depends on two methods: <tt class="docutils literal"><span class="pre">Resource.is_debug()</span></tt> &amp;
+<tt class="docutils literal"><span class="pre">Resource.bubble_exceptions()</span></tt>.</p>
+<div class="section" id="is-debug">
+<h3><tt class="docutils literal"><span class="pre">is_debug</span></tt><a class="headerlink" href="#is-debug" title="Permalink to this headline">¶</a></h3>
+<p>Regardless of the error type, the exception&#8217;s message will get serialized into
+the response under the <tt class="docutils literal"><span class="pre">&quot;error&quot;</span></tt> key. For example, if an <tt class="docutils literal"><span class="pre">IOError</span></tt> is
+raised during processing, you&#8217;ll get a response like:</p>
+<div class="highlight-python"><pre>HTTP/1.0 500 INTERNAL SERVER ERROR
+Content-Type: application/json
+# Other headers...
+
+{
+    "error": "Whatever."
+}</pre>
+</div>
+<p>If <tt class="docutils literal"><span class="pre">Resource.is_debug()</span></tt> returns <tt class="docutils literal"><span class="pre">True</span></tt> (the default is <tt class="docutils literal"><span class="pre">False</span></tt>), Restless
+will also include a traceback. For example:</p>
+<div class="highlight-python"><pre>HTTP/1.0 500 INTERNAL SERVER ERROR
+Content-Type: application/json
+# Other headers...
+
+{
+    "error": "Whatever.",
+    "traceback": "Traceback (most recent call last):\n # Typical traceback..."
+}</pre>
+</div>
+<p>Each framework-specific <tt class="docutils literal"><span class="pre">Resource</span></tt> subclass implements <tt class="docutils literal"><span class="pre">is_debug()</span></tt> in a
+way most appropriate for the framework. In the case of the <tt class="docutils literal"><span class="pre">DjangoResource</span></tt>,
+it returns <tt class="docutils literal"><span class="pre">settings.DEBUG</span></tt>, allowing your resources to stay consistent with
+the rest of your application.</p>
+</div>
+<div class="section" id="bubble-exceptions">
+<h3><tt class="docutils literal"><span class="pre">bubble_exceptions</span></tt><a class="headerlink" href="#bubble-exceptions" title="Permalink to this headline">¶</a></h3>
+<p>If <tt class="docutils literal"><span class="pre">Resource.bubble_exceptions()</span></tt> returns <tt class="docutils literal"><span class="pre">True</span></tt> (the default is <tt class="docutils literal"><span class="pre">False</span></tt>),
+any exception encountered will simply be re-raised &amp; it&#8217;s up to your setup to
+handle it. Typically, this behavior is undesirable except in development &amp; with
+frameworks that can provide extra information/debugging on exceptions. Feel
+free to override it (<tt class="docutils literal"><span class="pre">return</span> <span class="pre">True</span></tt>) or implement application-specific logic
+if that meets your needs.</p>
+</div>
+</div>
+<div class="section" id="authentication">
+<h2>Authentication<a class="headerlink" href="#authentication" title="Permalink to this headline">¶</a></h2>
+<p>We&#8217;re going to override one more method in our resource subclass, this time
+adding the <tt class="docutils literal"><span class="pre">is_authenticated</span></tt> method.:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># posts/api.py</span>
+<span class="kn">from</span> <span class="nn">restless.dj</span> <span class="kn">import</span> <span class="n">DjangoResource</span>
+
+<span class="kn">from</span> <span class="nn">posts.models</span> <span class="kn">import</span> <span class="n">Post</span>
+
+
+<span class="k">class</span> <span class="nc">PostResource</span><span class="p">(</span><span class="n">DjangoResource</span><span class="p">):</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;id&#39;</span><span class="p">:</span> <span class="s">&#39;id&#39;</span><span class="p">,</span>
+        <span class="s">&#39;title&#39;</span><span class="p">:</span> <span class="s">&#39;title&#39;</span><span class="p">,</span>
+        <span class="s">&#39;author&#39;</span><span class="p">:</span> <span class="s">&#39;user.username&#39;</span><span class="p">,</span>
+        <span class="s">&#39;body&#39;</span><span class="p">:</span> <span class="s">&#39;content&#39;</span><span class="p">,</span>
+        <span class="s">&#39;posted_on&#39;</span><span class="p">:</span> <span class="s">&#39;posted_on&#39;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="c"># Add this!</span>
+    <span class="k">def</span> <span class="nf">is_authenticated</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Open everything wide!</span>
+        <span class="c"># DANGEROUS, DO NOT DO IN PRODUCTION.</span>
+        <span class="k">return</span> <span class="bp">True</span>
+
+        <span class="c"># Alternatively, if the user is logged into the site...</span>
+        <span class="c"># return self.request.user.is_authenticated()</span>
+
+        <span class="c"># Alternatively, you could check an API key. (Need a model for this...)</span>
+        <span class="c"># from myapp.models import ApiKey</span>
+        <span class="c"># try:</span>
+        <span class="c">#     key = ApiKey.objects.get(key=self.request.GET.get(&#39;api_key&#39;))</span>
+        <span class="c">#     return True</span>
+        <span class="c"># except ApiKey.DoesNotExist:</span>
+        <span class="c">#     return False</span>
+
+    <span class="k">def</span> <span class="nf">list</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">detail</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+            <span class="n">title</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;title&#39;</span><span class="p">],</span>
+            <span class="n">user</span><span class="o">=</span><span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;author&#39;</span><span class="p">]),</span>
+            <span class="n">content</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;body&#39;</span><span class="p">]</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">Post</span><span class="o">.</span><span class="n">DoesNotExist</span><span class="p">:</span>
+            <span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="p">()</span>
+
+        <span class="n">post</span><span class="o">.</span><span class="n">title</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;title&#39;</span><span class="p">]</span>
+        <span class="n">post</span><span class="o">.</span><span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;author&#39;</span><span class="p">])</span>
+        <span class="n">post</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;body&#39;</span><span class="p">]</span>
+        <span class="n">post</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">post</span>
+
+    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pk</span><span class="p">):</span>
+        <span class="n">Post</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>With that change in place, now our API should play nice...</p>
+</div>
+<div class="section" id="testing-the-api-round-3">
+<h2>Testing the API, Round 3<a class="headerlink" href="#testing-the-api-round-3" title="Permalink to this headline">¶</a></h2>
+<p>Back to the terminal &amp; again run:</p>
+<div class="highlight-python"><pre>$ curl -X POST -H "Content-Type: application/json" -d '{"title": "New library released!", "author": "daniel", "body": "I just released a new thing!"}' http://127.0.0.1:8000/api/posts/</pre>
+</div>
+<p>You should get something like this back...:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">{</span>
+    <span class="s">&quot;body&quot;</span><span class="p">:</span> <span class="s">&quot;I just released a new thing!&quot;</span><span class="p">,</span>
+    <span class="s">&quot;title&quot;</span><span class="p">:</span> <span class="s">&quot;New library released!&quot;</span><span class="p">,</span>
+    <span class="s">&quot;id&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+    <span class="s">&quot;posted_on&quot;</span><span class="p">:</span> <span class="s">&quot;2014-01-13T10:02:55.926857+00:00&quot;</span><span class="p">,</span>
+    <span class="s">&quot;author&quot;</span><span class="p">:</span> <span class="s">&quot;daniel&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Hooray! Now we can check for it in the list view
+(<tt class="docutils literal"><span class="pre">GET</span></tt> <a class="reference external" href="http://127.0.0.1:8000/api/posts/">http://127.0.0.1:8000/api/posts/</a>) or by a detail (<tt class="docutils literal"><span class="pre">GET</span></tt>
+<a class="reference external" href="http://127.0.0.1:8000/api/posts/3/">http://127.0.0.1:8000/api/posts/3/</a>).</p>
+<p>We can also update it. Restless expects <strong>complete</strong> bodies (don&#8217;t try to send
+partial updates, that&#8217;s typically reserved for <tt class="docutils literal"><span class="pre">PATCH</span></tt>).:</p>
+<div class="highlight-python"><pre>$ curl -X POST -H "Content-Type: application/json" -d '{"title": "Another new library released!", "author": "daniel", "body": "I just released a new piece of software!"}' http://127.0.0.1:8000/api/posts/3/</pre>
+</div>
+<p>And we can delete our new data if we decide we don&#8217;t like it.:</p>
+<div class="highlight-python"><pre>$ curl -X DELETE http://127.0.0.1:8000/api/posts/3/</pre>
+</div>
+</div>
+<div class="section" id="conclusion">
+<h2>Conclusion<a class="headerlink" href="#conclusion" title="Permalink to this headline">¶</a></h2>
+<p>We&#8217;ve now got a basic, working RESTful API in a short amount of code! And
+the possibilities don&#8217;t stop at the ORM. You could hook up:</p>
+<ul class="simple">
+<li>Redis</li>
+<li>the NoSQL flavor of the month</li>
+<li>text/log files</li>
+<li>wrap calls to other (nastier) APIs</li>
+</ul>
+<p>You may also want to check the <a class="reference internal" href="cookbook.html#cookbook"><em>Cookbook</em></a> for other interesting/useful
+possibilities &amp; implementation patterns.</p>
+</div>
+<div class="section" id="bonus-flask-support">
+<h2>Bonus: Flask Support<a class="headerlink" href="#bonus-flask-support" title="Permalink to this headline">¶</a></h2>
+<p>Outside of the ORM, precious little of what we implemented above was
+Django-specific. If you used an ORM like <a class="reference external" href="http://peewee.readthedocs.org/en/latest/">Peewee</a> or <a class="reference external" href="http://www.sqlalchemy.org/">SQLAlchemy</a>, you&#8217;d have
+very similar-looking code.</p>
+<p>In actuality, there are just two changes to make the Restless-portion of the
+above work within Flask.</p>
+<ol class="arabic simple">
+<li>Change the inheritance</li>
+<li>Change how the URL routes are hooked up.</li>
+</ol>
+<div class="section" id="change-the-inheritance">
+<h3>Change The Inheritance<a class="headerlink" href="#change-the-inheritance" title="Permalink to this headline">¶</a></h3>
+<p>Restless ships with a <a class="reference internal" href="reference/resources.html#restless.fl.FlaskResource" title="restless.fl.FlaskResource"><tt class="xref py py-class docutils literal"><span class="pre">restless.fl.FlaskResource</span></tt></a> class, akin to the
+<tt class="docutils literal"><span class="pre">DjangoResource</span></tt>. So the first change is dead simple.:</p>
+<div class="highlight-python"><pre># Was: from restless.dj import DjangoResource
+# Becomes:
+from restless.fl import FlaskResource
+
+# ...
+
+# Was: class PostResource(DjangoResource):
+# Becomes:
+class PostResource(FlaskResource):
+    # ...</pre>
+</div>
+</div>
+<div class="section" id="change-how-the-url-routes-are-hooked-up">
+<h3>Change How The URL Routes Are Hooked Up<a class="headerlink" href="#change-how-the-url-routes-are-hooked-up" title="Permalink to this headline">¶</a></h3>
+<p>Again, similar to the <tt class="docutils literal"><span class="pre">DjangoResource</span></tt>, the <tt class="docutils literal"><span class="pre">FlaskResource</span></tt> comes with a
+special method to make hooking up the routes easier.</p>
+<p>Wherever your <tt class="docutils literal"><span class="pre">PostResource</span></tt> is defined, import your Flask <tt class="docutils literal"><span class="pre">app</span></tt>, then call
+the following:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">PostResource</span><span class="o">.</span><span class="n">add_url_rules</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">rule_prefix</span><span class="o">=</span><span class="s">&#39;/api/posts/&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This will hook up the same two endpoints (list &amp; detail, just like Django above)
+within the Flask app, doing similar dispatches.</p>
+<p>You can also do this manually (but it&#8217;s ugly/hurts).:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">app</span><span class="o">.</span><span class="n">add_url_rule</span><span class="p">(</span><span class="s">&#39;/api/posts/&#39;</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="s">&#39;api_posts_list&#39;</span><span class="p">,</span> <span class="n">view_func</span><span class="o">=</span><span class="n">PostResource</span><span class="o">.</span><span class="n">as_list</span><span class="p">(),</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;GET&#39;</span><span class="p">,</span> <span class="s">&#39;POST&#39;</span><span class="p">,</span> <span class="s">&#39;PUT&#39;</span><span class="p">,</span> <span class="s">&#39;DELETE&#39;</span><span class="p">])</span>
+<span class="n">app</span><span class="o">.</span><span class="n">add_url_rule</span><span class="p">(</span><span class="s">&#39;/api/posts/&lt;pk&gt;/&#39;</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="s">&#39;api_posts_detail&#39;</span><span class="p">,</span> <span class="n">view_func</span><span class="o">=</span><span class="n">PostResource</span><span class="o">.</span><span class="n">as_detail</span><span class="p">(),</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;GET&#39;</span><span class="p">,</span> <span class="s">&#39;POST&#39;</span><span class="p">,</span> <span class="s">&#39;PUT&#39;</span><span class="p">,</span> <span class="s">&#39;DELETE&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="done">
+<h3>Done!<a class="headerlink" href="#done" title="Permalink to this headline">¶</a></h3>
+<p>Believe it or not, if your ORM could be made to look similar, that&#8217;s all the
+further changes needed to get the same API (with the same end-user interactions)
+working on Flask! Huzzah!</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Restless Tutorial</a><ul>
+<li><a class="reference internal" href="#why-restless">Why Restless?</a></li>
+<li><a class="reference internal" href="#installation">Installation</a></li>
+<li><a class="reference internal" href="#getting-started">Getting Started</a></li>
+<li><a class="reference internal" href="#about-resources">About Resources</a></li>
+<li><a class="reference internal" href="#the-existing-setup">The Existing Setup</a></li>
+<li><a class="reference internal" href="#creating-a-resource">Creating A Resource</a><ul>
+<li><a class="reference internal" href="#fields">Fields</a></li>
+<li><a class="reference internal" href="#methods">Methods</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#hooking-up-the-urls">Hooking Up The URLs</a><ul>
+<li><a class="reference internal" href="#manual-urlconfs">Manual URLconfs</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#testing-the-api">Testing the API</a></li>
+<li><a class="reference internal" href="#creating-updating-deleting-data">Creating/Updating/Deleting Data</a></li>
+<li><a class="reference internal" href="#testing-the-api-round-2">Testing the API, Round 2</a></li>
+<li><a class="reference internal" href="#error-handling">Error Handling</a><ul>
+<li><a class="reference internal" href="#is-debug"><tt class="docutils literal"><span class="pre">is_debug</span></tt></a></li>
+<li><a class="reference internal" href="#bubble-exceptions"><tt class="docutils literal"><span class="pre">bubble_exceptions</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#authentication">Authentication</a></li>
+<li><a class="reference internal" href="#testing-the-api-round-3">Testing the API, Round 3</a></li>
+<li><a class="reference internal" href="#conclusion">Conclusion</a></li>
+<li><a class="reference internal" href="#bonus-flask-support">Bonus: Flask Support</a><ul>
+<li><a class="reference internal" href="#change-the-inheritance">Change The Inheritance</a></li>
+<li><a class="reference internal" href="#change-how-the-url-routes-are-hooked-up">Change How The URL Routes Are Hooked Up</a></li>
+<li><a class="reference internal" href="#done">Done!</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter">restless</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="philosophy.html"
+                        title="next chapter">Philosophy Behind Restless</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/tutorial.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="philosophy.html" title="Philosophy Behind Restless"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="restless"
+             >previous</a> |</li>
+        <li><a href="index.html">restless 1.3.1-dev documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Daniel Lindsley.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.
+    </div>
+  </body>
+</html>

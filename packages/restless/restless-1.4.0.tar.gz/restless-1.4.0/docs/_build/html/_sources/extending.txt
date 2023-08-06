@@ -1,0 +1,465 @@
+.. _extending:
+
+==================
+Extending Restless
+==================
+
+Restless is meant to handle many simpler cases well & have enough extensibility
+to handle more complex API tasks.
+
+However, a specific goal of the project is to not expand the scope much & simply
+give you, the expert on your API, the freedom to build what you need.
+
+We'll be covering:
+
+* Custom endpoints
+* Customizing data output
+* Adding data validation
+* Providing different serialization formats
+
+
+Custom Endpoints
+================
+
+Sometimes you need to provide more than just the typical HTTP verbs. Restless
+allows you to hook up custom endpoints that can take advantage of much of the
+``Resource``.
+
+Implementing these views requires a couple simple steps:
+
+* Writing the method
+* Adding to the ``Resource.http_methods`` mapping
+* Adding to your URL routing
+
+For instance, if you wanted to added a schema view (``/api/posts/schema/``)
+that responded to ``GET`` requests, you'd first write the method::
+
+    from restless.dj import DjangoResource
+
+
+    class PostResource(DjangoResource):
+        # The usual methods, then...
+
+        def schema(self):
+            # Return your schema information.
+            # We're keeping it simple (basic field names & data types).
+            return {
+                'fields': {
+                    'id': 'integer',
+                    'title': 'string',
+                    'author': 'string',
+                    'body': 'string',
+                },
+            }
+
+The next step is to update the :py:attr:`Resource.http_methods`. This can
+either be fully written out in your class or (as I prefer) a small extension
+to your ``__init__``...::
+
+    from restless.dj import DjangoResource
+
+
+    class PostResource(DjangoResource):
+        # We'll lightly extend the ``__init__``.
+        def __init__(self, *args, **kwargs):
+            super(PostResource, self).__init__(*args, **kwargs)
+
+            # Add on a new top-level key, then define what HTTP methods it
+            # listens on & what methods it calls for them.
+            self.http_methods.update({
+                'schema': {
+                    'GET': 'schema',
+                }
+            })
+
+        # The usual methods, then...
+
+        def schema(self):
+            return {
+                'fields': {
+                    'id': 'integer',
+                    'title': 'string',
+                    'author': 'string',
+                    'body': 'string',
+                },
+            }
+
+Finally, it's just a matter of hooking up the URLs as well. You can do this
+manually or (once again) by extending a built-in method.::
+
+    # Add the correct import here.
+    from django.conf.urls import patterns, url
+
+    from restless.dj import DjangoResource
+
+
+    class PostResource(DjangoResource):
+        def __init__(self, *args, **kwargs):
+            super(PostResource, self).__init__(*args, **kwargs)
+            self.http_methods.update({
+                'schema': {
+                    'GET': 'schema',
+                }
+            })
+
+        # The usual methods, then...
+
+        def schema(self):
+            return {
+                'fields': {
+                    'id': 'integer',
+                    'title': 'string',
+                    'author': 'string',
+                    'body': 'string',
+                },
+            }
+
+        # Finally, extend the URLs.
+        @classmethod
+        def urls(cls, name_prefix=None):
+            urlpatterns = super(PostResource, cls).urls(cls, name_prefix=name_prefix)
+            return urlpatterns + patterns('',
+                # Note: We pass ``prepare_data=False`` here so that Restless
+                # doesn't run ``prepare`` on the schema data.
+                # If your custom view returns a typical ``object/dict`` (like
+                # the ``detail`` method), you can omit this.
+                url(r'^schema/$', cls.as_view('schema', prepare_data=False), name=cls.build_url_name('schema', name_prefix)),
+            )
+
+.. note::
+
+    This step varies from framework to framework. The code is specific to the
+    :py:class:`restless.dj.DjangoResource`, but the approach is the same
+    regardless.
+
+You should now be able to hit something like http://127.0.0.1/api/posts/schema/
+in your browser & get a JSON schema view!
+
+
+Customizing Data Output
+=======================
+
+There are three approaches to customizing your data ouput.
+
+#. The built-in ``fields`` (simple)
+#. Overriding :py:meth:`restless.resources.Resource.prepare` (happy medium)
+#. Per-method data (flexible but most work)
+
+Fields
+------
+
+Using ``fields`` is documented elsewhere (see the :ref:`tutorial`), but the
+basic gist is that you define a dictionary on the **class**. Example::
+
+    class MyResource(Resource):
+        fields = {
+            # Expose the same name.
+            "id": "id",
+            # Rename a field.
+            "author": "username",
+            # Access deeper data.
+            "type_id": "metadata.type.pk",
+        }
+
+This dictionary is a mapping, with keys representing the final name & the
+values acting as a lookup path.
+
+If the lookup path **has no** periods (i.e. ``name``) in it, it's
+considered to be an attribute/key on the item being processed. If that item
+looks like a ``dict``, key access is attempted. If it looks like an ``object``,
+attribute access is used. In either case, the found value is returned.
+
+If the lookup path **has** periods (i.e. ``entry.title``), it is split on the
+periods (like a Python import path) and recursively uses the previous value to
+look up the next value until a final value is found.
+
+
+Overriding ``prepare``
+----------------------
+
+For every item (``object`` or ``dict``) that gets serialized as output, it runs
+through a ``prepare`` method on your ``Resource`` subclass.
+
+The default behavior checks to see if you have ``fields`` defined on your class
+& either just returns all the data (if there's no ``fields``) or uses the
+``fields`` to extract plain data.
+
+However, you can use/abuse this method for your own nefarious purposes. For
+example, if you wanted to serve an API of users but sanitize the data, you
+could do something like::
+
+    from django.contrib.auth.models import User
+
+    from restless.dj import DjangoResource
+
+
+    class UserResource(DjangoResource):
+        fields = {
+            'id': 'id',
+            'username': 'username',
+            # We're including email here, but we'll sanitize it later.
+            'email': 'email',
+            'date_joined': 'date_joined',
+        }
+
+        def list(self):
+            return User.objects.all()
+
+        def detail(self, pk):
+            return User.objects.get(pk=pk)
+
+        def prepare(self, data):
+            # ``data`` is the object/dict to be exposed.
+            # We'll call ``super`` to prep the data, then we'll mask the email.
+            prepped = super(UserResource, self).prepare(data)
+
+            email = prepped['email']
+            at_offset = email.index('@')
+            prepped['email'] = email[:at_offset + 1] + "..."
+
+            return prepped
+
+This example is somewhat contrived, but you can perform any kind of
+transformation you want here, as long as you return a plain, serializable
+``dict``.
+
+
+Per-Method Data
+---------------
+
+Because Restless can serve plain old Python objects (anything JSON serializable
++ ``datetime`` + ``decimal``), the ultimate form of control is simply to load
+your data however you want, then return a simple/serializable form.
+
+For example, Django's ``models.Model`` classes are not normally
+JSON-serializable. We also may want to expose related data in a nested form.
+Here's an example of doing something like that.::
+
+    from restless.dj import DjangoResource
+
+    from posts.models import Post
+
+
+    class PostResource(DjangoResource):
+        def detail(self, pk):
+            # We do our rich lookup here.
+            post = Post.objects.get(pk=pk).select_related('user')
+
+            # Then we can simplify it & include related information.
+            return {
+                'title': post.title,
+                'author': {
+                    'id': post.user.id,
+                    'username': post.user.username,
+                    'date_joined': post.user.date_joined,
+                    # We exclude things like ``password`` & ``email`` here
+                    # intentionally.
+                },
+                'body': post.content,
+                # ...
+            }
+
+While this is more verbose, it gives you all the control.
+
+If you have resources for your nested data, you can also re-use them to make the
+construction easier. For example::
+
+    from django.contrib.auth.models import User
+
+    from restless.dj import DjangoResource
+
+    from posts.models import Post
+
+
+    class UserResource(DjangoResource):
+        fields = {
+            'id': 'id',
+            'username': 'username',
+            'date_joined': 'date_joined',
+        }
+
+        def detail(self, pk):
+            return User.objects.get(pk=pk)
+
+
+    class PostResource(DjangoResource):
+        def detail(self, pk):
+            # We do our rich lookup here.
+            post = Post.objects.get(pk=pk).select_related('user')
+
+            # Instantiate the ``UserResource``
+            ur = UserResource()
+
+            # Then populate the data.
+            return {
+                'title': post.title,
+                # We leverage the ``prepare`` method from above to build the
+                # nested data we want.
+                'author': ur.prepare(post.user.id),
+                'body': post.content,
+                # ...
+            }
+
+
+Data Validation
+===============
+
+Validation can be a contentious issue. No one wants to risk data corruption
+or security holes in their services. However, there's no real standard or
+consensus on doing data validation even within the **individual** framework
+communities themselves, let alone *between* frameworks.
+
+So unfortunately, Restless mostly ignores this issue, leaving you to do data
+validation the way you think is best.
+
+The good news is that the data you'll need to validate is already in a
+convenient-to-work-with dictionary called ``Resource.data`` (assigned
+immediately after deserialization takes place).
+
+The recommended approach is to simply add on to your data methods themselves.
+For example, since Django ``Form`` objects are at least *bundled* with the
+framework, we'll use those as an example...::
+
+    from django.forms import ModelForm
+
+    from restless.dj import DjangoResource
+    from restless.exceptions import HttpError
+
+
+    class UserForm(ModelForm):
+        class Meta(object):
+            model = User
+            fields = ['username', 'first_name', 'last_name', 'email']
+
+
+    class UserResource(DjangoResource):
+        def create(self):
+            # We can create a bound form from the get-go.
+            form = UserForm(self.data)
+
+            if not form.is_valid():
+                raise HttpError("You're a bad person & you should feel bad.")
+
+            # Continue as normal, using the form data instead.
+            user = User.objects.create(
+                username=form.cleaned_data['username'],
+                first_name=form.cleaned_data['first_name'],
+                last_name=form.cleaned_data['last_name'],
+                email=form.cleaned_data['email'],
+            )
+            return user
+
+If you're going to use this validation in other places, you're welcome to DRY
+up your code into a validation method. An example of this might look like...::
+
+    from django.forms import ModelForm
+
+    from restless.dj import DjangoResource
+    from restless.exceptions import HttpError
+
+
+    class UserForm(ModelForm):
+        class Meta(object):
+            model = User
+            fields = ['username', 'first_name', 'last_name', 'email']
+
+
+    class UserResource(DjangoResource):
+        def validate_user(self):
+            form = UserForm(self.data)
+
+            if not form.is_valid():
+                raise HttpError("You're a bad person & you should feel bad.")
+
+            return form.cleaned_data
+
+        def create(self):
+            cleaned = self.validate_user()
+            user = User.objects.create(
+                username=cleaned['username'],
+                first_name=cleaned['first_name'],
+                last_name=cleaned['last_name'],
+                email=cleaned['email'],
+            )
+            return user
+
+        def update(self, pk):
+            cleaned = self.validate_user()
+            user = User.objects.get(pk=pk)
+            user.username = cleaned['username']
+            user.first_name = cleaned['first_name']
+            user.last_name = cleaned['last_name']
+            user.email = cleaned['email']
+            user.save()
+            return user
+
+
+Alternative Serialization
+=========================
+
+For some, Restless' JSON-only syntax might not be appealing. Fortunately,
+overriding this is not terribly difficult.
+
+For the purposes of demonstration, we'll implement YAML in place of JSON.
+The process would be similar (but much more verbose) for XML (& brings
+`a host of problems`_ as well).
+
+Start by creating a subclass specifically for serialization. We'll override
+a couple methods there, then all your actual API classes can inherit from it.::
+
+    import yaml
+
+    from restless import Resource
+
+
+    class YAMLResource(Resource):
+        def raw_deserialize(self, body):
+            # Do **NOT** use ``yaml.load`` here, as it can contain things like
+            # *functions* & other dangers!
+            return yaml.safe_load(body)
+
+        def raw_serialize(self, data):
+            return yaml.dump(data)
+
+Once those methods are implemented, it's just a matter of changing the
+inheritance on your classes.::
+
+    # Old.
+    class MyResource(Resource):
+        # ...
+
+    # New.
+    class MyResource(YAMLResource):
+        # ...
+
+You can even do things like handle multiple serialization formats, say if the
+user provides a ``?format=yaml`` GET param...::
+
+    from restless import Resource
+    from restless.utils import json, MoreTypesJSONEncoder
+
+    from django.template import Context, Template
+
+
+    class MultiSerializeResource(Resource):
+        def raw_deserialize(self, body):
+            # This is Django-specific, but all frameworks can handle GET
+            # parameters...
+            ct = request.GET.get('format', 'json')
+
+            if ct == 'yaml':
+                return yaml.safe_load(body)
+            else:
+                return json.load(body)
+
+        def raw_serialize(self, data):
+            # Again, Django-specific.
+            ct = request.GET.get('format', 'json')
+
+            if ct == 'yaml':
+                return yaml.dump(body)
+            else:
+                return json.dumps(body, cls=MoreTypesJSONEncoder)
+
+.. _`a host of problems`: https://pypi.python.org/pypi/defusedxml
+
