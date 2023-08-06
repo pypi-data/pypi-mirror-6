@@ -1,0 +1,323 @@
+pyFRET Tutorial
+================
+
+
+Installing pyFRET
+-----------------
+
+pyFRET is available as a module on PyPI_, the Python Packagae Index.
+    .. _PyPI: https://pypi.python.org/pypi
+
+If you are not already using python for programming, you may need to install python. Here are some instructions:
+
+* For Unix_: 
+    .. _Unix: https://docs.python.org/2/using/unix.html
+* For iOS_: 
+    .. _iOS: https://docs.python.org/2/using/mac.html
+* For Windows_: 
+    .. _Windows: https://docs.python.org/2/using/windows.html
+
+These pages also provide useful links to tutorials for programming in python.
+
+Once you have python up and running, you can install pyFRET from PyPI. Here's how.
+
+First, you will need to install a package named "pip", which allows quick installation of new packages from PyPI.
+Instructions for pip installation can be found on their website_:
+    .. _website: http://www.pip-installer.org/en/latest/installing.html
+
+Once you have pip installed, you can download pyFRET. pyFRET requires some other packages in order to work correctly. These are:
+
+* scipy
+* numpy
+* matplotlib
+
+Open a terminal window and type:
+
+.. code-block:: bash
+
+    $ pip install pyFRET
+
+Installing pyFRET using pip will automatically detect whether you have the required packages and will install them for you at the same time as pyFRET is installed.
+
+
+Using pyFRET
+------------
+
+To use pyFRET to analyse your data, you must first import the module into your python program. You can use:
+
+.. code-block:: python
+
+    import pyFRET
+
+This will import the whole module. However, it is easier to import pyFRET and pyALEX separately:
+
+.. code-block:: python
+
+    from pyFRET import pyFRET as pft
+    from pyFRET import pyALEX as pyx
+
+This will let you use their functions directly.
+
+Sample code that uses pyFRET to analyse smFRET data can be found in ALEX_example.py and FRET_example.py.
+These programs use configuration files to load parameters for the analysis. These configuration files are ALEX_config.cfg and FRET_config.cfg.
+These files can be found in the /bin folder of the pyFRET download.
+
+To provide further illustration of how pyFRET can be used, below are some examples of things that you can do using pyFRET.
+
+
+Using pyFRET.pyFRET
+-------------------
+
+Now that you have pyFRET imported into your program, you are ready to use it to analyse data. Let's start with a simple analysis of some FRET data.
+
+First, you need to initialize a FRET data object to hold your data.
+
+If you have a list of .csv files (here called file1, file2 and file3), you can do this:
+
+.. code-block:: python
+
+    my_directory = "path/to/my/files"
+    list_of_files = ["file1.csv", "file2.csv", "file3.csv"]
+    my_data = pft.parse_csv(my_directory, list_of_files)
+
+This will store your data as two arrays of values, named donor and acceptor, in an object called my data. You can print these arrays like this:
+
+.. code-block:: python
+
+    print my_data.donor
+    print my_data.acceptor
+
+Now you are ready to start manipulating the data.
+
+To subtract background autofluorescence:
+
+.. code-block:: python
+    
+    auto_donor = 0.5 # donor autofluorescence
+    auto_acceptor = 0.3 # acceptor autofluorescence
+    my_data.subtract_bckd(auto_donor, auto_acceptor)
+
+To select bursts using AND thresholding:
+
+.. code-block:: python
+
+    threshold_donor = 20 # donor threshold
+    threshold_acceptor = 20 # acceptor threshold
+    my_data.threshold_AND(threshold_donor, threshold_acceptor)
+
+To select bursts using SUM thresholding:
+
+.. code-block:: python
+    
+    threshold = 30 # threshold
+    my_data.threshold_SUM(threshold)
+
+To remove cross-talk from bursts: 
+
+.. code-block:: python
+    
+    cross_DtoA = 0.05 # fractional crosstalk from donor to acceptor
+    cross_AtoD = 0.01 # fractional crosstalk from acceptor to donor
+    my_data.subtract_crosstalk(cross_DtoA, cross_AtoD)
+
+To calculate the FRET proximity ratio of bursts, you can use the proximity_ratio function:
+
+.. code-block:: python
+    
+    gamma = 0.95 # instrumental gamma factor (default value 1.0)
+    E = my_data.proximity_ratio(gamma=0.95)
+
+
+You can also build FRET histogram directly from the donor and acceptor data. To make a FRET histogram, use the function build_histogram, which will calculate the proximity ratio internally. This function has several optional additions.
+
+The simplest option is just to make a histogram, and save the frequencies and bin centres in a .csv file:
+
+.. code-block:: python
+
+    filepath = "path/to/save/histogram"
+    csvname = my_histogram
+    g_factor = 0.95 # instrumental gamma factor
+    my_data.build_histogram(filepath, csvname, gamma=g_factor, bin_min=0.0, bin_max=1.0, bin_width=0.02)
+
+
+You can also save an image of the histogram:
+
+.. code-block:: python
+
+    filepath = "path/to/save/histogram"
+    csvname = my_histogram
+    g_factor = 0.95 # instrumental gamma factor
+    my_data.build_histogram(filepath, csvname, gamma=g_factor, bin_min=0.0, bin_max=1.0, bin_width=0.02, \ 
+    image = True, imgname = my_histogram, imgtype="png")
+
+
+Finally, you can fit the histogram with a single gaussian distribution and save the parameters of the fit in a csv file. This will also make an image of the histogram overlaid with the gauss fit. 
+
+.. code-block:: python
+
+    filepath = "path/to/save/histogram"
+    csvname = my_histogram
+    g_factor = 0.95 # instrumental gamma factor
+    my_data.build_histogram(filepath, csvname, gamma=g_factor, bin_min=0.0, bin_max=1.0, bin_width=0.02, \
+    image=True, imgname=my_histogram, imgtype="png", gauss=True, gaussname="gaussfit")
+
+As well as making histograms, you can also make some other plots to display your data. For example, a heatmap or 3D plot of event frequencies:
+
+.. code-block:: python
+
+    # make a heatmap
+    filepath = "path/to/save/image"
+    plotname = my_plot
+    my_data.make_hex_plot(filepath, plotname, imgtype="pdf", binning="log")
+
+    # make a 3D plot
+    filepath = "path/to/save/image"
+    plotname = my_3d_plot
+    my_data.make_3d_plot(filepath, plotname, imgtype="pdf")
+
+This makes images like these:
+
+.. image:: 10bp_FRET_hexplot.png
+    :scale: 45%
+
+.. image:: 10bp_FRET_3dplot.png
+    :scale: 45%
+
+For more information on the pyFRET library, more functions and more detail, please see the reference_:
+    .. _reference: pyfret_build/html/FRET_reference.html
+
+Using pyFRET.pyALEX
+-------------------
+
+pyALEX is for data collected using alternating laser excitation. Many of the functions are similar to those used in pyFRET. Here is a quick oveview.
+
+First, you need to initialize an ALEX data object to hold your data.
+
+If you have a list of .csv files (here called file1, file2 and file3), you can do this:
+
+.. code-block:: python
+
+    my_directory = "path/to/my/files"
+    list_of_files = ["file1.csv", "file2.csv", "file3.csv"]
+    my_data = pft.parse_csv(my_directory, list_of_files)
+
+This will store your data as four arrays of values (see below) in an object called my_data. The four data channels in an ALEX experiment are: 
+
+
+* D_D: Donor channel when the donor laser is on
+* D_A: Donor channel when the acceptor laser is on
+* A_D: Acceptor channel when the donor laser is on
+* A_A: Acceptor channel when the acceptor laser is on 
+
+You can print these arrays like this:
+
+.. code-block:: python
+
+    print my_data.D_D
+    print my_data.D_A
+    print my_data.A_D
+    print my_data.A_A
+
+Now you are ready to start manipulating the data.
+
+To subtract background autofluorescence:
+
+.. code-block:: python
+    
+    autoD_D = 0.5 # donor autofluorescence (donor laser)
+    autoD_A = 0.3 # donor autofluorescence (acceptor laser)
+    autoA_D = 0.5 # acceptor autofluorescence (donor laser)
+    autoA_A = 0.8 # acceptor autofluorescence (acceptor laser)
+    my_data.subtract_bckd(auto_donor, auto_acceptor)
+
+To subtract leakage and direct excitation from the FRET channel:
+
+.. code-block:: python
+    
+    l = 0.05 # fractional leakage from donor excitation into acceptor channel 
+    d = 0.03 # fractional contribution of direct acceptor excitation by donor laser 
+    my_data.subtract_crosstalk(l, d)
+
+The key innovation of ALEX is to select events based on their photon stoichiometry -- the fraction of all observed photons that were emitted by the acceptor dye.
+
+Both the Proximity Ratio, E, and the stoichiometry, S, can be calculated explicitly:
+
+.. code-block:: python
+    
+   	g_factor = 0.95 # the gamma factor
+    E = my_data.proximity_ratio(gamma=g_factor) # Proximity ratio
+    S = my_data.stoichiometry(gamma=g_factor) # Stoichiometry
+
+Then you can remove singly-labelled molecules that give events with extreme stoichiometries:
+
+.. code-block:: python
+
+    S = my_data.stoichiometry(gamma=g_factor)
+   	S_min = 0.2 # minimum S
+    S_max = 0.8 # maximium S
+    S = my_data.stoichiometry_selectiony(S, S_min, S_max)
+
+
+However, E and S can also be calculated in a single step, combined with burst selection based on S, using the scatter_hist function. This will also plot and optionally save a scatter plot of your data, with projections of E and S:
+
+.. code-block:: python
+    
+   	g_factor = 0.95 # the gamma factor
+   	S_min = 0.2
+   	S_max = 0.8
+   	filepath = "path\to\my\file"
+   	filename = "scatter_plot"
+   	scatter_hist(self, S_min, S_max, gamma=1.0, save=True, filepath=filepath, imgname=filename, imgtype="png")
+
+You can also make a separate histogram of the selected events. The histogram frequencies and bin centres will be saved in a csv file. You can also optionally save an image of the histogram and fit it as a single gaussian distribution.
+
+.. code-block:: python
+    
+   	g_factor = 0.95 # the gamma factor
+   	S_min = 0.2
+   	S_max = 0.8
+   	filepath = "path\to\my\file"
+   	filename = "E_histogram"
+   	img = "E_plot"
+   	build_histogram(filepath, filename, gamma=1.0, bin_min=0.0, bin_max=1.0, bin_width=0.02, image = True, imgname = img, imgtype="png")
+
+The scatterplot and FRET Efficency histograms look like this:
+
+.. image:: 10bp_ALEX_scatterhist.png
+    :scale: 45%
+
+.. image:: 10bp_ALEX_hist.png
+    :scale: 45%
+
+For more details about pyALEX, please see the detailed documentation_:
+	.. _documentation: pyfret_build/html/ALEX_reference.html
+
+    
+The Sample Data
+---------------
+Included in /bin is some sample data that you can use to check that your installation of pyFRET is working correctly.
+
+To reproduce our data analysis, from the \bin folder in pyFRET, type:
+
+.. code-block:: bash
+
+    $ python FRET_example.py 10bp_FRET_config.cfg
+
+This will execute the program FRET_example.py using the parameters stored in the configuration file 10bp_FRET_config.cfg, to analyse smFRET data from dual labelled DNA duplex, with a 10 base-pair separation between the dye attachment sites. There are four more smFRET datasets to analyse (4, 6, 8 and 12 bp separations) with similar configuration files.
+
+Similarly, you can reproduce our analysis of the equivalent ALEX data using:
+
+.. code-block:: bash
+
+    $ python ALEX_example.py 10bp_ALEX_config.cfg
+
+Right now, the configuration file parser that is used in ALEX_example.py and FRET_example.py runs only with a python 2.x installation. We are working on making an equivalent set of files for use with python 3.x distributions.
+
+To learn more about how configuration files work and how you can use them to analyse your own data please see the configparser_ documentation:
+    .. _configparser: https://docs.python.org/2/library/configparser.html 
+
+You can open both the configuration files and the example python scripts in a text editor (like Sublime_ or Gedit_) to see how the configuration files are used by the python program:
+    .. _Sublime: http://www.sublimetext.com/2
+    .. _Gedit: https://wiki.gnome.org/Apps/Gedit
+
+
