@@ -1,0 +1,212 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Sources &mdash; zope.schema 4.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '4.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="zope.schema 4.2 documentation" href="index.html" />
+    <link rel="next" title="Schema Validation" href="validation.html" />
+    <link rel="prev" title="Fields" href="fields.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="validation.html" title="Schema Validation"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="fields.html" title="Fields"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">zope.schema 4.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="sources">
+<h1>Sources<a class="headerlink" href="#sources" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="concepts">
+<h2>Concepts<a class="headerlink" href="#concepts" title="Permalink to this headline">¶</a></h2>
+<p>Sources are designed with three concepts:</p>
+<ul>
+<li><p class="first">The source itself - an iterable</p>
+<p>This can return any kind of object it wants. It doesn&#8217;t have to care
+for browser representation, encoding, ...</p>
+</li>
+<li><p class="first">A way to map a value from the iterable to something that can be used
+for form <em>values</em> - this is called a token. A token is commonly a
+(unique) 7bit representation of the value.</p>
+</li>
+<li><p class="first">A way to map a value to something that can be displayed to the user -
+this is called a title</p>
+</li>
+</ul>
+<p>The last two elements are dispatched using a so called <cite>term</cite>. The
+ITitledTokenizedTerm interface contains a triple of (value, token, title).</p>
+<p>Additionally there are some lookup functions to perform the mapping
+between values and terms and tokens and terms.</p>
+<p>Sources that require context use a special factory: a context source
+binder that is called with the context and instanciates the source when
+it is actually used.</p>
+</div>
+<div class="section" id="sources-in-fields">
+<h2>Sources in Fields<a class="headerlink" href="#sources-in-fields" title="Permalink to this headline">¶</a></h2>
+<p>A choice field can be constructed with a source or source name.  When a source
+is used, it will be used as the source for valid values.</p>
+<p>Create a source for all odd numbers.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope</span> <span class="kn">import</span> <span class="n">interface</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema.interfaces</span> <span class="kn">import</span> <span class="n">ISource</span><span class="p">,</span> <span class="n">IContextSourceBinder</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@interface.implementer</span><span class="p">(</span><span class="n">ISource</span><span class="p">)</span>
+<span class="gp">... </span><span class="k">class</span> <span class="nc">MySource</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">divisor</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__contains__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">value</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">divisor</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">my_source</span> <span class="o">=</span> <span class="n">MySource</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="mi">1</span> <span class="ow">in</span> <span class="n">my_source</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="mi">2</span> <span class="ow">in</span> <span class="n">my_source</span>
+<span class="go">False</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema</span> <span class="kn">import</span> <span class="n">Choice</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">choice</span> <span class="o">=</span> <span class="n">Choice</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;number&#39;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">my_source</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bound</span> <span class="o">=</span> <span class="n">choice</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="nb">object</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bound</span><span class="o">.</span><span class="n">vocabulary</span>
+<span class="go">&lt;...MySource...&gt;</span>
+</pre></div>
+</div>
+<p>If a IContextSourceBinder is passed as the <cite>source</cite> argument to Choice, it&#8217;s
+<cite>bind</cite> method will be called with the context as its only argument.   The
+result must implement ISource and will be used as the source.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">_my_binder_called</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">my_binder</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">_my_binder_called</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">source</span> <span class="o">=</span> <span class="n">MySource</span><span class="p">()</span>
+<span class="gp">... </span>    <span class="n">source</span><span class="o">.</span><span class="n">divisor</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">divisor</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="n">source</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">interface</span><span class="o">.</span><span class="n">directlyProvides</span><span class="p">(</span><span class="n">my_binder</span><span class="p">,</span> <span class="n">IContextSourceBinder</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Context</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">divisor</span> <span class="o">=</span> <span class="mi">3</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">choice</span> <span class="o">=</span> <span class="n">Choice</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;number&#39;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">my_binder</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bound</span> <span class="o">=</span> <span class="n">choice</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">Context</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">_my_binder_called</span><span class="p">)</span>
+<span class="go">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bound</span><span class="o">.</span><span class="n">vocabulary</span>
+<span class="go">&lt;...MySource...&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bound</span><span class="o">.</span><span class="n">vocabulary</span><span class="o">.</span><span class="n">divisor</span>
+<span class="go">3</span>
+</pre></div>
+</div>
+<p>When using IContextSourceBinder together with default value, it&#8217;s
+impossible to validate it on field initialization. Let&#8217;s check if
+initalization doesn&#8217;t fail in that case.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">choice</span> <span class="o">=</span> <span class="n">Choice</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;number&#39;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">my_binder</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">del</span> <span class="n">_my_binder_called</span><span class="p">[:]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bound</span> <span class="o">=</span> <span class="n">choice</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">Context</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">_my_binder_called</span><span class="p">)</span>
+<span class="go">1</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bound</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">bound</span><span class="o">.</span><span class="n">default</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bound</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ConstraintNotSatisfied</span>: <span class="n">3</span>
+</pre></div>
+</div>
+<p>It&#8217;s developer&#8217;s responsibility to provide a default value that fits the
+constraints when using context-based sources.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Sources</a><ul>
+<li><a class="reference internal" href="#concepts">Concepts</a></li>
+<li><a class="reference internal" href="#sources-in-fields">Sources in Fields</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="fields.html"
+                        title="previous chapter">Fields</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="validation.html"
+                        title="next chapter">Schema Validation</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/sources.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="validation.html" title="Schema Validation"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="fields.html" title="Fields"
+             >previous</a> |</li>
+        <li><a href="index.html">zope.schema 4.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

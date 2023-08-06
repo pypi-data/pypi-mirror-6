@@ -1,0 +1,565 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Fields &mdash; zope.schema 4.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '4.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="zope.schema 4.2 documentation" href="index.html" />
+    <link rel="next" title="Sources" href="sources.html" />
+    <link rel="prev" title="Zope 3 Schemas" href="narr.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="sources.html" title="Sources"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="narr.html" title="Zope 3 Schemas"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">zope.schema 4.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="fields">
+<h1>Fields<a class="headerlink" href="#fields" title="Permalink to this headline">¶</a></h1>
+<p>This document highlights unusual and subtle aspects of various fields and
+field classes, and is not intended to be a general introduction to schema
+fields.  Please see README.txt for a more general introduction.</p>
+<p>While many field types, such as Int, TextLine, Text, and Bool are relatively
+straightforward, a few have some subtlety.  We will explore the general
+class of collections and discuss how to create a custom creation field; discuss
+Choice fields, vocabularies, and their use with collections; and close with a
+look at the standard zope.app approach to using these fields to find views
+(&#8220;widgets&#8221;).</p>
+<div class="section" id="scalars">
+<h2>Scalars<a class="headerlink" href="#scalars" title="Permalink to this headline">¶</a></h2>
+<p>Scalar fields represent simple. immutable Python types.</p>
+<div class="section" id="bytes">
+<h3>Bytes<a class="headerlink" href="#bytes" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.Bytes</span></tt> fields contain binary data, represented
+as a sequence of bytes (<tt class="docutils literal"><span class="pre">str</span></tt> in Python2, <tt class="docutils literal"><span class="pre">bytes</span></tt> in Python3).</p>
+<p>Conversion from Unicode:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._compat</span> <span class="kn">import</span> <span class="n">b</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._compat</span> <span class="kn">import</span> <span class="n">u</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._field</span> <span class="kn">import</span> <span class="n">Bytes</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">obj</span> <span class="o">=</span> <span class="n">Bytes</span><span class="p">(</span><span class="n">constraint</span><span class="o">=</span><span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="n">b</span><span class="p">(</span><span class="s">&#39;x&#39;</span><span class="p">)</span> <span class="ow">in</span> <span class="n">v</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">obj</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="n">u</span><span class="p">(</span><span class="s">&quot; foo x.y.z bat&quot;</span><span class="p">))</span>
+<span class="go">&#39; foo x.y.z bat&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">obj</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="n">u</span><span class="p">(</span><span class="s">&quot; foo y.z bat&quot;</span><span class="p">))</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ConstraintNotSatisfied</span>: <span class="n"> foo y.z bat</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="ascii">
+<h3>ASCII<a class="headerlink" href="#ascii" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.ASCII</span></tt> fields are a restricted form of
+<tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.Bytes</span></tt>:  they can contain only 7-bit bytes.</p>
+<p>Validation accepts empty strings:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._field</span> <span class="kn">import</span> <span class="n">ASCII</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ascii</span> <span class="o">=</span> <span class="n">ASCII</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">empty</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ascii</span><span class="o">.</span><span class="n">_validate</span><span class="p">(</span><span class="n">empty</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>and all kinds of alphanumeric strings:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">alphanumeric</span> <span class="o">=</span> <span class="s">&quot;Bob</span><span class="se">\&#39;</span><span class="s">s my 23rd uncle&quot;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ascii</span><span class="o">.</span><span class="n">_validate</span><span class="p">(</span><span class="n">alphanumeric</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>but fails with 8-bit (encoded) strings:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">umlauts</span> <span class="o">=</span> <span class="s">&quot;Köhlerstraße&quot;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ascii</span><span class="o">.</span><span class="n">_validate</span><span class="p">(</span><span class="n">umlauts</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidValue</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="bytesline">
+<h3>BytesLine<a class="headerlink" href="#bytesline" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.BytesLine</span></tt> fields are a restricted form of
+<tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.Bytes</span></tt>:  they cannot contain newlines.</p>
+</div>
+<div class="section" id="asciiline">
+<h3>ASCIILine<a class="headerlink" href="#asciiline" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.BytesLine</span></tt> fields are a restricted form of
+<tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.ASCII</span></tt>:  they cannot contain newlines.</p>
+</div>
+<div class="section" id="float">
+<h3>Float<a class="headerlink" href="#float" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.Float</span></tt> fields contain binary data, represented
+as a a Python <tt class="docutils literal"><span class="pre">float</span></tt>.</p>
+<p>Conversion from Unicode:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._field</span> <span class="kn">import</span> <span class="n">Float</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span> <span class="o">=</span> <span class="n">Float</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;1.25&quot;</span><span class="p">)</span>
+<span class="go">1.25</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;1.25.6&quot;</span><span class="p">)</span> 
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ValueError</span>: <span class="n">invalid literal for float(): 1.25.6</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="decimal">
+<h3>Decimal<a class="headerlink" href="#decimal" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.Decimal</span></tt> fields contain binary data, represented
+as a a Python <tt class="docutils literal"><span class="pre">decimal.Decimal</span></tt>.</p>
+<p>Conversion from Unicode:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._field</span> <span class="kn">import</span> <span class="n">Decimal</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span> <span class="o">=</span> <span class="n">Decimal</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">decimal</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">isinstance</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;1.25&quot;</span><span class="p">),</span> <span class="n">decimal</span><span class="o">.</span><span class="n">Decimal</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">float</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;1.25&quot;</span><span class="p">))</span>
+<span class="go">1.25</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;1.25.6&quot;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ValueError</span>: <span class="n">invalid literal for Decimal(): 1.25.6</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="datetime">
+<h3>DateTime<a class="headerlink" href="#datetime" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.DateTime</span></tt> fields contain binary data, represented
+as a a Python <tt class="docutils literal"><span class="pre">datetime.DateTime</span></tt>.</p>
+</div>
+<div class="section" id="date">
+<h3>Date<a class="headerlink" href="#date" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.Date</span></tt> fields contain binary data, represented
+as a a Python <tt class="docutils literal"><span class="pre">datetime.Date</span></tt>.</p>
+</div>
+<div class="section" id="timedelta">
+<h3>TimeDelta<a class="headerlink" href="#timedelta" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.TimeDelta</span></tt> fields contain binary data, represented
+as a a Python <tt class="docutils literal"><span class="pre">datetime.TimeDelta</span></tt>.</p>
+</div>
+<div class="section" id="time">
+<h3>Time<a class="headerlink" href="#time" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.Time</span></tt> fields contain binary data, represented
+as a a Python <tt class="docutils literal"><span class="pre">datetime.Time</span></tt>.</p>
+</div>
+<div class="section" id="choice">
+<h3>Choice<a class="headerlink" href="#choice" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.Choice</span></tt> fields are constrained to values drawn
+from a specified set, which can be static or dynamic.</p>
+<p>Conversion from Unicode enforces the constraint:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema.interfaces</span> <span class="kn">import</span> <span class="n">IFromUnicode</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema.vocabulary</span> <span class="kn">import</span> <span class="n">SimpleVocabulary</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._field</span> <span class="kn">import</span> <span class="n">Choice</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">Choice</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">vocabulary</span><span class="o">=</span><span class="n">SimpleVocabulary</span><span class="o">.</span><span class="n">fromValues</span><span class="p">([</span><span class="n">u</span><span class="p">(</span><span class="s">&#39;foo&#39;</span><span class="p">),</span><span class="n">u</span><span class="p">(</span><span class="s">&#39;bar&#39;</span><span class="p">)]))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IFromUnicode</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="n">u</span><span class="p">(</span><span class="s">&quot;baz&quot;</span><span class="p">))</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ConstraintNotSatisfied</span>: <span class="n">baz</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="n">u</span><span class="p">(</span><span class="s">&quot;foo&quot;</span><span class="p">))</span>
+<span class="go">u&#39;foo&#39;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="uri">
+<h3>URI<a class="headerlink" href="#uri" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.URI</span></tt> fields contain native Python strings
+(<tt class="docutils literal"><span class="pre">str</span></tt>), matching the &#8220;scheme:data&#8221; pattern.</p>
+<p>Validation ensures that the pattern is matched:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._field</span> <span class="kn">import</span> <span class="n">URI</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uri</span> <span class="o">=</span> <span class="n">URI</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uri</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">b</span><span class="p">(</span><span class="s">&quot;http://www.python.org/foo/bar&quot;</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uri</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">b</span><span class="p">(</span><span class="s">&quot;DAV:&quot;</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uri</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">b</span><span class="p">(</span><span class="s">&quot;www.python.org/foo/bar&quot;</span><span class="p">))</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidURI</span>: <span class="n">www.python.org/foo/bar</span>
+</pre></div>
+</div>
+<p>Conversion from Unicode:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">uri</span> <span class="o">=</span> <span class="n">URI</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uri</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;http://www.python.org/foo/bar&quot;</span><span class="p">)</span>
+<span class="go">&#39;http://www.python.org/foo/bar&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uri</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;          http://www.python.org/foo/bar&quot;</span><span class="p">)</span>
+<span class="go">&#39;http://www.python.org/foo/bar&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uri</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;      </span><span class="se">\n</span><span class="s">    http://www.python.org/foo/bar</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="go">&#39;http://www.python.org/foo/bar&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">uri</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;http://www.python.org/ foo/bar&quot;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidURI</span>: <span class="n">http://www.python.org/ foo/bar</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="dottedname">
+<h3>DottedName<a class="headerlink" href="#dottedname" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.DottedName</span></tt> fields contain native Python strings
+(<tt class="docutils literal"><span class="pre">str</span></tt>), containing zero or more &#8220;dots&#8221; separating elements of the
+name.  The minimum and maximum number of dots can be passed to the
+constructor:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._field</span> <span class="kn">import</span> <span class="n">DottedName</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">DottedName</span><span class="p">(</span><span class="n">min_dots</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ValueError</span>: <span class="n">min_dots cannot be less than zero</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">DottedName</span><span class="p">(</span><span class="n">max_dots</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ValueError</span>: <span class="n">max_dots cannot be less than min_dots</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">DottedName</span><span class="p">(</span><span class="n">max_dots</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">min_dots</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ValueError</span>: <span class="n">max_dots cannot be less than min_dots</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span> <span class="o">=</span> <span class="n">DottedName</span><span class="p">(</span><span class="n">max_dots</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">min_dots</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.interface.verify</span> <span class="kn">import</span> <span class="n">verifyObject</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema.interfaces</span> <span class="kn">import</span> <span class="n">IDottedName</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">verifyObject</span><span class="p">(</span><span class="n">IDottedName</span><span class="p">,</span> <span class="n">dotted_name</span><span class="p">)</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span> <span class="o">=</span> <span class="n">DottedName</span><span class="p">(</span><span class="n">max_dots</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">min_dots</span>
+<span class="go">0</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span> <span class="o">=</span> <span class="n">DottedName</span><span class="p">(</span><span class="n">min_dots</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">max_dots</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">min_dots</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+<p>Validation ensures that the pattern is matched:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span> <span class="o">=</span> <span class="n">DottedName</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&quot;a.b.c&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&quot;a&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&quot;   a&quot;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidDottedName</span>: <span class="n">   a</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span> <span class="o">=</span> <span class="n">DottedName</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">,</span> <span class="n">min_dots</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a.b&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a.b.c.d&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidDottedName</span>: <span class="n">(&#39;too few dots; 1 required&#39;, &#39;a&#39;)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span> <span class="o">=</span> <span class="n">DottedName</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">,</span> <span class="n">max_dots</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a.b&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidDottedName</span>: <span class="n">(&#39;too many dots; no more than 0 allowed&#39;, &#39;a.b&#39;)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span> <span class="o">=</span> <span class="n">DottedName</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">,</span> <span class="n">max_dots</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a.b&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a.b.c&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a.b.c.d&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidDottedName</span>: <span class="n">(&#39;too many dots; no more than 2 allowed&#39;, &#39;a.b.c.d&#39;)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span> <span class="o">=</span> <span class="n">DottedName</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">,</span> <span class="n">max_dots</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">min_dots</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a.b&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidDottedName</span>: <span class="n">(&#39;too few dots; 1 required&#39;, &#39;a&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dotted_name</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;a.b.c&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidDottedName</span>: <span class="n">(&#39;too many dots; no more than 1 allowed&#39;, &#39;a.b.c&#39;)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id">
+<h3>Id<a class="headerlink" href="#id" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref py py-class docutils literal"><span class="pre">zope.schema._field.Id</span></tt> fields contain native Python strings
+(<tt class="docutils literal"><span class="pre">str</span></tt>), matching either the URI pattern or a &#8220;dotted name&#8221;.</p>
+<p>Validation ensures that the pattern is matched:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._field</span> <span class="kn">import</span> <span class="n">Id</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">id</span> <span class="o">=</span> <span class="n">Id</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">id</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&quot;http://www.python.org/foo/bar&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">id</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&quot;zope.app.content&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">id</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&quot;zope.app.content/a&quot;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidId</span>: <span class="n">zope.app.content/a</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">id</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&quot;http://zope.app.content x y&quot;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidId</span>: <span class="n">http://zope.app.content x y</span>
+</pre></div>
+</div>
+<p>Conversion from Unicode:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">id</span> <span class="o">=</span> <span class="n">Id</span><span class="p">(</span><span class="n">__name__</span><span class="o">=</span><span class="s">&#39;test&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">id</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;http://www.python.org/foo/bar&quot;</span><span class="p">)</span>
+<span class="go">&#39;http://www.python.org/foo/bar&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">id</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="n">u</span><span class="p">(</span><span class="s">&quot; http://www.python.org/foo/bar &quot;</span><span class="p">))</span>
+<span class="go">&#39;http://www.python.org/foo/bar&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">id</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;http://www.python.org/ foo/bar&quot;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidId</span>: <span class="n">http://www.python.org/ foo/bar</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">id</span><span class="o">.</span><span class="n">fromUnicode</span><span class="p">(</span><span class="s">&quot;      </span><span class="se">\n</span><span class="s"> x.y.z </span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="go">&#39;x.y.z&#39;</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="collections">
+<h2>Collections<a class="headerlink" href="#collections" title="Permalink to this headline">¶</a></h2>
+<p>Normal fields typically describe the API of the attribute &#8211; does it behave as a
+Python Int, or a Float, or a Bool &#8211; and various constraints to the model, such
+as a maximum or minimum value.  Collection fields have additional requirements
+because they contain other types, which may also be described and constrained.</p>
+<p>For instance, imagine a list that contains non-negative floats and enforces
+uniqueness. In a schema, this might be written as follows:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">Interface</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Float</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._compat</span> <span class="kn">import</span> <span class="n">u</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IInventoryItem</span><span class="p">(</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">pricePoints</span> <span class="o">=</span> <span class="n">List</span><span class="p">(</span>
+<span class="gp">... </span>        <span class="n">title</span><span class="o">=</span><span class="n">u</span><span class="p">(</span><span class="s">&quot;Price Points&quot;</span><span class="p">),</span>
+<span class="gp">... </span>        <span class="n">unique</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="n">value_type</span><span class="o">=</span><span class="n">Float</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="n">u</span><span class="p">(</span><span class="s">&quot;Price&quot;</span><span class="p">),</span> <span class="nb">min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="p">)</span>
+</pre></div>
+</div>
+<p>This indicates several things.</p>
+<ul class="simple">
+<li>pricePoints is an attribute of objects that implement IInventoryItem.</li>
+<li>The contents of pricePoints can be accessed and manipulated via a Python list
+API.</li>
+<li>Each member of pricePoints must be a non-negative float.</li>
+<li>Members cannot be duplicated within pricePoints: each must be must be unique.</li>
+<li>The attribute and its contents have descriptive titles.  Typically these
+would be message ids.</li>
+</ul>
+<p>This declaration creates a field that implements a number of interfaces, among
+them these:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema.interfaces</span> <span class="kn">import</span> <span class="n">IList</span><span class="p">,</span> <span class="n">ISequence</span><span class="p">,</span> <span class="n">ICollection</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IList</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">IInventoryItem</span><span class="p">[</span><span class="s">&#39;pricePoints&#39;</span><span class="p">])</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ISequence</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">IInventoryItem</span><span class="p">[</span><span class="s">&#39;pricePoints&#39;</span><span class="p">])</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ICollection</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">IInventoryItem</span><span class="p">[</span><span class="s">&#39;pricePoints&#39;</span><span class="p">])</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="creating-a-custom-collection-field">
+<h2>Creating a custom collection field<a class="headerlink" href="#creating-a-custom-collection-field" title="Permalink to this headline">¶</a></h2>
+<p>Ideally, custom collection fields have interfaces that inherit appropriately
+from either zope.schema.interfaces.ISequence or
+zope.schema.interfaces.IUnorderedCollection.  Most collection fields should be
+able to subclass zope.schema._field.AbstractCollection to get the necessary
+behavior.  Notice the behavior of the Set field in zope.schema._field: this
+would also be necessary to implement a Bag.</p>
+</div>
+<div class="section" id="choices-and-vocabularies">
+<h2>Choices and Vocabularies<a class="headerlink" href="#choices-and-vocabularies" title="Permalink to this headline">¶</a></h2>
+<p>Choice fields are the schema way of spelling enumerated fields and more.  By
+providing a dynamically generated vocabulary, the choices available to a
+choice field can be contextually calculated.</p>
+<p>Simple choices do not have to explicitly use vocabularies:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema</span> <span class="kn">import</span> <span class="n">Choice</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span> <span class="o">=</span> <span class="n">Choice</span><span class="p">((</span><span class="mi">640</span><span class="p">,</span> <span class="mi">1028</span><span class="p">,</span> <span class="mi">1600</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="mi">640</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="mi">960</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ConstraintNotSatisfied</span>: <span class="n">960</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">f</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s">&#39;bing&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ConstraintNotSatisfied</span>: <span class="n">bing</span>
+</pre></div>
+</div>
+<p>More complex choices will want to use registered vocabularies.  Vocabularies
+have a simple interface, as defined in
+zope.schema.interfaces.IBaseVocabulary.  A vocabulary must minimally be able
+to determine whether it contains a value, to create a term object for a value,
+and to return a query interface (or None) to find items in itself.  Term
+objects are an abstraction that wraps a vocabulary value.</p>
+<p>The Zope application server typically needs a fuller interface that provides
+&#8220;tokens&#8221; on its terms: ASCII values that have a one-to-one relationship to the
+values when the vocabulary is asked to &#8220;getTermByToken&#8221;.  If a vocabulary is
+small, it can also support the IIterableVocabulary interface.</p>
+<p>If a vocabulary has been registered, then the choice merely needs to pass the
+vocabulary identifier to the &#8220;vocabulary&#8221; argument of the choice during
+instantiation.</p>
+<p>A start to a vocabulary implementation that may do all you need for many simple
+tasks may be found in zope.schema.vocabulary.SimpleVocabulary.  Because
+registered vocabularies are simply callables passed a context, many
+registered vocabularies can simply be functions that rely on SimpleVocabulary:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema.vocabulary</span> <span class="kn">import</span> <span class="n">SimpleVocabulary</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">myDynamicVocabulary</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">v</span> <span class="o">=</span> <span class="n">dynamic_context_calculation_that_returns_an_iterable</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="n">SimpleVocabulary</span><span class="o">.</span><span class="n">fromValues</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+<span class="gp">...</span>
+</pre></div>
+</div>
+<p>The vocabulary interface is simple enough that writing a custom vocabulary is
+not too difficult itself.</p>
+<p>See zope.schema.vocabulary.TreeVocabulary for another
+IBaseVocabulary supporting vocabulary that provides a nested, tree-like
+structure.</p>
+</div>
+<div class="section" id="choices-and-collections">
+<h2>Choices and Collections<a class="headerlink" href="#choices-and-collections" title="Permalink to this headline">¶</a></h2>
+<p>Choices are a field type and can be used as a value_type for collections. Just
+as a collection of an &#8220;Int&#8221; value_type constrains members to integers, so a
+choice-based value type constrains members to choices within the Choice&#8217;s
+vocabulary.  Typically in the Zope application server widgets are found not
+only for the collection and the choice field but also for the vocabulary on
+which the choice is based.</p>
+</div>
+<div class="section" id="using-choice-and-collection-fields-within-a-widget-framework">
+<h2>Using Choice and Collection Fields within a Widget Framework<a class="headerlink" href="#using-choice-and-collection-fields-within-a-widget-framework" title="Permalink to this headline">¶</a></h2>
+<p>While fields support several use cases, including code documentation and data
+description and even casting, a significant use case influencing their design is
+to support form generation &#8211; generating widgets for a field.  Choice and
+collection fields are expected to be used within widget frameworks.  The
+zope.app approach typically (but configurably) uses multiple dispatches to
+find widgets on the basis of various aspects of the fields.</p>
+<p>Widgets for all fields are found by looking up a browser view of the field
+providing an input or display widget view.  Typically there is only a single
+&#8220;widget&#8221; registered for Choice fields.  When it is looked up, it performs
+another dispatch &#8211; another lookup &#8211; for a widget registered for both the field
+and the vocabulary.  This widget typically has enough information to render
+without a third dispatch.</p>
+<p>Collection fields may fire several dispatches.  The first is the usual lookup
+by field.  A single &#8220;widget&#8221; should be registered for ICollection, which does
+a second lookup by field and value_type constraint, if any, or, theoretically,
+if value_type is None, renders some absolutely generic collection widget that
+allows input of any value imaginable: a check-in of such a widget would be
+unexpected.  This second lookup may find a widget that knows how to render,
+and stop.  However, the value_type may be a choice, which will usually fire a
+third dispatch: a search for a browser widget for the collection field, the
+value_type field, and the vocabulary.  Further lookups may even be configured
+on the basis of uniqueness and other constraints.</p>
+<p>This level of indirection may be unnecessary for some applications, and can be
+disabled with simple ZCML changes within <cite>zope.app</cite>.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Fields</a><ul>
+<li><a class="reference internal" href="#scalars">Scalars</a><ul>
+<li><a class="reference internal" href="#bytes">Bytes</a></li>
+<li><a class="reference internal" href="#ascii">ASCII</a></li>
+<li><a class="reference internal" href="#bytesline">BytesLine</a></li>
+<li><a class="reference internal" href="#asciiline">ASCIILine</a></li>
+<li><a class="reference internal" href="#float">Float</a></li>
+<li><a class="reference internal" href="#decimal">Decimal</a></li>
+<li><a class="reference internal" href="#datetime">DateTime</a></li>
+<li><a class="reference internal" href="#date">Date</a></li>
+<li><a class="reference internal" href="#timedelta">TimeDelta</a></li>
+<li><a class="reference internal" href="#time">Time</a></li>
+<li><a class="reference internal" href="#choice">Choice</a></li>
+<li><a class="reference internal" href="#uri">URI</a></li>
+<li><a class="reference internal" href="#dottedname">DottedName</a></li>
+<li><a class="reference internal" href="#id">Id</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#collections">Collections</a></li>
+<li><a class="reference internal" href="#creating-a-custom-collection-field">Creating a custom collection field</a></li>
+<li><a class="reference internal" href="#choices-and-vocabularies">Choices and Vocabularies</a></li>
+<li><a class="reference internal" href="#choices-and-collections">Choices and Collections</a></li>
+<li><a class="reference internal" href="#using-choice-and-collection-fields-within-a-widget-framework">Using Choice and Collection Fields within a Widget Framework</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="narr.html"
+                        title="previous chapter">Zope 3 Schemas</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="sources.html"
+                        title="next chapter">Sources</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/fields.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="sources.html" title="Sources"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="narr.html" title="Zope 3 Schemas"
+             >previous</a> |</li>
+        <li><a href="index.html">zope.schema 4.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>

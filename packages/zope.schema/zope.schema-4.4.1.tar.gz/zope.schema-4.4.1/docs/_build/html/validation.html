@@ -1,0 +1,297 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Schema Validation &mdash; zope.schema 4.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '4.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="zope.schema 4.2 documentation" href="index.html" />
+    <link rel="next" title="Hacking on zope.schema" href="hacking.html" />
+    <link rel="prev" title="Sources" href="sources.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="hacking.html" title="Hacking on zope.schema"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="sources.html" title="Sources"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">zope.schema 4.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="schema-validation">
+<h1>Schema Validation<a class="headerlink" href="#schema-validation" title="Permalink to this headline">¶</a></h1>
+<p>There are two helper methods to verify schemas and interfaces:</p>
+<dl class="docutils">
+<dt>getValidationErrors</dt>
+<dd>first validates via the zope.schema field validators. If that succeeds the
+invariants are checked.</dd>
+<dt>getSchemaValidationErrors</dt>
+<dd><em>only</em> validateds via the zope.schema field validators. The invariants are
+<em>not</em> checked.</dd>
+</dl>
+<p>Create an interface to validate against:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">zope.interface</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">zope.schema</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">_a_greater_b_called</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">ITwoInts</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">a</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">Int</span><span class="p">(</span><span class="nb">max</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">b</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">Int</span><span class="p">(</span><span class="nb">min</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="gp">...</span>
+<span class="gp">... </span>    <span class="nd">@zope.interface.invariant</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">a_greater_b</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="n">_a_greater_b_called</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+<span class="gp">... </span>        <span class="k">if</span> <span class="n">obj</span><span class="o">.</span><span class="n">a</span> <span class="o">&lt;=</span> <span class="n">obj</span><span class="o">.</span><span class="n">b</span><span class="p">:</span>
+<span class="gp">... </span>            <span class="k">raise</span> <span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Invalid</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s">&lt;=</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">obj</span><span class="o">.</span><span class="n">a</span><span class="p">,</span> <span class="n">obj</span><span class="o">.</span><span class="n">b</span><span class="p">))</span>
+<span class="gp">...</span>
+</pre></div>
+</div>
+<p>Create a silly model:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">TwoInts</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>Create an instance of TwoInts but do not set attributes. We get two errors:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span> <span class="o">=</span> <span class="n">TwoInts</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">getValidationErrors</span><span class="p">(</span><span class="n">ITwoInts</span><span class="p">,</span> <span class="n">ti</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+<span class="go">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">&#39;a&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;SchemaNotFullyImplemented&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span>
+<span class="go">(&quot;&#39;TwoInts&#39; object has no attribute &#39;a&#39;&quot;,)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">&#39;b&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;SchemaNotFullyImplemented&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span>
+<span class="go">(&quot;&#39;TwoInts&#39; object has no attribute &#39;b&#39;&quot;,)</span>
+</pre></div>
+</div>
+<p>The <cite>getSchemaValidationErrors</cite> function returns the same result:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">r</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">getSchemaValidationErrors</span><span class="p">(</span><span class="n">ITwoInts</span><span class="p">,</span> <span class="n">ti</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+<span class="go">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">&#39;a&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;SchemaNotFullyImplemented&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span>
+<span class="go">(&quot;&#39;TwoInts&#39; object has no attribute &#39;a&#39;&quot;,)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">&#39;b&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;SchemaNotFullyImplemented&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span>
+<span class="go">(&quot;&#39;TwoInts&#39; object has no attribute &#39;b&#39;&quot;,)</span>
+</pre></div>
+</div>
+<p>Note that see no error from the invariant because the invariants are not
+vaildated if there are other schema errors.</p>
+<p>When we set a valid value for <cite>a</cite> we still get the same error for <cite>b</cite>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="mi">11</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">getValidationErrors</span><span class="p">(</span><span class="n">ITwoInts</span><span class="p">,</span> <span class="n">ti</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">errors</span><span class="p">)</span>
+<span class="go">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">&#39;a&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">doc</span><span class="p">()</span>
+<span class="go">u&#39;Value is too big&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;TooBig&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">args</span>
+<span class="go">(11, 10)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="go">&#39;b&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;SchemaNotFullyImplemented&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span>
+<span class="go">(&quot;&#39;TwoInts&#39; object has no attribute &#39;b&#39;&quot;,)</span>
+</pre></div>
+</div>
+<p>After setting a valid value for <cite>a</cite> there is only the error for the missing <cite>b</cite>
+left:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">a</span> <span class="o">=</span> <span class="mi">8</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">getValidationErrors</span><span class="p">(</span><span class="n">ITwoInts</span><span class="p">,</span> <span class="n">ti</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span>
+<span class="go">[(&#39;b&#39;, SchemaNotFullyImplemented(...AttributeError...))]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span>
+<span class="go">(&quot;&#39;TwoInts&#39; object has no attribute &#39;b&#39;&quot;,)</span>
+</pre></div>
+</div>
+<p>After setting valid value for <cite>b</cite> the schema is valid so the invariants are
+checked. As <cite>b&gt;a</cite> the invariant fails:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">getValidationErrors</span><span class="p">(</span><span class="n">ITwoInts</span><span class="p">,</span> <span class="n">ti</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">errors</span><span class="p">)</span>
+<span class="go">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">errors</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;Invalid&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">_a_greater_b_called</span><span class="p">)</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+<p>When using <cite>getSchemaValidationErrors</cite> we do not get an error any more:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">getSchemaValidationErrors</span><span class="p">(</span><span class="n">ITwoInts</span><span class="p">,</span> <span class="n">ti</span><span class="p">)</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+<p>Set <cite>b=5</cite> so everything is fine:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">ti</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">del</span> <span class="n">_a_greater_b_called</span><span class="p">[:]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">getValidationErrors</span><span class="p">(</span><span class="n">ITwoInts</span><span class="p">,</span> <span class="n">ti</span><span class="p">)</span>
+<span class="go">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">_a_greater_b_called</span><span class="p">)</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+<div class="section" id="compare-validationerror">
+<h2>Compare ValidationError<a class="headerlink" href="#compare-validationerror" title="Permalink to this headline">¶</a></h2>
+<p>There was an issue with compare validation error with somthing else then an
+exceptions. Let&#8217;s test if we can compare ValidationErrors with different things</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._bootstrapinterfaces</span> <span class="kn">import</span> <span class="n">ValidationError</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">=</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s">&#39;one&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v2</span> <span class="o">=</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s">&#39;one&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v3</span> <span class="o">=</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s">&#39;another one&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A ValidationError with the same arguments compares:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">==</span> <span class="n">v2</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>but not with an error with different arguments:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">==</span> <span class="n">v3</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+<p>We can also compare validation erros with other things then errors. This
+was running into an AttributeError in previous versions of zope.schema. e.g.
+AttributeError: &#8216;NoneType&#8217; object has no attribute &#8216;args&#8217;</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">==</span> <span class="bp">None</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">==</span> <span class="nb">object</span><span class="p">()</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">==</span> <span class="bp">False</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">==</span> <span class="bp">True</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">==</span> <span class="mi">0</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">==</span> <span class="mi">1</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">==</span> <span class="nb">int</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+<p>If we compare a ValidationError with another validation error based class,
+we will get the following result:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.schema._bootstrapinterfaces</span> <span class="kn">import</span> <span class="n">RequiredMissing</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r1</span> <span class="o">=</span> <span class="n">RequiredMissing</span><span class="p">(</span><span class="s">&#39;one&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v1</span> <span class="o">==</span> <span class="n">r1</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Schema Validation</a><ul>
+<li><a class="reference internal" href="#compare-validationerror">Compare ValidationError</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="sources.html"
+                        title="previous chapter">Sources</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="hacking.html"
+                        title="next chapter">Hacking on <tt class="docutils literal docutils literal docutils literal"><span class="pre">zope.schema</span></tt></a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/validation.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="hacking.html" title="Hacking on zope.schema"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="sources.html" title="Sources"
+             >previous</a> |</li>
+        <li><a href="index.html">zope.schema 4.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2b1.
+    </div>
+  </body>
+</html>
