@@ -1,0 +1,184 @@
+#!/usr/bin/env python
+
+# Check for broken links in the given files
+
+import sys
+import glob
+import re
+import httplib2
+
+
+class progress_indicator:
+    """A console text-based progress indicator."""
+
+    def __init__(self):
+        # data
+        self.progress_frames = ['-', '\\', '|', '/', '-', '\\', '|']
+        self.progress_string = ' %s '
+        self.progress_string_len = 3
+        self.progress_erase_string = '\b\b\b   \b\b\b'
+        # self.cur_frame will be incremented to zero on the first get_next()
+        self.cur_frame = -1
+
+    def show_next(self):
+        """Write the next progress frame to sys.stdout."""
+        self.cur_frame += 1
+        if self.cur_frame == len(self.progress_frames):
+            self.cur_frame = 0
+
+        sys.stdout.write(self.progress_string % (
+            self.progress_frames[self.cur_frame]))
+
+        sys.stdout.flush()
+
+    def erase(self):
+        """Erase the current progress frame from sys.stdout."""
+        sys.stdout.write(self.progress_erase_string)
+        sys.stdout.flush()
+
+    def len(self):
+        """Get the length of the progress frame, in characters."""
+        return self.progress_string_len
+
+
+USAGE = """
+clinks.py
+=========
+
+Check for broken links in HTML files in the current directory.
+
+Usage:
+------
+
+::
+
+  clinks [-i file] [-r] [filespecs]
+
+If no filespecs are provided, then all files ending in '.html' or '.htm' will
+be searched.
+
+If the filespec is a directory, then all files within it will be searched.
+
+Switches:
+---------
+
+**-i | --ignore**
+    Specifies a filename that includes terms that will cause a link to be
+    ignored. This file should be a simple text file with the terms provided
+    one-per-line.
+
+    By default, no terms are ignored.
+
+**-r | --recurse**
+    Recurse into directories. If not specified, then only the current
+    directory, or directories provided on the command-line, will be searched.
+
+Examples:
+---------
+
+::
+
+  clinks -r -i links_to_ignore.txt
+
+This will check all .html and .htm files in the current directory and all
+subdirectories, ignoring all of the links that include terms in the
+'links_to_ignore.txt' file.
+"""
+
+output_filename = 'bad_links.txt'
+
+filespecs = ['*.html', '*.htm']
+attr_types = ['href']
+ignore_list = []
+http = httplib2.Http()
+pi = progress_indicator()
+
+files_to_check = []
+
+# check for command-line arguments
+if len(sys.argv) > 1:
+    get_next_arg_for = ""
+    for arg in sys.argv:
+        if arg.startswith('-'):
+            if (arg == '-i' or arg == '--ignore'):
+                get_next_arg_for = 'i'
+            if (arg == '-h' or arg == '-?' or arg == '--help'):
+                print USAGE
+                sys.exit()
+            if (arg == '-r' or arg == '--recurse'):
+                recursive = true
+        elif get_next_arg_for != "":
+            if get_next_arg_for == 'i':
+                f = open(arg)
+                for line in f:
+                    ignore_list.append(line.strip())
+
+for spec in filespecs:
+    files_to_check += (glob.glob(spec))
+
+if len(files_to_check) < 1:
+    print "No HTML files found in current directory!"
+    sys.exit()
+
+total_files = len(files_to_check)
+cur_file_num = 0
+print "Checking %d files..." % total_files
+
+links_to_check = []
+total_bad_links = 0
+out_file = open(output_filename, 'w+')
+
+for filename in files_to_check:
+    cur_file_num += 1
+    cur_file_msg = "%s (%d/%d)" % (filename, cur_file_num, total_files)
+    sys.stdout.write(cur_file_msg)
+    sys.stdout.flush()
+
+    f = open(filename, 'r')
+    contents = f.read()
+
+    for attr in attr_types:
+        links_to_check += (re.findall('%s=\"(.*?)\"' % attr, contents))
+
+    if len(links_to_check) < 1:
+        continue
+
+    bad_links = []
+
+    links_checked = 0
+    for link in links_to_check:
+        if link.startswith('http'):
+            # ignore any links with text on the ignore list
+            if any(ignore_term in link for ignore_term in ignore_list):
+                continue
+            # check the link!
+            links_checked += 1
+            pi.show_next()
+            response = http.request(link, 'HEAD')
+            code = int(response[0]['status'])
+            # bad links are considered anything with a result > 200
+            if code > 200:
+                bad_links.append("  %s (%d)" % (link, code))
+            pi.erase()
+
+    if len(bad_links) < 1:
+        msg_len = len(cur_file_msg)
+        sys.stdout.write('%s%s%s' % ('\b' * msg_len, ' ' * msg_len, '\b' * msg_len))
+        sys.stdout.flush()
+        continue
+
+    total_bad_links += len(bad_links)
+
+    # there are bad links.. report them!
+    print ":\n  %d bad links found." % len(bad_links)
+    out_file.write("%s:\n" % filename)
+    for link in bad_links:
+        out_file.write("  %s\n" % link)
+    out_file.flush()
+
+    f.close()
+
+print "Result: %d bad links found in %d files." % (total_bad_links, total_files)
+print "You can find the report of bad links in the file: %s" % output_filename
+out_file.close()
+

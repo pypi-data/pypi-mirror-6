@@ -1,0 +1,279 @@
+#!/usr/bin/env python
+import sys
+import os
+
+config_file = 'aws-config.txt'
+switches = []
+s3 = None  # the AWS::S3 client
+s3_paths_to_process = []
+access_key_id = None
+secret_access_key = None
+
+USAGE = """
+s3lod
+=====
+
+List or download the contents of S3 buckets.
+
+Usage
+-----
+
+::
+
+    {s3lod} [-i] [s3_path] ...
+
+Depending on whether an s3 path (consisting of bucket_name/and/path/to/object).
+is provided, one of the following actions will be taken:
+
+* If no path is provided, then the list of buckets will be returned.
+
+* If a path is specified and refers to a bucket, then a list of the contents of
+  that bucket are returned.
+
+* If the path is a partial path (does not match the name of an S3 object, but
+  matches part of its path) then a list of all of the S3 objects that match the
+  partial path are returned.
+
+* If the path is to an actual S3 object, then you can download the object
+  (default) or get its info (if the ``-i`` flag is provided.
+
+Switches, if provided, always precede the accompanying arguments.
+
+The s3 path can be repeated, so multiple buckets, partial paths or objects can
+be provided at once.  If the ``-i`` flag is provided, it effects all of the
+specified arguments: no files will be downloaded; only the object information
+will be returned.
+
+Notes
+-----
+
+Before using this script, you must provide your AWS credentials to the program,
+with any one of the following methods:
+
+* Set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables
+  with your AWS credentials.
+
+* Provide a YAML-formatted file called `{configfile}` in the current
+  directory with your aws credentials specified like this::
+
+      ---
+      access_key_id:     ACCESSKEYID
+      secret_access_key: SECRETACCESKEY
+
+  Replace ACCESSKEYID and SECRETACCESSKEY with your own AWS credentials.
+
+  You can also specify the path to the config file by passing the
+  ``--aws_config <config_file_path>`` argument with the path to the config file
+  specified. You can use this argument to point to a config file with any name.
+
+* Provide the command-line arguments: ``--access_key ACCESSKEYID`` and/or
+  ``--secret_key SECRETACCESSKEY``, providing your own AWS credentials in place
+  of ACCESSKEYID and SECRETACCESSKEY.
+
+""".format(configfile=config_file, s3lod=__file__)
+
+def show_help():
+    print USAGE
+    sys.exit()
+
+def get_help():
+    print "Use '%s -h' to get help." % __file__
+    sys.exit()
+
+def process_args(args):
+    """Interpret the args and set switches"""
+
+    # provide access to global variables.
+    global config_file
+    global s3_paths_to_process
+    global access_key_id
+    global secret_access_key
+    global switches
+
+    # First, iterate through any switches. These always precede the other
+    # arguments.
+    i = 0
+    while i < len(args) and args[i][0] == '-':
+        if args[i][1] == '-':
+            # Oooh, an extended command!
+            ext_cmd = args[i][1:]
+            if ext_cmd == '-access_key':
+                i += 1 # read the next argument.
+                access_key_id = args[i]
+            elif ext_cmd == '-secret_key':
+                i += 1 # read the next argument.
+                secret_access_key = args[i]
+            elif ext_cmd == '-aws_config':
+                i += 1 # read the next argument.
+                config_file = args[i]
+        elif args[i][1] == 'h':
+            print USAGE
+            sys.exit()
+        else:
+            # store any other switches in the switches list.
+            switches += args[i][1]
+        # increment the counter.
+        i += 1
+
+    # done with switches, let's move on to s3 path arguments.
+    for s3_path in args[i:]:
+        s3_paths_to_process.append(s3_path)
+
+
+def authenticate_s3(access_key_id, secret_access_key, config_file):
+    """Authenticate with AWS and return an S3 object. Returns None if it failed
+    to get the S3 object."""
+    # Rules:
+    #
+    # 1. If the access_key_id and/or secret access key is specified, then use
+    #    its values in preference to all others.
+    #
+    # 2. If a file exists, use its values in preference to environment
+    #    variables.
+    #
+    # 3. If any credentials are still missing, look in the environment.
+
+    if not (access_key_id and secret_access_key):
+        # Command-line arguments didn't do the trick, so look for a file.
+        if os.path.exists(config_file):
+            # We're expecting a YAML-formatted file like this:
+            #
+            #     ---
+            #     access_key_id:     ACCESSKEYID
+            #     secret_access_key: SECRETACCESKEY
+            #
+            f = open(config_file, 'r')
+            config = dict(yaml.safe_load(f))
+            f.close()
+            # Whatever command-line args *weren't* specified, fill them in with
+            # details from the file.
+            if not access_key_id:
+                access_key_id = config['access_key_id']
+            if not secret_access_key:
+                secret_access_key = config['secret_access_key']
+
+    if not (access_key_id and secret_access_key):
+        # There are still some credentials missing. Look in the environment.
+        if not access_key_id:
+            access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+        if not secret_access_key:
+            secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+
+    s3 = None
+    if access_key_id and secret_access_key:
+        s3 = boto.connect_s3(access_key_id, secret_access_key)
+    return s3
+
+
+def split_s3_path(s3_path):
+    """Get a bucket name and object path"""
+    # Split the s3 path after the *first* slash character. The bucket name
+    # can't have a slash in it; anything after the first slash is considered
+    # the S3 object name.
+    if '/' in s3_path:
+        return s3_path.split('/', 1)
+    else:
+        return (s3_path, None)
+
+def print_s3key_info(s3bucket, s3key):
+    print "%s/%s:" % (s3bucket.name, s3key.name)
+    if s3key.content_disposition is not None:
+        print "  content-disposition: %s" % s3key.content_disposition
+    if s3key.content_encoding is not None:
+        print "  content-encoding: %s" % s3key.content_encoding
+    if s3key.content_language is not None:
+        print "  content-language: %s" % s3key.content_language
+    if s3key.content_type is not None:
+        print "  content-type: %s" % s3key.content_type
+    if s3key.encrypted is not None:
+        print "  encrypted: %s" % s3key.encrypted
+    if s3key.etag is not None:
+        print "  etag: %s" % s3key.etag
+    if s3key.last_modified is not None:
+        print "  last-modified: %s" % s3key.last_modified
+    if s3key.md5 is not None:
+        print "  md5: %s" % s3key.md5
+    if len(s3key.metadata) > 0:
+        print "  metadata: %s" % s3key.metadata
+    if s3key.owner is not None:
+        print "  owner: %s" % s3key.owner
+    if s3key.size is not None:
+        print "  size: %s" % s3key.size
+    if s3key.storage_class is not None:
+        print "  storage-class: %s" % s3key.storage_class
+    if s3key.version_id is not None:
+        print "  version-id: %s" % s3key.version_id
+
+#
+# THE SCRIPT
+#
+
+# Check dependencies... these modules might not be installed on the system.
+try:
+    import boto
+except ImportError, e:
+    print "boto is not installed. Run 'pip install boto' on the command-line"
+    print "to install it first."
+    sys.exit(1)
+
+try:
+    import yaml
+except ImportError, e:
+    print "pyyaml is not installed. Run 'pip install pyyaml' on the command-line"
+    print "to install it first."
+    sys.exit(1)
+
+# It's OK if there aren't any args. We'll just return the bucket list.
+if len(sys.argv) > 1:
+    process_args(sys.argv[1:])
+
+s3 = authenticate_s3(access_key_id, secret_access_key, config_file)
+if s3 is None:
+    print "Could not make a connection to Amazon S3."
+    get_help()
+    sys.exit()
+
+# if no args, just list the buckets.
+if len(s3_paths_to_process) == 0:
+    rs = s3.get_all_buckets()
+    for key in rs:
+        print key.name
+    sys.exit(0)
+
+# If we have args (that is, we're here), they're either:
+# - buckets to list the # contents of
+# - partial paths to list matching objects for
+# - files to download (or get info about).
+
+for s3_path in s3_paths_to_process:
+    bucket_name, object_name = split_s3_path(s3_path)
+
+    # we must at *least* have the bucket name.
+    if s3.lookup(bucket_name) is None:
+        print "** no such bucket: %s" % bucket_name
+        sys.exit(1)
+
+    bucket = s3.get_bucket(bucket_name)
+
+    # first, try for an exact match
+    s3key = bucket.get_key(object_name)
+
+    if s3key is None:
+        # maybe this is a partial path?
+        s3_key_list = bucket.list(object_name)
+        for s3key in s3_key_list:
+            if 'i' in switches:
+                print_s3key_info(bucket, s3key)
+            else:
+                print "%s/%s" % (bucket_name, s3key.name)
+    else:
+        if 'i' in switches:
+            print_s3key_info(bucket, s3key)
+        else:
+            # download the file.
+            path, filename = os.path.split(object_name)
+            sys.stdout.write("Downloading %s/%s as %s... " %  (bucket_name, object_name,
+                filename))
+            key.get_contents_to_filename(filename)
+            sys.stdout.write("OK!\n")
+
