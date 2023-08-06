@@ -1,0 +1,213 @@
+########
+Tutorial
+########
+
+*****************************
+How to use the cTDMS package
+*****************************
+
+=============================
+1. Reading TDMS or TDM files
+=============================
+
+To read a TDMS or TDM file you simply have to call: ::
+
+	from cTDMS.cTDMS import TDM_File
+	
+	tdm=TDM_File("Data4.tdm")
+	tdm.open()
+
+or: ::
+
+	from __future__ import with_statement
+	from cTDMS.cTDMS import TDM_File
+	
+	with TDM_File("Data4.tdm") as tdm:
+		...
+		...
+
+The format of the file name must be like this: ::
+
+	"C:\\Daten\\Projekte\\PyVDAW\\tdms.tdms"
+
+It is necessary to use double backslashes.
+
+The distiction between TDM or TDMS is just done by the extionsion of the file name. All operations of the cTDMS package can be done on TDM and TDMS files.
+
+With ``tdm.open()`` the structure of the whole TDM file is read into memory and can be accessed by the ``TDM_File`` object ``tdm``.
+
+The file object could have some options like:::
+
+  TDM_File(filename, readonly=0,  fileType="",  name="",  description="", title="", author="")
+  
+With ``readonly=1`` the file could be opened for read accessonly.
+The other options like ``fileType``,  ``name``, etc. will be used as properties on file level.
+
+If the file doesn\`t exists it is created. If it alread exists, it is opened for read and if specified with ``readonly=0`` for write access.
+
+==============
+Closing a file
+==============
+
+With: :: 
+
+    tdm.close()
+
+the file could be closed.
+
+If any changes made on the TDM file should be saved, a: ::
+
+    tdm.save()
+    
+command has to be done. In this case all changes will be writen back to the original TDM or TDMS file.
+
+If the file was opened with: ::
+
+    with TDM_File("Data4.tdm", readonly=0) as tdm:
+   
+any changes done on the data with be saved to the original TDM file, when leaving the ``with clause``
+
+If the file should be opened for readonly, the ``readonly=1`` option should be used.::
+
+    tdm=TDM_File("Data4.tdm", readonly=1)
+
+or: ::
+
+    with TDM_File("Data4.tdm", readonly=1) as tdm:
+	
+==================================
+Accessing properties on file level
+==================================
+
+Properities of the TDM file can be accessed by reading the dictionary ``tdm.attrs``: ::
+
+    with TDM_File(fn) as tdm:
+    #  File properties
+        print "File Properties -----"
+        for property in tdm.attrs:
+            print property,  tdm.attrs[property]
+
+Properties can be writen like this:
+::
+
+    import datetime
+    dt=datetime.datetime.now()
+    tdm.attrs["title"]="abc"
+    tdm.attrs["name"]="TDM Test File"
+    tdm.attrs["xxx"]=123
+    tdm.attrs["date"]=dt
+
+
+======================================
+Accessing groups in a TDMS or TDM file
+======================================
+
+The tdm file object is organized like a dictionary. The groups contained in the TDM file can be acces by: ::
+
+    for groupname in tdm:
+        print "Group %s ------------"%( groupname)
+        group=tdm[groupname]
+ 
+==================== 
+Creating a new group
+====================
+
+A new group in the TDM file can be created with following command: ::
+
+    if "newgroupname" is not in tdm:
+        new_group=tdm.add_Group("newgroupname",  "Description of the group")
+  
+Before creating a new group, it has to be checked, that this group is not already existing.  
+
+================
+Deleting a group
+================
+
+A group can be deleted by deleting the dictionary item in ``tdm``: ::
+
+    del tdm[groupname]
+    
+============================
+Access properties of a group
+============================
+
+Properties on group level can be accessed similar to properties on file level: ::
+
+    for groupname in tdm:
+        print "Group %s ------------"%( groupname)
+        group=tdm[groupname] 
+        
+        print "Group Properties -----"
+        for property in group.attrs:
+            print property, " = ",  group.attrs[property]   
+  
+        
+=========================
+Getting data from a group
+=========================
+
+Measuring data are store in channels of a group. the can be easily accessed by geting the channels from the group: ::
+
+    for groupname in tdm:
+        print "Group %s ------------"%( groupname)
+        group=tdm[groupname] 
+        
+        for channelname in group:
+            print "Channel %s ------------"%(channelname)
+            channel=group[channelname]
+            print "Channel Properties -----"
+            for property in channel.attrs:
+                print property,  channel.attrs[property]    
+            # get the data  
+            d=channel[5]   
+            d=channel[-5]
+            d=channel[:]
+            d=channel[0:]
+            d=channel[10:-1]
+            
+            t=type(d)
+            print "data type: %s, length: %d"%(str(type(d)),  len(d))
+
+The data in ``group[channelname]`` are normal numpy objects and could be of different type.
+
+Following mapping of data type will be done
+    
+    +--------------+---------+
+    |TDMS          |  numpy  |
+    +==============+=========+
+    |DDC_UInt8     |  u1     |
+    +--------------+---------+
+    |DDC_Int16     |  i2     |
+    +--------------+---------+
+    |DDC_Int32     |  i4     |
+    +--------------+---------+
+    |DDC_Float     |  float32|
+    +--------------+---------+
+    |DDC_Double    | float64 |
+    +--------------+---------+
+ 
+
+Data from a channel could be accessed by using the normal Python-way of indexing.
+
+ 
+==========================================
+Accessing the properties of a data channel
+==========================================
+
+The properties of each channel can be accessed in the same way as on group or file level by reading and writing of the ``channel.attrs`` dictionary.
+::
+
+    channel=group[channelname]
+    print "Channel Properties -----"
+    for property in channel.attrs:
+        print property,  channel.attrs[property]
+        channel.attrs["new property"]="test foobar"
+    
+New properties could be created by:
+::
+
+    channel.attrs["new property"]="test foobar"
+    
+Properties could not be deleted, this function is not implemented in the underlying library.
+
+        
