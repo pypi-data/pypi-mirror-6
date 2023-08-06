@@ -1,0 +1,10 @@
+__version__ = "0.1.23.post4.gab5bcef"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = 'develop'
+__git_remote_tracking_branch__ = 'origin/develop'
+__git_remote_url__ = 'git@infinigit.infinidat.com:host/multipathtools.git'
+__git_head_hash__ = 'ab5bcef7347d9b4e93565c4322085c4a0e2c4ca2'
+__git_head_subject__ = 'STORAGEMODEL-268 saving dm_name for MultipathDevice'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
