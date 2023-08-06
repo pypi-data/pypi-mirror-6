@@ -1,0 +1,59 @@
+#!/usr/bin/python
+# Copyright (C) 2012-2014 Peter Hatina <phatina@redhat.com>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see <http://www.gnu.org/licenses/>.
+
+import sys
+import logging
+
+from lmi.shell import LMIConsole
+from lmi.shell import LMIShellOptions
+
+if __name__ == "__main__":
+    options = LMIShellOptions(sys.argv)
+    logging.basicConfig(format='%(levelname)s: %(message)s')
+    logger = logging.getLogger("")
+    if options.log == LMIShellOptions._LOG_MORE_VERBOSE:
+        # Print out all the log messages to stderr stream
+        logger.setLevel(logging.DEBUG)
+    elif options.log == LMIShellOptions._LOG_VERBOSE:
+        # Print out only a set of log messages to stderr stream
+        logger.setLevel(logging.INFO)
+    elif options.log == LMIShellOptions._LOG_QUIET:
+        # Quiet flag seen, drop all the log messages
+        handlers = logger.handlers
+        for handler in handlers:
+            logger.removeHandler(handler)
+        logger.addHandler(logging.NullHandler())
+    else:
+        # By default, print error messages to stderr stream
+        logger.setLevel(logging.ERROR)
+
+    console = LMIConsole(options.cwd_first_in_path)
+    console.set_verify_server_certificate(options.verify_server_cert)
+    if options.interactive:
+        console.interact()
+    else:
+        script_name = options.script_name
+        script_argv = options.script_argv
+        interactive = options.interact
+        exit_code = console.interpret(
+            script_name,
+            script_argv,
+            interactive=interactive)
+        if interactive:
+            console.interact(console.locals)
+        else:
+            sys.exit(exit_code)
+    sys.exit(0)
