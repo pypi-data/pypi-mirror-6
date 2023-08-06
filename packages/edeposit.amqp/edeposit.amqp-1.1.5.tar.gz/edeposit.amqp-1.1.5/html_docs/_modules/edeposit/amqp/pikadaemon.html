@@ -1,0 +1,267 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>edeposit.amqp.pikadaemon &mdash; edeposit.amqp 1.1.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '1.1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="edeposit.amqp 1.1.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">edeposit.amqp 1.1.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for edeposit.amqp.pikadaemon</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c">#</span>
+<span class="c"># Interpreter version: python 2.7</span>
+<span class="c">#</span>
+<span class="c">#= Imports ====================================================================</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Generic AMQP blocking communication daemon server.</span>
+
+<span class="sd">Usage is simple - just inherit the class and override</span>
+<span class="sd">:func:`PikaDaemon.onMessageReceived`.</span>
+
+<span class="sd">You can send messages back using either :func:`PikaDaemon.sendMessage` or</span>
+<span class="sd">:func:`PikaDaemon.sendResponse`. Fist one allows you to send message</span>
+<span class="sd">everywhere, second one send message to the queue defined by constructor.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">pika</span>
+
+
+<span class="kn">import</span> <span class="nn">daemonwrapper</span>
+
+
+<span class="c">#= Functions &amp; objects ========================================================</span>
+<div class="viewcode-block" id="PikaDaemon"><a class="viewcode-back" href="../../../api/edeposit.amqp.pikadaemon.html#edeposit.amqp.pikadaemon.PikaDaemon">[docs]</a><span class="k">class</span> <span class="nc">PikaDaemon</span><span class="p">(</span><span class="n">daemonwrapper</span><span class="o">.</span><span class="n">DaemonRunnerWrapper</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">connection_param</span><span class="p">,</span> <span class="n">queue</span><span class="p">,</span> <span class="n">output_exchange</span><span class="p">,</span> <span class="n">output_key</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Pika and Daemon wrapper for handling AMQP connections.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            connection_param (pika.ConnectionParameters): object setting the</span>
+<span class="sd">                             connection</span>
+<span class="sd">            queue (str): name of queue where the daemon should listen</span>
+<span class="sd">            output_exchange (str): name of exchange where the daemon should put</span>
+<span class="sd">                                   responses</span>
+<span class="sd">            output_key (str): routing key for output exchange</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">PikaDaemon</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">queue</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">connection_param</span> <span class="o">=</span> <span class="n">connection_param</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span> <span class="o">=</span> <span class="n">queue</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_exchange</span> <span class="o">=</span> <span class="n">output_exchange</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">content_type</span> <span class="o">=</span> <span class="s">&quot;application/json&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_key</span> <span class="o">=</span> <span class="n">output_key</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">ack_sent</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ack_delivery_tag</span> <span class="o">=</span> <span class="bp">None</span>
+
+<div class="viewcode-block" id="PikaDaemon.body"><a class="viewcode-back" href="../../../api/edeposit.amqp.pikadaemon.html#edeposit.amqp.pikadaemon.PikaDaemon.body">[docs]</a>    <span class="k">def</span> <span class="nf">body</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method just handles AMQP connection details and receive loop.</span>
+
+<span class="sd">        Warning:</span>
+<span class="sd">            Don&#39;t override this method!</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connection</span> <span class="o">=</span> <span class="n">pika</span><span class="o">.</span><span class="n">BlockingConnection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">connection_param</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">channel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">channel</span><span class="p">()</span>
+
+        <span class="c"># receive messages and put them to .onMessageReceived() callback</span>
+        <span class="k">for</span> <span class="n">method_frame</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">body</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">consume</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ack_sent</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ack_delivery_tag</span> <span class="o">=</span> <span class="n">method_frame</span><span class="o">.</span><span class="n">delivery_tag</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">onMessageReceived</span><span class="p">(</span><span class="n">method_frame</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">body</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ack</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="PikaDaemon.ack"><a class="viewcode-back" href="../../../api/edeposit.amqp.pikadaemon.html#edeposit.amqp.pikadaemon.PikaDaemon.ack">[docs]</a>    <span class="k">def</span> <span class="nf">ack</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Acknowledge, that message was received.</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">            This will in some cases (depends on settings of RabbitMQ) remove</span>
+<span class="sd">            the message from the message queue.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ack_sent</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">basic_ack</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ack_delivery_tag</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ack_sent</span> <span class="o">=</span> <span class="bp">True</span>
+</div>
+<div class="viewcode-block" id="PikaDaemon.onMessageReceived"><a class="viewcode-back" href="../../../api/edeposit.amqp.pikadaemon.html#edeposit.amqp.pikadaemon.PikaDaemon.onMessageReceived">[docs]</a>    <span class="k">def</span> <span class="nf">onMessageReceived</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method_frame</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">body</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Callback which is called every time when message is received.</span>
+
+<span class="sd">        Warning:</span>
+<span class="sd">            You SHOULD override this.</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">            It is expected, that method returns True, if you want to</span>
+<span class="sd">            automatically ack the received message, which can be important in</span>
+<span class="sd">            some situations, because otherwise the message will be held in</span>
+<span class="sd">            message queue until someone will ack it.</span>
+
+<span class="sd">            You don&#39;t have to return True/False - you can ack the message</span>
+<span class="sd">            yourself, by calling :func:`ack`.</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">            Good design choice is to ack the message AFTER you process it, to</span>
+<span class="sd">            be sure, that message is processed properly and can be removed from</span>
+<span class="sd">            queue.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">print</span> <span class="s">&quot;method_frame:&quot;</span><span class="p">,</span> <span class="n">method_frame</span>
+        <span class="k">print</span> <span class="s">&quot;properties:&quot;</span><span class="p">,</span> <span class="n">properties</span>
+        <span class="k">print</span> <span class="s">&quot;body:&quot;</span><span class="p">,</span> <span class="n">body</span>
+
+        <span class="k">print</span> <span class="s">&quot;---&quot;</span>
+        <span class="k">print</span>
+</div>
+<div class="viewcode-block" id="PikaDaemon.sendMessage"><a class="viewcode-back" href="../../../api/edeposit.amqp.pikadaemon.html#edeposit.amqp.pikadaemon.PikaDaemon.sendMessage">[docs]</a>    <span class="k">def</span> <span class="nf">sendMessage</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exchange</span><span class="p">,</span> <span class="n">routing_key</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">properties</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                    <span class="n">UUID</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        With this function, you can send message to `exchange`.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            exchange (str): name of exchange you want to message to be</span>
+<span class="sd">                            delivered</span>
+<span class="sd">            routing_key (str): which routing key to use in headers of message</span>
+<span class="sd">            message (str): body of message</span>
+<span class="sd">            properties (dict ,optional): properties of message - if not used,</span>
+<span class="sd">                                      or set to ``None``, ``self.content_type``</span>
+<span class="sd">                                      and ``delivery_mode=1`` is used</span>
+<span class="sd">            UUID (str, optional): UUID of the message. If set, it is included</span>
+<span class="sd">                                  into ``properties`` of the message.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">properties</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">properties</span> <span class="o">=</span> <span class="n">pika</span><span class="o">.</span><span class="n">BasicProperties</span><span class="p">(</span>
+                <span class="n">content_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">content_type</span><span class="p">,</span>
+                <span class="n">delivery_mode</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                <span class="n">headers</span><span class="o">=</span><span class="p">{}</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">UUID</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">properties</span><span class="o">.</span><span class="n">headers</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">properties</span><span class="o">.</span><span class="n">headers</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">properties</span><span class="o">.</span><span class="n">headers</span><span class="p">[</span><span class="s">&quot;UUID&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">UUID</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">basic_publish</span><span class="p">(</span>
+            <span class="n">exchange</span><span class="o">=</span><span class="n">exchange</span><span class="p">,</span>
+            <span class="n">routing_key</span><span class="o">=</span><span class="n">routing_key</span><span class="p">,</span>
+            <span class="n">properties</span><span class="o">=</span><span class="n">properties</span><span class="p">,</span>
+            <span class="n">body</span><span class="o">=</span><span class="n">message</span>
+        <span class="p">)</span>
+</div>
+<div class="viewcode-block" id="PikaDaemon.sendResponse"><a class="viewcode-back" href="../../../api/edeposit.amqp.pikadaemon.html#edeposit.amqp.pikadaemon.PikaDaemon.sendResponse">[docs]</a>    <span class="k">def</span> <span class="nf">sendResponse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">UUID</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Send `message` to ``self.output_exchange`` with routing key</span>
+<span class="sd">        ``self.output_key``, ``self.content_type`` in ``delivery_mode=1``.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            message (str): message which will be sent</span>
+<span class="sd">            UUID: unique identification of message</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sendMessage</span><span class="p">(</span>
+            <span class="n">exchange</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">output_exchange</span><span class="p">,</span>
+            <span class="n">routing_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">output_key</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span>
+            <span class="n">UUID</span><span class="o">=</span><span class="n">UUID</span>
+        <span class="p">)</span>
+</div>
+<div class="viewcode-block" id="PikaDaemon.onExit"><a class="viewcode-back" href="../../../api/edeposit.amqp.pikadaemon.html#edeposit.amqp.pikadaemon.PikaDaemon.onExit">[docs]</a>    <span class="k">def</span> <span class="nf">onExit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Called when daemon is stopped. Basically just AMQP&#39;s ``.close()``</span>
+<span class="sd">        functions to ensure clean exit.</span>
+
+<span class="sd">        You can override this, but don&#39;t forget to call it thru ``super()``, or</span>
+<span class="sd">        the AMQP communication won&#39;t be closed properly!</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s">&quot;channel&quot;</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">pika</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ChannelClosed</span><span class="p">:</span>
+            <span class="k">pass</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">edeposit.amqp 1.1.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

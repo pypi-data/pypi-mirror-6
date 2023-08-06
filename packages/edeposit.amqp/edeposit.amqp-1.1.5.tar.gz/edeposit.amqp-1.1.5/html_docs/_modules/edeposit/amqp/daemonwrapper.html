@@ -1,0 +1,211 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>edeposit.amqp.daemonwrapper &mdash; edeposit.amqp 1.1.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '1.1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="edeposit.amqp 1.1.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">edeposit.amqp 1.1.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for edeposit.amqp.daemonwrapper</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c">#</span>
+<span class="c"># Interpreter version: python 2.7</span>
+<span class="c">#</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Module for creating generic, callback based wrappers.</span>
+
+<span class="sd">It is little bit easier (at least for me) to use than the original `daemon</span>
+<span class="sd">module &lt;https://pypi.python.org/pypi/python-daemon/&gt;`_.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+
+<span class="kn">import</span> <span class="nn">daemon</span>  <span class="c"># python-daemon package from pypi</span>
+<span class="kn">from</span> <span class="nn">daemon</span> <span class="kn">import</span> <span class="n">runner</span>
+
+
+<div class="viewcode-block" id="DaemonRunnerWrapper"><a class="viewcode-back" href="../../../api/edeposit.amqp.daemonwrapper.html#edeposit.amqp.daemonwrapper.DaemonRunnerWrapper">[docs]</a><span class="k">class</span> <span class="nc">DaemonRunnerWrapper</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pid_filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Generic daemon class, which allows you to daemonize your script and</span>
+<span class="sd">        react to events in simple callbacks.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            pid_filename (str): name of daemon&#39;s PID file, which is stored in</span>
+<span class="sd">                                ``/tmp``. Class automatically adds ``.pid``</span>
+<span class="sd">                                suffix.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stdin_path</span> <span class="o">=</span> <span class="s">&#39;/dev/null&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stdout_path</span> <span class="o">=</span> <span class="s">&#39;/dev/tty&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stderr_path</span> <span class="o">=</span> <span class="s">&#39;/dev/tty&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pidfile_path</span> <span class="o">=</span> <span class="s">&#39;/tmp/&#39;</span> <span class="o">+</span> <span class="n">pid_filename</span> <span class="o">+</span> <span class="s">&#39;.pid&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pidfile_timeout</span> <span class="o">=</span> <span class="mi">5</span>
+
+        <span class="c"># react to parameters and check if daemon is not already runnig</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">daemon_runner</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">DaemonRunner</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isRunning</span><span class="p">()</span> <span class="ow">and</span> <span class="s">&quot;stop&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span> <span class="ow">and</span> \
+           <span class="s">&quot;restart&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">onIsRunning</span><span class="p">()</span>
+
+<div class="viewcode-block" id="DaemonRunnerWrapper.run_daemon"><a class="viewcode-back" href="../../../api/edeposit.amqp.daemonwrapper.html#edeposit.amqp.daemonwrapper.DaemonRunnerWrapper.run_daemon">[docs]</a>    <span class="k">def</span> <span class="nf">run_daemon</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Used as daemon starter.</span>
+
+<span class="sd">        Warning:</span>
+<span class="sd">            DO NOT OVERRIDE THIS.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">daemon_runner</span><span class="o">.</span><span class="n">do_action</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">daemon</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">DaemonRunnerStopFailureError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">onStopFail</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">SystemExit</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">onExit</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="DaemonRunnerWrapper.run"><a class="viewcode-back" href="../../../api/edeposit.amqp.daemonwrapper.html#edeposit.amqp.daemonwrapper.DaemonRunnerWrapper.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Used to handle some exceptions.</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">            No, this can&#39;t be named differently, because it is defined in</span>
+<span class="sd">            original DaemonRunner object.</span>
+
+<span class="sd">        Warning:</span>
+<span class="sd">            DO NOT OVERRIDE THIS.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">body</span><span class="p">()</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">raise</span>
+        <span class="k">finally</span><span class="p">:</span>           <span class="c"># this is called only if daemon was not started</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">onExit</span><span class="p">()</span>  <span class="c"># and whole app ran on foreground</span>
+</div>
+<div class="viewcode-block" id="DaemonRunnerWrapper.body"><a class="viewcode-back" href="../../../api/edeposit.amqp.daemonwrapper.html#edeposit.amqp.daemonwrapper.DaemonRunnerWrapper.body">[docs]</a>    <span class="k">def</span> <span class="nf">body</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Here should be your code loop.</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">            Loop is automatically break-ed when daemon receives one of the unix</span>
+<span class="sd">            signals. After that, :func:`onExit` is called.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="DaemonRunnerWrapper.onStopFail"><a class="viewcode-back" href="../../../api/edeposit.amqp.daemonwrapper.html#edeposit.amqp.daemonwrapper.DaemonRunnerWrapper.onStopFail">[docs]</a>    <span class="k">def</span> <span class="nf">onStopFail</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Called when it is not possible to stop the daemon.</span>
+
+<span class="sd">        This kind of event typically occurs if there is no running instance of</span>
+<span class="sd">        daemon and script is called with ``stop`` parameter.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">print</span> <span class="s">&quot;There is no running instance to be stopped.&quot;</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DaemonRunnerWrapper.onIsRunning"><a class="viewcode-back" href="../../../api/edeposit.amqp.daemonwrapper.html#edeposit.amqp.daemonwrapper.DaemonRunnerWrapper.onIsRunning">[docs]</a>    <span class="k">def</span> <span class="nf">onIsRunning</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Oposite of :func:`onStopFail` - this callback is called if there is</span>
+<span class="sd">        already a running instance of daemon.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">print</span> <span class="s">&#39;It looks like a daemon is already running!&#39;</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DaemonRunnerWrapper.onExit"><a class="viewcode-back" href="../../../api/edeposit.amqp.daemonwrapper.html#edeposit.amqp.daemonwrapper.DaemonRunnerWrapper.onExit">[docs]</a>    <span class="k">def</span> <span class="nf">onExit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Called when the daemon received ?SIGTERM? and is shutting down.</span>
+
+<span class="sd">        Warning:</span>
+<span class="sd">            You should probably put something here, by default is there only</span>
+<span class="sd">            shutdown message &quot;DaemonRunnerWrapper is shutting down.&quot;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">print</span> <span class="s">&quot;DaemonRunnerWrapper is shutting down.&quot;</span>
+</div>
+<div class="viewcode-block" id="DaemonRunnerWrapper.isRunning"><a class="viewcode-back" href="../../../api/edeposit.amqp.daemonwrapper.html#edeposit.amqp.daemonwrapper.DaemonRunnerWrapper.isRunning">[docs]</a>    <span class="k">def</span> <span class="nf">isRunning</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Check PID and return true, if it looks like there is already a running</span>
+<span class="sd">        instance of daemon.</span>
+
+<span class="sd">        PID timeout can be set thru :attr:`pidfile_timeout` property.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">runner</span><span class="o">.</span><span class="n">make_pidlockfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pidfile_path</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">is_locked</span><span class="p">()</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">edeposit.amqp 1.1.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
