@@ -1,0 +1,10 @@
+__version__ = "0.6.16"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.6.16)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'b8f8e7141f2583ee68a14e316b5b65278f89602a'
+__git_head_subject__ = 'TRIVIAL projector skeleton update: delete bootstrap.py'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
