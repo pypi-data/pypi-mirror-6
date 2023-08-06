@@ -1,0 +1,165 @@
+Metadata-Version: 1.1
+Name: serialkiller-plugins
+Version: 0.0.2
+Summary: Plugins for serialkiller project
+Home-page: https://github.com/badele/serialkiller-plugins
+Author: Bruno Adelé
+Author-email: Bruno Adelé <bruno@adele.im>
+License: GPL
+Description: 
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        About
+        =====
+        
+        ``serialkiller-plugins`` Plugins for serialkiller project
+        
+        
+        Installing
+        ==========
+        
+        To install the latest release from `PyPI <http://pypi.python.org/pypi/serialkiller-plugins>`_
+        
+        ::
+        
+            $ pip install serialkiller-plugins
+        
+        To install the latest development version from `GitHub <https://github.com/badele/serialkiller-plugins>`_
+        
+        ::
+        
+            $ pip install git+git://github.com/badele/serialkiller-plugins.git
+        
+        Plugins
+        =======
+        - Is online (ping)
+        - Teleinformation (French electric provider)
+        - Sunshine (calc sunrise & sunset)
+        
+        
+        Script example
+        ==============
+        
+        For checking the sensors periodically, i use the supervisor application, it can restart the application if it crashes.
+        
+        Supervisor install.
+        
+        ::
+        
+            # Debian
+            $ apt-get install supervisor
+        
+            # Archlinux
+            $ pacman -S supervisor
+        
+        The check sensors supervisor configuration.
+        
+        ::
+        
+            [program:check_sensors]
+            command=~/.virtualenvs/serialkiller/bin/python /usr/local/bin/check_sensors.py
+            user=badele
+            autostart=true
+            autorestart=true
+        
+        
+        Active and start supervisor.
+        
+        ::
+        
+            # Debian
+            $ /etc/init.d/supervisor start
+        
+            # Archlinux
+            $ systemctl enable supvervisord
+            $ systemctl start supvervisord
+        
+            # Show status
+            $ supervisorctl status
+            check_sensors                    RUNNING    pid 1306, uptime 23:48:04
+        
+        ``/usr/local/bin/check_sensors.py`` script example.
+        
+        ::
+        
+            #!/usr/bin/env python
+            # -*- coding: utf-8 -*-
+        
+            import os
+            import time
+        
+            from skplugins import addValuePlugin, addEventPlugin, addValue, addEvent
+            from skplugins.network.ping import ping
+            from skplugins.weather.sunshine import sunshine
+        
+            server = '192.168.1.1'
+            while True:
+        
+                # Check sunshine
+                result = sunshine(latitude="43:36:43", longitude="3:53:38", elevation=8)
+                addValuePlugin(server, 'city:weather:sunshine', result)
+        
+                # Check internet connexion
+                result = ping(destination="8.8.8.8", count=1)
+                addValuePlugin(server, 'livingroom:internet:available', result)
+        
+                # Check webcam
+                result = ping(destination="192.168.1.2", count=1)
+                addValuePlugin(server, 'livingroom:axis:online', result)
+        
+                # Check my computer
+                result = ping(destination="192.168.1.3", count=1)
+                addValuePlugin(server, 'bedroom:hp2012:online', result)
+        
+                # Check teleinfo informations
+                result = teleinfo(dev='/dev/teleinfo')
+        
+                if 'HCHC' in result.results:
+                    addValue(server, 'washroom:teleinfo:hchc', result.types['HCHC'], result.results['HCHC'])
+        
+                if 'HCHP' in result.results:
+                    addValue(server, 'washroom:teleinfo:hchp', result.types['HCHP'], result.results['HCHP'])
+        
+                if 'IINST' in result.results:
+                    addValue(server, 'washroom:teleinfo:iinst', result.types['IINST'], result.results['IINST'])
+        
+                if 'ISOUSC' in result.results:
+                    addValue(server, 'washroom:teleinfo:isousc', result.types['ISOUSC'], result.results['ISOUSC'])
+        
+                if 'PAPP' in result.results:
+                    addValue(server, 'washroom:teleinfo:papp', result.types['PAPP'], result.results['PAPP'])
+        
+                #Sleep
+                time.sleep(5)
+        Changelog
+        =========
+        
+        Version 0.0.2 (2014-02-08)
+        --------------------------
+        
+         * Add metar plugin
+         * Add vigilance plugin (Meteo France)
+         * Add cache system
+         * Add process plugin
+         * Add sunshine plugin
+         * Add ping plugin
+         * Add teleinfo plugin
+        
+        Version 0.0.1 (2013-01-11)
+        --------------------------
+        
+        * First version
+        
+Platform: UNKNOWN
+Classifier: Programming Language :: Python
