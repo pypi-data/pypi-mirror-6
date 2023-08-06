@@ -1,0 +1,44 @@
+##title = Tax Payable
+##parameters=account,args=[],kw={}
+#
+# A BLEntry/BLSubsidiaryEntry is constituted from:
+#   id   - you should NEVER change this unless you REALLY know what you are doing!
+#   desc
+#   path to account
+#   amount
+#   a reference
+#
+# This script should return a list (possibly empty) of BLEntry objects
+#
+from Products.CMFCore.utils import getToolByName
+from Products.BastionBanking.ZCurrency import ZCurrency
+
+# the first entry processed is gross salary (alphabetically first) - retrieve it ...
+wages_exp = context.Ledger.accountValues(tags='wages_exp')[0]
+
+# hmmm - salary/hourly rate not set ...
+try:
+    gross = context.blEntry(wages_exp.getId()).amount
+except KeyError:
+    gross = None
+
+if not gross:
+    # no tax to pay - bail out to avoid expensive cpu cycles ...
+    return []
+
+annual = gross * 52   # we are expecting to run a weekly payroll ...
+payg = ZCurrency('%s 0.00' % gross.currency())
+bltool = getToolByName(context, 'portal_bastionledger')
+payg += bltool.personal_tax.calculateTax(context.effective(), annual)
+
+if payg > 0:
+    tax_account = context.Ledger.accountValues(tags='wages_tax')[0]
+
+    from Products.BastionLedger.BLEntry import BLEntry
+    return [ BLEntry(script.getId(),
+                     'Auto - %s' % script.title,
+                     'Ledger/%s' % tax_account.getId(),
+                     -payg / 52,
+                     script.getId()) ]
+
+return []

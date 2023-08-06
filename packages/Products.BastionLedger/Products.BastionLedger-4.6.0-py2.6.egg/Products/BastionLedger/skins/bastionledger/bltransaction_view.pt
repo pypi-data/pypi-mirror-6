@@ -1,0 +1,166 @@
+<html xmlns:tal="http://xml.zope.org/namespaces/tal"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      metal:use-macro="context/main_template/macros/master"
+      i18n:domain="bastionledger">
+
+  <metal:border fill-slot="top_slot">
+    <tal:border define="dummy python:request.set('enable_border',1)" />
+  </metal:border>
+ 
+  <div metal:fill-slot="main"
+       tal:define="entries context/entryValues;
+                   utool context/@@plone_portal_state/portal_url;
+                   effective context/effective">
+
+      <h1 class="documentFirstHeading"><img src="" alt="" tal:define="icon python:context.getIcon(1)" 
+              tal:attributes="src string:${utool}/${icon}">&nbsp;<span tal:replace="context/Title | context/getId"/></h1>
+
+      <div tal:replace="structure provider:plone.belowcontenttitle"/>
+
+   <div align="right" tal:define="attachments context/attachmentValues" tal:condition="attachments">
+       <tal:block tal:repeat="attachment attachments">
+          <img alt="Attachment" src="trombone.gif">
+          <a href="" target="_blank" 
+             tal:attributes="href string:attachments/${attachment/getId}"
+             tal:content="attachment/getId"/>
+       </tal:block>
+   </div>
+
+   <span class="label">Transaction No. </span><span tal:replace="context/getId"/><br/>
+
+   <table width="100%" cellpadding="2" cellspacing="0" summary="">
+      <tr>
+         <td valign="top">
+            <fieldset>
+               <legend>Details</legend>
+               <table summary="" border="0" cellpadding="2" cellspacing="0" width="100%">
+               <tr>
+                  <tal:block tal:define="ref context/referenceObject" tal:condition="nocall: ref">
+                    <td class="field">
+                        <strong>Reference</strong>&nbsp;
+                        <img src="" tal:define="icon python: ref.getIcon(1)"
+                                    tal:attributes="src string:${utool}/${icon}"/>
+                        <a href="" tal:attributes="href ref/absolute_url"
+                                   tal:content="ref/getId"/>
+                    </td>
+                  </tal:block>
+                  <td class="field">
+                     <strong>Effective Date</strong>&nbsp;
+                     <span tal:replace="python: context.toLocalizedTime(effective)"/>
+                  </td>
+                  <td class="field">
+                     <strong>Entered By</strong>&nbsp;
+                     <span tal:replace="context/entered_by"/>
+                  </td>
+                  <td class="field">
+                     <strong>When</strong>&nbsp;
+                     <span tal:replace="context/created"/>
+                  </td>
+                  <td class="field">
+                     <strong>Status</strong>
+                     <span tal:replace="context/status"/>
+                  </td>
+                </tr>
+                <tr tal:condition="python: context.meta_type == 'BLSubsidiaryTransaction'">
+                  <td class="field" colspan="4">
+                     <strong>Control A/c</strong>
+                     <a tal:define="control context/controlAccount"
+                        tal:attributes="href control/absolute_url"
+                        tal:content="control/prettyTitle"/>
+                  </td>
+                </tr>
+              </table>
+            </fieldset>
+         </td>
+         <td valign="top" tal:define="tags python: context.getProperty('tags')"
+             tal:condition="tags">
+             <fieldset>
+               <legend>Tags</legend>
+               <div tal:repeat="tag tags" tal:content="tag"/>
+             </fieldset>
+         </td>
+        </tr>
+       </table>
+
+       <table summary="" border="0" cellpadding="2" cellspacing="0" width="100%" tal:condition="entries">
+           <tr class="row">
+               <td width="32" class="field" nowrap>&nbsp;</td>
+               <td class="field"><strong>Account</strong></td>
+               <td class="field"><strong>Description</strong></td>
+               <td width="10%" class="field" align="right"><strong>Debit</strong></td>
+               <td width="10%" class="field" align="right"><strong>Credit</strong></td>
+     	       <td class="field">&nbsp;</td>
+           </tr>      
+           <tr tal:repeat="item entries" class=""
+               tal:attributes="class python: repeat['item'].odd() and 'odd' or 'even'">
+               <td class="field" valign="top" nowrap>
+                  <a href="" style="text-decoration: none;" 
+                     tal:attributes="href string:${item/getId}/edit">
+                      <img src="" alt="Entry" border="0" 
+                           tal:attributes="src string:${portal_url}/blentry.gif" />
+                  </a>
+                  <img src="/misc_/BastionLedger/currency" 
+                       tal:define="fcamt item/foreignAmount"
+                       tal:condition="fcamt" 
+                       tal:attributes="title fcamt;
+                                       src string:${portal_url}/blcurrency.gif"/>
+
+               </td>
+               <td class="field" valign="top" nowrap>
+                   <a href="" tal:define="acct python: item.blAccount()"
+                              tal:attributes="href string:${acct/absolute_url}"
+                              tal:content="acct/prettyTitle"/>
+               </td>
+               <td class="field" valign="top" tal:content="python: item.title"/>
+               <tal:block tal:condition="item/isDebit">
+                  <td class="field"  valign="top" align="right" nowrap
+                      tal:content="item/absAmount"/>
+                  <td>&nbsp;</td>
+               </tal:block>
+               <tal:block tal:condition="not: item/isDebit">
+                  <td>&nbsp;</td>
+                  <td class="field" valign="top" align="right" nowrap
+                      tal:content="item/absAmount"/>
+               </tal:block>
+               <td>&nbsp;</td>
+           </tr>
+           <tal:totals tal:define="drs context/debitTotal;
+                                   crs context/creditTotal"> 
+              <tr class="list-header">
+                  <td class="field" align="right" colspan="4" nowrap>
+                     <strong tal:content="drs"/>
+                  </td>
+                  <td class="field" align="right" nowrap>
+                     <strong tal:content="python: abs(crs)"/>
+                  </td>
+     	          <td class="field">&nbsp;</td>
+              </tr>
+              <tr class="list-header" 
+                  tal:define="balance python: drs + crs" 
+                  tal:on-error="string:"
+                  tal:condition="python: balance != 0">
+                  <td class="field" colspan="3">&nbsp;</td>
+                  <td class="field" align="right" nowrap tal:condition="python: balance < 0">
+                     <strong style="color: red" tal:content="balance"/>
+                  </td>
+                  <td class="field" align="right" colspan="2" nowrap tal:condition="python: balance > 0">
+                     <strong style="color: red" tal:content="python: abs(balance)"/>
+                  </td>
+     	          <td width="5%"  class="field">&nbsp;</td>
+              </tr>
+           </tal:totals>
+        </table>
+
+      <div tal:replace="structure provider:plone.belowcontentbody">
+           Document actions (print, sendto etc)
+      </div>
+
+      <tal:workflow tal:on-error="string:">
+          <div metal:use-macro="context/review_history/macros/review_history">
+               Workflow information
+          </div>
+      </tal:workflow>
+
+  </div>
+ 
+</html>
