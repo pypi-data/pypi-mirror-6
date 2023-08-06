@@ -1,0 +1,403 @@
+= Introduction =
+This is the pyPastSet tuple based distributed shared memory system.
+The following sections cover installation and basic use of the software. 
+pyPastSet is open source software distributed under the GPL v2 license. 
+Further license details are available in the COPYING file.
+
+The following sections describes all the steps from obtaining and
+installing pyPastSet to actually using it.
+ 
+
+= Preparation =
+In order to use pyPastSet you need Python (http://www.python.org/),
+the Pyro framework (http://pypi.python.org/pypi/Pyro) and a working SSH
+implementation (e.g. http://www.openssh.org).
+The optional psclean helper additionally relies on the 'pkill' tool by
+default. On Mac OSX and Windows pkill is not available out of the box. On
+OSX it can be installed as part of the 'proctools' package from
+MacPorts (http://www.macports.org/). The killall tool or a custom script
+to kill a process by name in combination with the PSPKILL environment is
+another solution.
+
+Please note that pyPastSet silently uses ssh to launch workers on the
+nodes listed in the pshosts file, so you may run into login prompts or
+errors unless your host(s) are configured for non-interactive ssh
+login. Please refer to one of the many online tutorials on setting up
+secure login without password like:
+http://www.debian-administration.org/articles/152
+if you are not familiar with the use of ssh keys.
+
+Additionally the use of Pyro implicitly means that one or more ports are
+used for name and object servers. 
+
+If you experience connection problems (e.g. 'gave up locating pastset'
+errors) you should make sure that you do not have a firewall preventing
+the master server from ssh'ing to the clients or the clients from
+talking with the Pyro components on the master server. The main ports
+here are typically port 22 for ssh and at least port 9090 and 7766 for
+Pyro. 
+It is possible to select all the ports used by pyPastSet with the PYRO_*
+environment variables, however. Services like SqueezeBox and CiscoSecure
+are known to also use TCP port 9090 per default, so if you run any of
+those you may want to use the port environments to avoid port conflicts.
+Further details are described in the Pyro manual and in the
+Debugging Network Problems section below.
+
+The PYRO_* environments may be combined with the PSMASTER environment
+that tells pyPastSet where to run the server components.
+
+Technically pyPastSet should work on all platforms, but it has only been
+tested on Linux and Mac OSX.
+
+
+= Installation =
+There are numerous ways to install pyPastSet ranging from just
+downloading and unpacking for local use to properly installing it
+system-wide. We recommend the method described in the Automated
+Installation section because it automatically pulls in the required
+dependencies and eases installation management.
+
+
+== Local Installation ==
+For isolated testing simply download and unpack the latest release from
+https://pypi.python.org/pypi/pastset
+or grab the latest version from the code repository as described on
+http://code.google.com/p/pypastset/source/checkout 
+and the code can be used from there without any need for administrator
+privileges.
+It is also possible to use pyPastSet from other locations in the file system
+as long as the PSROOT and PYTHONPATH environments are set to the path of
+the unpacked directory.
+
+
+== Automated Installation ==
+The fastest way to install pyPastSet system-wide is to just point pip
+(http://pypi.python.org/pypi/pip) or easy_install
+(http://pypi.python.org/pypi/setuptools) to the latest pastset release
+from the official Python Package Index (pypi.python.org):
+```
+pip install pastset
+```
+or
+```
+easy_install pastset
+```
+
+If you want to install another version you can use the explicit download
+location:
+```
+pip install https://pypi.python.org/packages/source/p/pastset/pastset-$VERSION.zip
+```
+or
+```
+easy_install https://pypi.python.org/packages/source/p/pastset/pastset-$VERSION.zip
+```
+Please note that you should then modify the url to the actual version you
+want to install. 
+In any case you will likely need to run the install command as a
+privileged user.
+
+
+== Manual Installation ==
+After obtaining the source as described in the Local Installation
+section it can be installed using the standard python distutils method
+of running:
+```
+python setup.py install
+```
+as a privileged user.
+This will install pyPastSet system wide, but has the drawback that
+upgrading or uninstalling it again later may be a bit cumbersome. The
+pip method mentioned above or the RPM/DEB package methods below make
+future upgrades or uninstallation clean and easy.
+
+
+=== Deb Packages ===
+On DEB-based systems like Debian and Ubuntu Linux the installation can
+be integrated with the system package systems using e.g. the stdeb
+software:
+```
+sudo apt-get install python-stdeb
+python setup.py --command-packages=stdeb.command bdist_deb
+sudo dpkg -i deb_dist/python-pastset_VERSION-1_all.deb
+```
+
+=== RPM Packages ===
+On RPM-based systems like Red Hat Enterprise Linux or Cent OS the
+installation can be integrated with the system package systems using
+e.g. the bdist_rpm target:
+```
+python setup.py bdist_rpm
+sudo rpm -i rpm_dist/python-pastset-VERSION.rpm
+```
+
+
+= Upgrading =
+Upgrading a pyPastSet installation is just a matter of repeating the
+installation steps with the new version. You may want to take the
+uninstallation steps first to make sure it is a clean upgrade, but it
+should not be strictly necessary.
+
+
+= Uninstall =
+If you installed pyPastSet with pip uninstall is just a matter of
+calling the corresponding uninstall command:
+```
+sudo pip uninstall pastset
+```
+If you used one of the DEB or RPM package methods you can simply use
+your preferred package manager to uninstall the python-pastset or
+pastset package again.
+For the local or manual distutils installation you need to manually
+delete the installed files to uninstall.
+
+
+= Environment Settings =
+It is possible to tell pyPastSet to use different settings internally
+trough the setting of environment variables:
+PSBIN:       which directory path to search for your application (default ".")
+PSROOT:      path of directory with PastSet installation (default ".")
+PSMASTER:    name of the master server (default ""), empty means current host
+PSHOSTS:     path of hosts file (default ""), empty means use only localhost
+PSPROCS:     number of clients to launch using hosts file order (default "1")
+PSSSH:       ssh command used to run application on nodes (default "ssh")
+PSPYTHON:    python command used to run application on nodes (default "python")
+PSPKILL:     pkill command used to kill process by name (default "pkill -9 -f")
+PSWAITPROCS: number of clients ready before scheduling jobs (default "PSPROCS")
+PSLOGPATH:   where to write internal log (default ""), empty means no log
+PSLOGLEVEL:  log level: debug/info/warning/error/critical (default "warning")
+PSCONFHELP:  path to the optional PastSet configuration helper (default "")
+
+Additionally all Pyro environments described in the Install section of the
+Pyro manual can be used to change Pyro defaults like port numbers:
+http://www.xs4all.nl/~irmen/pyro3/manual/3-install.html
+
+Finally the standard PATH and PYTHONPATH environments are useful for
+getting access to executables and python modules outside the default OS
+installation locations. However, PYTHONPATH it is not needed as long as
+you run your pyPastSet applications from the installation location or
+install it system-wide as described above.
+
+
+= Configuration Files =
+Configuration files are optional but they can be used to control
+pyPastSet like the environments mentioned above.
+They use the standard "ini" file format and options simply reuse the
+above environment names. Thus a valid configuration could be:
+```
+[DEFAULT]
+# Change log level to info for all runs
+PSLOGLEVEL = info
+```
+It is equivalent of automatically setting the PSLOGLEVEL environment to
+'info' for all pyPastSet commands without that environment value set.
+
+The actual configuration file paths are platform dependent but they can
+be found in the output of 
+```
+pypsrun -h
+```
+
+
+= Examples =
+A pyPastSet setup includes a scheduler/server, a number of clients and
+one or more pyPastSet applications. It is possible to manually start
+each of those with manual calls to pypsscheduler, pypsclient and the
+application, but it is recommended to use the pypsrun helper to automate
+it all.
+The pypsrun command makes it easy to run such a full PastSet instance
+and an application with a single command from the install directory:
+```
+PATH=$PATH:$PWD PYTHONPATH=$PWD pypsrun examples/simple.py
+```
+
+If pyPastSet is installed system-wide the correspoding command would be:
+```
+pypsrun simple.py
+```
+if called from a directory with the simple.py example application.
+
+In effect this launches PastSet and runs the simple.py example
+application with a single worker process on localhost. The resulting
+output is something like:
+```
+2011-07-02 18:47:29,511 psrun WARNING No PSHOSTS provided - only using localhost
+0 1
+(42, 3.1400000000000001)
+1 1
+```
+
+Multiple workers can be launched with the PSPROCS and PSBIN environments
+as seen with the Monte Carlo pi example and a local installation:
+```
+PATH=$PATH:$PWD PYTHONPATH=$PWD PSPROCS=4 PSBIN=$PWD/examples ./pypsrun \
+    mcpiserver.py 4 10 1000000
+```
+or for system wide installations with example scripts in ~/apps simply:
+```
+PSPROCS=4 PSBIN=~/apps pypsrun mcpiserver.py 4 10 1000000
+```
+
+This time four mcpiclient.py workers are launched from the application
+but because we did not provide a custom hosts file through the PSHOSTS
+environment all processes will still be launched at localhosts to yield
+output like:
+```
+2011-07-02 18:49:11,666 psrun WARNING No PSHOSTS provided - only using localhost
+2011-07-02 18:49:11,666 More client processes than hosts - wrapping around
+Pi is found as 3.141791 with 4 worker(s), 10 bag(s) and bagsize of 1000000
+```
+The actual pi value will fluctuate due to the nature of the randomized 
+Monte Carlo simulation. Both mcpiserver.py and mcpiclient.py are
+automatically taken from the examples directory due to the PSBIN setting.
+
+If your PastSet application or worker scripts that it spawns are located
+somewhere else it is necessary to point the PSBIN environment there. As
+an example with the simple.py example saved in the ~/apps directory, a
+copy of the default hosts file in ~/pshosts and pyPastSet installed in
+~/pypastset we could use:
+```
+PATH=$PATH:~/pypastset PYTHONPATH=~/pypastset PSHOSTS=~/pshosts \
+		       PSROOT=~/pypastset PSBIN=~/apps \
+		       ~/pypastset/pypsrun simple.py
+```
+to get the same result as above.
+
+
+If pyPastSet is installed system-wide the correspoding command would be
+just:
+```
+PSHOSTS=~/pshosts PSBIN=~/apps pypsrun simple.py
+```
+
+The hosts file is just a flat file containing a single hostname on each
+line. For a cluster with the nodes n0, n1, .. n7 the hosts file could
+thus contain the lines:
+```
+n0
+n1
+n2
+n3
+n4
+n5
+n6
+n7
+```
+
+More example applications are included with the code, so it may be a
+good idea to look a e.g. spawntest.py and xmcpiserver.py to get started.
+
+
+= Debugging Network Problems =
+We recommend leaving PSMASTER unset or set it to the address of the host
+where you launch pypsrun and then use the PYRO_* environments to keep the
+Pyro setup as simple as possible while debugging.
+Let's consider the same example where we have nodes n0 to n7 and run
+pypsrun from n0. We decide to only use the two ports 7777 and 7778 in
+this example. 
+First we set PSMASTER to the node where we run pypsrun from to keep all
+the pyPastSet server components there:
+```
+export PSMASTER=n0
+```
+
+Then we tell pyPastSet to use port 7777 on the same node for both the
+Pyro name server and broadcast helper:
+```
+export PYRO_NS_HOSTNAME=n0
+export PYRO_NS_PORT=7777
+export PYRO_NS_BC_PORT=7777
+```
+
+Finally we tell pyro to serve objects on port 7778 and not try to
+relocate to additional ports:
+```
+export PYRO_PORT=7778
+export PYRO_PORT_RANGE=1
+```
+
+With the pshosts file from above and a copy of the mcpiserver.py and
+mcpiclient.py scripts in the ~/apps directory, the resulting command
+would then be:
+PSHOSTS=pshosts PSPROCS=8 PSLOGLEVEL=debug PSBIN=~/apps pypsrun \
+		mcpiserver.py 8 100 1000
+
+If this simple setup still fails or hangs you can try to manually run
+the ssh commands and the Pyro commands.
+First make sure that the commands
+```
+ssh $PSMASTER hostname
+ssh n1 hostname
+...
+ssh n7 hostname
+```
+completes without errors.
+
+Then try launching the pyro name server in the background on the master:
+```
+ssh $PSMASTER pyro-ns -n $PYRO_NS_HOSTNAME -p $PYRO_NS_PORT &
+```
+and access it from each of the other nodes in turn:
+```
+ssh n1 pyro-nsc -h $PYRO_NS_HOSTNAME -p $PYRO_NS_PORT list
+...
+ssh n7 pyro-nsc -h $PYRO_NS_HOSTNAME -p $PYRO_NS_PORT list
+```
+The output should be something like:
+Locator: contacting Pyro Name Server...
+NS is at 10.0.0.1 (n0) port 7777
+:Default --> ( )
+for each node.
+Finally you can stop the name server again with the command:
+```
+ssh n1 pyro-nsc -h $PYRO_NS_HOSTNAME -p $PYRO_NS_PORT shutdown
+```
+
+Hopefully these steps will help you pin-point the problem, but feel free
+to ask otherwise.
+
+
+= Cleaning Up =
+In case your application crashes or you somehow end up with stray
+application or server processes from previous runs, you can use the
+pypsclean command to clean up. If we revisit the mcpiserver.py example
+with four workers from above you can terminate or clean up after the run
+with the command:
+```
+PSPROCS=4 PSBIN=~/apps pypsclean mcpiserver.py
+```
+
+
+= System Integration =
+It is possible to further integrate pyPastSet with e.g. local batch
+systems like PBS, SGE, SLURM and so on. The optional PSCONFHELP setting
+allows inline execution of a python script just before additional
+environment settings are parsed in pyPastSet. Thus such scripts can use
+whatever enviroment settings or files the batch system provides to
+control the pyPastSet execution.
+I.e. if the batch system sets the NODECOUNT environment to the number of
+available job nodes and the NODEFILE to the path of a pyPastSet
+compatible nodes file, a simple python script could be used to transfer
+that information to pyPastSet components through the PSPROCS and PSHOSTS
+environments:
+```
+# Inline python script to transfer allocated job node specs to pyPastSet
+# components 
+
+import os
+
+os.environ['PSPROCS'] = os.environ['NODECOUNT']
+os.environ['PSHOSTS'] = os.environ['NODESFILE']
+```
+
+The configuration file could then just set PSCONFHELP to the path of
+this script.
+
+
+= Additional Information =
+The included 'Programming with Python PastSet.pdf' document contains a
+more thorough introduction to PastSet and pyPastSet.
+
+Please refer to the pyPastSet project page 
+http://code.google.com/p/pypastset/
+for the latest news including our contact information.
