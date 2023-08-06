@@ -1,0 +1,505 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>DABISpectralToolbox.DABISpectralND &mdash; DABISpectralToolbox 0.1a documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.1a',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="DABISpectralToolbox 0.1a documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">DABISpectralToolbox 0.1a documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for DABISpectralToolbox.DABISpectralND</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">=================================</span>
+<span class="sd">DABI Spectral ND</span>
+<span class="sd">=================================</span>
+
+<span class="sd">Created on Mon Jul  9 11:35:12 2012</span>
+
+<span class="sd">@author: Daniele Bigoni (dabi@imm.dtu.dk)</span>
+
+<span class="sd">Implementation of Spectral Methods in n dimension.</span>
+
+<span class="sd">It uses the package ``DABISpectral1D`` as basic polynomials in order to construct higher dimensional rules by tensor product.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="n">__revision__</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="nb">str</span><span class="o">.</span><span class="n">isdigit</span><span class="p">,</span> <span class="s">&quot;$Revision: 97 $&quot;</span><span class="p">)</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&quot;Daniele Bigoni&quot;</span>
+<span class="n">__copyright__</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;Copyright 2012, Daniele Bigoni&quot;&quot;&quot;</span>
+<span class="n">__credits__</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;Daniele Bigoni&quot;</span><span class="p">]</span>
+<span class="n">__maintainer__</span> <span class="o">=</span> <span class="s">&quot;Daniele Bigoni&quot;</span>
+<span class="n">__email__</span> <span class="o">=</span> <span class="s">&quot;dabi@imm.dtu.dk&quot;</span>
+<span class="n">__status__</span> <span class="o">=</span> <span class="s">&quot;Production&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">scipy.misc</span> <span class="kn">import</span> <span class="n">comb</span>
+
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="kn">import</span> <span class="nn">itertools</span>
+
+<span class="k">def</span> <span class="nf">MultiIndex</span><span class="p">(</span><span class="n">d</span><span class="p">,</span><span class="n">N</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    MultiIndex(): generates the multi index ordering for the construction of multidimensional Generalized Vandermonde matrices</span>
+<span class="sd">    </span>
+<span class="sd">    Syntax:</span>
+<span class="sd">        ``IDX = MultiIndex(d,N)``</span>
+<span class="sd">    </span>
+<span class="sd">    Input:</span>
+<span class="sd">        * ``d`` = (int) dimension of the simplex</span>
+<span class="sd">        * ``N`` = (int) the maximum value of the sum of the indeces</span>
+<span class="sd">    </span>
+<span class="sd">    OUTPUT:</span>
+<span class="sd">        * ``IDX`` = (2d-array,int) array containing the ordered multi indeces        </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="c"># Compute the size of the number of multi-index elements (Pascal&#39;s simplex)</span>
+    <span class="n">NIDX</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">NIDX</span> <span class="o">=</span> <span class="n">NIDX</span> <span class="o">+</span> <span class="n">comb</span><span class="p">(</span> <span class="n">i</span><span class="o">+</span><span class="p">(</span><span class="n">d</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span><span class="n">d</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="bp">True</span><span class="p">)</span>
+    
+    <span class="c"># Allocate memory</span>
+    <span class="n">IDX</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">NIDX</span><span class="p">,</span><span class="n">d</span><span class="p">),</span><span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+    
+    <span class="n">iIDX</span> <span class="o">=</span> <span class="mi">1</span> <span class="c"># index in the multi-index table on which the first n-th order is</span>
+    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">IDX</span><span class="p">[</span><span class="n">iIDX</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">n</span>
+        <span class="c"># Start recursion</span>
+        <span class="n">iIDX</span> <span class="o">=</span> <span class="n">__MultiIndexRec</span><span class="p">(</span><span class="n">IDX</span><span class="p">,</span><span class="n">d</span><span class="p">,</span><span class="n">iIDX</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">IDX</span>
+    
+<span class="k">def</span> <span class="nf">__MultiIndexRec</span><span class="p">(</span><span class="n">IDX</span><span class="p">,</span><span class="n">d</span><span class="p">,</span><span class="n">m</span><span class="p">,</span><span class="n">i</span><span class="p">):</span>
+    <span class="c"># Start splitting</span>
+    <span class="n">mFirstSplit</span> <span class="o">=</span> <span class="n">m</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">mLastSplit</span> <span class="o">=</span> <span class="n">m</span><span class="o">-</span><span class="mi">1</span>
+    <span class="n">mNew</span> <span class="o">=</span> <span class="n">m</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span> <span class="o">&lt;</span> <span class="n">d</span><span class="p">):</span>
+        <span class="k">while</span> <span class="p">(</span><span class="n">IDX</span><span class="p">[</span><span class="n">mLastSplit</span><span class="p">,</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="n">IDX</span><span class="p">[</span><span class="n">mNew</span><span class="p">,:</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">IDX</span><span class="p">[</span><span class="n">mLastSplit</span><span class="p">,:</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">IDX</span><span class="p">[</span><span class="n">mNew</span><span class="p">,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">IDX</span><span class="p">[</span><span class="n">mLastSplit</span><span class="p">,</span><span class="n">i</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span>
+            <span class="n">IDX</span><span class="p">[</span><span class="n">mNew</span><span class="p">,</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">IDX</span><span class="p">[</span><span class="n">mLastSplit</span><span class="p">,</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span>
+            <span class="n">mLastSplit</span> <span class="o">=</span> <span class="n">mNew</span>
+            <span class="n">mNew</span> <span class="o">=</span> <span class="n">mNew</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="c"># Call recursion on sub set</span>
+            <span class="n">mNew</span> <span class="o">=</span> <span class="n">__MultiIndexRec</span><span class="p">(</span><span class="n">IDX</span><span class="p">,</span><span class="n">d</span><span class="p">,</span><span class="n">mNew</span><span class="p">,</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c"># Move</span>
+        <span class="n">IDX</span><span class="p">[</span><span class="n">mNew</span><span class="p">,:</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">IDX</span><span class="p">[</span><span class="n">mFirstSplit</span><span class="p">,:</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">IDX</span><span class="p">[</span><span class="n">mNew</span><span class="p">,</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">IDX</span><span class="p">[</span><span class="n">mFirstSplit</span><span class="p">,</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">mNew</span> <span class="o">=</span> <span class="n">mNew</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="c"># Call recursion on sub set</span>
+        <span class="n">mNew</span> <span class="o">=</span> <span class="n">__MultiIndexRec</span><span class="p">(</span><span class="n">IDX</span><span class="p">,</span><span class="n">d</span><span class="p">,</span><span class="n">mNew</span><span class="p">,</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">mNew</span>
+
+<div class="viewcode-block" id="PolyND"><a class="viewcode-back" href="../../index.html#DABISpectralToolbox.DABISpectralND.PolyND">[docs]</a><span class="k">class</span> <span class="nc">PolyND</span><span class="p">:</span>
+    <span class="n">polys</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">DIM</span> <span class="o">=</span> <span class="mi">0</span>
+    
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">polys</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialization of the N-dimensional Polynomial instance</span>
+<span class="sd">        </span>
+<span class="sd">        Syntax:</span>
+<span class="sd">            ``p = PolyND(polys)``</span>
+<span class="sd">        </span>
+<span class="sd">        Input:</span>
+<span class="sd">            * ``polys`` = (list,DABISpectral1D.Poly1D) list of polynomial instances of the class ``DABISpectral1D.Poly1D``</span>
+<span class="sd">        </span>
+<span class="sd">        .. seealso:: DABISpectral1D.Poly1D</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">polys</span> <span class="o">=</span> <span class="n">polys</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">polys</span><span class="p">)</span>
+    
+<div class="viewcode-block" id="PolyND.GaussQuadrature"><a class="viewcode-back" href="../../index.html#DABISpectralToolbox.DABISpectralND.PolyND.GaussQuadrature">[docs]</a>    <span class="k">def</span> <span class="nf">GaussQuadrature</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Ns</span><span class="p">,</span> <span class="n">normed</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">warnings</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        GaussQuadrature(): computes the tensor product of the Guass Points and weights</span>
+<span class="sd">        </span>
+<span class="sd">        Syntax:</span>
+<span class="sd">            ``(x,w) = GaussQuadrature(Ns,[normed=False],[warnings=True])``</span>
+<span class="sd">        </span>
+<span class="sd">        Input:</span>
+<span class="sd">            * ``Ns`` = (list,int) n-dimensional list with the order of approximation of each polynomial</span>
+<span class="sd">            * ``normed`` = (optional,boolean) whether the weights will be normalized or not</span>
+<span class="sd">            * ``warnings`` = (optional,boolean) set whether to ask for confirmation when it is required to allocate more then 100Mb of memory</span>
+<span class="sd">        </span>
+<span class="sd">        Output:</span>
+<span class="sd">            * ``x`` = tensor product of the collocation points</span>
+<span class="sd">            * ``w`` = tensor product of the weights</span>
+<span class="sd">        </span>
+<span class="sd">        .. warning:: The lengths of ``Ns`` has to be conform to the number of polynomials with which you have instantiated ``PolyND``</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="c"># Memory allocation for which the user will get a warning message (Mb)</span>
+        <span class="n">warningMem</span> <span class="o">=</span> <span class="mf">100.0</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">Ns</span><span class="p">)</span> <span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;The number of elements in Ns is not consistent&quot;</span>
+            <span class="k">return</span>
+        
+        <span class="c">#######################</span>
+        <span class="c"># Estimate memory usage</span>
+        <span class="n">Ncoll</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">Ns</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">SDOUBLE</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+        <span class="n">SARRAY</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([]))</span>
+        <span class="n">xMem</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">*</span> <span class="n">Ncoll</span> <span class="o">*</span> <span class="n">SDOUBLE</span> <span class="o">+</span> <span class="n">SARRAY</span>
+        <span class="n">wMem</span> <span class="o">=</span> <span class="n">Ncoll</span> <span class="o">*</span> <span class="n">SDOUBLE</span> <span class="o">+</span> <span class="n">SARRAY</span>
+        <span class="n">totMem</span> <span class="o">=</span> <span class="n">xMem</span> <span class="o">+</span> <span class="n">wMem</span>
+        <span class="c"># Print out information</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;----------------------------------------------------------------------&quot;</span> <span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;DABISpectralND.GaussQuadrature: Memory usage information:&quot;</span> <span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;</span><span class="se">\t</span><span class="s"> X Points: </span><span class="si">%10.2f</span><span class="s"> Mb &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">xMem</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;</span><span class="se">\t</span><span class="s"> Weights: </span><span class="si">%10.2f</span><span class="s"> Mb &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">wMem</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;Total Memory: </span><span class="si">%10.2f</span><span class="s"> Mb &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">totMem</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;N of collocation points: </span><span class="si">%d</span><span class="s"> &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">Ncoll</span><span class="p">)</span> <span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">warnings</span> <span class="ow">and</span> <span class="n">totMem</span> <span class="o">*</span> <span class="mf">1e-6</span> <span class="o">&gt;</span> <span class="n">warningMem</span><span class="p">:</span>
+            <span class="n">opt</span> <span class="o">=</span> <span class="s">&#39;a&#39;</span>
+            <span class="k">while</span> <span class="p">(</span><span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;c&#39;</span> <span class="ow">and</span> <span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;b&#39;</span> <span class="ow">and</span> <span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;q&#39;</span><span class="p">):</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;The total memory that will be allocated exceed </span><span class="si">%10.2f</span><span class="s">Mb. Chose one , of the following options:&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">warningMem</span><span class="p">))</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\t</span><span class="s"> [c]: continue&quot;</span><span class="p">)</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\t</span><span class="s"> [q]: exit&quot;</span><span class="p">)</span>
+                <span class="n">opt</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">opt</span> <span class="o">==</span>  <span class="s">&#39;q&#39;</span><span class="p">):</span>
+                <span class="k">return</span>
+        
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;----------------------------------------------------------------------&quot;</span> <span class="p">)</span>
+        
+        <span class="n">x</span><span class="p">,</span><span class="n">w</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">polys</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">GaussQuadrature</span><span class="p">(</span><span class="n">Ns</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">normed</span><span class="p">)</span>
+        <span class="n">wKron</span> <span class="o">=</span> <span class="n">w</span>
+        <span class="n">xs</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">):</span>
+            <span class="n">x</span><span class="p">,</span><span class="n">w</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">polys</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">GaussQuadrature</span><span class="p">(</span><span class="n">Ns</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">normed</span><span class="p">)</span>
+            <span class="n">wKron</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">kron</span><span class="p">(</span><span class="n">wKron</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
+            <span class="n">xs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">xKron</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">)))</span>
+        
+        <span class="k">return</span> <span class="p">(</span><span class="n">xKron</span><span class="p">,</span> <span class="n">wKron</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="PolyND.GaussLobattoQuadrature"><a class="viewcode-back" href="../../index.html#DABISpectralToolbox.DABISpectralND.PolyND.GaussLobattoQuadrature">[docs]</a>    <span class="k">def</span> <span class="nf">GaussLobattoQuadrature</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Ns</span><span class="p">,</span> <span class="n">normed</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">warnings</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        GaussLobattoQuadrature(): computes the tensor product of the Guass Lobatto Points and weights</span>
+<span class="sd">        </span>
+<span class="sd">        Syntax:</span>
+<span class="sd">            ``(x,w) = GaussLobattoQuadrature(Ns,[normed=False],[warnings=True])``</span>
+<span class="sd">        </span>
+<span class="sd">        Input:</span>
+<span class="sd">            * ``Ns`` = (list,int) n-dimensional list with the order of approximation of each polynomial</span>
+<span class="sd">            * ``normed`` = (optional,boolean) whether the weights will be normalized or not</span>
+<span class="sd">            * ``warnings`` = (optional,boolean) set whether to ask for confirmation when it is required to allocate more then 100Mb of memory</span>
+<span class="sd">        </span>
+<span class="sd">        Output:</span>
+<span class="sd">            * ``x`` = tensor product of the collocation points</span>
+<span class="sd">            * ``w`` = tensor product of the weights</span>
+<span class="sd">        </span>
+<span class="sd">        .. warning:: The lengths of ``Ns`` has to be conform to the number of polynomials with which you have instantiated ``PolyND``</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="c"># Memory allocation for which the user will get a warning message (Mb)</span>
+        <span class="n">warningMem</span> <span class="o">=</span> <span class="mf">100.0</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">Ns</span><span class="p">)</span> <span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;The number of elements in Ns is not consistent&quot;</span>
+            <span class="k">return</span>
+        
+        <span class="c">#######################</span>
+        <span class="c"># Estimate memory usage</span>
+        <span class="n">Ncoll</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">Ns</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">SDOUBLE</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+        <span class="n">SARRAY</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([]))</span>
+        <span class="n">xMem</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">*</span> <span class="n">Ncoll</span> <span class="o">*</span> <span class="n">SDOUBLE</span> <span class="o">+</span> <span class="n">SARRAY</span>
+        <span class="n">wMem</span> <span class="o">=</span> <span class="n">Ncoll</span> <span class="o">*</span> <span class="n">SDOUBLE</span> <span class="o">+</span> <span class="n">SARRAY</span>
+        <span class="n">totMem</span> <span class="o">=</span> <span class="n">xMem</span> <span class="o">+</span> <span class="n">wMem</span>
+        <span class="c"># Print out information</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;----------------------------------------------------------------------&quot;</span> <span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;DABISpectralND.GaussLobattoQuadrature: Memory usage information:&quot;</span> <span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;</span><span class="se">\t</span><span class="s"> X Points: </span><span class="si">%10.2f</span><span class="s"> Mb &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">xMem</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;</span><span class="se">\t</span><span class="s"> Weights: </span><span class="si">%10.2f</span><span class="s"> Mb &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">wMem</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;Total Memory: </span><span class="si">%10.2f</span><span class="s"> Mb &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">totMem</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;N of collocation points: </span><span class="si">%d</span><span class="s"> &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">Ncoll</span><span class="p">)</span> <span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">warnings</span> <span class="ow">and</span> <span class="n">totMem</span> <span class="o">*</span> <span class="mf">1e-6</span> <span class="o">&gt;</span> <span class="n">warningMem</span><span class="p">:</span>
+            <span class="n">opt</span> <span class="o">=</span> <span class="s">&#39;a&#39;</span>
+            <span class="k">while</span> <span class="p">(</span><span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;c&#39;</span> <span class="ow">and</span> <span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;b&#39;</span> <span class="ow">and</span> <span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;q&#39;</span><span class="p">):</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;The total memory that will be allocated exceed </span><span class="si">%10.2f</span><span class="s">Mb. Chose one , of the following options:&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">warningMem</span><span class="p">))</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\t</span><span class="s"> [c]: continue&quot;</span><span class="p">)</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\t</span><span class="s"> [q]: exit&quot;</span><span class="p">)</span>
+                <span class="n">opt</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">opt</span> <span class="o">==</span>  <span class="s">&#39;q&#39;</span><span class="p">):</span>
+                <span class="k">return</span>
+        
+        <span class="k">print</span><span class="p">(</span> <span class="s">&quot;----------------------------------------------------------------------&quot;</span> <span class="p">)</span>
+        
+        <span class="n">x</span><span class="p">,</span><span class="n">w</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">polys</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">GaussLobattoQuadrature</span><span class="p">(</span><span class="n">Ns</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">wKron</span> <span class="o">=</span> <span class="n">w</span>
+        <span class="n">xs</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">):</span>
+            <span class="n">x</span><span class="p">,</span><span class="n">w</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">polys</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">GaussLobattoQuadrature</span><span class="p">(</span><span class="n">Ns</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">wKron</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">kron</span><span class="p">(</span><span class="n">wKron</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
+            <span class="n">xs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">xKron</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">)))</span>
+        
+        <span class="k">return</span> <span class="p">(</span><span class="n">xKron</span><span class="p">,</span> <span class="n">wKron</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="PolyND.GradVandermonde"><a class="viewcode-back" href="../../index.html#DABISpectralToolbox.DABISpectralND.PolyND.GradVandermonde">[docs]</a>    <span class="k">def</span> <span class="nf">GradVandermonde</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">rs</span><span class="p">,</span><span class="n">Ns</span><span class="p">,</span><span class="n">ks</span><span class="p">,</span><span class="n">norms</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">usekron</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span><span class="n">output</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span><span class="n">warnings</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        GradVandermonde(): initialize the tensor product of the k-th gradient of the modal basis.</span>
+<span class="sd">        </span>
+<span class="sd">        Syntax:</span>
+<span class="sd">            ``V = GradVandermonde(r,N,k,[norms=None],[usekron=True],[output=True],[warnings=True])``</span>
+<span class="sd">        </span>
+<span class="sd">        Input:</span>
+<span class="sd">            * ``rs`` = (list of 1d-array,float) ``n``-dimensional list of set of points on which to evaluate the polynomials (by default they are not the kron product of the points. See ``usekron`` option)</span>
+<span class="sd">            * ``Ns`` = (list,int) n-dimensional list with the maximum orders of approximation of each polynomial</span>
+<span class="sd">            * ``ks`` = (list,int) n-dimensional list with derivative orders</span>
+<span class="sd">            * ``norms`` = (default=None,list,boolean) n-dimensional list of boolean, True -&gt; orthonormal, False -&gt; orthogonal, None -&gt; all orthonormal</span>
+<span class="sd">            * ``usekron`` = (optional,boolean) set whether to apply the kron product of the single dimensional Vandermonde matrices or to multiply column-wise. kron(rs) and usekron==False is equal to rs and usekron==True</span>
+<span class="sd">            * ``output`` = (optional,boolean) set whether to print out information about memory allocation</span>
+<span class="sd">            * ``warnings`` = (optional,boolean) set whether to ask for confirmation when it is required to allocate more then 100Mb of memory</span>
+<span class="sd">        </span>
+<span class="sd">        OUTPUT:</span>
+<span class="sd">            * ``V`` = Tensor product of the Generalized Vandermonde matrices</span>
+<span class="sd">        </span>
+<span class="sd">        .. warning:: The lengths of ``Ns`` , ``rs`` , ``ks`` , ``norms`` has to be conform to the number of polynomials with which you have instantiated ``PolyND``</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="c"># Memory allocation for which the user will get a warning message (Mb)</span>
+        <span class="n">warningMem</span> <span class="o">=</span> <span class="mf">100.0</span>
+        
+        <span class="k">if</span> <span class="n">usekron</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">rs</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">Ns</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ks</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span> <span class="n">norms</span> <span class="o">!=</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">norms</span><span class="p">)))</span> <span class="p">:</span>
+                <span class="k">print</span> <span class="s">&quot;The number of elements in rs, Ns, ks and norms is not consistent&quot;</span>
+                <span class="k">return</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span> <span class="ow">not</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">rs</span><span class="p">)</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="ow">and</span> <span class="n">rs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">Ns</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ks</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span> <span class="n">norms</span> <span class="o">!=</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">norms</span><span class="p">)))</span> <span class="p">:</span>
+                <span class="k">print</span> <span class="s">&quot;The number of elements in rs, Ns, ks and norms is not consistent&quot;</span>
+                <span class="k">return</span>
+        
+        <span class="k">if</span> <span class="n">norms</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">norms</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">)</span>
+        
+        <span class="c">#######################</span>
+        <span class="c"># Estimate memory usage</span>
+        <span class="k">if</span> <span class="n">usekron</span><span class="p">:</span>
+            <span class="n">Ncolls</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">):</span>
+                <span class="n">Ncolls</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">rs</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">SDOUBLE</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+            <span class="n">SARRAY</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([]))</span>
+            <span class="n">VMem</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">Ns</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">Ncolls</span><span class="p">)</span> <span class="o">*</span> <span class="n">SDOUBLE</span> <span class="o">+</span> <span class="n">SARRAY</span>
+            <span class="n">totMem</span> <span class="o">=</span> <span class="n">VMem</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">Ncolls</span> <span class="o">=</span> <span class="n">rs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">SDOUBLE</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+            <span class="n">SARRAY</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([]))</span>
+            <span class="n">VMem</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">Ns</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">Ncolls</span> <span class="o">*</span> <span class="n">SDOUBLE</span> <span class="o">+</span> <span class="n">SARRAY</span>
+            <span class="n">totMem</span> <span class="o">=</span> <span class="n">VMem</span>
+        <span class="c"># Print out information</span>
+        <span class="k">if</span> <span class="n">output</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span> <span class="s">&quot;----------------------------------------------------------------------&quot;</span> <span class="p">)</span>
+            <span class="k">print</span><span class="p">(</span> <span class="s">&quot;DABISpectralND.GradVandermonde: Memory usage information:&quot;</span> <span class="p">)</span>
+            <span class="k">print</span><span class="p">(</span> <span class="s">&quot;</span><span class="se">\t</span><span class="s"> Tensor Basis: </span><span class="si">%10.2f</span><span class="s"> Mb &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">VMem</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="p">)</span>
+            <span class="k">print</span><span class="p">(</span> <span class="s">&quot;Total Memory: </span><span class="si">%10.2f</span><span class="s"> Mb &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">totMem</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="p">)</span>
+            
+            <span class="k">if</span> <span class="n">warnings</span> <span class="ow">and</span> <span class="n">totMem</span> <span class="o">*</span> <span class="mf">1e-6</span> <span class="o">&gt;</span> <span class="n">warningMem</span><span class="p">:</span>
+                <span class="n">opt</span> <span class="o">=</span> <span class="s">&#39;a&#39;</span>
+                <span class="k">while</span> <span class="p">(</span><span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;c&#39;</span> <span class="ow">and</span> <span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;b&#39;</span> <span class="ow">and</span> <span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;q&#39;</span><span class="p">):</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;The total memory that will be allocated exceed </span><span class="si">%10.2f</span><span class="s">Mb. Chose one , of the following options:&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">warningMem</span><span class="p">))</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\t</span><span class="s"> [c]: continue&quot;</span><span class="p">)</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\t</span><span class="s"> [q]: exit&quot;</span><span class="p">)</span>
+                    <span class="n">opt</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">opt</span> <span class="o">==</span>  <span class="s">&#39;q&#39;</span><span class="p">):</span>
+                    <span class="k">return</span>
+            
+            <span class="k">print</span><span class="p">(</span> <span class="s">&quot;----------------------------------------------------------------------&quot;</span> <span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">usekron</span><span class="p">:</span>
+            <span class="n">VKron</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">polys</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">GradVandermonde1D</span><span class="p">(</span><span class="n">rs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">Ns</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">ks</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">norms</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">):</span>
+                <span class="n">VKron</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">kron</span><span class="p">(</span><span class="n">VKron</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">polys</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">GradVandermonde1D</span><span class="p">(</span><span class="n">rs</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">Ns</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">ks</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">norms</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">VKron</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">rs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">1</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">):</span>
+                <span class="n">VKronNew</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">VKron</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">VKron</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">Ns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">)))</span>
+                <span class="n">V</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">polys</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">GradVandermonde1D</span><span class="p">(</span><span class="n">rs</span><span class="p">[:,</span><span class="n">i</span><span class="p">],</span><span class="n">Ns</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">ks</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">norms</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">VKron</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                    <span class="n">VKronNew</span><span class="p">[:,</span><span class="n">col</span><span class="o">*</span><span class="p">(</span><span class="n">Ns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">):(</span><span class="n">col</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">Ns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">VKron</span><span class="p">[:,</span><span class="n">col</span><span class="p">],(</span><span class="n">Ns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">V</span>
+                <span class="n">VKron</span> <span class="o">=</span> <span class="n">VKronNew</span>
+        
+        <span class="k">return</span> <span class="n">VKron</span>
+</div>
+<div class="viewcode-block" id="PolyND.GradVandermondePascalSimplex"><a class="viewcode-back" href="../../index.html#DABISpectralToolbox.DABISpectralND.PolyND.GradVandermondePascalSimplex">[docs]</a>    <span class="k">def</span> <span class="nf">GradVandermondePascalSimplex</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">rs</span><span class="p">,</span><span class="n">N</span><span class="p">,</span><span class="n">ks</span><span class="p">,</span><span class="n">norms</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="n">output</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span><span class="n">warnings</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        GradVandermondePascalSimplex(): initialize k-th gradient of the modal basis up to the total order N</span>
+<span class="sd">        </span>
+<span class="sd">        Syntax:</span>
+<span class="sd">            ``V = GradVandermonde(r,N,k,[norms=None],[output=True],[warnings=True])``</span>
+<span class="sd">        </span>
+<span class="sd">        Input:</span>
+<span class="sd">            * ``rs`` = (list of 1d-array,float) ``n``-dimensional list of set of points on which to evaluate the polynomials</span>
+<span class="sd">            * ``N`` = (int) the maximum orders of the polynomial basis</span>
+<span class="sd">            * ``ks`` = (list,int) n-dimensional list with derivative orders</span>
+<span class="sd">            * ``norms`` = (default=None,list,boolean) n-dimensional list of boolean, True -&gt; orthonormal, False -&gt; orthogonal, None -&gt; all orthonormal</span>
+<span class="sd">            * ``output`` = (optional,boolean) set whether to print out information about memory allocation</span>
+<span class="sd">            * ``warnings`` = (optional,boolean) set whether to ask for confirmation when it is required to allocate more then 100Mb of memory</span>
+<span class="sd">        </span>
+<span class="sd">        OUTPUT:</span>
+<span class="sd">            * ``V`` = Generalized Vandermonde matrix up to the N-th order</span>
+<span class="sd">        </span>
+<span class="sd">        .. warning:: The lengths of ``rs`` , ``ks`` , ``norms`` has to be conform to the number of polynomials with which you have instantiated ``PolyND``</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="c"># Memory allocation for which the user will get a warning message (Mb)</span>
+        <span class="n">warningMem</span> <span class="o">=</span> <span class="mf">100.0</span>
+        
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">rs</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ks</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span> <span class="n">norms</span> <span class="o">!=</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">DIM</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">norms</span><span class="p">)))</span> <span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;The number of elements in rs, Ns, ks and norms is not consistent&quot;</span>
+            <span class="k">return</span>
+        
+        <span class="k">if</span> <span class="n">norms</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">norms</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">)</span>
+        
+        <span class="c">#######################</span>
+        <span class="c"># Estimate memory usage</span>
+        <span class="n">Ncolls</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">):</span>
+            <span class="n">Ncolls</span> <span class="o">=</span> <span class="n">Ncolls</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">rs</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="c"># Number of basis computed using the pascal simplex formula</span>
+        <span class="n">Nbasis</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">Nbasis</span> <span class="o">=</span> <span class="n">Nbasis</span> <span class="o">+</span> <span class="n">comb</span><span class="p">(</span> <span class="n">i</span><span class="o">+</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">SDOUBLE</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+        <span class="n">SARRAY</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">getsizeof</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([]))</span>
+        <span class="n">VMem</span> <span class="o">=</span> <span class="n">Nbasis</span> <span class="o">*</span> <span class="n">Ncolls</span> <span class="o">*</span> <span class="n">SDOUBLE</span> <span class="o">+</span> <span class="n">SARRAY</span>
+        <span class="n">totMem</span> <span class="o">=</span> <span class="n">VMem</span>
+        <span class="c"># Print out information</span>
+        <span class="k">if</span> <span class="n">output</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span> <span class="s">&quot;----------------------------------------------------------------------&quot;</span> <span class="p">)</span>
+            <span class="k">print</span><span class="p">(</span> <span class="s">&quot;DABISpectralND.GradVandermondePascalSimplex Memory usage information:&quot;</span> <span class="p">)</span>
+            <span class="k">print</span><span class="p">(</span> <span class="s">&quot;</span><span class="se">\t</span><span class="s"> Tensor Basis: </span><span class="si">%10.2f</span><span class="s"> Mb &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">VMem</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="p">)</span>
+            <span class="k">print</span><span class="p">(</span> <span class="s">&quot;Total Memory: </span><span class="si">%10.2f</span><span class="s"> Mb &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">totMem</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="p">)</span>
+            
+            <span class="k">if</span> <span class="n">warnings</span> <span class="ow">and</span> <span class="n">totMem</span> <span class="o">*</span> <span class="mf">1e-6</span> <span class="o">&gt;</span> <span class="n">warningMem</span><span class="p">:</span>
+                <span class="n">opt</span> <span class="o">=</span> <span class="s">&#39;a&#39;</span>
+                <span class="k">while</span> <span class="p">(</span><span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;c&#39;</span> <span class="ow">and</span> <span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;b&#39;</span> <span class="ow">and</span> <span class="n">opt</span> <span class="o">!=</span> <span class="s">&#39;q&#39;</span><span class="p">):</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;The total memory that will be allocated exceed </span><span class="si">%10.2f</span><span class="s">Mb. Chose one , of the following options:&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">warningMem</span><span class="p">))</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\t</span><span class="s"> [c]: continue&quot;</span><span class="p">)</span>
+                    <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\t</span><span class="s"> [q]: exit&quot;</span><span class="p">)</span>
+                    <span class="n">opt</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">opt</span> <span class="o">==</span>  <span class="s">&#39;q&#39;</span><span class="p">):</span>
+                    <span class="k">return</span>
+            
+            <span class="k">print</span><span class="p">(</span> <span class="s">&quot;----------------------------------------------------------------------&quot;</span> <span class="p">)</span>
+        
+        <span class="c"># Compute combinations of collocation points</span>
+        <span class="n">xKron</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="o">*</span><span class="n">rs</span><span class="p">)))</span>
+        
+        <span class="c"># Compute single Generalized Vandermonde Matrices</span>
+        <span class="n">Vs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">):</span>
+            <span class="n">Vs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">polys</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">GradVandermonde1D</span><span class="p">(</span><span class="n">xKron</span><span class="p">[:,</span><span class="n">i</span><span class="p">],</span><span class="n">N</span><span class="p">,</span><span class="n">ks</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">norms</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+        
+        <span class="c"># Make space for the Vandermonde matrix</span>
+        <span class="n">V</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">Ncolls</span><span class="p">,</span><span class="n">Nbasis</span><span class="p">))</span>
+        
+        <span class="c"># Compute the Pascal&#39;s Simplex of the basis functions</span>
+        <span class="n">IDX</span> <span class="o">=</span> <span class="n">MultiIndex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DIM</span><span class="p">,</span><span class="n">N</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">IDX</span><span class="p">,</span><span class="mi">0</span><span class="p">)):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">IDX</span><span class="p">,</span><span class="mi">1</span><span class="p">)):</span>
+                <span class="n">V</span><span class="p">[:,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">V</span><span class="p">[:,</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">Vs</span><span class="p">[</span><span class="n">j</span><span class="p">][:,</span><span class="n">IDX</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]]</span>
+        
+        <span class="k">return</span> <span class="n">V</span>
+        </div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">DABISpectralToolbox 0.1a documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Daniele Bigoni.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
