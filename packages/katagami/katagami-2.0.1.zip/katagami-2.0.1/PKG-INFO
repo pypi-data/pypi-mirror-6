@@ -1,0 +1,217 @@
+Metadata-Version: 1.1
+Name: katagami
+Version: 2.0.1
+Summary: katagami: a simple xml/html template library
+Home-page: http://pypi.python.org/pypi/katagami
+Author: chrono-meter@gmx.net
+Author-email: chrono-meter@gmx.net
+License: PSF
+Description: katagami: a simple xml/html template library
+        ============================================
+        
+        This library is one of many `Python templating libraries
+        <http://wiki.python.org/moin/Templating>`_.
+        
+        
+        Features
+        --------
+         * Based on XML's Processing instructions (`<?...?>`)
+         * Simple features and simple implementation
+         * Python script inside XML/HTML with any level indentation
+         * `Inline Python expression`_
+         * `Embed Python script`_
+         * `Block structure`_
+         * Supports both of Python 2 and Python 3
+         * As fast as `mako <http://www.makotemplates.org/>`_
+         * Iteratable output
+        
+        
+        Example
+        -------
+        
+        Make a HTML string with `inline Python expression`_ and Python's `for` (`Block
+        structure`_)::
+        
+            >>> from katagami import render_string, myprint
+            >>> myprint(render_string('''<html>
+            ... <body>
+            ...     <? for name in names: {?>
+            ...         <p>hello, <?=name?></p>
+            ...     <?}?>
+            ... </body>
+            ... </html>''', {'names': ['world', 'python']}))
+            <html>
+            <body>
+            <BLANKLINE>
+                    <p>hello, world</p>
+            <BLANKLINE>
+                    <p>hello, python</p>
+            <BLANKLINE>
+            </body>
+            </html>
+        
+        
+        Inline Python expression
+        ------------------------
+        
+        This feature evaluates your inline expression and output to result::
+        
+            >>> myprint(render_string('''<html><body>
+            ...     <?='hello, world'?>
+            ... </body></html>'''))
+            <html><body>
+                hello, world
+            </body></html>
+        
+        By the default, this example raises an exception, evaluated expression must be
+        `str` (`unicode` in Python 2)::
+        
+            >>> myprint(render_string('''<html><body>
+            ...     <?=1?>
+            ... </body></html>''')) #doctest: +IGNORE_EXCEPTION_DETAIL
+            Traceback (most recent call last):
+            ...
+            TypeError: Can't convert 'int' object to str implicitly
+        
+        Set the `cast_string` feature::
+        
+            >>> myprint(render_string('''<?py
+            ...         from katagami import cast_string
+            ...     ?><html><body>
+            ...     <?=1?>
+            ... </body></html>'''))
+            <html><body>
+                1
+            </body></html>
+        
+        Also set the `except_hook` feature::
+        
+            >>> myprint(render_string('''<?py
+            ...         from katagami import except_hook
+            ...     ?><html><body>
+            ...     <?=1?>
+            ... </body></html>'''))
+            <html><body>
+                Can't convert 'int' object to str implicitly
+            </body></html>
+        
+        
+        Embed Python script
+        -------------------
+        
+        All indentation will be arranged automatically::
+        
+            >>> myprint(render_string('''<html>
+            ... <?py
+            ...     # It is a top level here. This works fine.
+            ...     if 1:
+            ...         msg = 'message from indented script'
+            ... ?>
+            ... <body>
+            ...     <p><?=msg?></p>
+            ...     <?py msg = 'message from single line script' # This works fine too. ?>
+            ...     <p><?=msg?></p>
+            ...     <? if 1: {?>
+            ... <?py
+            ... # Is is nested here. This also works fine.
+            ... msg = 'message from nested indented script'
+            ... ?>
+            ...     <p><?=msg?></p>
+            ...     <?}?>
+            ... </body>
+            ... </html>'''))
+            <html>
+            <BLANKLINE>
+            <body>
+                <p>message from indented script</p>
+            <BLANKLINE>
+                <p>message from single line script</p>
+            <BLANKLINE>
+            <BLANKLINE>
+                <p>message from nested indented script</p>
+            <BLANKLINE>
+            </body>
+            </html>
+        
+        
+        Block structure
+        ---------------
+        
+        Indentation with C-style block structure::
+        
+            >>> myprint(render_string('''<html>
+            ... <body>
+            ...     <p>hello,&nbsp;
+            ...     <? try: {?>
+            ...         <?=name?>
+            ...     <?} except NameError: {?>
+            ...         NameError
+            ...     <?} else: {?>
+            ...         never output here
+            ...     <?}?>
+            ...     </p>
+            ... </body>
+            ... </html>'''))
+            <html>
+            <body>
+                <p>hello,&nbsp;
+            <BLANKLINE>
+            <BLANKLINE>
+                    NameError
+            <BLANKLINE>
+                </p>
+            </body>
+            </html>
+        
+        Note
+        ~~~~
+        
+         * '<? }' and '{ ?>' are wrong. Don't insert space. '<?}' and '{?>' are correct.
+         * Ending colon (':') is required.
+         * Block closing '<?}?>' is required.
+        
+        
+        Encoding detection
+        ------------------
+        
+        Encoding will be detected automatically::
+        
+            >>> myprint(render_string(b'''<html>
+            ... <head><meta charset="shift-jis"></head>
+            ... <body>\x93\xfa\x96{\x8c\xea</body>
+            ... </html>'''))
+            <html>
+            <head><meta charset="shift-jis"></head>
+            <body>\u65e5\u672c\u8a9e</body>
+            </html>
+        
+        Supported formats:
+        
+         * <?xml encoding="ENCODING"?>
+         * <meta charset="ENCODING">
+         * <meta http-equiv="Content-Type" content="MIMETYPE; ENCODING">
+        
+        
+        History
+        -------
+        
+         * 2.0.1 improve backward compatibility of the test
+         * 2.0.0 change a lot and add some features
+         * 1.1.0 change api, add except_handler, add shorthand of gettext (<?_message?>),
+                 some fixes
+         * 1.0.3 fix ignoring `encoding` argument, fix indent bug, add `renderString`
+         * 1.0.2 improve doctest compatibility, some fixes
+         * 1.0.1 fix bugs, docs, speed
+         * 1.0.0 remove backward compatibility
+        
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: Python Software Foundation License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Internet :: WWW/HTTP :: Dynamic Content :: CGI Tools/Libraries
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Text Processing :: Markup :: HTML
+Classifier: Topic :: Text Processing :: Markup :: XML
