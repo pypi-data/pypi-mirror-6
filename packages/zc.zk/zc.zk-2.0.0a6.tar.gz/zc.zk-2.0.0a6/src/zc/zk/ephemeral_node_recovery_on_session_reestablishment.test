@@ -1,0 +1,62 @@
+Test to make sure we recreate ephemeral nodes when we reestablish sessions
+===========================================================================
+
+First, a basic test:
+
+    >>> import zc.zk
+    >>> zk = zc.zk.ZooKeeper('zookeeper.example.com:2181')
+
+Create some ephemeral nodes, which should be reestablished on session
+reestablishment:
+
+    >>> zk.register('/fooservice/providers', 'test')
+
+So, we have an ephemeral node before losing the session:
+
+    >>> zk.get_children('/fooservice/providers')
+    [u'test']
+
+    >>> zk.client.lose_session()
+
+Now, after creating the new session, we have the ephemeral node:
+
+    >>> zk.get_children('/fooservice/providers')
+    [u'test']
+
+Some custom data and acl:
+
+    >>> import kazoo.security
+    >>> acl = kazoo.security.ACL(
+    ...     kazoo.security.Permissions.READ |
+    ...     kazoo.security.Permissions.WRITE |
+    ...     kazoo.security.Permissions.ADMIN,
+    ...     kazoo.security.ANYONE_ID_UNSAFE,
+    ...     )
+    >>> zk.register('/fooservice/providers', 'test2', acl, a=1)
+    >>> zk.print_tree('/fooservice/providers')
+    /providers
+      /test
+        pid = 9999
+      /test2
+        a = 1
+        pid = 9999
+    >>> zk.client.lose_session()
+    >>> zk.print_tree('/fooservice/providers')
+    /providers
+      /test
+        pid = 9999
+      /test2
+        a = 1
+        pid = 9999
+
+    >>> zk.client.get_acls('/fooservice/providers/test2')[0] == acl
+    True
+
+We track data changes:
+
+    >>> _ = zk.set('/fooservice/providers/test', 'y')
+    >>> zk.client.lose_session()
+    >>> zk.get('/fooservice/providers/test')[0]
+    'y'
+
+    >>> zk.close()
