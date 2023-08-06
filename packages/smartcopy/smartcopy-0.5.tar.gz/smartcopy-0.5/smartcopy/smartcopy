@@ -1,0 +1,100 @@
+#! /usr/bin/python
+
+__author__ = 'shrikar'
+from cmd import Cmd
+from os.path import expanduser
+import os
+from smartutils import get_config
+from smartutils import get_db
+from smartutils import reload_config
+import subprocess
+import sys
+class MyPrompt(Cmd):
+
+    def __init__(self):
+        Cmd.__init__(self)
+        self.data = []
+        fd = open(get_db(),"r")
+        for pattern in fd.readlines():
+            self.data.append(pattern.strip("\n"))
+        fd.close()
+        self.index = 1
+
+    def savefile(self):
+        home = expanduser("~")
+        fd = open(get_db(),"w")
+        for pattern in self.data:
+            fd.write(pattern+"\n")
+        fd.close()
+
+    def do_change_config(self,args):
+        fd = open(get_config()+".bk","w")
+        source = raw_input("Enter local directory: ")
+        destination = raw_input("Enter Dropbox/Box/Google mounted path: ")
+        fd.write("source="+source+"\n")
+        fd.write("destination="+destination+"\n")
+        fd.close()
+        os.system("mv "+get_config()+".bk " + get_config())
+        os.system("pkill -f smartcopydaemon.py")
+        print("=================================================================")
+        print("!!!! Important information !!!!")
+        print "Please restart the smartcopydaemon.\nExample : \npython smartcopydaemon.py"
+        print("=================================================================")
+        sys.exit(0)
+
+    def do_display_config(self,args):
+        src,dest = reload_config()
+        print "Local directory : " + src
+        print "Dropbox/Box/Google mounted path : " + dest
+
+    def do_add(self, args):
+        """Add a file pattern to be ignored."""
+        if(args==""):
+            print "Please provide the pattern. "
+            print "Example: add *.jar ( For ignore any file ending with jar ) "
+            return;
+        print "Adding this pattern to ignore path :  %s" % args
+        self.data.append(args)
+        self.savefile()
+
+    def do_list(self,args):
+        """List existing patterns that are ignored."""
+        self.index = 1
+        if(len(self.data) == 0):
+            print "No pattern listed in the database."
+
+        for pattern in self.data:
+            print str(self.index) +" ) " + pattern
+            self.index += 1
+
+    def do_del(self,args):
+        """Delete an existing pattern that was ignored."""
+        if(int(args) > len(self.data)):
+            return
+        del self.data[int(args)-1]
+        self.do_list(0)
+        self.savefile()
+
+    def do_quit(self, args):
+        """Quits the program."""
+        print "Quitting."
+        raise SystemExit
+
+
+if __name__ == '__main__':
+    home = expanduser("~")
+    smartdir = home+"/.smartcopy"
+    print smartdir
+    if(not os.path.exists(smartdir)):
+        os.system("mkdir -p " + smartdir)
+        if(not os.path.exists(get_config())):
+            fd = open(get_config(),"w")
+            fd.write("source="+home+"/SmartCopy\n")
+            fd.write("destination="+home+"/Dropbox\n")
+            fd.close()
+        if(not os.path.exists(get_db())):
+            subprocess.call(["touch ",get_db()])
+
+    prompt = MyPrompt()
+    prompt.prompt = 'smartcopy> '
+    prompt.cmdloop('Starting SmartCopy Engine...')
