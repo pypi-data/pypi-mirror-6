@@ -1,0 +1,406 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# AWL simulator - Commandline interface
+#
+# Copyright 2012-2013 Michael Buesch <m@bues.ch>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+
+import sys
+import os
+import getopt
+import traceback
+
+from awlsim import *
+
+
+class TextInterfaceAwlSimClient(AwlSimClient):
+	def handle_CPUDUMP(self, dumpText):
+		emitCpuDump(dumpText)
+
+def usage():
+	printInfo("awlsim version %d.%d" % (VERSION_MAJOR, VERSION_MINOR))
+	printInfo("")
+	printInfo("%s [OPTIONS] <AWL-source or awlsim-project file>" % sys.argv[0])
+	printInfo("")
+	printInfo("Options:")
+	printInfo(" -1|--onecycle         Only run one cycle")
+	printInfo(" -4|--fouraccu         Enable 4-accu mode")
+	printInfo(" -D|--no-cpu-dump      Do not show CPU status while running")
+	printInfo(" -q|--quiet            Do not show any status messages")
+	printInfo(" -x|--extended-insns   Enable extended instructions")
+	printInfo(" -t|--obtemp 1/0       Enable/disable writing of OB-temp variables (Default: off)")
+	printInfo(" -m|--mnemonics auto   Mnemonics type: en, de, auto (default)")
+	printInfo(" -P|--profile 0        Set profiling level (Default: 0)")
+	printInfo("")
+	printInfo("Server backend related options:")
+	printInfo(" -c|--connect IP:PORT  Connect to server backend")
+	printInfo(" -b|--spawn-backend    Spawn a new backend server and connect to it")
+	printInfo(" -i|--interpreter EXE  Set the backend interpreter executable")
+	printInfo("")
+	printInfo("Loading hardware modules:")
+	printInfo(" -H|--hardware NAME:PARAM=VAL:PARAM=VAL...")
+	printInfo("Print module information:")
+	printInfo(" -I|--hardware-info NAME")
+	printInfo("")
+	printInfo(" Where NAME is the name of the hardware module.")
+	printInfo(" PARAM=VAL are optional hardware specific parameters.")
+
+def writeStdout(message):
+	if not opt_quiet:
+		sys.stdout.write(message)
+		sys.stdout.flush()
+
+nextScreenUpdate = 0.0
+lastDump = ""
+
+def clearConsole():
+	# Make cursor visible, clear console and
+	# move cursor to homeposition.
+	writeStdout("\x1B[?25h\x1B[2J\x1B[H")
+
+def emitCpuDump(dump):
+	# Pad lines
+	dump = '\n'.join(line + (79 - len(line)) * ' ' + '|'
+			 for line in dump.splitlines())
+	global lastDump
+	lastDump = dump
+	writeStdout("\x1B[H" + dump)
+
+def cpuDumpCallback(cpu):
+	global nextScreenUpdate
+	if cpu.now < nextScreenUpdate and\
+	   not opt_onecycle:
+		return
+	nextScreenUpdate = cpu.now + 0.1
+	emitCpuDump(str(cpu))
+
+def makeLoglevel():
+	return Logging.LOG_ERROR if opt_quiet else Logging.LOG_INFO
+
+def assignCpuSpecs(specs):
+	specs.setConfiguredMnemonics(opt_mnemonics)
+	specs.setNrAccus(4 if opt_fouraccu else 2)
+
+def readInputFile(inputFile):
+	if Project.fileIsProject(inputFile):
+		project = Project.fromFile(inputFile)
+	else:
+		# make a fake project
+		project = Project(projectFile = None,
+				  awlFiles = [ inputFile, ])
+	return project
+
+def run(inputFile):
+	s = None
+	try:
+		if awlsim_useCython:
+			writeStdout("*** Using accelerated CYTHON core "
+				    "(AWLSIMCYTHON environment variable is set)\n")
+
+		project = readInputFile(inputFile)
+
+		writeStdout("Parsing code...\n")
+		parseTrees = []
+		for awlFile in project.awlFiles:
+			p = AwlParser()
+			p.parseFile(awlFile)
+			parseTrees.append(p.getParseTree())
+		symTables = []
+		for symTabFile in project.symTabFiles:
+			tab = SymTabParser.parseFile(symTabFile,
+						     autodetectFormat = True,
+						     mnemonics = opt_mnemonics)
+			symTables.append(tab)
+
+		writeStdout("Initializing simulator...\n")
+		s = AwlSim(profileLevel = opt_profile)
+
+		# Load hardware modules
+		for name, parameters in opt_hwmods:
+			writeStdout("Loading hardware module '%s'...\n" % name)
+			hwClass = s.loadHardwareModule(name)
+			s.registerHardwareClass(hwClass = hwClass,
+						parameters = parameters)
+
+		cpu = s.getCPU()
+		assignCpuSpecs(cpu.getSpecs())
+		cpu.enableObTempPresets(opt_obtemp)
+		cpu.enableExtendedInsns(opt_extInsns)
+		if not opt_noCpuDump and not opt_quiet:
+			cpu.setBlockExitCallback(cpuDumpCallback, cpu)
+		writeStdout("Initializing CPU...\n")
+		s.reset()
+		for symTable in symTables:
+			s.loadSymbolTable(symTable)
+		for parseTree in parseTrees:
+			s.load(parseTree)
+		s.startup()
+		writeStdout("[Initialization finished - CPU is executing user code]\n")
+		try:
+			if not opt_noCpuDump:
+				clearConsole()
+			while 1:
+				s.runCycle()
+				if opt_onecycle:
+					break
+		finally:
+			if not opt_noCpuDump and not opt_quiet:
+				clearConsole()
+				writeStdout(lastDump + '\n')
+	except (AwlParserError, AwlSimError) as e:
+		printError(e.getReport())
+		return 1
+	except KeyboardInterrupt as e:
+		pass
+	except MaintenanceRequest as e:
+		if e.requestType == MaintenanceRequest.TYPE_SHUTDOWN:
+			writeStdout("Shutting down, as requested...\n")
+		else:
+			assert(0)
+	finally:
+		if s:
+			ps = s.getProfileStats()
+			if ps:
+				writeStdout("\n\nProfile stats (level %d) follow:\n" %\
+					    opt_profile)
+				writeStdout(ps)
+				writeStdout("\n")
+			s.shutdown()
+	return 0
+
+def runWithServerBackend(inputFile):
+	client = None
+	try:
+		if awlsim_useCython:
+			printError("The accelerated CYTHON core currently is incompatible "
+				   "with the backend server. Please remove the "
+				   "AWLSIMCYTHON environment variable.")
+			return 1
+
+		project = readInputFile(inputFile)
+
+		# Connect to the server
+		client = TextInterfaceAwlSimClient()
+		if opt_spawnBackend:
+			writeStdout("Spawning core server...\n")
+			host, port = AwlSimServer.DEFAULT_HOST, AwlSimServer.DEFAULT_PORT
+			if opt_connect:
+				host, port = opt_connect
+			client.spawnServer(interpreter = opt_interpreter,
+					   listenHost = host,
+					   listenPort = port)
+		writeStdout("Connecting to core server...\n")
+		if opt_connect:
+			client.connectToServer(host = opt_connect[0],
+					       port = opt_connect[1])
+		else:
+			client.connectToServer()
+
+		writeStdout("Initializing simulator...\n")
+		client.setLoglevel(makeLoglevel())
+		client.setRunState(False)
+		client.reset()
+
+		# Load hardware modules
+		for name, parameters in opt_hwmods:
+			client.loadHardwareModule(name, parameters)
+
+		# Configure the core
+		if opt_noCpuDump:
+			client.setPeriodicDumpInterval(0)
+		else:
+			client.setPeriodicDumpInterval(300)
+		client.enableOBTempPresets(opt_obtemp)
+		client.enableExtendedInsns(opt_extInsns)
+		specs = client.getCpuSpecs()
+		assignCpuSpecs(specs)
+		client.setCpuSpecs(specs)
+
+		# Fire up the core
+		writeStdout("Initializing CPU...\n")
+		for symTabFile in project.symTabFiles:
+			client.loadSymbolTable(awlFileRead(symTabFile))
+		for awlFile in project.awlFiles:
+			client.loadCode(awlFileRead(awlFile))
+		client.setRunState(True)
+
+		# Run the client-side event loop
+		writeStdout("[Initialization finished - Remote-CPU is executing user code]\n")
+		try:
+			if not opt_noCpuDump:
+				clearConsole()
+			while True:
+				client.processMessages(True)
+		finally:
+			if not opt_noCpuDump and not opt_quiet:
+				clearConsole()
+				writeStdout(lastDump + '\n')
+	except AwlSimError as e:
+		printError(e.getReport())
+		return 1
+	except MaintenanceRequest as e:
+		if e.requestType == MaintenanceRequest.TYPE_SHUTDOWN:
+			writeStdout("Shutting down, as requested...\n")
+		else:
+			assert(0)
+	except KeyboardInterrupt as e:
+		pass
+	finally:
+		if client:
+			client.shutdown()
+	return 0
+
+def main():
+	global opt_onecycle
+	global opt_quiet
+	global opt_noCpuDump
+	global opt_fouraccu
+	global opt_extInsns
+	global opt_obtemp
+	global opt_mnemonics
+	global opt_hwmods
+	global opt_hwinfos
+	global opt_profile
+	global opt_connect
+	global opt_spawnBackend
+	global opt_interpreter
+
+	opt_onecycle = False
+	opt_quiet = False
+	opt_noCpuDump = False
+	opt_fouraccu = False
+	opt_extInsns = False
+	opt_obtemp = False
+	opt_mnemonics = "auto"
+	opt_hwmods = []
+	opt_hwinfos = []
+	opt_profile = 0
+	opt_connect = None
+	opt_spawnBackend = False
+	opt_interpreter = None
+
+	try:
+		(opts, args) = getopt.getopt(sys.argv[1:],
+			"h14qDxt:m:H:I:P:c:bi:",
+			[ "help", "onecycle", "fouraccu", "quiet", "no-cpu-dump", "extended-insns",
+			  "obtemp=", "mnemonics=",
+			  "hardware=", "hardware-info=", "profile=",
+			  "connect=", "spawn-backend", "interpreter=", ])
+	except getopt.GetoptError as e:
+		printError(str(e))
+		usage()
+		return 1
+	for (o, v) in opts:
+		if o in ("-h", "--help"):
+			usage()
+			return 0
+		if o in ("-1", "--onecycle"):
+			opt_onecycle = True
+		if o in ("-4", "--fouraccu"):
+			opt_fouraccu = True
+		if o in ("-q", "--quiet"):
+			opt_quiet = True
+		if o in ("-D", "--no-cpu-dump"):
+			opt_noCpuDump = True
+		if o in ("-x", "--extended-insns"):
+			opt_extInsns = True
+		if o in ("-t", "--obtemp"):
+			opt_obtemp = str2bool(v)
+		if o in ("-m", "--mnemonics"):
+			opt_mnemonics = v.lower()
+			if opt_mnemonics not in ("en", "de", "auto"):
+				printError("-m|--mnemonics: Invalid mnemonics type")
+				sys.exit(1)
+		if o in ("-H", "--hardware"):
+			try:
+				v = v.split(':')
+				if not v:
+					raise ValueError
+				name = v[0]
+				params = {}
+				for pstr in v[1:]:
+					if not pstr:
+						continue
+					i = pstr.find('=')
+					if i < 0:
+						raise ValueError
+					pname = pstr[:i]
+					pval = pstr[i+1:]
+					if not pname or not pval:
+						raise ValueError
+					params[pname] = pval
+				opt_hwmods.append( (name, params) )
+			except (ValueError, IndexError) as e:
+				printError("-H|--hardware: Invalid module name or parameters")
+				sys.exit(1)
+		if o in ("-I", "--hardware-info"):
+			opt_hwinfos.append(v.split(':')[0])
+		if o in ("-P", "--profile"):
+			try:
+				opt_profile = int(v)
+			except ValueError:
+				printError("-P|--profile: Invalid profile level")
+		if o in ("-c", "--connect"):
+			try:
+				idx = v.rfind(":")
+				if idx <= 0:
+					raise ValueError
+				opt_connect = (v[:idx], int(v[idx+1:]))
+			except ValueError:
+				printError("-c|--connect: Invalid host/port")
+				sys.exit(1)
+		if o in ("-b", "--spawn-backend"):
+			opt_spawnBackend = True
+		if o in ("-i", "--interpreter"):
+			opt_interpreter = v
+	if len(args) != 1 and not opt_hwinfos:
+		usage()
+		return 1
+	if args:
+		inputFile = args[0]
+
+	Logging.setLoglevel(makeLoglevel())
+
+	opt_mnemonics = {
+		"en"	: S7CPUSpecs.MNEMONICS_EN,
+		"de"	: S7CPUSpecs.MNEMONICS_DE,
+		"auto"	: S7CPUSpecs.MNEMONICS_AUTO,
+	}[opt_mnemonics]
+
+	try:
+		if opt_hwinfos:
+			# Just print the hardware-infos and exit.
+			for name in opt_hwinfos:
+				cls = AwlSim.loadHardwareModule(name)
+				printInfo(cls.getModuleInfo())
+			return 0
+	except (AwlParserError, AwlSimError) as e:
+		printError(e.getReport())
+		return 1
+
+	if opt_interpreter and not opt_spawnBackend:
+		printError("Selected an --interpreter, but no "
+			   "--spawn-backend was requested.")
+		return 1
+
+	if opt_spawnBackend or opt_connect:
+		return runWithServerBackend(inputFile)
+	return run(inputFile)
+
+if __name__ == "__main__":
+	sys.exit(main())
