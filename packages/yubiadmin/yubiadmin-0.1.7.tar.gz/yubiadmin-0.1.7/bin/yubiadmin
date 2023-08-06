@@ -1,0 +1,100 @@
+#!/usr/bin/python
+# Copyright (c) 2013 Yubico AB
+# All rights reserved.
+#
+#   Redistribution and use in source and binary forms, with or
+#   without modification, are permitted provided that the following
+#   conditions are met:
+#
+#    1. Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#    2. Redistributions in binary form must reproduce the above
+#       copyright notice, this list of conditions and the following
+#       disclaimer in the documentation and/or other materials provided
+#       with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+# COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+# ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+import os
+import base64
+import argparse
+from wsgiref.simple_server import make_server, WSGIRequestHandler
+from webob.dec import wsgify
+from webob import exc
+from yubiadmin import server
+from yubiadmin.static import DirectoryApp
+from yubiadmin.config import settings
+
+REALM = 'YubiADMIN'
+STATIC_ASSETS = ['js', 'css', 'img', 'favicon.ico']
+
+
+class CustomRequestHandler(WSGIRequestHandler):
+    def address_string(self):
+        return str(self.client_address[0])
+
+
+class StaticPasswordValidator(object):
+    def __init__(self, username, password):
+        self.auth = base64.b64encode('%s:%s' % (username, password))
+
+    def __call__(self, auth):
+        return self.auth == auth
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description="",
+        add_help=True,
+        # formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument('-i', '--interface', nargs='?',
+                        default=settings['iface'], help='Listening interface')
+    parser.add_argument('-p', '--port', nargs='?', default=settings['port'],
+                        help='Listening port')
+    parser.add_argument('-U', '--username', nargs='?',
+                        default=settings['user'],
+                        help='Username for authentication')
+    parser.add_argument('-P', '--password', nargs='?',
+                        default=settings['pass'],
+                        help='Password for authentication')
+    args = parser.parse_args()
+    args.port = int(args.port)
+
+    module_dir = os.path.dirname(server.__file__)
+    base_dir = os.path.abspath(module_dir)
+    static_dir = os.path.join(base_dir, 'static')
+
+    static_app = DirectoryApp(static_dir)
+
+    validator = StaticPasswordValidator(args.username, args.password)
+
+    @wsgify
+    def with_static(request):
+        if request.authorization:
+            _, auth = request.authorization
+            if validator(auth):
+                base = request.path_info_peek()
+                if base in STATIC_ASSETS:
+                    return request.get_response(static_app)
+                return request.get_response(server.application)
+
+        # Deny access
+        response = exc.HTTPUnauthorized()
+        response.www_authenticate = ('Basic', {'realm': REALM})
+        return response
+
+    httpd = make_server(args.interface, args.port, with_static,
+                        handler_class=CustomRequestHandler)
+    httpd.serve_forever()
