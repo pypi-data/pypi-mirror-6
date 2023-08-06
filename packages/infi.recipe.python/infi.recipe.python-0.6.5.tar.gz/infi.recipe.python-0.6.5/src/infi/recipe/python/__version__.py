@@ -1,0 +1,10 @@
+__version__ = "0.6.5"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.6.5)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'bf6a82ab3c835b31a4f8dc985f42b432548d5a94'
+__git_head_subject__ = 'Finished release v0.6.5.'
+__git_head_message__ = '* release/v0.6.5:\n  TRIVIAL fixing versioning\n  TRIVIAL handling centos/redhat distribution'
+__git_dirty_diff__ = ''
