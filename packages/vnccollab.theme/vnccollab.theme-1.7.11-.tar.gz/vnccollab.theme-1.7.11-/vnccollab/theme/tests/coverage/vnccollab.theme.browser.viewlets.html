@@ -1,0 +1,719 @@
+
+    <html>
+      <head><title>Test coverage for vnccollab.theme.browser.viewlets</title>
+      <style type="text/css">
+        a {text-decoration: none; display: block; padding-right: 1em;}
+        a:hover {background: #EFA;}
+        hr {height: 1px; border: none; border-top: 1px solid gray;}
+        .notcovered {background: #FCC;}
+        .footer {margin: 2em; font-size: small; color: gray;}
+      </style>
+      </head>
+      <body><h1>Test coverage for vnccollab.theme.browser.viewlets</h1>
+      <table>
+    
+<tr><td><a href="vnccollab.html">vnccollab/</a></td> <td style="background: red">&nbsp;&nbsp;&nbsp;&nbsp;</td> <td>covered 69% (1245 of 4098 uncovered)</td></tr>
+<tr><td><a href="vnccollab.theme.html">&nbsp;&nbsp;&nbsp;&nbsp;theme/</a></td> <td style="background: red">&nbsp;&nbsp;&nbsp;&nbsp;</td> <td>covered 69% (1245 of 4098 uncovered)</td></tr>
+<tr><td><a href="vnccollab.theme.browser.html">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;browser/</a></td> <td style="background: red">&nbsp;&nbsp;&nbsp;&nbsp;</td> <td>covered 74% (507 of 1985 uncovered)</td></tr>
+<tr><td><a href="vnccollab.theme.browser.viewlets.html">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;viewlets.py</a></td> <td style="background: orange">&nbsp;&nbsp;&nbsp;&nbsp;</td> <td>covered 88% (57 of 497 uncovered)</td></tr>
+</table><hr/>
+<pre>    1: from urllib import quote_plus
+    1: import logging
+    1: import os.path
+    1: from pyactiveresource.activeresource import ActiveResource
+       
+    1: from Acquisition import aq_inner
+    1: from DateTime import DateTime
+       
+    1: from zope.app.component.hooks import getSite
+    1: from zope.interface import alsoProvides, providedBy, Interface
+    1: from zope.component import getMultiAdapter, queryMultiAdapter, getUtility
+    1: from zope.i18nmessageid import MessageFactory
+    1: from zope.viewlet.interfaces import IViewlet
+       
+    1: from Products.Five.browser.pagetemplatefile import ViewPageTemplateFile
+    1: from Products.CMFCore.utils import getToolByName
+    1: from Products.CMFCore.interfaces import IActionCategory, IAction
+    1: from Products.CMFCore.ActionInformation import ActionInfo
+    1: from Products.CMFPlone.utils import safe_unicode, normalizeString, parent
+    1: from Products.CMFPlone.i18nl10n import monthname_msgid, weekdayname_msgid
+    1: from Products.CMFPlone.interfaces.siteroot import IPloneSiteRoot
+       
+    1: from plone.i18n.normalizer.interfaces import IIDNormalizer
+    1: from plone.app.contentmenu.menu import FactoriesSubMenuItem
+    1: from plone.app.viewletmanager.manager import BaseOrderedViewletManager
+    1: from plone.app.layout.viewlets import common
+    1: from plone.app.layout.viewlets.interfaces import IPortalHeader
+    1: from plone.memoize.instance import memoize
+    1: from plone.registry.interfaces import IRegistry
+    1: from plone.portlets.interfaces import IPortletManager, IPortletRenderer
+       
+    1: from Products.Carousel.browser.viewlet import CarouselViewlet
+       # from jarn.xmpp.core.browser.viewlet import XMPPViewlet
+       
+    1: from collective.quickupload.portlet.quickuploadportlet import JAVASCRIPT
+       
+    1: from vnccollab.theme.portlets.zimbra_mail import logException
+    1: from vnccollab.theme import messageFactory as _
+    1: from vnccollab.theme.avatar import IAvatarUtil
+    1: from vnccollab.theme.config import FOOTER_LINKS_CAT
+    1: from vnccollab.theme.browser.interfaces import IVNCCollabHtmlHead
+    1: from vnccollab.theme.portlets import world_clock
+    1: from vnccollab.theme.settings import IWorldClockSettings
+    1: from vnccollab.theme.util import getZimbraLiveAnnotatedTasks
+       
+    1: from plone.app.layout.links.viewlets import FaviconViewlet
+       
+       
+    1: _pl = MessageFactory('plonelocales')
+    1: logger = logging.getLogger('vnccollab.theme.RelatedRedmineTicketsViewlet')
+       
+       
+    2: class TopRatedViewlet(common.ViewletBase):
+           """Renders list of most rated items under given container.
+       
+           Rating system by cioppino.twothumbs.
+    1:     """
+       
+    1:     def update(self):
+    1:         catalog = getToolByName(self.context, 'portal_catalog')
+    1:         elems = []
+    1:         for brain in catalog(path={'depth': 20,
+    1:             'query': '/'.join(self.context.getPhysicalPath())},
+    1:             sort_on='avg_ratings',
+    4:             sort_order='reverse'):
+       
+                   # skip item if nobody voted yet
+    3:             if brain.positive_ratings == 0 and brain.total_down_ratings == 0:
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 continue</div>       
+    3:             elems.append({
+    3:                 'title': _(safe_unicode(brain.Title)),
+    3:                 'desc': _(safe_unicode(brain.Description)),
+    3:                 'url': brain.getURL(),
+    3:                 'type': normalizeString(brain.portal_type, encoding='utf-8'),
+    3:                 'rating': {'total': brain.avg_ratings,
+    3:                            'liked': brain.positive_ratings,
+    3:                            'disliked': brain.total_down_ratings}})
+       
+    1:         self.elems = tuple(elems)
+       
+       
+    2: class ActionsListViewlet(common.ViewletBase):
+           """Renders internal ActionsItem List object view.
+       
+           Gets first found ActionsItem List object in first level hierarchy.
+    1:     """
+       
+    1:     def update(self):
+    1:         self.todo = None
+   66:         for obj in self.context.objectValues():
+   65:             if getattr(obj, 'portal_type', '') == 'ActionItemList':
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 self.todo = obj</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 break</div>       
+       
+    2: class LoginViewlet(common.ViewletBase):
+    1:     """Most methods are copied over from login portlet renderer"""
+       
+    1:     template = ViewPageTemplateFile('templates/login.pt')
+    1:     anon_template = ViewPageTemplateFile('templates/anon_login.pt')
+       
+    1:     def __init__(self, *args, **kw):
+   71:         super(LoginViewlet, self).__init__(*args, **kw)
+       
+   71:         self.membership = getToolByName(self.context, 'portal_membership')
+   71:         self.context_state = getMultiAdapter((self.context, self.request),
+   71:             name=u'plone_context_state')
+   71:         self.portal_state = getMultiAdapter((self.context, self.request),
+   71:             name=u'plone_portal_state')
+   71:         self.pas_info = getMultiAdapter((self.context, self.request),
+   71:             name=u'pas_info')
+       
+    1:     def render(self):
+   69:         mt = getToolByName(self.context, 'portal_membership')
+   69:         if mt.isAnonymousUser():
+   33:             return self.anon_template()
+               else:
+   36:             return self.template()
+       
+    1:     def show(self):
+   36:         if not self.portal_state.anonymous():
+   36:             return False
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         if not self.pas_info.hasLoginPasswordExtractor():</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             return False</div>       
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         return True</div>               # page = self.request.get('URL', '').split('/')[-1]
+               # return page not in ('login_form', '@@register')
+       
+    1:     @property
+           def available(self):
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         return self.auth() is not None and self.show()</div>       
+    1:     def register_url(self):
+   64:         registry = getUtility(IRegistry)
+   64:         show_register = registry.get(self._k('show_register_url'), True)
+   64:         register_url = registry.get(self._k('register_url'), '')
+       
+   64:         if not show_register:
+    2:             return ''
+       
+   62:         if not register_url:
+   58:             register_url = '%s/register' % self.portal_state.portal_url()
+       
+   62:         return register_url
+       
+    1:     def help_url(self):
+   33:         registry = getUtility(IRegistry)
+   33:         return registry.get(self._k('help_url'), '')
+       
+    1:     def login_url(self):
+   64:         registry = getUtility(IRegistry)
+   64:         show_login = registry.get(self._k('show_login_url'), True)
+   64:         login_url = registry.get(self._k('login_url'), '')
+       
+   64:         if not show_login:
+    2:             return ''
+       
+   62:         if not login_url:
+   58:             login_url = '%s/login_form' % self.portal_state.portal_url()
+       
+   62:         return login_url
+       
+    1:     def _k(self, k):
+  289:         return 'vnccollab.theme.settings' \
+  289:             + '.IAnonymousHomepageSettings.{0}'.format(k)
+       
+    1:     def mail_password_form(self):
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         return '%s/mail_password_form' % self.portal_state.portal_url()</div>       
+    1:     def login_name(self):
+   36:         auth = self.auth()
+   36:         name = None
+   36:         if auth is not None:
+   36:             name = getattr(auth, 'name_cookie', None)
+   36:         if not name:
+   36:             name = '__ac_name'
+   36:         return name
+       
+    1:     def login_password(self):
+   36:         auth = self.auth()
+   36:         passwd = None
+   36:         if auth is not None:
+   36:             passwd = getattr(auth, 'pw_cookie', None)
+   36:         if not passwd:
+   36:             passwd = '__ac_password'
+   36:         return passwd
+       
+    1:     def join_action(self):
+    2:         context = self.context
+    2:         tool = getToolByName(context, 'portal_actions')
+    2:         join = tool.listActionInfos(action_chain='user/join', object=context)
+    2:         if len(join) &gt; 0:
+    1:             return join[0]['url']
+    1:         return None
+       
+    1:     def can_register(self):
+    2:         if getToolByName(self.context, 'portal_registration', None) is None:
+    1:             return False
+    1:         return self.membership.checkPermission('Add portal member',
+    1:             self.context)
+       
+    1:     def can_request_password(self):
+    2:         return self.membership.checkPermission('Mail forgotten password',
+    2:             self.context)
+       
+    1:     @memoize
+    1:     def auth(self, _marker=[]):
+   36:         acl_users = getToolByName(self.context, 'acl_users')
+   36:         return getattr(acl_users, 'credentials_cookie_auth', None)
+       
+       
+    2: class HeaderTimeViewlet(common.ViewletBase):
+    1:     """Returns current date and time in local format"""
+       
+    1:     def update(self):
+    1:         super(HeaderTimeViewlet, self).update()
+       
+    1:         date = DateTime()
+    1:         self.day = date.day()
+    1:         self.month = _pl(monthname_msgid(int(date.strftime('%m'))),
+    1:             default=safe_unicode(date.Month()))
+    1:         self.dayname = _pl(weekdayname_msgid(int(date.strftime('%w'))),
+    1:             default=safe_unicode(date.DayOfWeek()))
+    1:         self.datetime = self.toLocalizedTime(date, long_format=True)
+       
+    1:     def toLocalizedTime(self, time, long_format=None, time_only=None):
+               """Convert time to localized time
+               """
+    2:         util = getToolByName(self.context, 'translation_service')
+    2:         return util.ulocalized_time(time, long_format, time_only, self.context,
+    2:                                     domain='plonelocales')
+       
+       
+    2: class PathBarViewlet(common.PathBarViewlet):
+    1:     template = ViewPageTemplateFile('templates/path_bar.pt')
+       
+    1:     def render(self):
+   70:         mt = getToolByName(self.context, 'portal_membership')
+   70:         if mt.isAnonymousUser():
+   33:             return u''
+               else:
+   37:             return self.template()
+       
+    2: class FooterViewlet(common.FooterViewlet):
+    1:     index = ViewPageTemplateFile('templates/footer.pt')
+       
+    1:     def update(self):
+   69:         super(FooterViewlet, self).update()
+   69:         self.columns = columns = {}
+       
+   69:         context = aq_inner(self.context)
+   69:         actions_tool = getToolByName(context, 'portal_actions')
+       
+               # check if we got root category for all column links
+   69:         if not FOOTER_LINKS_CAT in actions_tool.objectIds():
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             return</div>       
+               # prepare expression context for evaluating TAL expressions
+   69:         ec = actions_tool._getExprContext(context)
+       
+               # go over root category and collect all sub-categories
+   69:         container = actions_tool[FOOTER_LINKS_CAT]
+   69:         cat_ids = container.objectIds()
+  276:         for cid in ('column1', 'column2', 'column3'):
+                   # skip not existing categories
+  207:             if cid not in cat_ids:
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 continue</div>       
+  207:             cat = container[cid]
+  207:             if not IActionCategory.providedBy(cat):
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 continue</div>       
+                   # prepare category actions
+  207:             actions = []
+  621:             for action in cat.objectValues():
+                       # look only for actions
+  414:                 if not IAction.providedBy(action):
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                     continue</div>       
+                       # create actioninfo object to compile and render TAL expressions
+                       # and check if action is available in current circumstances
+  414:                 info = ActionInfo(action, ec)
+  414:                 if not (info['visible'] and info['allowed'] and
+  381:                         info['available']):
+   66:                     continue
+       
+                       # and finally extract all required details from action
+  348:                 desc = action.getProperty('description', None) or None
+  348:                 if desc is not None:
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                     desc = _(safe_unicode(desc))</div>  348:                 actions.append({
+  348:                     'id': info['id'],
+  348:                     'title': _(safe_unicode(info['title'])),
+  348:                     'desc': desc,
+  348:                     'url': info['url']
+                       })
+       
+                   # finally add category to be rendered as footer column
+  207:             columns[cid] = {
+  207:                 'title': _(safe_unicode(cat.getProperty('title', ''))),
+  207:                 'actions': tuple(actions)
+                   }
+       
+   69:         self.columns = columns
+       
+       
+    2: class PersonalBarViewlet(common.PersonalBarViewlet):
+    1:     index = ViewPageTemplateFile('templates/personal_bar.pt')
+       
+    1:     def update(self):
+   69:         super(PersonalBarViewlet, self).update()
+       
+               # get personal user image
+   69:         self.user_image = None
+   69:         if not self.anonymous:
+   36:             mtool = getToolByName(self.context, 'portal_membership')
+                   # if no userid passes it'll return portrait of logged in user
+   36:             portrait = mtool.getPersonalPortrait()
+   36:             if portrait is not None:
+   36:                 self.user_image = portrait.absolute_url()
+       
+               # render languages viewlet
+   69:         context = aq_inner(self.context)
+   69:         languages = u''
+   69:         manager = BaseOrderedViewletManager()
+   69:         alsoProvides(manager, IPortalHeader)
+   69:         viewlet = queryMultiAdapter((context, self.request, self.view,
+   69:             manager), IViewlet, name='vnccollab.theme.languageselector')
+   69:         if viewlet is not None:
+   69:             viewlet = viewlet.__of__(context)
+   69:             viewlet.update()
+   69:             languages = viewlet.render()
+   69:         self.languages = languages
+       
+               # Get css style for image avatar
+   69:         self.avatar_width = 80
+   69:         self.avatar_height = 80
+   69:         self.avatar_style = ''
+       
+   69:         if self.user_image is not None:
+   36:             img_name = os.path.basename(self.user_image)
+   36:             if img_name != 'defaultUser.png':
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 img = context.portal_memberdata.portraits[img_name]</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 avatar = getUtility(IAvatarUtil)</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 self.avatar_width, self.avatar_height, self.avatar_style = avatar.style(img, (80, 80))</div>       
+       
+    2: class VNCCarouselViewlet(CarouselViewlet):
+    1:     """Customize template to fix javascript code"""
+       
+    1:     index = ViewPageTemplateFile('templates/carousel_viewlet.pt')
+       
+    2: class AnonHomepageCarouselViewlet(CarouselViewlet):
+    1:     template = ViewPageTemplateFile('templates/carousel_viewlet.pt')
+       
+    1:     def render(self):
+    3:         mt = getToolByName(self.context, 'portal_membership')
+    3:         if mt.isAnonymousUser():
+    2:             return self.template()
+               else:
+    1:             return u''
+       
+    2: class VNCCollabHeaderViewlet(common.ViewletBase):
+    1:     """Viewlet that inserts vnc header manager into plone header manager"""
+       
+    1:     def available(self):
+               """Available only if carousel is set on current folder"""
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         context = aq_inner(self.context)</div>       
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         manager = BaseOrderedViewletManager()</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         alsoProvides(manager, IVNCCollabHtmlHead)</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         viewlet = queryMultiAdapter((context, self.request, self.view, manager),</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             IViewlet, name='vnccollab.theme.headercarousel')</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         if viewlet is None:</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             return False</div>       
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         viewlet = viewlet.__of__(context)</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         viewlet.update()</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         return viewlet.available</div>       
+       
+    2: class RelatedRedmineTicketsViewlet(common.ViewletBase):
+    1:     """Lists redmine tickets assigned to current object"""
+       
+    1:     def update(self):
+   11:         self.tickets = ()
+       
+   11:         if IPloneSiteRoot in providedBy(self.context):
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             return</div>       
+   11:         tickets = []
+               # check if settings are configured
+               # check user redmine credentials and redmine url/field id
+   11:         registry = getUtility(IRegistry)
+   11:         url = registry.get('vnccollab.theme.redmine.url')
+   11:         field_id = registry.get('vnccollab.theme.redmine.plone_uid_field_id')
+   11:         username, password = self.getAuthCredentials()
+   11:         if username and password and url and field_id:
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             Issue = type("Issue", (ActiveResource,), {'_site': url, '_user':</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 username, '_password': password})</div>                   # do actual calls to redmine
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             try:</div>                       # fetch opened issues belonging to authenticated user
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 uuid = self.context.UID()</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 data = Issue.find(**{'cf_%d' % field_id: uuid,</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                     'status_id': 'o', 'sort': 'updated_on:desc'})</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             except Exception:</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 logException(_(u"Error during fetching redmine tickets %s" %</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                     url), context=self.context, logger=logger)</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 return</div>       
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             for item in data:</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 info = item.to_dict()</div>       
+                       # skip invalid entries
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 if not info.get('id') or not info.get('subject'):</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                     continue</div>       
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                 tickets.append({</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                     'id': info['id'],</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                     'title': safe_unicode(info['subject']),</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                     'body': safe_unicode(info.get('description', '')),</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;                     'url': '%s/issues/%s' % (url, info['id'])</div>                       })
+       
+   11:         self.tickets = tuple(tickets)
+       
+    1:     @memoize
+           def getAuthCredentials(self):
+               """Returns username and password for redmine user."""
+               # take username and password from authenticated user Zimbra creds
+   11:         mtool = getToolByName(self.context, 'portal_membership')
+   11:         member = mtool.getAuthenticatedMember()
+   11:         username, password = member.getProperty('redmine_username', ''), \
+   11:             member.getProperty('redmine_password', '')
+               # password could contain non-ascii chars, ensure it's properly encoded
+   11:         return username, safe_unicode(password).encode('utf-8')
+       
+       
+    2: class RelatedZimbraTasksViewlet(common.ViewletBase):
+    1:     """Lists zimbra tasks assigned to current object"""
+       
+    1:     def update(self):
+   11:         self.tasks = getZimbraLiveAnnotatedTasks(self.context)
+       
+       
+    2: class WorldClockViewlet(common.ViewletBase):
+           """Shows world clock.
+       
+           It basically re-uses World Clock portlet code.
+    1:     """
+       
+    1:     def update(self):
+    1:         context = aq_inner(self.context)
+    1:         portal = getToolByName(context, 'portal_url').getPortalObject()
+    1:         manager = getUtility(IPortletManager, name='plone.rightcolumn',
+    1:             context=portal)
+       
+               # get settings from registry
+    1:         registry = getUtility(IRegistry)
+    1:         try:
+    1:             settings = registry.forInterface(IWorldClockSettings)
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         except KeyError:</div>                   # in case settings are not there yet
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             self.world_clock = ''</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             return</div>       
+    1:         tz_1 = settings.tz_1
+    1:         skin_1 = settings.skin_1
+    1:         radius_1 = settings.radius_1
+    1:         no_seconds_1 = settings.no_seconds_1
+    1:         tz_2 = settings.tz_2
+    1:         skin_2 = settings.skin_2
+    1:         radius_2 = settings.radius_2
+    1:         no_seconds_2 = settings.no_seconds_2
+    1:         tz_3 = settings.tz_3
+    1:         skin_3 = settings.skin_3
+    1:         radius_3 = settings.radius_3
+    1:         no_seconds_3 = settings.no_seconds_3
+       
+    1:         assignment = world_clock.Assignment(header=u'', tz_1=tz_1,
+    1:             skin_1=skin_1, radius_1=radius_1, no_seconds_1=no_seconds_1,
+    1:             tz_2=tz_2, skin_2=skin_2, radius_2=radius_2,
+    1:             no_seconds_2=no_seconds_2, tz_3=tz_3, skin_3=skin_3,
+    1:             radius_3=radius_3, no_seconds_3=no_seconds_3)
+    1:         renderer = queryMultiAdapter((context, self.request, self.view, manager,
+    1:             assignment), IPortletRenderer)
+    1:         renderer.update()
+    1:         self.world_clock = renderer.render()
+       
+       
+    2: class IExternalEditable(Interface):
+    1:     """Marker Interface for objects than can be edited by zopeedit."""
+       
+       
+    2: class ZopeEditViewlet(common.ViewletBase):
+    1:     """Link for external editor"""
+    1:     def external_editor_url(self):
+    1:         path = self.context.absolute_url_path()
+    1:         p = os.path.dirname(path)
+    1:         me = os.path.basename(path) + '.zem'
+    1:         return os.path.join(p, 'externalEdit_', me)
+       
+       
+    2: class AddContentAreaViewlet(common.ViewletBase):
+    1:     """Add new content form"""
+    1:     index = ViewPageTemplateFile('templates/add_content_area.pt')
+       
+    1:     def getAddLinks(self):
+               """Returns list with info of the allowed types to create using
+               the add wizard.
+               """
+   37:         result = self._get_default_allowed_types()
+  137:         ids = [x['id'] for x in result]
+       
+               # Adds allowed types in current context
+   37:         context = aq_inner(self.context)
+   37:         extend = self._allowed_types(context)
+       
+  407:         for item in extend:
+  370:             if item['id'] not in ids:
+  270:                 result.append(item)
+       
+   37:         return result
+       
+    1:     def _get_default_allowed_types(self):
+               '''Default allowed types: the ones you can add to your
+               member folder.'''
+   37:         member_folder = self._get_member_home()
+   37:         if member_folder is None:
+   27:             return []
+               else:
+   10:             return self._allowed_types(member_folder)
+       
+    1:     def _get_member_home(self):
+               '''Returns the cuerrent user's folder.'''
+   37:         mtool = getToolByName(self.context, 'portal_membership')
+   37:         member = mtool.getAuthenticatedMember()
+   37:         if member is None:
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             return None</div>       
+   37:         portal = getToolByName(self.context, 'portal_url').getPortalObject()
+   37:         try:
+   37:             id = member.id.replace('@', '-40')
+   37:             home = portal['Members'][id]
+   27:         except:
+   27:             home = None
+       
+   37:         return home
+       
+    1:     def _all_user_selectable_types(self, site):
+               """ List user-selectable content types.
+       
+               We cannot use the method provided by the IPortalState utility view,
+               because the vocabulary factory must be available in contexts where
+               there is no HTTP request (e.g. when installing add-on product).
+       
+               This code is copied from
+               https://github.com/plone/plone.app.layout/tree/master/plone/app/layout/globals/portal.py
+               """
+       
+   47:         context = aq_inner(site)
+   47:         site_properties = getToolByName(context, "portal_properties").site_properties
+   47:         not_searched = site_properties.getProperty('types_not_searched', [])
+       
+   47:         portal_types = getToolByName(context, "portal_types")
+   47:         types = portal_types.listContentTypes()
+       
+               # Get list of content type ids which are not filtered out
+ 1457:         prepared_types = [t for t in types if t not in not_searched]
+       
+   47:         ignored = ['Cast Update', 'Cast Comment', 'Topic']
+  658:         return [portal_types[id] for id in prepared_types if id not in ignored]
+       
+    1:     def _allowed_types(self, context):
+               '''Return info of the types that can be added to the context.'''
+   47:         submenu = FactoriesSubMenuItem(context, self.request)
+   47:         folder = self.getFolder(context)
+   47:         folder_url = folder.absolute_url()
+       
+   47:         idnormalizer = getUtility(IIDNormalizer)
+   47:         result = []
+       
+               #for atype in submenu._addableTypesInContext(folder):
+  517:         for atype in self._all_user_selectable_types(folder):
+  470:             id = atype.getId()
+  470:             result.append({
+  470:                 'id': id,
+  470:                 'title': atype.Title(),
+  470:                 'desc': atype.Description(),
+  470:                 'url': '%s/createObject?type_name=%s' % (folder_url,
+  470:                     quote_plus(id)),
+  470:                 'icon': '%s/add_content_area/metabox_icon_%s.png' % (
+  470:                     self.site_url, idnormalizer.normalize(id))
+                   })
+       
+   47:         return result
+       
+    1:     def getUploadUrl(self):
+               """
+               return upload url
+               in current folder
+               """
+   37:         context = aq_inner(self.context)
+   37:         ploneview = context.restrictedTraverse('@@plone')
+   37:         folder_url = ploneview.getCurrentFolderUrl()
+   37:         return '%s/@@wizard_uploader' % folder_url
+       
+    1:     def upload_javascript(self):
+   37:         return JAVASCRIPT.replace('.QuickUploadPortlet', '#createWizard')
+       
+    1:     @memoize
+           def getFolder(self, context):
+   47:         context = aq_inner(context)
+   47:         submenu = FactoriesSubMenuItem(context, self.request)
+   47:         if submenu.context_state.is_default_page():
+    4:             return parent(context)
+   43:         return submenu._addContext()
+       
+       
+    2: class AddButtonViewlet(common.ViewletBase):
+    1:     '''Overrides SearchBoxViewlet for folders in Stream Mode.'''
+    1:     template = ViewPageTemplateFile('templates/addbutton.pt')
+       
+    1:     def render(self):
+   69:         mt = getToolByName(self.context, 'portal_membership')
+   69:         if mt.isAnonymousUser():
+   33:             return u''
+               else:
+   36:             return self.template()
+       
+    1: try:
+    1:     import vnccollab.cloudcast
+    1:     from vnccollab.cloudcast.interfaces import ICastContainer, \
+               ICastsContainer, ICast
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt; except ImportError:</div><div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;     CAST_ENABLED = False</div>       else:
+    1:     CAST_ENABLED = True
+       
+       
+    2: class CastViewletBase(object):
+       
+    1:     def get_cast_url(self):
+   39:         if not CAST_ENABLED:
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             return False</div>       
+   39:         catalog = getToolByName(self.context, 'portal_catalog')
+   39:         portal_path = getToolByName(self.context, 'portal_url').getPortalPath()
+   39:         casts = catalog(portal_type='CastsContainer', path={'query':
+   39:             portal_path, 'depth': 1}, sort_on='getObjPositionInParent')
+   39:         if len(casts) &gt; 0:
+    2:             return casts[0].getURL()
+       
+               # no casts container in site root, search for any other casts container
+   37:         casts = catalog(portal_type='CastsContainer',
+   37:             sort_on='getObjPositionInParent')
+   37:         if len(casts) &gt; 0:
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             return casts[0].getURL()</div>       
+   37:         return False
+       
+    1:     def check_in_cast(self):
+   41:         if not CAST_ENABLED:
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;             return False</div>       
+   41:         cast_interfaces = [ICastsContainer, ICastContainer, ICast]
+       
+  158:         for cast in cast_interfaces:
+  119:             if cast.providedBy(self.context):
+    2:                 return True
+       
+   39:         return False
+       
+       
+       # class CustomXMPPViewlet(XMPPViewlet, CastViewletBase):
+       #
+       #     index = ViewPageTemplateFile('templates/xmpp_viewlet.pt')
+       #
+       #     def update(self):
+       #         super(CustomXMPPViewlet, self).update()
+       #
+       #         # prepare link to first cast container on the site, of course if cast
+       #         # feature is enabled
+       #         self.cast_url = self.get_cast_url()
+       #         self.cast_url = self.cast_url if self.cast_url else ''
+       
+       
+    2: class HeaderLinksIconsViewlet(FaviconViewlet):
+       
+    1:     render = ViewPageTemplateFile('templates/favicon.pt')
+       
+       
+    2: class TabsViewlet(common.ViewletBase, CastViewletBase):
+       
+    1:     index = ViewPageTemplateFile('templates/tabs.pt')
+       
+    1:     @property
+           def available(self):
+   72:         mt = getToolByName(self.context, 'portal_membership')
+   72:         if mt.isAnonymousUser():
+   33:             return False
+               else:
+   39:             return True
+       
+       
+    1:     def update(self):
+   72:         self.portal_tabs = []
+   72:         if not self.available:
+   33:             return
+       
+               self.portal_tabs = [
+   39:             {'name': 'Content',
+   39:              'description': 'content',
+   39:              'id': 'content',
+   39:              'url': getSite().absolute_url(),
+   39:              'selected': not self.check_in_cast()
+                   }]
+       
+   39:         cast_url = self.get_cast_url()
+   39:         if cast_url != False:
+    2:             self.portal_tabs.append({
+    2:                 'name': 'Cast',
+    2:                 'description': 'cast',
+    2:                 'id': 'cast',
+    2:                 'url': cast_url,
+    2:                 'selected': self.check_in_cast()})
+       
+       
+    2: class SearchBoxViewlet(common.ViewletBase):
+    1:     """Overrides SearchBoxViewlet for folders in Stream Mode."""
+    1:     template = ViewPageTemplateFile('templates/searchbox.pt')
+       
+    1:     def render(self):
+   69:         mt = getToolByName(self.context, 'portal_membership')
+   69:         if mt.isAnonymousUser():
+   33:             return u''
+               else:
+   36:             return self.template()
+       
+    2: class EmptyViewlet(common.ViewletBase):
+    1:     """Empty viewlet to remove previous registrations"""
+       
+    1:     def update(self):
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         pass</div>       
+    1:     def render(self):
+<div class="notcovered">&gt;&gt;&gt;&gt;&gt;&gt;         return u''</div></pre>
+
+      <div class="footer">
+      Generated for revision Niewersjonowany katalog on 2014-02-26 19:06:33.637329Z
+      </div>
+    </body>
+    </html>
