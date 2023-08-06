@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+# -*- coding: UTF-8 -*-
+#
+# Para agregar una radio agregue una línea al diccionario. Por ejemplo:
+#	'madre': ('Radio Madre AM 530', 'http://200.68.81.65:8000/am530'),
+
+
+urls = {
+	# 'radio_id': ('radio_name', 'radio_url'),
+	'airelibre': ('Aire Libre FM 91.3', 'http://95.154.254.81:31438'),
+	'dp': ('Del Plata AM 1030', 'http://active.telecomcdn.com/delplata/delplata'),
+	'dpros': ('Del Plata Rosario FM 107.5', 'http://media203.services.digitar.net/delplatarosario'),
+	'colifata': ('Radio La Colifata FM 100.1', 'http://giss.tv:8000/radiocolifata.mp3'),
+	'coop': ('Radio Cooperativa AM 770', 'http://rcoop.cnwks.ws:8358/'),
+	'cont': ('Radio Continental AM 590', 'http://69.31.54.135/CONTINENTAL'),
+	'eco': ('Eco Radio Rosario FM 92.3', 'http://media203.services.digitar.net/EcoRadioRos'),
+	'elmundo': ('Radio El Mundo AM 1070', 'http://184.107.240.26:8010/vivo'),
+	'eter': ('radio eter', 'http://sc01.server54.net:7184'),
+	'eter+': ('radio eter plus', 'http://sc01.server54.net:7172'),
+	'gros': ('Radio Gran Rosario FM 88.9', 'http://media203.services.digitar.net/granrosario'),
+	'khuelga': ('K-HUELGA Radio libre y social FM 102.9', 'http://www.kehuelga.org:8000/radio.mp3'),
+	'la100': ('La 100 FM 99.9', 'http://buecrplb01.cienradios.com.ar/la100.mp3'),
+	#'lared': ('La Red AM 910', 'rtmp://vivolared.multimediosamerica.com.ar/streamlared/&streamId=lared'),
+	'laredros': ('La Red Rosario FM 102.7', 'http://media203.services.digitar.net/lared'),
+	'latribu': ('FM La Tribu 88.7', 'http://vivo.fmlatribu.com:8000/latribu.mp3'),
+	'lt2': ('Radio 2 AM 1230', 'http://209.160.20.34/radio2'),
+	'lt3': ('LT3 AM 680', 'http://media203.services.digitar.net/lt3'),
+	'lt8': ('La Ocho LT8 AM 830', 'http://media203.services.digitar.net/lt8'),
+	'madre': ('Radio Madre AM 530', 'http://200.68.81.65:8000/am530'),
+	'metro': ('Metro FM 95.1', 'http://201.212.5.144/metro'),
+	'mitre': ('Radio Mitre AM 790', 'http://buecrplb01.cienradios.com.ar/Mitre790.mp3'),
+	'nac': ('Radio Nacional AM 870', 'http://37.59.19.104:8010/'),
+	'nacrosfm': ('Radio Nacional Rosario FM 104.5', 'http://37.59.19.104:8170/'),
+	'nacrosam': ('Radio Nacional Rosario AM 1300', 'http://37.59.19.104:8026/'),
+	'cabe': ('Planeta Cabezón Radio OnLine', 'http://50.22.217.204:8393/'),
+	'quilpo': ('Radio Quilpo', 'http://200.58.112.154:9510/'),
+	'rnma': ('Red Nacional de Medios Alternativos', 'http://radio.nodo50.org:8000/mediosalter.mp3'),
+	'redtl': ('Red TL FM 105.5', 'rtmp://98.158.181.21:1935/radio/redtl'),
+	'rp': ('Rock&Pop FM 95.9', 'http://201.212.5.144/audio959-rockandpop'),
+	'unr': ('Radio Universidad UNR FM 103.3', 'http://nubroadcast.com:8000/radio016.aac'),
+	'vorterix': ('Vorterix FM 103.1', 'http://184.173.77.4:9776'),
+	'vxbahia': ('Vorterix Bahía Blanca FM 99.1', 'http://74.222.2.108:12606'),
+	'vxbarilo': ('Vorterix Bariloche FM 95.9', 'http://63.141.238.139:8056'),
+	'vxparana': ('Vorterix Paraná FM 91.7', 'http://200.58.116.222:8000'),
+	'vxros': ('Vorterix Rosario FM 102.1', 'rtmp://200.58.96.105:1935/radio/ON'),
+	'frecm': ('Frecuencia Mutual FM 104.1 Rosario', 'http://streamwowza.com:1935/9670/default.stream/playlist.m3u8'),
+	'fm1': ('FM 1 Gálvez FM 105.3', 'http://200.43.135.250:8088/fm1'),
+	'latina': ('Latina Gálvez FM 92.5', 'http://200.43.135.250:8088/fmlatina'),
+	'ec': ('Estación del Centro Gálvez FM 95.7', 'mms://72.55.165.46/fm957'),
+}
+
