@@ -1,0 +1,311 @@
+Metadata-Version: 1.1
+Name: pave
+Version: 0.69
+Summary: Simple push-based configuration and deployment tool, leveraging fabric.  No servers, few dependencies.
+Home-page: https://bitbucket.org/mixmastamyk/pave
+Author: Mike Miller
+Author-email: mixmastamyk@bitbucket.org
+License: GPLv3+
+Download-URL: https://bitbucket.org/mixmastamyk/pave/get/default.tar.gz
+Description: |
+        |
+        |
+        
+        
+        ::
+        
+                                                        H   |P""""`.
+                                                      __H._ || o_  |
+            - - - - - - - - - - - - - - - - - - - -   |=====\||((,/ '_______  - - -
+                                                      |  __  YHaHHHaP ___   #:
+                  ______________ ___   ______        / ,'   `.YHHHHP.'   `. #:
+                  ___  __ \  __ `/_ | / /  _ \      | :       :HHH(/       . \
+                  __  /_/ / /_/ /_  |/ //  __/      `-|  (\)  |:=:"|  (\)  | _>
+                  _  ____/\__,_/ _____/ \___/         \       /(=) `       '
+                  /_/                                  `-._.-       `-._.-'
+        
+        **tl;dr**
+        
+            Simple push-based deployment and remote host management,
+            leveraging fabric. 
+            No servers, few dependencies.
+        
+        
+        Intro
+        =====
+        
+        There are also slides on this topic,
+        `located here <http://mixmastamyk.bitbucket.org/pave/>`_.
+        
+        Another one?
+        --------------
+        
+        Been looking for the “perfect” config management tool to deploy software
+        to networked boxes... and still looking.  I've tried but didn’t choose these:
+        
+            bcfg, cfengine, puppet, chef, saltstack, ansible, etc.
+        
+        I found them powerful and complex.
+        They required daemons running, had their own languages, unique terminology,
+        XML, Ruby, or Jinja dependencies.
+        Despite reading the word “simple” multiple times, each had a varingly steep
+        learning curve, and dozens if not hundreds of pages of abstract
+        or "enterprisey" docs.
+        
+        For my modest needs, ansible seemed the best fit (ssh-based and no servers),
+        but there were a few things bugging me.
+        Finally realized I was telling it how to do things, though I really wanted
+        the tool to *figure it out itself*.
+        
+        Likewise, I stumbled across fabric early on, and like most loved it—at
+        first.
+        Unfortunately as a script gets longer it dawns on you why people say,
+        *“don’t use it for configuration management!”*
+        Intentions, implementation details, and code all get mixed up in the same
+        script and things get ugly fast.
+        Cuisine (a fabric addon) appeared promising, but it looked mainly to shorten
+        the fabfile.
+        I wanted to go further and completely separate my setup from general
+        implementation code.
+        
+        Maybe I could whip one up myself? I started looking into how to build such a
+        system.
+        Thankfully after a day or so I realized the building blocks are already in
+        fabric.
+        Why not just commandeer it for my own evil purposes? *</grin>*
+        
+        So here is pave.
+        
+        How does it work?
+        -----------------
+        
+        Pave logs you into your networked hosts using SSH and configures them to
+        your liking "automatically" using the command line.
+        Just tell it *what* to do.
+        It'll check first and *won't make changes* unless it needs to.
+        
+        Don’t have to write any code for common tasks.
+        Don't have to know anything about Python or the OS you’re using (in
+        theory---You'll get the most out of it
+        if you know how to use the default shell installed on your hosts,
+        such as bash.)
+        No gnarly/obscure runtimes to install, no root servers taking up
+        memory/listening/waiting to be cracked, no new languages, nor weird
+        lingo to learn.
+        
+        Just a config file, a command, ... and space for a new parking lot.
+        
+        Use
+        -----
+        
+        Requirements
+        ~~~~~~~~~~~~
+        
+        An OS from the last 5 years or so, with Python 2.6+ (locally) and sshd
+        (remotely) ready to go.
+        
+        Development is primarily on Ubuntu clients with
+        **Ubuntu Server 12.04 (Precise LTS)**
+        as the target
+        (with some recent attention to Fedora, CentOS, Gentoo, Rasbian, and OSX),
+        but aims to work everywhere practical, Unix and Windows.
+        
+        
+        Installation & Setup
+        ~~~~~~~~~~~~~~~~~~~~
+        
+        Need pip?
+        
+        .. code-block:: bash
+        
+            sudo apt-get install python-pip   # Or yum, brew, etc.
+        
+        "Express" install::
+        
+            sudo pip install pave
+        
+        Custom install options:
+        
+            **OSX**: (Not yet tested, alpha quality)
+            Install pip and the command-line developer tools if they are not already
+            (type ``easy_install pip`` and ``gcc`` at a terminal),
+            since pave needs paramiko/pycrypto and the latter needs to be built.
+        
+            **Windows**: (Not yet tested, alpha quality)
+            Install `pip <http://stackoverflow.com/a/14407505/450917>`_ and
+            `pycrypto <http://www.voidspace.org.uk/python/modules.shtml#pycrypto>`_.
+            Type ``pip install pave[win]`` in an Admin prompt.
+        
+            **Debian Linux**:
+            Note if pycrypto (ssh) needs to be built, or you'd like to build
+            libyaml (for speed),
+            do this first::
+        
+                sudo apt-get install build-essential python-dev libyaml-dev
+        
+            For the dev version:
+        
+            ::
+        
+                sudo pip install \
+                https://bitbucket.org/mixmastamyk/pave/get/default.zip
+        
+            Also, note that pip is not required;
+            You could also download the package manually from PyPI or bitbucket.
+            Unpack the archive, ``cd`` into the folder created, then:
+        
+            .. code-block:: bash
+        
+                sudo ./setup.py install    # manual install
+        
+            | Like typing in passwords over and over?  No?  ;)
+            | Do you have an ssh key-pair set up?  No?
+        
+            ::
+        
+                ssh-keygen -t rsa
+                ssh-copy-id [user@]machine
+        
+            Pave can do the steps above if you'd like, however for "piece" of mind
+            it's better to do it yourself.
+        
+            You may need to paste the matching line from ``~/.ssh/id_rsa.pub`` into
+            your EC2 or other cloud console... if you're into that sort of thing.
+        
+        
+        Creating El Pavefile
+        ~~~~~~~~~~~~~~~~~~~~~~
+        
+        The pavefile is what tells pave what to do.
+        This file is named ``./pave.yml`` by default,
+        and "hello world" might look like this:
+        
+        .. code-block:: yaml
+        
+            main:
+                user: ubuntu
+                sudo: True
+                targets:
+                    - 192.168.2.1             # a list/str of hosts/groups
+        
+            # passwords:                      # use only if not using keys
+            #   - ask password SSH Password   # default passwd for fabric
+        
+            tasks:
+                - packages:
+                    if-platform: Debian
+                    install: sysvbanner
+        
+                - packages:
+                    if-platform: Redhat
+                    install: banner
+        
+                - banner "Hello!"             # world
+        
+        To create this file now, you may use the "skeleton" shortcut::
+        
+            pave -S
+        
+        Each section above declares what you’d like pave to do, and the details
+        under each must be indented *with spaces*.
+        Comments are written following the ``#`` character.
+        The only required section is ``main`` which contains options for pave.
+        Lists and mappings (dicts/hashes) are welcome in appropriate places.
+        The format is called yaml, and syntax details `can be found here
+        <https://pave.readthedocs.org/en/latest/pavefile.html>`_.
+        You don’t need to know much about it for now, just keep to the form above.
+        
+        Common tasks already have their own modules, such as ``packages:`` above.
+        These modules handle mundane details so you don't need to be concerned.
+        Don’t reinvent the wheel by putting platform-dependent commands into an
+        ad-hoc tasklist—That's what we're trying to avoid.
+        
+        Reference docs can be found on the next page and `examples here
+        <https://bitbucket.org/mixmastamyk/pave/src/default/examples/>`_.
+        How to target groups of hosts and do other necessary things like declare
+        variables, render templates, create users, configure the OS, etc, etc. is
+        demonstrated.
+        
+        
+        Running it
+        ~~~~~~~~~~~~
+        
+        ::
+        
+            pave
+        
+        Now, that's my definition of simple. ;)  
+        Of course pave does less than the big-guns but handles quite a lot already and
+        will only grow.
+        Consult the references and ``pave -h`` for many options.
+        
+        You should see output similar to this (if you use ``pave -V``).
+        (Verbose logs from the last five runs are kept in ``~/.cache/pave/logs/``.)
+        
+        ::
+        
+            ✓ INFO    main: Version 0.60, Python: 2.7.4, fabric: 1.6.1, ./pave.yml
+            ✓ INFO    transport: Connected (version 2.0, client OpenSSH_5.9p1)
+            ✓ INFO    transport: Authentication (publickey) successful!
+            ✓ INFO    main: found a(n) Ubuntu system.
+            ✓ INFO    packages: install: sysvbanner
+        
+            [snip install-text]
+        
+            [192.168.2.1] out: sudo password:
+            [192.168.2.1] out: #     #                                    ###
+            [192.168.2.1] out: #     #  ######  #       #        ####     ###
+            [192.168.2.1] out: #     #  #       #       #       #    #    ###
+            [192.168.2.1] out: #######  #####   #       #       #    #     #
+            [192.168.2.1] out: #     #  #       #       #       #    #
+            [192.168.2.1] out: #     #  #       #       #       #    #    ###
+            [192.168.2.1] out: #     #  ######  ######  ######   ####     ###
+        
+            ✓ INFO    main: {u'192.168.2.1': (2, 0)}
+        
+        
+        The numbers at the end mean pave made two changes and had zero errors on
+        the remote host.
+        
+        *"Exxxxcellent, Smithers."*
+        
+        |
+        
+        License
+        .........
+        
+        Licensed under the `GPL, version 3+ <http://www.gnu.org/licenses/gpl.html>`_.
+        A commercial license may also be available in the future.
+        
+        |
+        
+        Next »»
+        .........
+        
+        (Looking for a very simple build tool to complement pave?
+        `BuildIt <https://bitbucket.org/mixmastamyk/buildit>`_
+        was designed for that purpose.)
+        
+        This concludes the introductory readme.
+        Kindly continue on to the
+        `next chapter <https://pave.readthedocs.org/en/latest/pavefile.html>`_
+        of the full docs.
+        You may also go to the
+        `table of contents <https://pave.readthedocs.org/en/latest/>`_
+        instead.
+        
+        
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: System Administrators
+Classifier: License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Topic :: System :: Installation/Setup
+Classifier: Topic :: System :: Systems Administration
+Classifier: Topic :: Utilities
+Requires: PyYAML(>=3.05,<4.0)
+Requires: fabric(>=1.4,<2.0)
+Requires: voluptuous(>=0.8.3,<0.9)
