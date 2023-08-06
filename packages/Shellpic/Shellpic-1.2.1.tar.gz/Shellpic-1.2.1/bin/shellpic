@@ -1,0 +1,144 @@
+#!/usr/bin/env python
+# -*- coding: utf-8; mode: Python -*-
+#
+#
+# Lars Jørgen Solberg <supersolberg@gmail.com> 2014
+#
+import argparse
+from PIL import Image
+import sys
+import cStringIO
+import time
+import cProfile
+
+import shellpic
+
+
+def main():    
+    # parse command line parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument("image", help="Use '-' to read from STDIN")
+    parser.add_argument("--shell8", action="store_true", 
+                        help="Print text suitable for a shell capable of displaying 8bit colors (default)")
+    parser.add_argument("--shell24", action="store_true", 
+                        help="Print text suitable for a shell capable of displaying 24bit colors")
+    parser.add_argument("--irc", action="store_true", 
+                        help="Print text suitable for piping to an irc client")
+    parser.add_argument("--no-scale", action="store_true",
+                        help="Do not attempt to scale the image to fit the terminal")
+    parser.add_argument("--scale-x", nargs=1, type=int,
+                        help="Scale the image to this width")
+    parser.add_argument("--scale-y", nargs=1, type=int,
+                        help="Scale the image to this height")
+    parser.add_argument("--animate", action="store_true", 
+                        help="Animate the image once")
+    parser.add_argument("--loop", action="store_true", 
+                        help="Animate the image and loop indefinetly")
+    args = parser.parse_args()    
+
+    # create the right kind of 'Formatter'
+    if args.irc:
+        formatter = shellpic.Irc()
+    elif args.shell24:
+        formatter = shellpic.Shell24Bit()
+    else:
+        formatter = shellpic.Shell8bit()
+    dimentions = formatter.dimentions()
+    
+    # load the image
+    if args.image == '-':
+        # we need to copy the entire image to a buffer as PIL likes to seek()
+        buf = cStringIO.StringIO()
+        buf.write(sys.stdin.read())
+        buf.seek(0)
+        img = Image.open(buf)
+        img.load() # so we can safely close buf
+        buf.close()
+    else:
+        img = Image.open(args.image)
+
+    # grab what we need from the info-property, as some transformations might change them
+    if 'background' in img.info:
+        formatter.bgcolor = shellpic.ensure_rgb(img.palette, img.info['background'])
+    if 'duration' in img.info:
+        frame_delay = img.info['duration']
+    else:
+        frame_delay = 0
+
+
+    # extract the frames for animation
+    dispose_frames = []    
+    if args.animate or args.loop:
+        frames = [img.copy()]
+
+        while True:
+            try:
+                if hasattr(img, 'dispose'):
+                    dispose_frames.append(img.dispose)
+                else:
+                    dispose_frames.append(None)
+                img.seek(img.tell() + 1)
+                frames.append(img.copy())
+            except EOFError:
+                break
+    else:
+        frames = [img.copy()]
+        if hasattr(img, 'dispose'):
+            dispose_frames = [img.dispose]
+
+    # scale it to fit the terminal
+    if not args.no_scale:
+        if args.scale_x:
+            dimentions = [args.scale_x[0], dimentions[1]]
+        if args.scale_y:
+            dimentions = [dimentions[0], args.scale_y[0]]
+        
+        # it seems like each frame must be resized individually 
+        for i in range(len(frames)):
+            frames[i] = shellpic.scale(frames[i], *dimentions)
+
+        try:
+            for i in range(len(dispose_frames)):
+                if dispose_frames[i]:
+                    dispose_frames[i] = shellpic.scale(dispose_frames[i], *dimentions)
+        except ValueError:
+            # how is this possible? This exception should be cought in scale()
+            pass # FIXME do something smart
+
+
+    # convert the image to RGBA, this must be done after any
+    # resizing to prevent artifacts
+    for i in range(len(frames)):
+        frames[i] = frames[i].convert('RGBA')
+    for i in range(len(dispose_frames)):
+        if dispose_frames[i]:
+            dispose_frames[i] = dispose_frames[i].convert('RGBA')
+
+
+
+    # print the image as an animation
+    if args.animate or args.loop:
+        try:
+            delay = float(frame_delay) / 1000
+            print formatter.clear_screen().encode('utf-8')
+            while True:
+                for frame, dispose in zip(frames, dispose_frames):
+                    start = time.time()
+                    print formatter.move_cursor(0, 0).encode('utf-8')
+                    print formatter.format(frame, dispose).encode('utf-8')
+                    done = time.time()
+                    time.sleep(max(0.0 , delay - (done - start)))
+                if not args.loop:
+                    break
+        except KeyboardInterrupt:
+            print formatter.clear_screen().encode('utf-8')
+        except NotImplementedError:
+            sys.stderr.write('Animation is not implemented for ' + formatter.__class__.__name__ + '\n')
+            exit(1)
+    else:
+        # or print the resutl to STDOUT
+        print formatter.format(frames[0]).encode('utf-8')
+
+
+if __name__ == "__main__":
+    main()
