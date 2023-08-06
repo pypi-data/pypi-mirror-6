@@ -1,0 +1,10 @@
+#!python
+# EASY-INSTALL-ENTRY-SCRIPT: 'libsass==0.3.0','console_scripts','sassc'
+__requires__ = 'libsass==0.3.0'
+import sys
+from pkg_resources import load_entry_point
+
+if __name__ == '__main__':
+    sys.exit(
+        load_entry_point('libsass==0.3.0', 'console_scripts', 'sassc')()
+    )
