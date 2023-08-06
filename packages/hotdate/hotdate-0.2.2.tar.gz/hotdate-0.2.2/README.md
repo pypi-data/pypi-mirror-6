@@ -1,0 +1,4 @@
+hotdate
+=======
+
+Intuitive date formatting.
