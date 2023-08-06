@@ -1,0 +1,817 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>setup_pyproject.templates.versioneer &mdash; setup_pyproject unknown documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     'unknown',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="setup_pyproject unknown documentation" href="../../../index.html" />
+    <link rel="up" title="setup_pyproject.templates" href="../templates.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">setup_pyproject unknown documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../templates.html" accesskey="U">setup_pyproject.templates</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for setup_pyproject.templates.versioneer</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/python</span>
+
+<span class="sd">&quot;&quot;&quot;versioneer.py</span>
+
+<span class="sd">(like a rocketeer, but for versions)</span>
+
+<span class="sd">* https://github.com/warner/python-versioneer</span>
+<span class="sd">* Brian Warner (modified by Florian Wilhelm)</span>
+<span class="sd">* License: Public Domain</span>
+<span class="sd">* Version: 0.8+</span>
+
+<span class="sd">This file helps distutils-based projects manage their version number by just</span>
+<span class="sd">creating version-control tags.</span>
+
+<span class="sd">For developers who work from a VCS-generated tree (e.g. &#39;git clone&#39; etc),</span>
+<span class="sd">each &#39;setup.py version&#39;, &#39;setup.py build&#39;, &#39;setup.py sdist&#39; will compute a</span>
+<span class="sd">version number by asking your version-control tool about the current</span>
+<span class="sd">checkout. The version number will be written into a generated _version.py</span>
+<span class="sd">file of your choosing, where it can be included by your __init__.py</span>
+
+<span class="sd">For users who work from a VCS-generated tarball (e.g. &#39;git archive&#39;), it will</span>
+<span class="sd">compute a version number by looking at the name of the directory created when</span>
+<span class="sd">te tarball is unpacked. This conventionally includes both the name of the</span>
+<span class="sd">project and a version number.</span>
+
+<span class="sd">For users who work from a tarball built by &#39;setup.py sdist&#39;, it will get a</span>
+<span class="sd">version number from a previously-generated _version.py file.</span>
+
+<span class="sd">As a result, loading code directly from the source tree will not result in a</span>
+<span class="sd">real version. If you want real versions from VCS trees (where you frequently</span>
+<span class="sd">update from the upstream repository, or do new development), you will need to</span>
+<span class="sd">do a &#39;setup.py version&#39; after each update, and load code from the build/</span>
+<span class="sd">directory.</span>
+
+<span class="sd">You need to provide this code with a few configuration values:</span>
+
+<span class="sd"> versionfile_source:</span>
+<span class="sd">    A project-relative pathname into which the generated version strings</span>
+<span class="sd">    should be written. This is usually a _version.py next to your project&#39;s</span>
+<span class="sd">    main __init__.py file. If your project uses src/myproject/__init__.py,</span>
+<span class="sd">    this should be &#39;src/myproject/_version.py&#39;. This file should be checked</span>
+<span class="sd">    in to your VCS as usual: the copy created below by &#39;setup.py</span>
+<span class="sd">    update_files&#39; will include code that parses expanded VCS keywords in</span>
+<span class="sd">    generated tarballs. The &#39;build&#39; and &#39;sdist&#39; commands will replace it with</span>
+<span class="sd">    a copy that has just the calculated version string.</span>
+
+<span class="sd"> versionfile_build:</span>
+<span class="sd">    Like versionfile_source, but relative to the build directory instead of</span>
+<span class="sd">    the source directory. These will differ when your setup.py uses</span>
+<span class="sd">    &#39;package_dir=&#39;. If you have package_dir={&#39;myproject&#39;: &#39;src/myproject&#39;},</span>
+<span class="sd">    then you will probably have versionfile_build=&#39;myproject/_version.py&#39; and</span>
+<span class="sd">    versionfile_source=&#39;src/myproject/_version.py&#39;.</span>
+
+<span class="sd"> tag_prefix: a string, like &#39;PROJECTNAME-&#39;, which appears at the start of all</span>
+<span class="sd">             VCS tags. If your tags look like &#39;myproject-1.2.0&#39;, then you</span>
+<span class="sd">             should use tag_prefix=&#39;myproject-&#39;. If you use unprefixed tags</span>
+<span class="sd">             like &#39;1.2.0&#39;, this should be an empty string.</span>
+
+<span class="sd"> parentdir_prefix: a string, frequently the same as tag_prefix, which</span>
+<span class="sd">                   appears at the start of all unpacked tarball filenames. If</span>
+<span class="sd">                   your tarball unpacks into &#39;myproject-1.2.0&#39;, this should</span>
+<span class="sd">                   be &#39;myproject-&#39;.</span>
+
+<span class="sd">To use it:</span>
+
+<span class="sd"> 1: include this file in the top level of your project</span>
+<span class="sd"> 2: make the following changes to the top of your setup.py:</span>
+<span class="sd">     import versioneer</span>
+<span class="sd">     versioneer.versionfile_source = &#39;src/myproject/_version.py&#39;</span>
+<span class="sd">     versioneer.versionfile_build = &#39;myproject/_version.py&#39;</span>
+<span class="sd">     versioneer.tag_prefix = &#39;&#39; # tags are like 1.2.0</span>
+<span class="sd">     versioneer.parentdir_prefix = &#39;myproject-&#39; # dirname like &#39;myproject-1.2.0&#39;</span>
+<span class="sd"> 3: add the following arguments to the setup() call in your setup.py:</span>
+<span class="sd">     version=versioneer.get_version(),</span>
+<span class="sd">     cmdclass=versioneer.get_cmdclass(),</span>
+<span class="sd"> 4: run &#39;setup.py update_files&#39;, which will create _version.py, and will</span>
+<span class="sd">    modify your __init__.py to define __version__ (by calling a function</span>
+<span class="sd">    from _version.py)</span>
+<span class="sd"> 5: modify your MANIFEST.in to include versioneer.py</span>
+<span class="sd"> 6: add both versioneer.py and the generated _version.py to your VCS</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">sys</span><span class="o">,</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">distutils.core</span> <span class="kn">import</span> <span class="n">Command</span>
+<span class="kn">from</span> <span class="nn">distutils.command.sdist</span> <span class="kn">import</span> <span class="n">sdist</span> <span class="k">as</span> <span class="n">_sdist</span>
+<span class="kn">from</span> <span class="nn">distutils.command.build</span> <span class="kn">import</span> <span class="n">build</span> <span class="k">as</span> <span class="n">_build</span>
+
+<span class="n">versionfile_source</span> <span class="o">=</span> <span class="bp">None</span>
+<span class="n">versionfile_build</span> <span class="o">=</span> <span class="bp">None</span>
+<span class="n">tag_prefix</span> <span class="o">=</span> <span class="bp">None</span>
+<span class="n">parentdir_prefix</span> <span class="o">=</span> <span class="bp">None</span>
+
+<span class="n">VCS</span> <span class="o">=</span> <span class="s">&quot;git&quot;</span>
+<span class="n">IN_LONG_VERSION_PY</span> <span class="o">=</span> <span class="bp">False</span>
+
+
+<span class="n">LONG_VERSION_PY</span> <span class="o">=</span> <span class="s">&#39;&#39;&#39;</span>
+<span class="s">IN_LONG_VERSION_PY = True</span>
+<span class="s"># This file helps to compute a version number in source trees obtained from</span>
+<span class="s"># git-archive tarball (such as those provided by githubs download-from-tag</span>
+<span class="s"># feature). Distribution tarballs (build by setup.py sdist) and build</span>
+<span class="s"># directories (produced by setup.py build) will contain a much shorter file</span>
+<span class="s"># that just contains the computed version number.</span>
+
+<span class="s"># This file is released into the public domain. Generated by</span>
+<span class="s"># versioneer-0.8+ (https://github.com/warner/python-versioneer)</span>
+
+<span class="s"># these strings will be replaced by git during git-archive</span>
+<span class="s">git_refnames = &quot;</span><span class="si">%(DOLLAR)s</span><span class="s">Format:</span><span class="si">%%</span><span class="s">d</span><span class="si">%(DOLLAR)s</span><span class="s">&quot;</span>
+<span class="s">git_full = &quot;</span><span class="si">%(DOLLAR)s</span><span class="s">Format:</span><span class="si">%%</span><span class="s">H</span><span class="si">%(DOLLAR)s</span><span class="s">&quot;</span>
+
+
+<span class="s">import subprocess</span>
+<span class="s">import sys</span>
+
+<span class="s">def run_command(args, cwd=None, verbose=False, hide_stderr=False):</span>
+<span class="s">    try:</span>
+<span class="s">        # remember shell=False, so use git.cmd on windows, not just git</span>
+<span class="s">        p = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE,</span>
+<span class="s">                             stderr=(subprocess.PIPE if hide_stderr else None))</span>
+<span class="s">    except EnvironmentError:</span>
+<span class="s">        e = sys.exc_info()[1]</span>
+<span class="s">        if verbose:</span>
+<span class="s">            print(&quot;unable to run </span><span class="si">%%</span><span class="s">s&quot; </span><span class="si">%%</span><span class="s"> args[0])</span>
+<span class="s">            print(e)</span>
+<span class="s">        return None</span>
+<span class="s">    stdout = p.communicate()[0].strip()</span>
+<span class="s">    if sys.version &gt;= &#39;3&#39;:</span>
+<span class="s">        stdout = stdout.decode()</span>
+<span class="s">    if p.returncode != 0:</span>
+<span class="s">        if verbose:</span>
+<span class="s">            print(&quot;unable to run </span><span class="si">%%</span><span class="s">s (error)&quot; </span><span class="si">%%</span><span class="s"> args[0])</span>
+<span class="s">        return None</span>
+<span class="s">    return stdout</span>
+
+
+<span class="s">import sys</span>
+<span class="s">import re</span>
+<span class="s">import os.path</span>
+
+<span class="s">def get_expanded_variables(versionfile_source):</span>
+<span class="s">    # the code embedded in _version.py can just fetch the value of these</span>
+<span class="s">    # variables. When used from setup.py, we don&#39;t want to import</span>
+<span class="s">    # _version.py, so we do it with a regexp instead. This function is not</span>
+<span class="s">    # used from _version.py.</span>
+<span class="s">    variables = {}</span>
+<span class="s">    try:</span>
+<span class="s">        f = open(versionfile_source,&quot;r&quot;)</span>
+<span class="s">        for line in f.readlines():</span>
+<span class="s">            if line.strip().startswith(&quot;git_refnames =&quot;):</span>
+<span class="s">                mo = re.search(r&#39;=\s*&quot;(.*)&quot;&#39;, line)</span>
+<span class="s">                if mo:</span>
+<span class="s">                    variables[&quot;refnames&quot;] = mo.group(1)</span>
+<span class="s">            if line.strip().startswith(&quot;git_full =&quot;):</span>
+<span class="s">                mo = re.search(r&#39;=\s*&quot;(.*)&quot;&#39;, line)</span>
+<span class="s">                if mo:</span>
+<span class="s">                    variables[&quot;full&quot;] = mo.group(1)</span>
+<span class="s">        f.close()</span>
+<span class="s">    except EnvironmentError:</span>
+<span class="s">        pass</span>
+<span class="s">    return variables</span>
+
+<span class="s">def versions_from_expanded_variables(variables, tag_prefix, verbose=False):</span>
+<span class="s">    refnames = variables[&quot;refnames&quot;].strip()</span>
+<span class="s">    if refnames.startswith(&quot;$Format&quot;):</span>
+<span class="s">        if verbose:</span>
+<span class="s">            print(&quot;variables are unexpanded, not using&quot;)</span>
+<span class="s">        return {} # unexpanded, so not in an unpacked git-archive tarball</span>
+<span class="s">    refs = set([r.strip() for r in refnames.strip(&quot;()&quot;).split(&quot;,&quot;)])</span>
+<span class="s">    # starting in git-1.8.3, tags are listed as &quot;tag: foo-1.0&quot; instead of</span>
+<span class="s">    # just &quot;foo-1.0&quot;. If we see a &quot;tag: &quot; prefix, prefer those.</span>
+<span class="s">    TAG = &quot;tag: &quot;</span>
+<span class="s">    tags = set([r[len(TAG):] for r in refs if r.startswith(TAG)])</span>
+<span class="s">    if not tags:</span>
+<span class="s">        # Either we&#39;re using git &lt; 1.8.3, or there really are no tags. We use</span>
+<span class="s">        # a heuristic: assume all version tags have a digit. The old git </span><span class="si">%%</span><span class="s">d</span>
+<span class="s">        # expansion behaves like git log --decorate=short and strips out the</span>
+<span class="s">        # refs/heads/ and refs/tags/ prefixes that would let us distinguish</span>
+<span class="s">        # between branches and tags. By ignoring refnames without digits, we</span>
+<span class="s">        # filter out many common branch names like &quot;release&quot; and</span>
+<span class="s">        # &quot;stabilization&quot;, as well as &quot;HEAD&quot; and &quot;master&quot;.</span>
+<span class="s">        tags = set([r for r in refs if re.search(r&#39;\d&#39;, r)])</span>
+<span class="s">        if verbose:</span>
+<span class="s">            print(&quot;discarding &#39;</span><span class="si">%%</span><span class="s">s&#39;, no digits&quot; </span><span class="si">%%</span><span class="s"> &quot;,&quot;.join(refs-tags))</span>
+<span class="s">    if verbose:</span>
+<span class="s">        print(&quot;likely tags: </span><span class="si">%%</span><span class="s">s&quot; </span><span class="si">%%</span><span class="s"> &quot;,&quot;.join(sorted(tags)))</span>
+<span class="s">    for ref in sorted(tags):</span>
+<span class="s">        # sorting will prefer e.g. &quot;2.0&quot; over &quot;2.0rc1&quot;</span>
+<span class="s">        if ref.startswith(tag_prefix):</span>
+<span class="s">            r = ref[len(tag_prefix):]</span>
+<span class="s">            if verbose:</span>
+<span class="s">                print(&quot;picking </span><span class="si">%%</span><span class="s">s&quot; </span><span class="si">%%</span><span class="s"> r)</span>
+<span class="s">            return { &quot;version&quot;: r,</span>
+<span class="s">                     &quot;full&quot;: variables[&quot;full&quot;].strip() }</span>
+<span class="s">    # no suitable tags, so we use the full revision id</span>
+<span class="s">    if verbose:</span>
+<span class="s">        print(&quot;no suitable tags, using full revision id&quot;)</span>
+<span class="s">    return { &quot;version&quot;: variables[&quot;full&quot;].strip(),</span>
+<span class="s">             &quot;full&quot;: variables[&quot;full&quot;].strip() }</span>
+
+<span class="s">def versions_from_vcs(tag_prefix, versionfile_source, verbose=False):</span>
+<span class="s">    # this runs &#39;git&#39; from the root of the source tree. That either means</span>
+<span class="s">    # someone ran a setup.py command (and this code is in versioneer.py, so</span>
+<span class="s">    # IN_LONG_VERSION_PY=False, thus the containing directory is the root of</span>
+<span class="s">    # the source tree), or someone ran a project-specific entry point (and</span>
+<span class="s">    # this code is in _version.py, so IN_LONG_VERSION_PY=True, thus the</span>
+<span class="s">    # containing directory is somewhere deeper in the source tree). This only</span>
+<span class="s">    # gets called if the git-archive &#39;subst&#39; variables were *not* expanded,</span>
+<span class="s">    # and _version.py hasn&#39;t already been rewritten with a short version</span>
+<span class="s">    # string, meaning we&#39;re inside a checked out source tree.</span>
+
+<span class="s">    try:</span>
+<span class="s">        here = os.path.abspath(__file__)</span>
+<span class="s">    except NameError:</span>
+<span class="s">        # some py2exe/bbfreeze/non-CPython implementations don&#39;t do __file__</span>
+<span class="s">        return {} # not always correct</span>
+
+<span class="s">    GIT = &quot;git&quot;</span>
+<span class="s">    if sys.platform == &quot;win32&quot;:</span>
+<span class="s">        GIT = &quot;git.cmd&quot;</span>
+
+<span class="s">    # versionfile_source is the relative path from the top of the source tree</span>
+<span class="s">    # (where the .git directory might live) to this file. Invert this to find</span>
+<span class="s">    # the root from __file__.</span>
+<span class="s">    root = here</span>
+<span class="s">    if IN_LONG_VERSION_PY:</span>
+<span class="s">        for i in range(len(versionfile_source.split(&quot;/&quot;))):</span>
+<span class="s">            root = os.path.dirname(root)</span>
+<span class="s">    else:</span>
+<span class="s">        toplevel = run_command([GIT, &quot;rev-parse&quot;, &quot;--show-toplevel&quot;],</span>
+<span class="s">                               hide_stderr=True)</span>
+<span class="s">        root = (toplevel.strip() if toplevel else os.path.dirname(here))</span>
+<span class="s">    if not os.path.exists(os.path.join(root, &quot;.git&quot;)):</span>
+<span class="s">        if verbose:</span>
+<span class="s">            print(&quot;no .git in </span><span class="si">%%</span><span class="s">s&quot; </span><span class="si">%%</span><span class="s"> root)</span>
+<span class="s">        return {}</span>
+
+<span class="s">    stdout = run_command([GIT, &quot;describe&quot;, &quot;--tags&quot;, &quot;--dirty&quot;, &quot;--always&quot;],</span>
+<span class="s">                         cwd=root)</span>
+<span class="s">    if stdout is None:</span>
+<span class="s">        return {}</span>
+<span class="s">    if not stdout.startswith(tag_prefix):</span>
+<span class="s">        if verbose:</span>
+<span class="s">            print(&quot;tag &#39;</span><span class="si">%%</span><span class="s">s&#39; doesn&#39;t start with prefix &#39;</span><span class="si">%%</span><span class="s">s&#39;&quot; </span><span class="si">%%</span><span class="s"> (stdout, tag_prefix))</span>
+<span class="s">        return {}</span>
+<span class="s">    tag = stdout[len(tag_prefix):]</span>
+<span class="s">    stdout = run_command([GIT, &quot;rev-parse&quot;, &quot;HEAD&quot;], cwd=root)</span>
+<span class="s">    if stdout is None:</span>
+<span class="s">        return {}</span>
+<span class="s">    full = stdout.strip()</span>
+<span class="s">    if tag.endswith(&quot;-dirty&quot;):</span>
+<span class="s">        full += &quot;-dirty&quot;</span>
+<span class="s">    return {&quot;version&quot;: tag, &quot;full&quot;: full}</span>
+
+
+<span class="s">def versions_from_parentdir(parentdir_prefix, versionfile_source, verbose=False):</span>
+<span class="s">    if IN_LONG_VERSION_PY:</span>
+<span class="s">        # We&#39;re running from _version.py. If it&#39;s from a source tree</span>
+<span class="s">        # (execute-in-place), we can work upwards to find the root of the</span>
+<span class="s">        # tree, and then check the parent directory for a version string. If</span>
+<span class="s">        # it&#39;s in an installed application, there&#39;s no hope.</span>
+<span class="s">        try:</span>
+<span class="s">            here = os.path.abspath(__file__)</span>
+<span class="s">        except NameError:</span>
+<span class="s">            # py2exe/bbfreeze/non-CPython don&#39;t have __file__</span>
+<span class="s">            return {} # without __file__, we have no hope</span>
+<span class="s">        # versionfile_source is the relative path from the top of the source</span>
+<span class="s">        # tree to _version.py. Invert this to find the root from __file__.</span>
+<span class="s">        root = here</span>
+<span class="s">        for i in range(len(versionfile_source.split(&quot;/&quot;))):</span>
+<span class="s">            root = os.path.dirname(root)</span>
+<span class="s">    else:</span>
+<span class="s">        # we&#39;re running from versioneer.py, which means we&#39;re running from</span>
+<span class="s">        # the setup.py in a source tree. sys.argv[0] is setup.py in the root.</span>
+<span class="s">        here = os.path.abspath(sys.argv[0])</span>
+<span class="s">        root = os.path.dirname(here)</span>
+
+<span class="s">    # Source tarballs conventionally unpack into a directory that includes</span>
+<span class="s">    # both the project name and a version string.</span>
+<span class="s">    dirname = os.path.basename(root)</span>
+<span class="s">    if not dirname.startswith(parentdir_prefix):</span>
+<span class="s">        if verbose:</span>
+<span class="s">            print(&quot;guessing rootdir is &#39;</span><span class="si">%%</span><span class="s">s&#39;, but &#39;</span><span class="si">%%</span><span class="s">s&#39; doesn&#39;t start with prefix &#39;</span><span class="si">%%</span><span class="s">s&#39;&quot; </span><span class="si">%%</span><span class="s"></span>
+<span class="s">                  (root, dirname, parentdir_prefix))</span>
+<span class="s">        return None</span>
+<span class="s">    return {&quot;version&quot;: dirname[len(parentdir_prefix):], &quot;full&quot;: &quot;&quot;}</span>
+
+<span class="s">tag_prefix = &quot;</span><span class="si">%(TAG_PREFIX)s</span><span class="s">&quot;</span>
+<span class="s">parentdir_prefix = &quot;</span><span class="si">%(PARENTDIR_PREFIX)s</span><span class="s">&quot;</span>
+<span class="s">versionfile_source = &quot;</span><span class="si">%(VERSIONFILE_SOURCE)s</span><span class="s">&quot;</span>
+
+<span class="s">def get_versions(default={&quot;version&quot;: &quot;unknown&quot;, &quot;full&quot;: &quot;&quot;}, verbose=False):</span>
+<span class="s">    variables = { &quot;refnames&quot;: git_refnames, &quot;full&quot;: git_full }</span>
+<span class="s">    ver = versions_from_expanded_variables(variables, tag_prefix, verbose)</span>
+<span class="s">    if not ver:</span>
+<span class="s">        ver = versions_from_vcs(tag_prefix, versionfile_source, verbose)</span>
+<span class="s">    if not ver:</span>
+<span class="s">        ver = versions_from_parentdir(parentdir_prefix, versionfile_source,</span>
+<span class="s">                                      verbose)</span>
+<span class="s">    if not ver:</span>
+<span class="s">        ver = default</span>
+<span class="s">    return rep_by_pep440(ver)</span>
+
+<span class="s">def git2pep440(ver_str):</span>
+<span class="s">    try:</span>
+<span class="s">        tag, commits, _ = ver_str.split(&#39;-&#39;, 2)</span>
+<span class="s">        return &quot;.post&quot;.join([tag, commits])</span>
+<span class="s">    except ValueError:</span>
+<span class="s">        return ver_str</span>
+
+<span class="s">def rep_by_pep440(ver):</span>
+<span class="s">    ver[&quot;version&quot;] = git2pep440(ver[&quot;version&quot;])</span>
+<span class="s">    return ver</span>
+
+<span class="s">&#39;&#39;&#39;</span>
+
+
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<div class="viewcode-block" id="run_command"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.run_command">[docs]</a><span class="k">def</span> <span class="nf">run_command</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">cwd</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">hide_stderr</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c"># remember shell=False, so use git.cmd on windows, not just git</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">cwd</span><span class="o">=</span><span class="n">cwd</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span>
+                             <span class="n">stderr</span><span class="o">=</span><span class="p">(</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span> <span class="k">if</span> <span class="n">hide_stderr</span> <span class="k">else</span> <span class="bp">None</span><span class="p">))</span>
+    <span class="k">except</span> <span class="ne">EnvironmentError</span><span class="p">:</span>
+        <span class="n">e</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;unable to run </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="k">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">None</span>
+    <span class="n">stdout</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">communicate</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version</span> <span class="o">&gt;=</span> <span class="s">&#39;3&#39;</span><span class="p">:</span>
+        <span class="n">stdout</span> <span class="o">=</span> <span class="n">stdout</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">returncode</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;unable to run </span><span class="si">%s</span><span class="s"> (error)&quot;</span> <span class="o">%</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">return</span> <span class="bp">None</span>
+    <span class="k">return</span> <span class="n">stdout</span>
+
+</div>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">os.path</span>
+
+<div class="viewcode-block" id="get_expanded_variables"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.get_expanded_variables">[docs]</a><span class="k">def</span> <span class="nf">get_expanded_variables</span><span class="p">(</span><span class="n">versionfile_source</span><span class="p">):</span>
+    <span class="c"># the code embedded in _version.py can just fetch the value of these</span>
+    <span class="c"># variables. When used from setup.py, we don&#39;t want to import</span>
+    <span class="c"># _version.py, so we do it with a regexp instead. This function is not</span>
+    <span class="c"># used from _version.py.</span>
+    <span class="n">variables</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">versionfile_source</span><span class="p">,</span> <span class="s">&quot;r&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">readlines</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&quot;git_refnames =&quot;</span><span class="p">):</span>
+                <span class="n">mo</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">r&#39;=\s*&quot;(.*)&quot;&#39;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">mo</span><span class="p">:</span>
+                    <span class="n">variables</span><span class="p">[</span><span class="s">&quot;refnames&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mo</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&quot;git_full =&quot;</span><span class="p">):</span>
+                <span class="n">mo</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">r&#39;=\s*&quot;(.*)&quot;&#39;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">mo</span><span class="p">:</span>
+                    <span class="n">variables</span><span class="p">[</span><span class="s">&quot;full&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mo</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">except</span> <span class="ne">EnvironmentError</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="k">return</span> <span class="n">variables</span>
+</div>
+<div class="viewcode-block" id="versions_from_expanded_variables"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.versions_from_expanded_variables">[docs]</a><span class="k">def</span> <span class="nf">versions_from_expanded_variables</span><span class="p">(</span><span class="n">variables</span><span class="p">,</span> <span class="n">tag_prefix</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="n">refnames</span> <span class="o">=</span> <span class="n">variables</span><span class="p">[</span><span class="s">&quot;refnames&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">refnames</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&quot;$Format&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;variables are unexpanded, not using&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{}</span>  <span class="c"># unexpanded, so not in an unpacked git-archive tarball</span>
+    <span class="n">refs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">r</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">refnames</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s">&quot;()&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;,&quot;</span><span class="p">)])</span>
+    <span class="c"># starting in git-1.8.3, tags are listed as &quot;tag: foo-1.0&quot; instead of</span>
+    <span class="c"># just &quot;foo-1.0&quot;. If we see a &quot;tag: &quot; prefix, prefer those.</span>
+    <span class="n">TAG</span> <span class="o">=</span> <span class="s">&quot;tag: &quot;</span>
+    <span class="n">tags</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">TAG</span><span class="p">):]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">refs</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">TAG</span><span class="p">)])</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">tags</span><span class="p">:</span>
+        <span class="c"># Either we&#39;re using git &lt; 1.8.3, or there really are no tags. We use</span>
+        <span class="c"># a heuristic: assume all version tags have a digit. The old git %d</span>
+        <span class="c"># expansion behaves like git log --decorate=short and strips out the</span>
+        <span class="c"># refs/heads/ and refs/tags/ prefixes that would let us distinguish</span>
+        <span class="c"># between branches and tags. By ignoring refnames without digits, we</span>
+        <span class="c"># filter out many common branch names like &quot;release&quot; and</span>
+        <span class="c"># &quot;stabilization&quot;, as well as &quot;HEAD&quot; and &quot;master&quot;.</span>
+        <span class="n">tags</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">refs</span> <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">r&#39;\d&#39;</span><span class="p">,</span> <span class="n">r</span><span class="p">)])</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;discarding &#39;</span><span class="si">%s</span><span class="s">&#39;, no digits&quot;</span> <span class="o">%</span> <span class="s">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">refs</span> <span class="o">-</span> <span class="n">tags</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;likely tags: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="s">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">tags</span><span class="p">)))</span>
+    <span class="k">for</span> <span class="n">ref</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">tags</span><span class="p">):</span>
+        <span class="c"># sorting will prefer e.g. &quot;2.0&quot; over &quot;2.0rc1&quot;</span>
+        <span class="k">if</span> <span class="n">ref</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">tag_prefix</span><span class="p">):</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">ref</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">tag_prefix</span><span class="p">):]</span>
+            <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                <span class="k">print</span><span class="p">(</span><span class="s">&quot;picking </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">r</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{</span> <span class="s">&quot;version&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">,</span>
+                     <span class="s">&quot;full&quot;</span><span class="p">:</span> <span class="n">variables</span><span class="p">[</span><span class="s">&quot;full&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="p">}</span>
+    <span class="c"># no suitable tags, so we use the full revision id</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;no suitable tags, using full revision id&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span> <span class="s">&quot;version&quot;</span><span class="p">:</span> <span class="n">variables</span><span class="p">[</span><span class="s">&quot;full&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+             <span class="s">&quot;full&quot;</span><span class="p">:</span> <span class="n">variables</span><span class="p">[</span><span class="s">&quot;full&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="p">}</span>
+</div>
+<div class="viewcode-block" id="versions_from_vcs"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.versions_from_vcs">[docs]</a><span class="k">def</span> <span class="nf">versions_from_vcs</span><span class="p">(</span><span class="n">tag_prefix</span><span class="p">,</span> <span class="n">versionfile_source</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="c"># this runs &#39;git&#39; from the root of the source tree. That either means</span>
+    <span class="c"># someone ran a setup.py command (and this code is in versioneer.py, so</span>
+    <span class="c"># IN_LONG_VERSION_PY=False, thus the containing directory is the root of</span>
+    <span class="c"># the source tree), or someone ran a project-specific entry point (and</span>
+    <span class="c"># this code is in _version.py, so IN_LONG_VERSION_PY=True, thus the</span>
+    <span class="c"># containing directory is somewhere deeper in the source tree). This only</span>
+    <span class="c"># gets called if the git-archive &#39;subst&#39; variables were *not* expanded,</span>
+    <span class="c"># and _version.py hasn&#39;t already been rewritten with a short version</span>
+    <span class="c"># string, meaning we&#39;re inside a checked out source tree.</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">here</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">NameError</span><span class="p">:</span>
+        <span class="c"># some py2exe/bbfreeze/non-CPython implementations don&#39;t do __file__</span>
+        <span class="k">return</span> <span class="p">{}</span>  <span class="c"># not always correct</span>
+
+    <span class="n">GIT</span> <span class="o">=</span> <span class="s">&quot;git&quot;</span>
+    <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s">&quot;win32&quot;</span><span class="p">:</span>
+        <span class="n">GIT</span> <span class="o">=</span> <span class="s">&quot;git.cmd&quot;</span>
+
+    <span class="c"># versionfile_source is the relative path from the top of the source tree</span>
+    <span class="c"># (where the .git directory might live) to this file. Invert this to find</span>
+    <span class="c"># the root from __file__.</span>
+    <span class="n">root</span> <span class="o">=</span> <span class="n">here</span>
+    <span class="k">if</span> <span class="n">IN_LONG_VERSION_PY</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">versionfile_source</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">))):</span>
+            <span class="n">root</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">toplevel</span> <span class="o">=</span> <span class="n">run_command</span><span class="p">([</span><span class="n">GIT</span><span class="p">,</span> <span class="s">&quot;rev-parse&quot;</span><span class="p">,</span> <span class="s">&quot;--show-toplevel&quot;</span><span class="p">],</span>
+                               <span class="n">hide_stderr</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="p">(</span><span class="n">toplevel</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">if</span> <span class="n">toplevel</span> <span class="k">else</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">here</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="s">&quot;.git&quot;</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;no .git in </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">root</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{}</span>
+
+    <span class="n">stdout</span> <span class="o">=</span> <span class="n">run_command</span><span class="p">([</span><span class="n">GIT</span><span class="p">,</span> <span class="s">&quot;describe&quot;</span><span class="p">,</span> <span class="s">&quot;--tags&quot;</span><span class="p">,</span> <span class="s">&quot;--dirty&quot;</span><span class="p">,</span> <span class="s">&quot;--always&quot;</span><span class="p">],</span>
+                         <span class="n">cwd</span><span class="o">=</span><span class="n">root</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">stdout</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">stdout</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">tag_prefix</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;tag &#39;</span><span class="si">%s</span><span class="s">&#39; doesn&#39;t start with prefix &#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">stdout</span><span class="p">,</span> <span class="n">tag_prefix</span><span class="p">))</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="n">tag</span> <span class="o">=</span> <span class="n">stdout</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">tag_prefix</span><span class="p">):]</span>
+    <span class="n">stdout</span> <span class="o">=</span> <span class="n">run_command</span><span class="p">([</span><span class="n">GIT</span><span class="p">,</span> <span class="s">&quot;rev-parse&quot;</span><span class="p">,</span> <span class="s">&quot;HEAD&quot;</span><span class="p">],</span> <span class="n">cwd</span><span class="o">=</span><span class="n">root</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">stdout</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="n">full</span> <span class="o">=</span> <span class="n">stdout</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">tag</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&quot;-dirty&quot;</span><span class="p">):</span>
+        <span class="n">full</span> <span class="o">+=</span> <span class="s">&quot;-dirty&quot;</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s">&quot;version&quot;</span><span class="p">:</span> <span class="n">tag</span><span class="p">,</span> <span class="s">&quot;full&quot;</span><span class="p">:</span> <span class="n">full</span><span class="p">}</span>
+
+</div>
+<div class="viewcode-block" id="versions_from_parentdir"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.versions_from_parentdir">[docs]</a><span class="k">def</span> <span class="nf">versions_from_parentdir</span><span class="p">(</span><span class="n">parentdir_prefix</span><span class="p">,</span> <span class="n">versionfile_source</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">IN_LONG_VERSION_PY</span><span class="p">:</span>
+        <span class="c"># We&#39;re running from _version.py. If it&#39;s from a source tree</span>
+        <span class="c"># (execute-in-place), we can work upwards to find the root of the</span>
+        <span class="c"># tree, and then check the parent directory for a version string. If</span>
+        <span class="c"># it&#39;s in an installed application, there&#39;s no hope.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">here</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">NameError</span><span class="p">:</span>
+            <span class="c"># py2exe/bbfreeze/non-CPython don&#39;t have __file__</span>
+            <span class="k">return</span> <span class="p">{}</span>  <span class="c"># without __file__, we have no hope</span>
+        <span class="c"># versionfile_source is the relative path from the top of the source</span>
+        <span class="c"># tree to _version.py. Invert this to find the root from __file__.</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">here</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">versionfile_source</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">))):</span>
+            <span class="n">root</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c"># we&#39;re running from versioneer.py, which means we&#39;re running from</span>
+        <span class="c"># the setup.py in a source tree. sys.argv[0] is setup.py in the root.</span>
+        <span class="n">here</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">here</span><span class="p">)</span>
+
+    <span class="c"># Source tarballs conventionally unpack into a directory that includes</span>
+    <span class="c"># both the project name and a version string.</span>
+    <span class="n">dirname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">dirname</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">parentdir_prefix</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;guessing rootdir is &#39;</span><span class="si">%s</span><span class="s">&#39;, but &#39;</span><span class="si">%s</span><span class="s">&#39; doesn&#39;t start with prefix &#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span> <span class="o">%</span>
+                  <span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dirname</span><span class="p">,</span> <span class="n">parentdir_prefix</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">None</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s">&quot;version&quot;</span><span class="p">:</span> <span class="n">dirname</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">parentdir_prefix</span><span class="p">):],</span> <span class="s">&quot;full&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">}</span></div>
+<span class="kn">import</span> <span class="nn">os.path</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="c"># os.path.relpath only appeared in Python-2.6 . Define it here for 2.5.</span>
+<div class="viewcode-block" id="os_path_relpath"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.os_path_relpath">[docs]</a><span class="k">def</span> <span class="nf">os_path_relpath</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">curdir</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a relative version of a path&quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">path</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;no path specified&quot;</span><span class="p">)</span>
+
+    <span class="n">start_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">start</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="p">]</span>
+    <span class="n">path_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="p">]</span>
+
+    <span class="c"># Work out how much of the filepath is shared by start and path.</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">commonprefix</span><span class="p">([</span><span class="n">start_list</span><span class="p">,</span> <span class="n">path_list</span><span class="p">]))</span>
+
+    <span class="n">rel_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">pardir</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">start_list</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="n">path_list</span><span class="p">[</span><span class="n">i</span><span class="p">:]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">rel_list</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">curdir</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="o">*</span><span class="n">rel_list</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="do_vcs_install"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.do_vcs_install">[docs]</a><span class="k">def</span> <span class="nf">do_vcs_install</span><span class="p">(</span><span class="n">versionfile_source</span><span class="p">,</span> <span class="n">ipy</span><span class="p">):</span>
+    <span class="n">GIT</span> <span class="o">=</span> <span class="s">&quot;git&quot;</span>
+    <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span> <span class="o">==</span> <span class="s">&quot;win32&quot;</span><span class="p">:</span>
+        <span class="n">GIT</span> <span class="o">=</span> <span class="s">&quot;git.cmd&quot;</span>
+    <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="n">versionfile_source</span><span class="p">,</span> <span class="n">ipy</span><span class="p">]</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">me</span> <span class="o">=</span> <span class="n">__file__</span>
+        <span class="k">if</span> <span class="n">me</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&quot;.pyc&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">me</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&quot;.pyo&quot;</span><span class="p">):</span>
+            <span class="n">me</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">me</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s">&quot;.py&quot;</span>
+        <span class="n">versioneer_file</span> <span class="o">=</span> <span class="n">os_path_relpath</span><span class="p">(</span><span class="n">me</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">NameError</span><span class="p">:</span>
+        <span class="n">versioneer_file</span> <span class="o">=</span> <span class="s">&quot;versioneer.py&quot;</span>
+    <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">versioneer_file</span><span class="p">)</span>
+    <span class="n">present</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s">&quot;.gitattributes&quot;</span><span class="p">,</span> <span class="s">&quot;r&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">readlines</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">versionfile_source</span><span class="p">):</span>
+                <span class="k">if</span> <span class="s">&quot;export-subst&quot;</span> <span class="ow">in</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">1</span><span class="p">:]:</span>
+                    <span class="n">present</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">except</span> <span class="ne">EnvironmentError</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">present</span><span class="p">:</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s">&quot;.gitattributes&quot;</span><span class="p">,</span> <span class="s">&quot;a+&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s"> export-subst</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">versionfile_source</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&quot;.gitattributes&quot;</span><span class="p">)</span>
+    <span class="n">run_command</span><span class="p">([</span><span class="n">GIT</span><span class="p">,</span> <span class="s">&quot;add&quot;</span><span class="p">,</span> <span class="s">&quot;--&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="n">files</span><span class="p">)</span>
+</div>
+<span class="n">SHORT_VERSION_PY</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s"># This file was generated by &#39;versioneer.py&#39; (0.8+) from</span>
+<span class="s"># revision-control system data, or from the parent directory name of an</span>
+<span class="s"># unpacked source archive. Distribution tarballs contain a pre-generated copy</span>
+<span class="s"># of this file.</span>
+
+<span class="s">version_version = &#39;</span><span class="si">%(version)s</span><span class="s">&#39;</span>
+<span class="s">version_full = &#39;</span><span class="si">%(full)s</span><span class="s">&#39;</span>
+<span class="s">def get_versions(default={}, verbose=False):</span>
+<span class="s">    return {&#39;version&#39;: version_version, &#39;full&#39;: version_full}</span>
+
+<span class="s">&quot;&quot;&quot;</span>
+
+<span class="n">DEFAULT</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;version&quot;</span><span class="p">:</span> <span class="s">&quot;unknown&quot;</span><span class="p">,</span> <span class="s">&quot;full&quot;</span><span class="p">:</span> <span class="s">&quot;unknown&quot;</span><span class="p">}</span>
+
+<div class="viewcode-block" id="versions_from_file"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.versions_from_file">[docs]</a><span class="k">def</span> <span class="nf">versions_from_file</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="n">versions</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">EnvironmentError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">versions</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">readlines</span><span class="p">():</span>
+        <span class="n">mo</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s">&quot;version_version = &#39;([^&#39;]+)&#39;&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">mo</span><span class="p">:</span>
+            <span class="n">versions</span><span class="p">[</span><span class="s">&quot;version&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mo</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">mo</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s">&quot;version_full = &#39;([^&#39;]+)&#39;&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">mo</span><span class="p">:</span>
+            <span class="n">versions</span><span class="p">[</span><span class="s">&quot;full&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mo</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">versions</span>
+</div>
+<div class="viewcode-block" id="write_to_version_file"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.write_to_version_file">[docs]</a><span class="k">def</span> <span class="nf">write_to_version_file</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">versions</span><span class="p">):</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">SHORT_VERSION_PY</span> <span class="o">%</span> <span class="n">versions</span><span class="p">)</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">print</span><span class="p">(</span><span class="s">&quot;set </span><span class="si">%s</span><span class="s"> to &#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">versions</span><span class="p">[</span><span class="s">&quot;version&quot;</span><span class="p">]))</span>
+
+</div>
+<div class="viewcode-block" id="get_best_versions"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.get_best_versions">[docs]</a><span class="k">def</span> <span class="nf">get_best_versions</span><span class="p">(</span><span class="n">versionfile</span><span class="p">,</span> <span class="n">tag_prefix</span><span class="p">,</span> <span class="n">parentdir_prefix</span><span class="p">,</span>
+                      <span class="n">default</span><span class="o">=</span><span class="n">DEFAULT</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="c"># returns dict with two keys: &#39;version&#39; and &#39;full&#39;</span>
+    <span class="c">#</span>
+    <span class="c"># extract version from first of _version.py, &#39;git describe&#39;, parentdir.</span>
+    <span class="c"># This is meant to work for developers using a source checkout, for users</span>
+    <span class="c"># of a tarball created by &#39;setup.py sdist&#39;, and for users of a</span>
+    <span class="c"># tarball/zipball created by &#39;git archive&#39; or github&#39;s download-from-tag</span>
+    <span class="c"># feature.</span>
+
+    <span class="n">variables</span> <span class="o">=</span> <span class="n">get_expanded_variables</span><span class="p">(</span><span class="n">versionfile_source</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">variables</span><span class="p">:</span>
+        <span class="n">ver</span> <span class="o">=</span> <span class="n">versions_from_expanded_variables</span><span class="p">(</span><span class="n">variables</span><span class="p">,</span> <span class="n">tag_prefix</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ver</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="k">print</span><span class="p">(</span><span class="s">&quot;got version from expanded variable </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">ver</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">rep_by_pep440</span><span class="p">(</span><span class="n">ver</span><span class="p">)</span>
+
+    <span class="n">ver</span> <span class="o">=</span> <span class="n">versions_from_file</span><span class="p">(</span><span class="n">versionfile</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ver</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="k">print</span><span class="p">(</span><span class="s">&quot;got version from file </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">versionfile</span><span class="p">,</span> <span class="n">ver</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">rep_by_pep440</span><span class="p">(</span><span class="n">ver</span><span class="p">)</span>
+
+    <span class="n">ver</span> <span class="o">=</span> <span class="n">versions_from_vcs</span><span class="p">(</span><span class="n">tag_prefix</span><span class="p">,</span> <span class="n">versionfile_source</span><span class="p">,</span> <span class="n">verbose</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ver</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="k">print</span><span class="p">(</span><span class="s">&quot;got version from git </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">ver</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">rep_by_pep440</span><span class="p">(</span><span class="n">ver</span><span class="p">)</span>
+
+    <span class="n">ver</span> <span class="o">=</span> <span class="n">versions_from_parentdir</span><span class="p">(</span><span class="n">parentdir_prefix</span><span class="p">,</span> <span class="n">versionfile_source</span><span class="p">,</span> <span class="n">verbose</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ver</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="k">print</span><span class="p">(</span><span class="s">&quot;got version from parentdir </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">ver</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">rep_by_pep440</span><span class="p">(</span><span class="n">ver</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="k">print</span><span class="p">(</span><span class="s">&quot;got version from default </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">ver</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">default</span>
+</div>
+<div class="viewcode-block" id="get_versions"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.get_versions">[docs]</a><span class="k">def</span> <span class="nf">get_versions</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="n">DEFAULT</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="n">versionfile_source</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">,</span> <span class="s">&quot;please set versioneer.versionfile_source&quot;</span>
+    <span class="k">assert</span> <span class="n">tag_prefix</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">,</span> <span class="s">&quot;please set versioneer.tag_prefix&quot;</span>
+    <span class="k">assert</span> <span class="n">parentdir_prefix</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">,</span> <span class="s">&quot;please set versioneer.parentdir_prefix&quot;</span>
+    <span class="k">return</span> <span class="n">get_best_versions</span><span class="p">(</span><span class="n">versionfile_source</span><span class="p">,</span> <span class="n">tag_prefix</span><span class="p">,</span> <span class="n">parentdir_prefix</span><span class="p">,</span>
+                             <span class="n">default</span><span class="o">=</span><span class="n">default</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span></div>
+<div class="viewcode-block" id="get_version"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.get_version">[docs]</a><span class="k">def</span> <span class="nf">get_version</span><span class="p">(</span><span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">get_versions</span><span class="p">(</span><span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)[</span><span class="s">&quot;version&quot;</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="cmd_version"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_version">[docs]</a><span class="k">class</span> <span class="nc">cmd_version</span><span class="p">(</span><span class="n">Command</span><span class="p">):</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;report generated version string&quot;</span>
+    <span class="n">user_options</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">boolean_options</span> <span class="o">=</span> <span class="p">[]</span>
+<div class="viewcode-block" id="cmd_version.initialize_options"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_version.initialize_options">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_options</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+<div class="viewcode-block" id="cmd_version.finalize_options"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_version.finalize_options">[docs]</a>    <span class="k">def</span> <span class="nf">finalize_options</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+<div class="viewcode-block" id="cmd_version.run"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_version.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">ver</span> <span class="o">=</span> <span class="n">get_version</span><span class="p">(</span><span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;Version is currently: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">ver</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="cmd_build"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_build">[docs]</a><span class="k">class</span> <span class="nc">cmd_build</span><span class="p">(</span><span class="n">_build</span><span class="p">):</span>
+<div class="viewcode-block" id="cmd_build.run"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_build.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">versions</span> <span class="o">=</span> <span class="n">get_versions</span><span class="p">(</span><span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">_build</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="c"># now locate _version.py in the new build/ directory and replace it</span>
+        <span class="c"># with an updated value</span>
+        <span class="n">target_versionfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">build_lib</span><span class="p">,</span> <span class="n">versionfile_build</span><span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;UPDATING </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">target_versionfile</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">target_versionfile</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">target_versionfile</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">SHORT_VERSION_PY</span> <span class="o">%</span> <span class="n">versions</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</div></div>
+<div class="viewcode-block" id="cmd_sdist"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_sdist">[docs]</a><span class="k">class</span> <span class="nc">cmd_sdist</span><span class="p">(</span><span class="n">_sdist</span><span class="p">):</span>
+<div class="viewcode-block" id="cmd_sdist.run"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_sdist.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">versions</span> <span class="o">=</span> <span class="n">get_versions</span><span class="p">(</span><span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_versioneer_generated_versions</span> <span class="o">=</span> <span class="n">versions</span>
+        <span class="c"># unless we update this, the command will keep using the old version</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">distribution</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">version</span> <span class="o">=</span> <span class="n">versions</span><span class="p">[</span><span class="s">&quot;version&quot;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">_sdist</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="cmd_sdist.make_release_tree"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_sdist.make_release_tree">[docs]</a>    <span class="k">def</span> <span class="nf">make_release_tree</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base_dir</span><span class="p">,</span> <span class="n">files</span><span class="p">):</span>
+        <span class="n">_sdist</span><span class="o">.</span><span class="n">make_release_tree</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base_dir</span><span class="p">,</span> <span class="n">files</span><span class="p">)</span>
+        <span class="c"># now locate _version.py in the new base_dir directory (remembering</span>
+        <span class="c"># that it may be a hardlink) and replace it with an updated value</span>
+        <span class="n">target_versionfile</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_dir</span><span class="p">,</span> <span class="n">versionfile_source</span><span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot;UPDATING </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">target_versionfile</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">target_versionfile</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">target_versionfile</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">SHORT_VERSION_PY</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">_versioneer_generated_versions</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</div></div>
+<span class="n">INIT_PY_SNIPPET</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">from ._version import get_versions</span>
+<span class="s">__version__ = get_versions()[&#39;version&#39;]</span>
+<span class="s">del get_versions</span>
+<span class="s">&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="cmd_update_files"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_update_files">[docs]</a><span class="k">class</span> <span class="nc">cmd_update_files</span><span class="p">(</span><span class="n">Command</span><span class="p">):</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;modify __init__.py and create _version.py&quot;</span>
+    <span class="n">user_options</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">boolean_options</span> <span class="o">=</span> <span class="p">[]</span>
+<div class="viewcode-block" id="cmd_update_files.initialize_options"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_update_files.initialize_options">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_options</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+<div class="viewcode-block" id="cmd_update_files.finalize_options"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_update_files.finalize_options">[docs]</a>    <span class="k">def</span> <span class="nf">finalize_options</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+<div class="viewcode-block" id="cmd_update_files.run"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.cmd_update_files.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">ipy</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">versionfile_source</span><span class="p">),</span> <span class="s">&quot;__init__.py&quot;</span><span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">&quot; creating </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">versionfile_source</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">versionfile_source</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">LONG_VERSION_PY</span> <span class="o">%</span> <span class="p">{</span><span class="s">&quot;DOLLAR&quot;</span><span class="p">:</span> <span class="s">&quot;$&quot;</span><span class="p">,</span>
+                                   <span class="s">&quot;TAG_PREFIX&quot;</span><span class="p">:</span> <span class="n">tag_prefix</span><span class="p">,</span>
+                                   <span class="s">&quot;PARENTDIR_PREFIX&quot;</span><span class="p">:</span> <span class="n">parentdir_prefix</span><span class="p">,</span>
+                                   <span class="s">&quot;VERSIONFILE_SOURCE&quot;</span><span class="p">:</span> <span class="n">versionfile_source</span><span class="p">,</span>
+                                   <span class="p">})</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">old</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">ipy</span><span class="p">,</span> <span class="s">&quot;r&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">EnvironmentError</span><span class="p">:</span>
+            <span class="n">old</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">INIT_PY_SNIPPET</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">old</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot; appending to </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">ipy</span><span class="p">)</span>
+            <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">ipy</span><span class="p">,</span> <span class="s">&quot;a&quot;</span><span class="p">)</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">INIT_PY_SNIPPET</span><span class="p">)</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot; </span><span class="si">%s</span><span class="s"> unmodified&quot;</span> <span class="o">%</span> <span class="n">ipy</span><span class="p">)</span>
+        <span class="n">do_vcs_install</span><span class="p">(</span><span class="n">versionfile_source</span><span class="p">,</span> <span class="n">ipy</span><span class="p">)</span>
+</div></div>
+<div class="viewcode-block" id="get_cmdclass"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.get_cmdclass">[docs]</a><span class="k">def</span> <span class="nf">get_cmdclass</span><span class="p">():</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s">&#39;version&#39;</span><span class="p">:</span> <span class="n">cmd_version</span><span class="p">,</span>
+            <span class="s">&#39;update_files&#39;</span><span class="p">:</span> <span class="n">cmd_update_files</span><span class="p">,</span>
+            <span class="s">&#39;build&#39;</span><span class="p">:</span> <span class="n">cmd_build</span><span class="p">,</span>
+            <span class="s">&#39;sdist&#39;</span><span class="p">:</span> <span class="n">cmd_sdist</span><span class="p">,</span>
+            <span class="p">}</span>
+</div>
+<div class="viewcode-block" id="git2pep440"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.git2pep440">[docs]</a><span class="k">def</span> <span class="nf">git2pep440</span><span class="p">(</span><span class="n">ver_str</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">tag</span><span class="p">,</span> <span class="n">commits</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ver_str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;-&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s">&quot;.post&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">tag</span><span class="p">,</span> <span class="n">commits</span><span class="p">])</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ver_str</span>
+</div>
+<div class="viewcode-block" id="rep_by_pep440"><a class="viewcode-back" href="../../../_rst/setup_pyproject.templates.html#setup_pyproject.templates.versioneer.rep_by_pep440">[docs]</a><span class="k">def</span> <span class="nf">rep_by_pep440</span><span class="p">(</span><span class="n">ver</span><span class="p">):</span>
+    <span class="n">ver</span><span class="p">[</span><span class="s">&quot;version&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">git2pep440</span><span class="p">(</span><span class="n">ver</span><span class="p">[</span><span class="s">&quot;version&quot;</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">ver</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">setup_pyproject unknown documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../templates.html" >setup_pyproject.templates</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Florian Wilhelm.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
