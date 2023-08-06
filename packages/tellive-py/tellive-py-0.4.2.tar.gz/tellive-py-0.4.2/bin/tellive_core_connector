@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2014 Erik Johansson <erik@ejohansson.se>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
+# USA
+
+import tellive
+from tellive.tellstick import TellstickLiveClient
+from tellive.livemessage import LiveMessage
+from tellcore.telldus import TelldusCore, Device, Sensor, \
+    QueuedCallbackDispatcher
+import tellcore.constants as const
+
+import argparse
+import configparser
+import logging
+import select
+import socket
+import time
+
+# Offical keys for tellive_core_connector
+PUBLIC_KEY = "THETECHET2STUSWAGACRUWEFU5EWUW5W"
+PRIVATE_KEY = "PES7ANEWURUPHANETUJUPEGEKAWUFAHE"
+
+# Must match commands in handle_command
+SUPPORTED_METHODS = const.TELLSTICK_TURNON \
+    | const.TELLSTICK_TURNOFF \
+    | const.TELLSTICK_BELL \
+    | const.TELLSTICK_DIM \
+    | const.TELLSTICK_LEARN \
+    | const.TELLSTICK_EXECUTE \
+    | const.TELLSTICK_UP \
+    | const.TELLSTICK_DOWN \
+    | const.TELLSTICK_STOP
+
+PING_INTERVAL = 2 * 60
+PONG_INTERVAL = 6 * 60
+
+def socketpair(family=socket.AF_INET, type=socket.SOCK_STREAM, proto=0):
+    """A socket pair usable as a self-pipe, for Windows.
+
+    Copied from asyncio.
+    Origin: https://gist.github.com/4325783, by Geert Jansen.  Public domain.
+    """
+    # We create a connected TCP socket. Note the trick with setblocking(0)
+    # that prevents us from having to create a thread.
+    lsock = socket.socket(family, type, proto)
+    lsock.bind(('localhost', 0))
+    lsock.listen(1)
+    addr, port = lsock.getsockname()
+    csock = socket.socket(family, type, proto)
+    csock.setblocking(False)
+    try:
+        csock.connect((addr, port))
+    except (BlockingIOError, InterruptedError):
+        pass
+    except Exception:
+        lsock.close()
+        csock.close()
+        raise
+    ssock, _ = lsock.accept()
+    csock.setblocking(True)
+    lsock.close()
+    return (ssock, csock)
+
+
+class SelectableCallbackDispatcher(QueuedCallbackDispatcher):
+    def __init__(self):
+        super().__init__()
+        try:
+            ssock, csock = socket.socketpair()
+        except AttributeError:
+            ssock, csock = socketpair()
+
+        ssock.shutdown(socket.SHUT_WR)
+        self.read_socket = ssock
+
+        try:
+            csock.shutdown(socket.SHUT_RD)
+        except:
+            # On e.g. Mac OS X the SHUT_WR above also closes the read end on
+            # the other side and thus shutdown(SHUT_RD) fails with ENOTCONN.
+            pass
+        self.write_socket = csock
+
+    def fileno(self):
+        return self.read_socket.fileno()
+
+    def on_callback(self, *args):
+        super().on_callback(*args)
+        self.write_socket.send(b'1')
+
+    def on_readable(self):
+        self.read_socket.recv(1)
+        super().process_callback()
+
+
+def handle_command(device, action, value=None):
+    if action == "turnon":
+        device.turn_on()
+    elif action == "turnoff":
+        device.turn_off()
+    elif action == "bell":
+        device.bell()
+    elif action == "dim":
+        device.dim(value)
+    elif action == "learn":
+        device.learn()
+    elif action == "execute":
+        device.execute()
+    elif action == "up":
+        device.up()
+    elif action == "down":
+        device.down()
+    elif action == "stop":
+        device.stop()
+    else:
+        logging.warning("Unkown command '%s'", action)
+
+def main(config):
+    client = TellstickLiveClient(PUBLIC_KEY, PRIVATE_KEY)
+
+    (server, port) = client.connect_to_first_available_server()
+    logging.info("Connected to %s:%d", server, port)
+
+    def sensor_name(sensor):
+        key = "sensor_{0.protocol}_{0.model}_{0.id}".format(sensor)
+        if not key in config:
+            config[key] = ""
+        return config[key]
+
+    def device_enabled(device_id):
+        key = "device_{}_enabled".format(device_id)
+        if not key in config:
+            config[key] = "True"
+        return config.getboolean(key)
+
+    TelldusCore.callback_dispatcher = None
+    callback_dispatcher = SelectableCallbackDispatcher()
+    core = TelldusCore(callback_dispatcher=callback_dispatcher)
+
+    def on_device_event(device_id, method, data, cid):
+        if device_enabled(device_id):
+            client.report_device_event(device_id, method, data)
+    core.register_device_event(on_device_event)
+
+    def on_sensor_event(protocol, model, id, datatype, value, timestamp, cid):
+        sensor = Sensor(protocol, model, id, datatype)
+        if sensor_name(sensor):
+            client.report_sensor_values(sensor)
+    core.register_sensor_event(on_sensor_event)
+
+    supported_methods = SUPPORTED_METHODS
+    client.register(version=tellive.__version__, uuid=config['uuid'])
+
+    timeout = min(PING_INTERVAL, PONG_INTERVAL)
+    while True:
+        try:
+            rlist, _, _ = select.select([client.socket, callback_dispatcher],
+                                        [], [], timeout)
+        except KeyboardInterrupt:
+            client.disconnect()
+            break
+
+        if client.socket in rlist:
+            msg = client.receive_message()
+
+            if msg.subject() == client.SUBJECT_COMMAND:
+                params = msg.parameter(0)
+                device = Device(params['id'])
+                if device_enabled(device.id):
+                    handle_command(device, params['action'],
+                                   params.get('value'))
+                else:
+                    logging.debug("Ignoring command for disabled device %d",
+                                  device.id)
+                if 'ACK' in params:
+                    client.acknowledge(params['ACK'])
+
+            elif msg.subject() == client.SUBJECT_PONG:
+                pass
+
+            elif msg.subject() == client.SUBJECT_REGISTERD:
+                methods = msg.parameter(0)['supportedMethods']
+                supported_methods = supported_methods & methods
+                logging.debug("Client is registered, supported methods: "
+                              "0x%02x -> 0x%02x", methods, supported_methods)
+
+                devices = []
+                for device in core.devices():
+                    if device_enabled(device.id):
+                        devices.append(device)
+                client.report_devices(devices, supported_methods)
+
+                sensors = []
+                for sensor in core.sensors():
+                    if sensor_name(sensor):
+                        sensors.append(sensor)
+                client.report_sensors(sensors, name_function=sensor_name)
+
+            elif msg.subject() == client.SUBJECT_NOT_REGISTERED:
+                url = msg.parameter(0)['url']
+                logging.info("Activate this client by visiting: '%s'", url)
+                config['uuid'] = msg.parameter(0)['uuid']
+                client.disconnect()
+                # Add all devices and sensors to the config
+                for device in core.devices():
+                    device_enabled(device.id)
+                for sensor in core.sensors():
+                    sensor_name(sensor)
+
+                logging.info("Trying to open url in browser")
+                import webbrowser
+                webbrowser.open(url)
+                break
+
+            elif msg.subject() == client.SUBJECT_DISCONNECT:
+                raise RuntimeError("Disconnected by server")
+
+            else:
+                logging.warning("Unknown subject '%s'", msg.subject())
+
+        if callback_dispatcher in rlist:
+            callback_dispatcher.on_readable()
+
+        now = time.time()
+
+        # Should get something from the server within PONG_INTERVAL
+        next_pong_time = PONG_INTERVAL - (now - client.time_received)
+        if next_pong_time <= 0:
+            raise RuntimeError("No pong received from server")
+
+        # Need to send something to the server at least once in PING_INTERVAL
+        next_ping_time = PING_INTERVAL - (now - client.time_sent)
+        if next_ping_time <= 5:
+            client.ping()
+            next_ping_time = PING_INTERVAL
+
+        timeout = min(next_pong_time, next_ping_time)
+
+if __name__ == '__main__':
+    epilog = """
+The configuration file will automatically be updated to list all sensors found
+on the system, but no values will be sent to Telldus Live. For that to happen
+you need to edit the configuration file and give each sensor that you wish to
+report a name. If you for example have a Oregon EA4C sensor with id 78 in your
+bedroom, you could change the line "sensor_oregon_ea4c_78 =" to
+"sensor_oregon_ea4c_78 = Bedroom" and the sensor will show up in Telldus Live
+with the name Bedroom. You can also edit the configuration file if you wish to
+block a device from being controlled from Telldus Live. Locate the line with
+the device id you wish to block and change true to false.
+"""
+    parser = argparse.ArgumentParser(
+        description='Connect a TellStick to Telldus Live', epilog=epilog)
+    parser.add_argument('config', help='Configuration file to use')
+    parser.add_argument('-d', '--debug', help="Enable debug logging",
+                        action='store_true')
+    args = parser.parse_args()
+
+    section = 'settings'
+    config = configparser.ConfigParser()
+    config[section] = {'uuid': '', 'debug': False}
+    config.read(args.config)
+
+    level = logging.INFO
+    if config[section].getboolean('debug') or args.debug:
+        level = logging.DEBUG
+    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
+                        level=level)
+
+    while True:
+        try:
+            main(config[section])
+            break
+        except Exception as e:
+            logging.error("Communication error: %s", e,
+                          exc_info=(level == logging.DEBUG))
+
+            import random
+            retry_in = random.randint(20, 2 * 60)
+            logging.info("Reconnecting in %d seconds", retry_in)
+            try:
+                time.sleep(retry_in)
+            except KeyboardInterrupt:
+                break
+
+    with open(args.config, 'w') as configfile:
+        config.write(configfile)
