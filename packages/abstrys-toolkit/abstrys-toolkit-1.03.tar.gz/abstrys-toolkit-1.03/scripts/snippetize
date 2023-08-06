@@ -1,0 +1,170 @@
+#!/usr/bin/env python
+#
+# Cut source files into predictably-named snippet files that can be xi:included
+# in XML and so forth.
+#
+# By Eron Hennessey
+#
+# The rules:
+#
+# * All snips begin with a prefix. This can be anywhere on the line, but
+# anything after the prefix is interpreted as a snippet.
+#
+# * After the snippet there is some whitespace.
+#
+# * The whitespace is followed by a unique name that identifies the snippet.
+#
+#   This name cannot contain any whitespace, and must be a valid filename, as
+#   well, since the snippet files will be named thusly:
+#
+#      orig_file_basename-snippet_id.orig_extension
+#
+# * All snips end with a postfix. The postfix can be the same as the prefix,
+#   but many people find it easy to pick out visually distinct endings and
+#   beginnings.
+#
+# * Different snips may not overlap.
+#
+
+import os
+import sys
+
+source_dir = 'src'
+snip_dir = 'snips'
+unsnip_dir = 'unsnips'
+snip_prefix = "~~|"
+snip_postfix = "|~~"
+unsnippetize = False
+
+USAGE = """snippetize - cut a file into snippets (or remove snippet markers)
+
+Usage:
+------
+
+    snippetize [-u] [file1] [file2] ...
+
+* If *no arguments* are given, then all of the files in the ``{source_dir}``
+  dir will be processed.
+
+* If a *directory* is provided as input, then all files in the given directory
+  will be processed.
+
+* All snipped files will be written to the ``{snip_dir}`` directory.
+
+* If -u is specified, then the files will be "unsnipped"--all of the snip
+  markers will be removed from the file and the resulting file will be saved in
+  the ``{unsnip_dir}`` dir.
+
+Making snippets:
+----------------
+
+1. To make a snippet in a source file, simply delimit the beginning of your
+   snippet like this::
+
+      {snip_prefix} snippet_name
+
+   The *snippet_name* is a unique name within the file that you use to refer
+   to the snippet.  The resulting snippet file will be named like this::
+
+     file_name-snippet_name.file_ext
+
+2. End your snip with the end-snip delimiter::
+
+      {snip_postfix}
+
+   Any lines between the delimiters will be copied into the resulting snippet
+   file.
+
+Begin-snip and end-snip delimiters are usually placed within comments in the
+source files. For example, in a C++ or Java source file, you might have::
+
+    // {snip_prefix} first_snip
+    ... some code here ...
+    // {snip_postfix}
+
+In Python, Ruby, or in a bash script, you would have::
+
+    # {snip_prefix} first_snip
+    ... some code here ...
+    # {snip_postfix}
+""".format(source_dir=source_dir, snip_dir=snip_dir, unsnip_dir=unsnip_dir,
+        snip_prefix=snip_prefix, snip_postfix=snip_postfix)
+
+def unsnip_file(filename):
+    """Write the file to the destination without any snip tags"""
+    f = open(filename)
+    of = open('%s/%s' % (unsnip_dir, filename), 'w+')
+
+    for line in f.readlines():
+        if (snip_prefix in line) or (snip_postfix in line):
+            continue
+        else:
+            of.write(line)
+
+def snip_file(filename):
+    """Extract any snips from the given file into their own snip files."""
+
+    # Hold on...
+    if unsnippetize is True:
+        unsnip_file(filename)
+        return
+
+    # OK, good to go.
+    cur_tag = None
+    f = open(filename)
+    of = None
+    for line in f.readlines():
+
+        if cur_tag is None:
+            # Not in a snip... yet.
+            x = line.find(snip_prefix)
+            if x > -1:
+                x += len(snip_prefix)
+                cur_tag = line[x:].strip()
+                print cur_tag
+                (f_base, f_ext) = os.path.splitext(filename)
+                of_path = "%s/%s-%s%s" % (snip_dir, f_base, cur_tag, f_ext)
+                of = open(of_path, 'w+')
+        else:
+            # In a snip... but are we finished?
+            x = line.find(snip_postfix)
+            if x > -1:
+                # Yep, we're finished.
+                of.close()
+                cur_tag = None
+            else:
+                # Nope; this line must be part of the snippet.
+                of.write(line)
+    # remember to close the file...
+    f.close()
+
+# There's one argument: '-u', which will unsnippetize a file.
+if (sys.argv[1] == '-h') or (sys.argv[1] == '-?'):
+    print USAGE
+    sys.exit()
+elif sys.argv[1] == '-u':
+    unsnippetize = True
+    files = sys.argv[2:]
+else:
+    files = sys.argv[1:]
+
+# if no files were given, then just operate on all files in the source
+# directory.
+if len(files) == 0:
+    files += source_dir
+
+# make sure output dirs are there!
+if unsnippetize:
+    if not os.path.exists(unsnip_dir):
+        os.makedirs(unsnip_dir)
+else:
+    if not os.path.exists(snip_dir):
+        os.makedirs(snip_dir)
+
+for filename in files:
+    if os.path.isdir(filename):
+        # if a directory, operate on all files within it.
+        for f in os.listdir(filename):
+            snip_file(f)
+    else:
+        snip_file(filename)
