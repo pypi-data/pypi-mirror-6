@@ -1,0 +1,361 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>aleph.export</title>
+    
+    <link rel="stylesheet" href="../../_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="" href="../../index.html" />
+    <link rel="up" title="aleph" href="../aleph.html" /> 
+  </head>
+  <body>
+      <div class="header"><img class="rightlogo" src="../../_static/nkp_logo.png" alt="Logo"/><h1 class="heading"><a href="../../index.html">
+          <span></span></a></h1>
+        <h2 class="heading"><span>aleph.export</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <h1>Source code for aleph.export</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c">#</span>
+<span class="c"># Interpreter version: python 2.7</span>
+<span class="c">#</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This module is used to put data to Aleph. It is based on custom made webform,</span>
+<span class="sd">which is currently used to report new books by publishers.</span>
+
+<span class="sd">Most important function from this module is :func:`exportEPublication`,</span>
+<span class="sd">which will do everything, that is needed to do, to export</span>
+<span class="sd">:class:`aleph.datastructures.epublication.EPublication` structure to the Aleph.</span>
+
+<span class="sd">Warning:</span>
+<span class="sd">    This whole module is highly dependent on processes, which are defined as</span>
+<span class="sd">    import processes at the Czech National Library.</span>
+
+<span class="sd">Warning:</span>
+<span class="sd">    If you want to use export ability in your library, you should rewrite this</span>
+<span class="sd">    and take care, that you are sending data somewhere, where someone will</span>
+<span class="sd">    process them. Otherwise, you can fill your library&#39;s database with crap.</span>
+
+<span class="sd">Note:</span>
+<span class="sd">    Source code of the webform is not available at this moment (it was created</span>
+<span class="sd">    by third party), but it is possible, that it will be in future. This will</span>
+<span class="sd">    highly depend on number of people, which will use this project.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="c">#= Imports ====================================================================</span>
+<span class="kn">import</span> <span class="nn">isbn</span>
+<span class="kn">import</span> <span class="nn">settings</span>
+<span class="kn">from</span> <span class="nn">datastructures</span> <span class="kn">import</span> <span class="n">FormatEnum</span>
+
+<span class="kn">from</span> <span class="nn">httpkie</span> <span class="kn">import</span> <span class="n">Downloader</span>
+
+
+<span class="c">#= Functions &amp; objects ========================================================</span>
+<div class="viewcode-block" id="ExportException"><a class="viewcode-back" href="../../api/aleph.export.html#aleph.export.ExportException">[docs]</a><span class="k">class</span> <span class="nc">ExportException</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="ne">Exception</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="InvalidISBNException"><a class="viewcode-back" href="../../api/aleph.export.html#aleph.export.InvalidISBNException">[docs]</a><span class="k">class</span> <span class="nc">InvalidISBNException</span><span class="p">(</span><span class="n">ExportException</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">InvalidISBNException</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="ExportRejectedException"><a class="viewcode-back" href="../../api/aleph.export.html#aleph.export.ExportRejectedException">[docs]</a><span class="k">class</span> <span class="nc">ExportRejectedException</span><span class="p">(</span><span class="n">ExportException</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ExportRejectedException</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="PostData"><a class="viewcode-back" href="../../api/aleph.export.html#aleph.export.PostData">[docs]</a><span class="k">class</span> <span class="nc">PostData</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This class is used to transform data from</span>
+<span class="sd">    :class:`aleph.datastructures.epublication.EPublication` to dictionary,</span>
+<span class="sd">    which is sent as POST request to Aleph third-party webform_.</span>
+
+<span class="sd">    .. _webform: http://aleph.nkp.cz/F/?func=file&amp;file_name=service-isbn</span>
+
+<span class="sd">    Note:</span>
+<span class="sd">        Class is used instead of simple function, because there is 29 POST</span>
+<span class="sd">        parameters with internal dependencies, which need to be processed and</span>
+<span class="sd">        validated before they can be passed to webform.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        epub (EPublication): structure, which will be converted</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        _POST (dict):   dictionary with parsed data</span>
+<span class="sd">        mapping (dict): dictionary with some of mapping, which are aplied to</span>
+<span class="sd">                        ``_POST`` dict in postprocessing</span>
+
+<span class="sd">    Warning:</span>
+<span class="sd">        Don&#39;t manipulate ``_POST`` property directly, if you didn&#39;t really know</span>
+<span class="sd">        the&#39;internal structure and how the ``mapping`` is aplied.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epub</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&quot;sid&quot;</span><span class="p">:</span> <span class="n">settings</span><span class="o">.</span><span class="n">EDEPOSIT_EXPORT_SIGNATURE</span><span class="p">,</span>
+            <span class="s">&quot;P0100LDR__&quot;</span><span class="p">:</span> <span class="s">&quot;-----nam-a22------a-4500&quot;</span><span class="p">,</span>
+            <span class="s">&quot;P0200FMT__&quot;</span><span class="p">:</span> <span class="s">&quot;BK&quot;</span><span class="p">,</span>
+            <span class="s">&quot;P0300BAS__a&quot;</span><span class="p">:</span> <span class="s">&quot;30&quot;</span><span class="p">,</span>
+            <span class="s">&quot;P0501010__a&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># ISBN (uppercase)</span>
+            <span class="s">&quot;P0502010__b&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># vazba/forma</span>
+            <span class="s">&quot;P0504010__d&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># cena</span>
+            <span class="c"># &quot;P1201901__b&quot;: &quot;&quot;,    # ean</span>
+            <span class="s">&quot;P0601010__a&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># ISBN souboru</span>
+            <span class="s">&quot;P0602010__b&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># same thing</span>
+            <span class="s">&quot;P07012001_a&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># název</span>
+            <span class="s">&quot;P07022001_b&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># vyplneno na zaklade vazby/formy</span>
+            <span class="s">&quot;P07032001_e&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># podnázev</span>
+            <span class="s">&quot;P07042001_h&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># Část (svazek, díl)</span>
+            <span class="s">&quot;P07052001_i&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># Název části</span>
+            <span class="s">&quot;P1301ZAK__b&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># autor</span>
+            <span class="s">&quot;P1302ZAK__c&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># autor2</span>
+            <span class="s">&quot;P1303ZAK__c&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># autor3</span>
+            <span class="s">&quot;P10012252_a&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># edice</span>
+            <span class="s">&quot;P10022252_v&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># Číslo svazku</span>
+            <span class="s">&quot;P110185640u&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># URL</span>
+            <span class="s">&quot;P0503010__x&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># Formát (poze pro epublikace)</span>
+            <span class="s">&quot;P0901210__a&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># Místo vydání</span>
+            <span class="s">&quot;P0902210__c&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># Nakladatel</span>
+            <span class="s">&quot;P0903210__d&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># Měsíc a rok vydání</span>
+            <span class="s">&quot;P1401PJM__a&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># Vydáno v koedici s</span>
+            <span class="s">&quot;P0801205__a&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># Pořadí vydání</span>
+            <span class="s">&quot;P1501IST1_a&quot;</span><span class="p">:</span> <span class="s">&quot;ow&quot;</span><span class="p">,</span>  <span class="c"># Zpracovatel záznamu (hidden)</span>
+            <span class="s">&quot;P1502IST1_b&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># Zpracovatel záznamu (viditelna)</span>
+            <span class="s">&quot;P1601ISB__a&quot;</span><span class="p">:</span> <span class="s">&quot;&quot;</span><span class="p">,</span>    <span class="c"># ISBN2 - validated (hidden)</span>
+            <span class="c"># &quot;REPEAT&quot;: &quot;Y&quot;,        # predvyplnit zaznam</span>
+        <span class="p">}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mapping</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&quot;mapa&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s">&quot;-----nem-a22------a-4500&quot;</span><span class="p">,</span>
+                <span class="s">&quot;MP&quot;</span><span class="p">,</span>
+                <span class="s">&quot;30&quot;</span><span class="p">,</span>
+                <span class="s">&quot;kartografický dokument&quot;</span><span class="p">,</span>
+                <span class="s">&quot;ow&quot;</span>
+            <span class="p">],</span>
+            <span class="s">&quot;CD-ROM&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s">&quot;-----nam-a22------a-4500&quot;</span><span class="p">,</span>
+                <span class="s">&quot;BK&quot;</span><span class="p">,</span>
+                <span class="s">&quot;30&quot;</span><span class="p">,</span>
+                <span class="s">&quot;elektronický zdroj&quot;</span><span class="p">,</span>
+                <span class="s">&quot;ow&quot;</span>
+            <span class="p">],</span>
+            <span class="s">&quot;online&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s">&quot;-----nam-a22------a-4500&quot;</span><span class="p">,</span>
+                <span class="s">&quot;BK&quot;</span><span class="p">,</span>
+                <span class="s">&quot;49&quot;</span><span class="p">,</span>
+                <span class="s">&quot;elektronický zdroj&quot;</span><span class="p">,</span>
+                <span class="s">&quot;ox&quot;</span><span class="p">,</span>
+            <span class="p">],</span>
+            <span class="s">&quot;else&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s">&quot;-----nam-a22------a-4500&quot;</span><span class="p">,</span>
+                <span class="s">&quot;BK&quot;</span><span class="p">,</span>
+                <span class="s">&quot;30&quot;</span><span class="p">,</span>
+                <span class="s">&quot;&quot;</span><span class="p">,</span>
+                <span class="s">&quot;ow&quot;</span>
+            <span class="p">]</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mapping</span><span class="p">[</span><span class="s">&quot;DVD&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mapping</span><span class="p">[</span><span class="s">&quot;CD-ROM&quot;</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_import_epublication</span><span class="p">(</span><span class="n">epub</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_import_epublication</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epub</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fill internal property ._POST dictionary with data from EPublication.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0501010__a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">ISBN</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P07012001_a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">nazev</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P07032001_e&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">podnazev</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0502010__b&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">vazba</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0504010__d&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">cena</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P07042001_h&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">castDil</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P07052001_i&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">nazevCasti</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0902210__c&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">nakladatelVydavatel</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0903210__d&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">datumVydani</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0801205__a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">poradiVydani</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P1502IST1_b&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">zpracovatelZaznamu</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0503010__x&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">format</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P110185640u&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">url</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0901210__a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">mistoVydani</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0601010__a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">epub</span><span class="o">.</span><span class="n">ISBNSouboruPublikaci</span>
+
+        <span class="c"># FUTURE:</span>
+        <span class="c"># self._POST[&quot;&quot;] = epub.mistoDistribuce</span>
+        <span class="c"># self._POST[&quot;&quot;] = epub.distributor</span>
+        <span class="c"># self._POST[&quot;&quot;] = epub.datumDistribuce</span>
+        <span class="c"># self._POST[&quot;&quot;] = epub.kategorieProRIV  # TODO: wtf?</span>
+        <span class="c"># self._POST[&quot;&quot;] = epub.datumProCopyright  # wut</span>
+
+        <span class="n">authors</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">lastName</span> <span class="o">+</span> <span class="s">&quot;, &quot;</span> <span class="o">+</span> <span class="n">x</span><span class="o">.</span><span class="n">firstName</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">epub</span><span class="o">.</span><span class="n">autori</span><span class="p">]</span>
+        <span class="n">authors_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;P1301ZAK__b&quot;</span><span class="p">,</span> <span class="s">&quot;P1302ZAK__c&quot;</span><span class="p">,</span> <span class="s">&quot;P1303ZAK__c&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">field</span><span class="p">,</span> <span class="n">author</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">authors_fields</span><span class="p">,</span> <span class="n">authors</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="n">author</span>
+
+    <span class="k">def</span> <span class="nf">_apply_mapping</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mapping</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Map some case specific data to the fields in internal dictionary.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0100LDR__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0200FMT__&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0502010__b&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P07022001_b&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P1501IST1_a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapping</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_postprocess</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Move data between internal fields, validate them and make sure, that</span>
+<span class="sd">        everything is as it should be.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># get ISBN of serie</span>
+        <span class="n">series_isbn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0601010__a&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">series_isbn</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">series_isbn</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">series_isbn</span> <span class="o">=</span> <span class="n">series_isbn</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="c"># try to validate series ISBN</span>
+        <span class="k">if</span> <span class="n">series_isbn</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span> <span class="ow">and</span> <span class="n">series_isbn</span> <span class="o">!=</span> <span class="p">[]:</span>
+            <span class="n">series_isbn</span> <span class="o">=</span> <span class="n">series_isbn</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0601010__a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">series_isbn</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">isbn</span><span class="o">.</span><span class="n">is_valid_isbn</span><span class="p">(</span><span class="n">series_isbn</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">InvalidISBNException</span><span class="p">(</span>
+                    <span class="s">&quot;</span><span class="si">%s</span><span class="s"> is has invalid ISBN checksum!&quot;</span> <span class="o">%</span> <span class="n">series_isbn</span>
+                <span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0601010__b&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;soubor : &quot;</span> <span class="o">+</span> <span class="n">series_isbn</span>
+
+        <span class="c"># validate ISBN of the book</span>
+        <span class="n">book_isbn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0501010__a&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">book_isbn</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">book_isbn</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">book_isbn</span> <span class="o">=</span> <span class="n">book_isbn</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">isbn</span><span class="o">.</span><span class="n">is_valid_isbn</span><span class="p">(</span><span class="n">book_isbn</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">InvalidISBNException</span><span class="p">(</span>
+                <span class="s">&quot;</span><span class="si">%s</span><span class="s"> is has invalid ISBN checksum!&quot;</span> <span class="o">%</span> <span class="n">book_isbn</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0501010__a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">book_isbn</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P1601ISB__a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">book_isbn</span>
+
+        <span class="c"># some fields need to be remapped (depends on type of media)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_apply_mapping</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mapping</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0502010__b&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">mapping</span><span class="p">[</span><span class="s">&quot;else&quot;</span><span class="p">])</span>
+        <span class="p">)</span>
+
+        <span class="c"># # clean the dict before you send it</span>
+        <span class="c"># for key in self._POST.keys():</span>
+        <span class="c">#     if self._POST[key] == &quot;&quot;:</span>
+        <span class="c">#         del self._POST[key]</span>
+
+    <span class="k">def</span> <span class="nf">_check_required_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Make sure, that internal dictionary contains all fields, which are</span>
+<span class="sd">        requiered by the webform.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0501010__a&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>  <span class="c"># ISBN</span>
+        <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P1601ISB__a&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>  <span class="c"># hidden ISBN field</span>
+
+        <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P07012001_a&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>  <span class="c"># nazev</span>
+        <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0901210__a&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>  <span class="c"># Místo vydání</span>
+
+        <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0903210__d&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>  <span class="c"># Měsíc a rok vydání</span>
+        <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0801205__a&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>  <span class="c"># Pořadí vydání</span>
+
+        <span class="c"># Zpracovatel záznamu</span>
+        <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P1501IST1_a&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>  <span class="c"># (hidden)</span>
+        <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P1502IST1_b&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>  <span class="c"># (visible)</span>
+
+        <span class="c"># vazba/forma</span>
+        <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0502010__b&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c"># Formát (poze pro epublikace)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0502010__b&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">FormatEnum</span><span class="o">.</span><span class="n">ONLINE</span><span class="p">:</span>
+            <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0503010__x&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="k">assert</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_POST</span><span class="p">[</span><span class="s">&quot;P0902210__c&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;&quot;</span><span class="p">)</span>  <span class="c"># Nakladatel</span>
+
+<div class="viewcode-block" id="PostData.get_POST_data"><a class="viewcode-back" href="../../api/aleph.export.html#aleph.export.PostData.get_POST_data">[docs]</a>    <span class="k">def</span> <span class="nf">get_POST_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            dict: POST data, which can be sent to webform using urllib, \</span>
+<span class="sd">                  or similar library</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_postprocess</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_required_fields</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_POST</span>
+
+</div></div>
+<span class="k">def</span> <span class="nf">_sendPostDict</span><span class="p">(</span><span class="n">post_dict</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Send `post_dict` to the ``settigns.ALEPH_EXPORT_URL``.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        post_dict (dict): dictionary from :class:`PostData.get_POST_data()`</span>
+
+<span class="sd">    It may look strange, to have standalone function to do this, but it is used</span>
+<span class="sd">    in unittests to test that form rejects invalid data, which can tell us,</span>
+<span class="sd">    when the webform is broken.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">downer</span> <span class="o">=</span> <span class="n">Downloader</span><span class="p">()</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">downer</span><span class="o">.</span><span class="n">download</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">ALEPH_EXPORT_URL</span><span class="p">,</span> <span class="n">post</span><span class="o">=</span><span class="n">post_dict</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="s">&quot;Požadavek byl odmítnut&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ExportRejectedException</span><span class="p">(</span><span class="s">&quot;Export was rejected by Aleph form!&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data</span>
+
+
+<div class="viewcode-block" id="exportEPublication"><a class="viewcode-back" href="../../api/aleph.export.html#aleph.export.exportEPublication">[docs]</a><span class="k">def</span> <span class="nf">exportEPublication</span><span class="p">(</span><span class="n">epub</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Send `epub` EPublication object to Aleph, where it will be processed by</span>
+<span class="sd">    librarians.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        epub (EPublication): structure for export</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">post_dict</span> <span class="o">=</span> <span class="n">PostData</span><span class="p">(</span><span class="n">epub</span><span class="p">)</span><span class="o">.</span><span class="n">get_POST_data</span><span class="p">()</span>
+    <span class="c"># sendPostDict(post_dict)  # TODO: uncoment, when test settings at the webform will be implemented</span></div>
+</pre></div>
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="../../index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

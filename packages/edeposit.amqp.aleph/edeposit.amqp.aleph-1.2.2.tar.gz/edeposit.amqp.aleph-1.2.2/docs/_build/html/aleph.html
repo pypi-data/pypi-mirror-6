@@ -1,0 +1,1153 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>aleph Package</title>
+    
+    <link rel="stylesheet" href="_static/haiku.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/print.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/theme_extras.js"></script>
+    <link rel="top" title="" href="index.html" /> 
+  </head>
+  <body>
+      <div class="header"><img class="rightlogo" src="_static/nkp_logo.png" alt="Logo"/><h1 class="heading"><a href="index.html">
+          <span></span></a></h1>
+        <h2 class="heading"><span>aleph Package</span></h2>
+      </div>
+      <div class="topnav">
+      
+        <p>
+        <a class="uplink" href="index.html">Contents</a>
+        </p>
+
+      </div>
+      <div class="content">
+        
+        
+  <div class="section" id="aleph-package">
+<h1>aleph Package<a class="headerlink" href="#aleph-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="id1">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">aleph</span></tt> Package<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="module-aleph.__init__"></span><ul class="simple">
+<li>Query workflow &#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8211;</li>
+</ul>
+<p>To query Aleph, just create one of the Queries - ISBNQuery for example and put
+it into SearchRequest wrapper. Then encode it by calling toAMQPMessage() and
+send the message to the Aleph&#8217;s exchange.</p>
+<p>&#8212;
+isbnq = ISBNQuery(&#8220;80-251-0225-4&#8221;)
+request = SearchRequest(isbnq)</p>
+<dl class="docutils">
+<dt>amqp.send(</dt>
+<dd>message    = serialize(request),
+properties = &#8221;..&#8221;,
+exchange   = &#8220;ALEPH&#8217;S_EXCHANGE&#8221;</dd>
+</dl>
+<div class="section" id="id2">
+<h3>)<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
+<p>and you will get back AMQP message, and after decoding with fromAMQPMessage()
+also SearchResult.</p>
+<p>If you want to just get count of how many items is there in Aleph, just wrap
+the ISBNQuery with CountRequest (you should use this instead of just calling
+len() to SearchResult.records - it doesn&#8217;t put that much load to Aleph):</p>
+<p>&#8212;
+isbnq = ISBNQuery(&#8220;80-251-0225-4&#8221;)
+request = CountRequest(isbnq)</p>
+<p># rest is same..
+&#8212;</p>
+<p>and you will get back (after decoding) CountResult.</p>
+<p>Here is ASCII flow diagram for you:</p>
+<p>ISBNQuery      &#8212;-.                                 ,&#8211;&gt; CountResult
+AuthorQuery    &#8212;-|                                 |        <a href="#id3"><span class="problematic" id="id4">`</span></a>- num_of_records
+PublisherQuery &#8212;-|                                 |
+GenericQuery   &#8212;-|      ISBNValidationRequest      <a href="#id5"><span class="problematic" id="id6">|</span></a>&#8211;&gt; SearchResult</p>
+<blockquote>
+<div><blockquote>
+<div><div class="line-block">
+<div class="line">|                |        <a href="#id7"><span class="problematic" id="id8">`</span></a>- AlephRecord</div>
+</div>
+<p>V                |                |</p>
+</div></blockquote>
+<dl class="docutils">
+<dt>Count/SearchRequest        |                <a href="#id9"><span class="problematic" id="id10">|</span></a>&#8211;&gt; ISBNValidationResult</dt>
+<dd><blockquote class="first">
+<div><blockquote>
+<div><div class="line-block">
+<div class="line">|                |        <a href="#id11"><span class="problematic" id="id12">`</span></a>- ISBN</div>
+</div>
+<p>V                |                |</p>
+</div></blockquote>
+<dl class="docutils">
+<dt>serialize()&lt;&#8212;&#8212;&#8212;-&#8216;           deserialize()</dt>
+<dd><div class="first line-block">
+<div class="line">^</div>
+</div>
+<p class="last">V             Client              |</p>
+</dd>
+<dt>AMQPMessage &#8212;&#8212;&gt; AMQP &#8212;&#8212;-&gt; AMQPMessage</dt>
+<dd><div class="first line-block">
+<div class="line">^</div>
+</div>
+<p class="last">V    |
+|    ^
+V    |
+|    ^
+V    |</p>
+</dd>
+<dt>AMQPMessage &lt;&#8212;&#8212; AMQP &lt;&#8212;&#8212;&#8211; AMQPMessage</dt>
+<dd><div class="first line-block">
+<div class="line">Service              ^</div>
+<div class="line-block">
+<div class="line"><a href="#id13"><span class="problematic" id="id14">|</span></a></div>
+</div>
+</div>
+<p class="last">V                                  |</p>
+</dd>
+</dl>
+</div></blockquote>
+<p class="last">reactToAMQPMessage() ............... magic_happens()</p>
+</dd>
+</dl>
+</div></blockquote>
+<p>Neat, isn&#8217;t it?</p>
+<ul class="simple">
+<li>Export workflow &#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;-</li>
+</ul>
+<p>TODO: implement, then write docstring</p>
+<dl class="class">
+<dt id="aleph.__init__.AuthorQuery">
+<em class="property">class </em><tt class="descclassname">aleph.__init__.</tt><tt class="descname">AuthorQuery</tt><a class="reference internal" href="_modules/aleph/__init__.html#AuthorQuery"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.__init__.AuthorQuery" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.__init__.AuthorQuery" title="aleph.__init__.AuthorQuery"><tt class="xref py py-class docutils literal"><span class="pre">aleph.__init__.AuthorQuery</span></tt></a>, <tt class="xref py py-class docutils literal"><span class="pre">aleph.__init__._QueryTemplate</span></tt></p>
+<p>Query Aleph to get books by Author.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.__init__.GenericQuery">
+<em class="property">class </em><tt class="descclassname">aleph.__init__.</tt><tt class="descname">GenericQuery</tt><a class="reference internal" href="_modules/aleph/__init__.html#GenericQuery"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.__init__.GenericQuery" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.__init__.GenericQuery" title="aleph.__init__.GenericQuery"><tt class="xref py py-class docutils literal"><span class="pre">aleph.__init__.GenericQuery</span></tt></a>, <tt class="xref py py-class docutils literal"><span class="pre">aleph.__init__._QueryTemplate</span></tt></p>
+<p>Used for generic queries to aleph.</p>
+<p>For details of base/phrase/.. parameters, see aleph.py : searchInAleph().</p>
+<p>This is used mainly if you want to search by your own parameters and don&#8217;t
+want to use prepared wrappers (AuthorQuery/ISBNQuery/..).</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.__init__.ISBNQuery">
+<em class="property">class </em><tt class="descclassname">aleph.__init__.</tt><tt class="descname">ISBNQuery</tt><a class="reference internal" href="_modules/aleph/__init__.html#ISBNQuery"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.__init__.ISBNQuery" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.__init__.ISBNQuery" title="aleph.__init__.ISBNQuery"><tt class="xref py py-class docutils literal"><span class="pre">aleph.__init__.ISBNQuery</span></tt></a>, <tt class="xref py py-class docutils literal"><span class="pre">aleph.__init__._QueryTemplate</span></tt></p>
+<p>Query Aleph to get books by ISBN.</p>
+<dl class="docutils">
+<dt>Note: ISBN is not unique, so you can get back lot of books with same ISBN.</dt>
+<dd>Some books also have two or more ISBNs.</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.__init__.PublisherQuery">
+<em class="property">class </em><tt class="descclassname">aleph.__init__.</tt><tt class="descname">PublisherQuery</tt><a class="reference internal" href="_modules/aleph/__init__.html#PublisherQuery"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.__init__.PublisherQuery" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.__init__.PublisherQuery" title="aleph.__init__.PublisherQuery"><tt class="xref py py-class docutils literal"><span class="pre">aleph.__init__.PublisherQuery</span></tt></a>, <tt class="xref py py-class docutils literal"><span class="pre">aleph.__init__._QueryTemplate</span></tt></p>
+<p>Query Aleph to get books by Publisher.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.__init__.deserialize">
+<tt class="descclassname">aleph.__init__.</tt><tt class="descname">deserialize</tt><big>(</big><em>data</em><big>)</big><a class="reference internal" href="_modules/aleph/__init__.html#deserialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.__init__.deserialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Deserialize classes from JSON data.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.__init__.iiOfAny">
+<tt class="descclassname">aleph.__init__.</tt><tt class="descname">iiOfAny</tt><big>(</big><em>instance</em>, <em>classes</em><big>)</big><a class="reference internal" href="_modules/aleph/__init__.html#iiOfAny"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.__init__.iiOfAny" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns true, if <cite>instance</cite> is instance of any (iiOfAny) of the <cite>classes</cite>.</p>
+<p>This function doesn&#8217;t use isinstance() check, it just compares the
+classnames.</p>
+<p>This can be generaly dangerous, but it is really useful when you are
+comparing class serialized in one module and deserialized in another.</p>
+<p>This causes, that module paths in class internals are different and
+isinstance() and type() comparsions thus fails.</p>
+<p>Use this function instead, if you wan&#8217;t to check what type is your
+deserialized message.</p>
+<p>instance &#8211; class instance you want to know the type
+classes &#8211; list of classes, or just the class you want to compare - func</p>
+<blockquote>
+<div>automatically retypes nonlist/nontuple parameters to list</div></blockquote>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.__init__.reactToAMQPMessage">
+<tt class="descclassname">aleph.__init__.</tt><tt class="descname">reactToAMQPMessage</tt><big>(</big><em>message</em>, <em>response_callback</em>, <em>UUID</em><big>)</big><a class="reference internal" href="_modules/aleph/__init__.html#reactToAMQPMessage"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.__init__.reactToAMQPMessage" title="Permalink to this definition">¶</a></dt>
+<dd><p>React to given AMQPMessage. Return data thru given callback function.</p>
+<p>message &#8211; message encoded in JSON by serialize()
+response_callback &#8211; function taking exactly ONE parameter - message&#8217;s body</p>
+<blockquote>
+<div>with response. Function take care of sending the
+response over AMQP.</div></blockquote>
+<p>Returns result of response_callback() call.</p>
+<dl class="docutils">
+<dt>Raise:</dt>
+<dd>ValueError if bad type of <cite>message</cite> structure is given.</dd>
+<dt>TODO:</dt>
+<dd>React to Export requests.</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.__init__.serialize">
+<tt class="descclassname">aleph.__init__.</tt><tt class="descname">serialize</tt><big>(</big><em>data</em><big>)</big><a class="reference internal" href="_modules/aleph/__init__.html#serialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.__init__.serialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Serialize class hierarchy into JSON.</p>
+</dd></dl>
+
+</div>
+</div>
+<div class="section" id="module-aleph.aleph">
+<span id="aleph-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">aleph</span></tt> Module<a class="headerlink" href="#module-aleph.aleph" title="Permalink to this headline">¶</a></h2>
+<p>Aleph X-Service wrapper.</p>
+<p>This module allows you to query Aleph&#8217;s X-Services module (Aleph server is
+defined by ALEPH_URL in settings.py).</p>
+<p>There are two levels of abstraction:</p>
+<ul class="simple">
+<li>Lowlevel &#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8211;</li>
+</ul>
+<p>You can use this functions to access Aleph:</p>
+<blockquote>
+<div>searchInAleph(base, phrase, considerSimilar, field)
+getDocumentIDs(aleph_search_result, [number_of_docs])
+downloadMARCXML(doc_id, library)
+downloadMARCOAI(doc_id, base)</div></blockquote>
+<p>Workflow:</p>
+<p>Aleph works in strange way, that he won&#8217;t allow you to access desired
+information directly.</p>
+<p>You have to create search request by calling searchInAleph() first, which
+will return dictionary with few imporant informations about session.</p>
+<p>This dictionary can be later used as parameter to function getDocumentIDs(),
+which will give you list of DocumentID named tuples.</p>
+<p>Named tuples are used, because to access your document, you won&#8217;t need just
+document ID number, but also library ID string.</p>
+<p>Depending on your system, there may be just only one accessible library, or
+mutiple ones, and then you will be glad, that you get both of this
+informations together.</p>
+<p>DocumentID can be used as parameter to downloadMARCXML().</p>
+<p>Lets look at some code:</p>
+<p>&#8212;
+ids = getDocumentIDs(searchInAleph(&#8220;nkc&#8221;, &#8220;test&#8221;, False, &#8220;wrd&#8221;))
+for id_num, library in ids:</p>
+<blockquote>
+<div><p>XML = downloadMARCXML(id_num, library)</p>
+<p># processDocument(XML)</p>
+</div></blockquote>
+<p>&#8212;</p>
+<ul class="simple">
+<li>Highlevel &#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;-</li>
+</ul>
+<p>So far, there are only getter wrappers:</p>
+<blockquote>
+<div>getISBNsIDs()
+getAuthorsBooksIDs()
+getPublishersBooksIDs()</div></blockquote>
+<p>And counting functions (they are one request to aleph faster than just
+counting results from getters):</p>
+<blockquote>
+<div>getISBNCount()
+getAuthorsBooksCount()
+getPublishersBooksCount()</div></blockquote>
+<ul class="simple">
+<li>Other noteworthy properties &#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;-</li>
+</ul>
+<p>Properties VALID_ALEPH_BASES and VALID_ALEPH_FIELDS can be specific only to
+our library, but sadly, I dont really know.</p>
+<p>List of valid bases can be obtained by calling _getListOfBases(), which
+returns list of strings.</p>
+<p>There is also defined exception tree - see AlephException docstring for
+details.</p>
+<dl class="docutils">
+<dt>TODO:</dt>
+<dd>multiple bases in one request?
+disable valid fields/bases checking?
+_getListOfFields()</dd>
+</dl>
+<dl class="exception">
+<dt id="aleph.aleph.AlephException">
+<em class="property">exception </em><tt class="descclassname">aleph.aleph.</tt><tt class="descname">AlephException</tt><big>(</big><em>message</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#AlephException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.AlephException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+<p>Exception tree:</p>
+<ul class="simple">
+<li>AlephException
+<a href="#id15"><span class="problematic" id="id16">|</span></a>- InvalidAlephBaseException
+<a href="#id17"><span class="problematic" id="id18">|</span></a>- InvalidAlephFieldException
+<a href="#id19"><span class="problematic" id="id20">|</span></a>- LibraryNotFoundException
+<a href="#id21"><span class="problematic" id="id22">`</span></a>- DocumentNotFoundException</li>
+</ul>
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.aleph.DocumentID">
+<em class="property">class </em><tt class="descclassname">aleph.aleph.</tt><tt class="descname">DocumentID</tt><a class="headerlink" href="#aleph.aleph.DocumentID" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">tuple</span></tt></p>
+<p>DocumentID(id, library, base)</p>
+<dl class="method">
+<dt id="aleph.aleph.DocumentID.__getnewargs__">
+<tt class="descname">__getnewargs__</tt><big>(</big><big>)</big><a class="headerlink" href="#aleph.aleph.DocumentID.__getnewargs__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return self as a plain tuple.  Used by copy and pickle.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.aleph.DocumentID.__getstate__">
+<tt class="descname">__getstate__</tt><big>(</big><big>)</big><a class="headerlink" href="#aleph.aleph.DocumentID.__getstate__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Exclude the OrderedDict from pickling</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.aleph.DocumentID.__repr__">
+<tt class="descname">__repr__</tt><big>(</big><big>)</big><a class="headerlink" href="#aleph.aleph.DocumentID.__repr__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a nicely formatted representation string</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.aleph.DocumentID.base">
+<tt class="descname">base</tt><a class="headerlink" href="#aleph.aleph.DocumentID.base" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 2</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.aleph.DocumentID.id">
+<tt class="descname">id</tt><a class="headerlink" href="#aleph.aleph.DocumentID.id" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 0</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="aleph.aleph.DocumentID.library">
+<tt class="descname">library</tt><a class="headerlink" href="#aleph.aleph.DocumentID.library" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 1</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="exception">
+<dt id="aleph.aleph.DocumentNotFoundException">
+<em class="property">exception </em><tt class="descclassname">aleph.aleph.</tt><tt class="descname">DocumentNotFoundException</tt><big>(</big><em>message</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#DocumentNotFoundException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.DocumentNotFoundException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.aleph.AlephException" title="aleph.aleph.AlephException"><tt class="xref py py-class docutils literal"><span class="pre">aleph.aleph.AlephException</span></tt></a></p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="aleph.aleph.InvalidAlephBaseException">
+<em class="property">exception </em><tt class="descclassname">aleph.aleph.</tt><tt class="descname">InvalidAlephBaseException</tt><big>(</big><em>message</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#InvalidAlephBaseException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.InvalidAlephBaseException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.aleph.AlephException" title="aleph.aleph.AlephException"><tt class="xref py py-class docutils literal"><span class="pre">aleph.aleph.AlephException</span></tt></a></p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="aleph.aleph.InvalidAlephFieldException">
+<em class="property">exception </em><tt class="descclassname">aleph.aleph.</tt><tt class="descname">InvalidAlephFieldException</tt><big>(</big><em>message</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#InvalidAlephFieldException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.InvalidAlephFieldException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.aleph.AlephException" title="aleph.aleph.AlephException"><tt class="xref py py-class docutils literal"><span class="pre">aleph.aleph.AlephException</span></tt></a></p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="aleph.aleph.LibraryNotFoundException">
+<em class="property">exception </em><tt class="descclassname">aleph.aleph.</tt><tt class="descname">LibraryNotFoundException</tt><big>(</big><em>message</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#LibraryNotFoundException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.LibraryNotFoundException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.aleph.AlephException" title="aleph.aleph.AlephException"><tt class="xref py py-class docutils literal"><span class="pre">aleph.aleph.AlephException</span></tt></a></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.aleph.downloadMARCOAI">
+<tt class="descclassname">aleph.aleph.</tt><tt class="descname">downloadMARCOAI</tt><big>(</big><em>doc_id</em>, <em>base</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#downloadMARCOAI"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.downloadMARCOAI" title="Permalink to this definition">¶</a></dt>
+<dd><p>Download MARC OAI document with given <cite>doc_id</cite> from given (logical) <cite>base</cite>.</p>
+<p>Funny part is, that some documents can be obtained only with this function
+in their full text.</p>
+<p>doc_id &#8211; document id (you will get this from getDocumentIDs())
+base &#8211; base from which you want to download Aleph document - this seems to</p>
+<blockquote>
+<div>be duplicite with searchInAleph()&#8217; parameters, but it&#8217;s just
+somethin Aleph&#8217;s X-Services want, so ..</div></blockquote>
+<p>Returns: MARC XML unicode string.</p>
+<dl class="docutils">
+<dt>Raise:</dt>
+<dd>InvalidAlephBaseException
+DocumentNotFoundException</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.aleph.downloadMARCXML">
+<tt class="descclassname">aleph.aleph.</tt><tt class="descname">downloadMARCXML</tt><big>(</big><em>doc_id</em>, <em>library</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#downloadMARCXML"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.downloadMARCXML" title="Permalink to this definition">¶</a></dt>
+<dd><p>Download MARC XML document with given <cite>doc_id</cite> from given <cite>library</cite>.</p>
+<p>doc_id &#8211; document id (you will get this from getDocumentIDs())
+library &#8211; NKC01 in our case, but don&#8217;t worry, getDocumentIDs() adds</p>
+<blockquote>
+<div>library specification into DocumentID named tuple.</div></blockquote>
+<p>Returns: MARC XML unicode string.</p>
+<dl class="docutils">
+<dt>Raise:</dt>
+<dd>LibraryNotFoundException
+DocumentNotFoundException</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.aleph.getAuthorsBooksCount">
+<tt class="descclassname">aleph.aleph.</tt><tt class="descname">getAuthorsBooksCount</tt><big>(</big><em>author</em>, <em>base='nkc'</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#getAuthorsBooksCount"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.getAuthorsBooksCount" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.aleph.getAuthorsBooksIDs">
+<tt class="descclassname">aleph.aleph.</tt><tt class="descname">getAuthorsBooksIDs</tt><big>(</big><em>author</em>, <em>base='nkc'</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#getAuthorsBooksIDs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.getAuthorsBooksIDs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.aleph.getDocumentIDs">
+<tt class="descclassname">aleph.aleph.</tt><tt class="descname">getDocumentIDs</tt><big>(</big><em>aleph_search_result</em>, <em>number_of_docs=-1</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#getDocumentIDs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.getDocumentIDs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return list of DocumentID named tuples to given &#8216;aleph_search_result&#8217;.</p>
+<p>aleph_search_result &#8211; dict returned from searchInAleph()
+number_of_docs &#8211; how many DocumentIDs from set given by</p>
+<blockquote>
+<div>aleph_search_result should be returned, default -1
+for all of them.</div></blockquote>
+<p>Returned DocumentID can be used as parameters to downloadMARCXML().</p>
+<dl class="docutils">
+<dt>Raise:</dt>
+<dd>AlephException</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.aleph.getISBNCount">
+<tt class="descclassname">aleph.aleph.</tt><tt class="descname">getISBNCount</tt><big>(</big><em>isbn</em>, <em>base='nkc'</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#getISBNCount"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.getISBNCount" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.aleph.getISBNsIDs">
+<tt class="descclassname">aleph.aleph.</tt><tt class="descname">getISBNsIDs</tt><big>(</big><em>isbn</em>, <em>base='nkc'</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#getISBNsIDs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.getISBNsIDs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.aleph.getPublishersBooksCount">
+<tt class="descclassname">aleph.aleph.</tt><tt class="descname">getPublishersBooksCount</tt><big>(</big><em>publisher</em>, <em>base='nkc'</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#getPublishersBooksCount"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.getPublishersBooksCount" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.aleph.getPublishersBooksIDs">
+<tt class="descclassname">aleph.aleph.</tt><tt class="descname">getPublishersBooksIDs</tt><big>(</big><em>publisher</em>, <em>base='nkc'</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#getPublishersBooksIDs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.getPublishersBooksIDs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.aleph.searchInAleph">
+<tt class="descclassname">aleph.aleph.</tt><tt class="descname">searchInAleph</tt><big>(</big><em>base</em>, <em>phrase</em>, <em>considerSimilar</em>, <em>field</em><big>)</big><a class="reference internal" href="_modules/aleph/aleph.html#searchInAleph"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.aleph.searchInAleph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send request to the aleph search engine.</p>
+<p>Request itself is pretty useless, but it can be later used as parameter
+for getAlephRecords(), which can fetch records from Aleph.</p>
+<p>phrase &#8211; what do you want to search
+base &#8211; which database you want to use
+field &#8211; where you want to look
+considerSimilar &#8211; fuzzy search, which is not working at all, so don&#8217;t</p>
+<blockquote>
+<div>use it</div></blockquote>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>aleph_search_record, which is dictionary consisting from those fields</em> &#8211;<blockquote>
+<div>error (optional) &#8211; present if there was some form of error
+no_entries (int) &#8211; number of entries that can be fetch from aleph
+no_records (int) &#8211; no idea what is this, but it is always &gt;= than<blockquote>
+<div>no_entries</div></blockquote>
+<p>set_number (int) &#8211; important - something like ID of your request
+session-id (str) &#8211; used to count users for licensing purposes</p>
+</div></blockquote>
+<p class="rubric">example</p>
+<dl class="docutils">
+<dt>{</dt>
+<dd>&#8216;session-id&#8217;: &#8216;YLI54HBQJESUTS678YYUNKEU4BNAUJDKA914GMF39J6K89VSCB&#8217;,
+&#8216;set_number&#8217;: 36520,
+&#8216;no_records&#8217;: 1,
+&#8216;no_entries&#8217;: 1</dd>
+</dl>
+<p>}</p>
+</td>
+</tr>
+</tbody>
+</table>
+<dl class="docutils">
+<dt>Raise:</dt>
+<dd>AlephException
+InvalidAlephBaseException
+InvalidAlephFieldException</dd>
+<dt>TODO:</dt>
+<dd><ul class="first last simple">
+<li>support multiple phrases in one request</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-aleph.convertors">
+<span id="convertors-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">convertors</span></tt> Module<a class="headerlink" href="#module-aleph.convertors" title="Permalink to this headline">¶</a></h2>
+<p>This module exists to provide ability to convert from AMQP data structures to
+Aleph&#8217;s data structures.</p>
+<p>It can convert MARCXMLRecord to EPublication simplified data structure.</p>
+<p>It can also serialize any namedtuple to JSON.</p>
+<dl class="function">
+<dt id="aleph.convertors.fromJSON">
+<tt class="descclassname">aleph.convertors.</tt><tt class="descname">fromJSON</tt><big>(</big><em>json_data</em><big>)</big><a class="reference internal" href="_modules/aleph/convertors.html#fromJSON"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.convertors.fromJSON" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert JSON string back to python structures.</p>
+<p>This is necessary, because standard JSON module can&#8217;t serialize
+namedtuples.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.convertors.toEPublication">
+<tt class="descclassname">aleph.convertors.</tt><tt class="descname">toEPublication</tt><big>(</big><em>marcxml</em><big>)</big><a class="reference internal" href="_modules/aleph/convertors.html#toEPublication"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.convertors.toEPublication" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert MARCXMLRecord object to EPublication named tuple (see __init__.py).</p>
+<p>marcxml &#8211; MARCXMLRecord instance OR string (with &lt;record&gt; tag)</p>
+<p>Returns EPublication named tuple.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.convertors.toJSON">
+<tt class="descclassname">aleph.convertors.</tt><tt class="descname">toJSON</tt><big>(</big><em>structure</em><big>)</big><a class="reference internal" href="_modules/aleph/convertors.html#toJSON"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.convertors.toJSON" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert structure to json.</p>
+<p>This is necessary, because standard JSON module can&#8217;t serialize
+namedtuples.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-aleph.export">
+<span id="export-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">export</span></tt> Module<a class="headerlink" href="#module-aleph.export" title="Permalink to this headline">¶</a></h2>
+<p>This module is used to put data to Aleph.</p>
+<p>It is based on custom made webform, which is currently used to report new
+books by publishers.</p>
+<p>Source code of this form is not available at this moment (it was created by
+third party), but it is possible, that it will be in future. This will highly
+depend on number of people, which will use this project.</p>
+<p>Most important function from this module is exportEPublication(epub), which
+will do everything, that is needed to do, to export EPublication structure to
+the Aleph.</p>
+<p>This whole module is highly dependent on processes, which are defined as import
+processes at the Czech National Library.</p>
+<p>If you want to use export ability in your library, you should rewrite this and
+take care, that you are sending data somewhere, where someone will process
+them. Otherwise, you can fill your library&#8217;s database with crap.</p>
+<dl class="exception">
+<dt id="aleph.export.ExportException">
+<em class="property">exception </em><tt class="descclassname">aleph.export.</tt><tt class="descname">ExportException</tt><big>(</big><em>message</em><big>)</big><a class="reference internal" href="_modules/aleph/export.html#ExportException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.export.ExportException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="aleph.export.ExportRejectedException">
+<em class="property">exception </em><tt class="descclassname">aleph.export.</tt><tt class="descname">ExportRejectedException</tt><big>(</big><em>message</em><big>)</big><a class="headerlink" href="#aleph.export.ExportRejectedException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.export.ExportException" title="aleph.export.ExportException"><tt class="xref py py-class docutils literal"><span class="pre">aleph.export.ExportException</span></tt></a></p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="aleph.export.InvalidISBNException">
+<em class="property">exception </em><tt class="descclassname">aleph.export.</tt><tt class="descname">InvalidISBNException</tt><big>(</big><em>message</em><big>)</big><a class="reference internal" href="_modules/aleph/export.html#InvalidISBNException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.export.InvalidISBNException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.export.ExportException" title="aleph.export.ExportException"><tt class="xref py py-class docutils literal"><span class="pre">aleph.export.ExportException</span></tt></a></p>
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.export.PostData">
+<em class="property">class </em><tt class="descclassname">aleph.export.</tt><tt class="descname">PostData</tt><big>(</big><em>epub</em><big>)</big><a class="headerlink" href="#aleph.export.PostData" title="Permalink to this definition">¶</a></dt>
+<dd><p>This class is used to transform data from EPublication to dictionary, which
+is sent as POST request to Aleph third-party webform.</p>
+<p><a class="reference external" href="http://aleph.nkp.cz/F/?func=file&amp;file_name=service-isbn">http://aleph.nkp.cz/F/?func=file&amp;file_name=service-isbn</a></p>
+<p>Class is used, because there is 29 POST parameters with internal
+dependencies, which need to be processed and validated before they can be
+passed to webform.</p>
+<dl class="method">
+<dt id="aleph.export.PostData.get_POST_data">
+<tt class="descname">get_POST_data</tt><big>(</big><big>)</big><a class="headerlink" href="#aleph.export.PostData.get_POST_data" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.export.exportEPublication">
+<tt class="descclassname">aleph.export.</tt><tt class="descname">exportEPublication</tt><big>(</big><em>epub</em><big>)</big><a class="headerlink" href="#aleph.export.exportEPublication" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send <cite>epub</cite> EPublication object to Aleph, where it will be processed by
+librarians.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-aleph.isbn">
+<span id="isbn-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">isbn</span></tt> Module<a class="headerlink" href="#module-aleph.isbn" title="Permalink to this headline">¶</a></h2>
+<p>This module is providing funcionality to validate ISBN checksums and also
+allows to compute ISBN checksum digits.</p>
+<dl class="function">
+<dt id="aleph.isbn.get_isbn10_checksum">
+<tt class="descclassname">aleph.isbn.</tt><tt class="descname">get_isbn10_checksum</tt><big>(</big><em>isbn</em><big>)</big><a class="reference internal" href="_modules/aleph/isbn.html#get_isbn10_checksum"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.isbn.get_isbn10_checksum" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.isbn.get_isbn13_checksum">
+<tt class="descclassname">aleph.isbn.</tt><tt class="descname">get_isbn13_checksum</tt><big>(</big><em>isbn</em><big>)</big><a class="reference internal" href="_modules/aleph/isbn.html#get_isbn13_checksum"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.isbn.get_isbn13_checksum" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.isbn.is_isbn10_valid">
+<tt class="descclassname">aleph.isbn.</tt><tt class="descname">is_isbn10_valid</tt><big>(</big><em>isbn</em><big>)</big><a class="reference internal" href="_modules/aleph/isbn.html#is_isbn10_valid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.isbn.is_isbn10_valid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.isbn.is_isbn13_valid">
+<tt class="descclassname">aleph.isbn.</tt><tt class="descname">is_isbn13_valid</tt><big>(</big><em>isbn</em><big>)</big><a class="reference internal" href="_modules/aleph/isbn.html#is_isbn13_valid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.isbn.is_isbn13_valid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.isbn.is_valid_isbn">
+<tt class="descclassname">aleph.isbn.</tt><tt class="descname">is_valid_isbn</tt><big>(</big><em>isbn</em><big>)</big><a class="reference internal" href="_modules/aleph/isbn.html#is_valid_isbn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.isbn.is_valid_isbn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="aleph.isbn.isbn_cleaner">
+<tt class="descclassname">aleph.isbn.</tt><tt class="descname">isbn_cleaner</tt><big>(</big><em>fn</em><big>)</big><a class="reference internal" href="_modules/aleph/isbn.html#isbn_cleaner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.isbn.isbn_cleaner" title="Permalink to this definition">¶</a></dt>
+<dd><p>Decorator for calling other functions from this modules.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-aleph.marcxml">
+<span id="marcxml-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">marcxml</span></tt> Module<a class="headerlink" href="#module-aleph.marcxml" title="Permalink to this headline">¶</a></h2>
+<p>Module for parsing and high-level processing of MARC XML records.</p>
+<p>About format and how the class work; Standard MARC record is made from
+three parts:</p>
+<blockquote>
+<div>leader &#8211; binary something, you can probably ignore it
+controlfileds &#8211; marc fields &lt; 10
+datafields &#8211; important information you actually want</div></blockquote>
+<p>Basic MARC XML scheme uses this structure:</p>
+<blockquote>
+<div><p>&lt;controlfield tag=&#8221;001&#8221;&gt;data&lt;/controlfield&gt;
+...
+&lt;controlfield tag=&#8221;010&#8221;&gt;data&lt;/controlfield&gt;
+&lt;datafield tag=&#8221;011&#8221; ind1=&#8221; &#8221; ind2=&#8221; &#8220;&gt;</p>
+<blockquote>
+<div>&lt;subfield code=&#8221;scode&#8221;&gt;data&lt;/subfield&gt;
+&lt;subfield code=&#8221;a&#8221;&gt;data&lt;/subfield&gt;
+&lt;subfield code=&#8221;a&#8221;&gt;another data, but same code!&lt;/subfield&gt;
+...
+&lt;subfield code&#8221;scode+&#8221;&gt;another data&lt;/subfield&gt;</div></blockquote>
+<p>&lt;/datafield&gt;
+...
+&lt;datafield tag=&#8221;999&#8221; ind1=&#8221; &#8221; ind2=&#8221; &#8220;&gt;
+...
+&lt;/datafield&gt;</p>
+</div></blockquote>
+<p>&lt;/record&gt;
+&#8212;</p>
+<p>&lt;leader&gt; is optional and it is parsed into MARCXMLRecord.leader as string.</p>
+<p>&lt;controlfield&gt;s are optional and parsed as dictionary into
+MARCXMLRecord.controlfields, and dictionary for data from example would
+look like this:</p>
+<p>&#8212;
+MARCXMLRecord.controlfields = {</p>
+<blockquote>
+<div>&#8220;001&#8221;: &#8220;data&#8221;,
+...
+&#8220;010&#8221;: &#8220;data&#8221;</div></blockquote>
+<div class="section" id="id23">
+<h3>}<a class="headerlink" href="#id23" title="Permalink to this headline">¶</a></h3>
+<p>&lt;datafield&gt;s are non-optional and are parsed into MARCXMLRecord.datafields,
+which is little bit more complicated dictionary. Complicated is mainly
+because tag parameter is not unique, so there can be more &lt;datafield&gt;s with
+same tag!</p>
+<p>scode is always one character (ASCII lowercase), or number.</p>
+<p>&#8212;
+MARCXMLRecord.datafields = {</p>
+<blockquote>
+<div><dl class="docutils">
+<dt>&#8220;011&#8221;: [{</dt>
+<dd>&#8220;ind1&#8221;: &#8221; &#8221;,
+&#8220;ind2&#8221;: &#8221; &#8221;,
+&#8220;scode&#8221;: [&#8220;data&#8221;],
+&#8220;scode+&#8221;: [&#8220;another data&#8221;]</dd>
+</dl>
+<p>}],</p>
+<p># real example
+&#8220;928&#8221;: [{</p>
+<blockquote>
+<div>&#8220;ind1&#8221;: &#8220;1&#8221;,
+&#8220;ind2&#8221;: &#8221; &#8221;,
+&#8220;a&#8221;: [&#8220;Portál&#8221;]</div></blockquote>
+<p>}],</p>
+<dl class="docutils">
+<dt>&#8220;910&#8221;: [</dt>
+<dd><dl class="first docutils">
+<dt>{</dt>
+<dd>&#8220;ind1&#8221;: &#8220;1&#8221;,
+&#8220;ind2&#8221;: &#8221; &#8221;,
+&#8220;a&#8221;: [&#8220;ABA001&#8221;]</dd>
+</dl>
+<p>},
+{</p>
+<blockquote>
+<div>&#8220;ind1&#8221;: &#8220;2&#8221;,
+&#8220;ind2&#8221;: &#8221; &#8221;,
+&#8220;a&#8221;: [&#8220;BOA001&#8221;],
+&#8220;b&#8221;: [&#8220;2-1235.975&#8221;]</div></blockquote>
+<p>},
+{</p>
+<blockquote>
+<div>&#8220;ind1&#8221;: &#8220;3&#8221;,
+&#8220;ind2&#8221;: &#8221; &#8221;,
+&#8220;a&#8221;: [&#8220;OLA001&#8221;],
+&#8220;b&#8221;: [&#8220;1-218.844&#8221;]</div></blockquote>
+<p class="last">}</p>
+</dd>
+</dl>
+<p>]</p>
+</div></blockquote>
+</div>
+<div class="section" id="id24">
+<h3>}<a class="headerlink" href="#id24" title="Permalink to this headline">¶</a></h3>
+<p>As you can see in 910 record example, sometimes there are multiple records
+in a list!</p>
+<p>NOTICE, THAT RECORDS ARE STORED IN ARRAY, NO MATTER IF IT IS JUST ONE
+RECORD, OR MULTIPLE RECORDS. SAME APPLY TO SUBFIELDS.</p>
+<p>Example above corresponds with this piece of code from real world:</p>
+<p>&#8212;
+&lt;datafield tag=&#8221;910&#8221; ind1=&#8221;1&#8221; ind2=&#8221; &#8220;&gt;
+&lt;subfield code=&#8221;a&#8221;&gt;ABA001&lt;/subfield&gt;
+&lt;/datafield&gt;
+&lt;datafield tag=&#8221;910&#8221; ind1=&#8221;2&#8221; ind2=&#8221; &#8220;&gt;
+&lt;subfield code=&#8221;a&#8221;&gt;BOA001&lt;/subfield&gt;
+&lt;subfield code=&#8221;b&#8221;&gt;2-1235.975&lt;/subfield&gt;
+&lt;/datafield&gt;
+&lt;datafield tag=&#8221;910&#8221; ind1=&#8221;3&#8221; ind2=&#8221; &#8220;&gt;
+&lt;subfield code=&#8221;a&#8221;&gt;OLA001&lt;/subfield&gt;
+&lt;subfield code=&#8221;b&#8221;&gt;1-218.844&lt;/subfield&gt;
+&lt;/datafield&gt;
+&#8212;</p>
+<ul class="simple">
+<li>OAI &#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;-</li>
+</ul>
+<p>To prevent things to be too much simple, there is also another type of MARC
+XML document - OAI format.</p>
+<p>OAI documents are little bit different, but almost same in structure.</p>
+<p>leader is optional and is stored in MARCXMLRecord.controlfields[&#8220;LDR&#8221;], but
+also in MARCXMLRecord.leader for backward compatibility.</p>
+<p>&lt;controlfield&gt; is renamed to &lt;fixfield&gt; and its &#8220;tag&#8221; parameter to &#8220;label&#8221;.</p>
+<p>&lt;datafield&gt; tag is not named datafield, but &lt;varfield&gt;, &#8220;tag&#8221; parameter is
+&#8220;id&#8221; and ind1/ind2 are named i1/i2, but works the same way.</p>
+<p>&lt;subfield&gt;s parameter &#8220;code&#8221; is renamed to &#8220;label&#8221;.</p>
+<p>Real world example:</p>
+<p>&#8212;
+&lt;oai_marc&gt;
+&lt;fixfield id=&#8221;LDR&#8221;&gt;&#8212;&#8211;nam-a22&#8212;&#8212;aa4500&lt;/fixfield&gt;
+&lt;fixfield id=&#8221;FMT&#8221;&gt;BK&lt;/fixfield&gt;
+&lt;fixfield id=&#8221;001&#8221;&gt;cpk19990652691&lt;/fixfield&gt;
+&lt;fixfield id=&#8221;003&#8221;&gt;CZ-PrNK&lt;/fixfield&gt;
+&lt;fixfield id=&#8221;005&#8221;&gt;20130513104801.0&lt;/fixfield&gt;
+&lt;fixfield id=&#8221;007&#8221;&gt;tu&lt;/fixfield&gt;
+&lt;fixfield id=&#8221;008&#8221;&gt;990330m19981999xr-af&#8211;d&#8212;&#8212;000-1-cze&#8211;&lt;/fixfield&gt;
+&lt;varfield id=&#8221;015&#8221; i1=&#8221; &#8221; i2=&#8221; &#8220;&gt;
+&lt;subfield label=&#8221;a&#8221;&gt;cnb000652691&lt;/subfield&gt;
+&lt;/varfield&gt;
+&lt;varfield id=&#8221;020&#8221; i1=&#8221; &#8221; i2=&#8221; &#8220;&gt;
+&lt;subfield label=&#8221;a&#8221;&gt;80-7174-091-8 (sv. 1 : váz.) :&lt;/subfield&gt;
+&lt;subfield label=&#8221;c&#8221;&gt;Kč 182,00&lt;/subfield&gt;
+&lt;/varfield&gt;
+...
+&lt;/oai_marc&gt;
+&#8212;</p>
+<ul class="simple">
+<li>Full documentation &#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;-</li>
+</ul>
+<p>Description of simplified MARCXML schema can be found at
+<a class="reference external" href="http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd">http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd</a></p>
+<p>Full description of MARCXML with definition of each element can be found at
+<a class="reference external" href="http://www.loc.gov/standards/marcxml/mrcbxmlfile.dtd">http://www.loc.gov/standards/marcxml/mrcbxmlfile.dtd</a> (19492 lines of code)</p>
+<p>Description of MARC OAI can be found at
+<a class="reference external" href="http://www.openarchives.org/OAI/oai_marc.xsd">http://www.openarchives.org/OAI/oai_marc.xsd</a></p>
+<dl class="class">
+<dt id="aleph.marcxml.Corporation">
+<em class="property">class </em><tt class="descclassname">aleph.marcxml.</tt><tt class="descname">Corporation</tt><a class="reference internal" href="_modules/aleph/marcxml.html#Corporation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.Corporation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.marcxml.Corporation" title="aleph.marcxml.Corporation"><tt class="xref py py-class docutils literal"><span class="pre">aleph.marcxml.Corporation</span></tt></a></p>
+<p>Some informations about corporations (fields 110, 610, 710, 810).</p>
+<dl class="docutils">
+<dt>Properties:</dt>
+<dd>.name
+.place
+.date</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.marcxml.MARCXMLRecord">
+<em class="property">class </em><tt class="descclassname">aleph.marcxml.</tt><tt class="descname">MARCXMLRecord</tt><big>(</big><em>xml=None</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord" title="Permalink to this definition">¶</a></dt>
+<dd><p>Class for serialization/deserialization of MARCXML and MARC OAI
+documents.</p>
+<p>This class parses everything between &lt;root&gt; elements. It checks, if
+there is root element, so please, give it full XML.</p>
+<p>Internal format is described in module docstring. You can access
+internal data directly, or using few handy methods on two different
+levels of abstraction:</p>
+<ul class="simple">
+<li>No abstraction at all &#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;</li>
+</ul>
+<p>You can choose to access data directly and for this use, there is few
+important properties:</p>
+<blockquote>
+<div>.leader         (string)
+.oai_marc       (bool)
+.controlfields  (dict)
+.datafields     (dict of arrays of dict of arrays of strings ^-^)</div></blockquote>
+<p>.controlfields is simple and easy to use dictionary, where keys are
+field identificators (string, 3 chars, all chars digits). Value is
+always string.</p>
+<p>.datafields is little bit complicated and it is dictionary, consisting
+of arrays of dictionaries, which consist from arrays of strings and two
+special parameters.</p>
+<p>It sounds horrible, but it is not that hard to understand:</p>
+<p>&#8212;
+.datafields = {</p>
+<blockquote>
+<div><p>&#8220;011&#8221;: [&#8220;ind1&#8221;: &#8221; &#8221;, &#8220;ind2&#8221;: &#8221; &#8220;]  # array of 0 or more dicts
+&#8220;012&#8221;: [</p>
+<blockquote>
+<div><dl class="docutils">
+<dt>{</dt>
+<dd>&#8220;a&#8221;: [&#8220;a) subsection value&#8221;],
+&#8220;b&#8221;: [&#8220;b) subsection value&#8221;],
+&#8220;ind1&#8221;: &#8221; &#8221;,
+&#8220;ind2&#8221;: &#8221; &#8220;</dd>
+</dl>
+<p>},
+{</p>
+<blockquote>
+<div><dl class="docutils">
+<dt>&#8220;a&#8221;: [</dt>
+<dd>&#8220;multiple values in a) subsections are possible!&#8221;,
+&#8220;another value in a) subsection&#8221;</dd>
+</dl>
+<p>],
+&#8220;c&#8221;: [</p>
+<blockquote>
+<div>&#8220;subsection identificator is always one character long&#8221;</div></blockquote>
+<p>],
+&#8220;ind1&#8221;: &#8221; &#8221;,
+&#8220;ind2&#8221;: &#8221; &#8220;</p>
+</div></blockquote>
+<p>}</p>
+</div></blockquote>
+<p>]</p>
+</div></blockquote>
+<p>Notice ind1/ind2 keywords, which are reserved indicators and used in few
+cases thru MARC standard.</p>
+<p>Dict structure is not that hard to understand, but kinda long to access,
+so there is also little bit more high-level abstraction access methods.</p>
+<ul class="simple">
+<li>Lowlevel abstraction &#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;-</li>
+</ul>
+<p>To access data little bit easier, there are defined two methods to
+access and two methods to add data to internal dictionaries:</p>
+<blockquote>
+<div>.addControlField(name, value)
+.addDataField(name, i1, i2, subfields_dict)</div></blockquote>
+<p>Names imho selfdescribing. subfields_dict is expected en enforced to be
+dictionary with one character long keys and list of strings as values.</p>
+<p>Getters are also simple to use:</p>
+<blockquote>
+<div>.getControlRecord(controlfield)
+.getDataRecords(datafield, subfield, throw_exceptions)</div></blockquote>
+<p>.getControlRecord() is basically just wrapper over .controlfields and
+works same way as accessing .controlfields[controlfield]</p>
+<p>.getDataRecords(datafield, subfield, throw_exceptions) return list of
+MarcSubrecord* objects with informations from section <cite>datafield</cite>
+subsection <cite>subfield</cite>.</p>
+<p>If throw_exceptions parameter is set to False, method returns empty list
+instead of throwing KeyError.</p>
+<p><a href="#id25"><span class="problematic" id="id26">*</span></a>As I said, function returns list of MarcSubrecord objects. They are
+almost same thing as normal strings (they are actually subclassed
+strings), but defines few important methods, which can make your life
+little bit easier:</p>
+<blockquote>
+<div>.getI1()
+.getI2()
+.getOtherSubfiedls()</div></blockquote>
+<p>.getOtherSubfiedls() returns dictionary with other subsections, as
+subfield requested by calling .getDataRecords().</p>
+<ul class="simple">
+<li>Highlevel abstractions &#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8211;</li>
+</ul>
+<p>There is also lot of highlevel getters:</p>
+<blockquote>
+<div>.getName()
+.getSubname()
+.getPrice()
+.getPart()
+.getPartName()
+.getPublisher()
+.getPubDate()
+.getPubOrder()
+.getFormat()
+.getPubPlace()
+.getAuthors()
+.getCorporations()
+.getDistributors()
+.getISBNs()
+.getBinding()
+.getOriginals()</div></blockquote>
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.addControlField">
+<tt class="descname">addControlField</tt><big>(</big><em>name</em>, <em>value</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.addControlField"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.addControlField" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.addDataField">
+<tt class="descname">addDataField</tt><big>(</big><em>name</em>, <em>i1</em>, <em>i2</em>, <em>subfields_dict</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.addDataField"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.addDataField" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add new datafield into self.datafields.</p>
+<p>name &#8211; name of datafield
+i1 &#8211; value of i1/ind1 parameter
+i2 &#8211; value of i2/ind2 parameter
+subfields_dict &#8211; dictionary containing subfields in this format:</p>
+<dl class="docutils">
+<dt>{</dt>
+<dd>&#8220;field_id&#8221;: [&#8220;subfield data&#8221;,],
+...
+&#8220;z&#8221;: [&#8220;X0456b&#8221;]</dd>
+</dl>
+<p>}</p>
+<p>field_id can be only one characted long!</p>
+<p>Function takes care of OAI MARC.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getAuthors">
+<tt class="descname">getAuthors</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getAuthors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getAuthors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return list of authors represented as Person objects.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getBinding">
+<tt class="descname">getBinding</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getBinding"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getBinding" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getControlRecord">
+<tt class="descname">getControlRecord</tt><big>(</big><em>controlfield</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getControlRecord"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getControlRecord" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return record from given <cite>controlfield</cite>. Returned type: str.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getCorporations">
+<tt class="descname">getCorporations</tt><big>(</big><em>roles=['dst']</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getCorporations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getCorporations" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return list of Corporation objects specified by roles parameter.</p>
+<dl class="docutils">
+<dt>roles &#8211; specify which types of corporations you need. Set to</dt>
+<dd>[&#8220;any&#8221;] for any role, [&#8220;dst&#8221;] for distributors, etc.. See
+<a class="reference external" href="http://www.loc.gov/marc/relators/relaterm.html">http://www.loc.gov/marc/relators/relaterm.html</a> for details.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getDataRecords">
+<tt class="descname">getDataRecords</tt><big>(</big><em>datafield</em>, <em>subfield</em>, <em>throw_exceptions=True</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getDataRecords"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getDataRecords" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return content of given subfield in datafield.</p>
+<dl class="docutils">
+<dt>datafield &#8211; String with section name (for example &#8220;001&#8221;, &#8220;100&#8221;,</dt>
+<dd>&#8220;700&#8221;)</dd>
+</dl>
+<p>subfield &#8211; String with subfield name (for example &#8220;a&#8221;, &#8220;1&#8221;, etc..)
+throw_exceptions &#8211; If True, KeyError is raised if method couldnt</p>
+<blockquote>
+<div>found given datafield/subfield. If false, blank
+array [] is returned.</div></blockquote>
+<p>Returns list of MarcSubrecords. MarcSubrecord is practically same
+thing as string, but has defined .getI1() and .getI2() properties.</p>
+<p>Believe me, you will need this, because MARC XML depends on them
+from time to time (name of authors for example).</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getDistributors">
+<tt class="descname">getDistributors</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getDistributors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getDistributors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return list of distributors. Each distributor is represented as
+Corporation object.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getFormat">
+<tt class="descname">getFormat</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getFormat"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getFormat" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getI">
+<tt class="descname">getI</tt><big>(</big><em>num</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getI"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getI" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get current name of i1/ind1 parameter based on self.oai_marc.</p>
+<p>This method is used mainly internally, but it can be handy if you
+work with with raw MARC XML object and not using getters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getISBNs">
+<tt class="descname">getISBNs</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getISBNs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getISBNs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return list of ISBN strings.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getName">
+<tt class="descname">getName</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getName"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getName" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getOriginals">
+<tt class="descname">getOriginals</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getOriginals"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getOriginals" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return list of original names.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPart">
+<tt class="descname">getPart</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getPart"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPart" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPartName">
+<tt class="descname">getPartName</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getPartName"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPartName" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPrice">
+<tt class="descname">getPrice</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getPrice"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPrice" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPubDate">
+<tt class="descname">getPubDate</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getPubDate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPubDate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPubOrder">
+<tt class="descname">getPubOrder</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getPubOrder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPubOrder" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPubPlace">
+<tt class="descname">getPubPlace</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getPubPlace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPubPlace" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getPublisher">
+<tt class="descname">getPublisher</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getPublisher"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getPublisher" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.getSubname">
+<tt class="descname">getSubname</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.getSubname"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.getSubname" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MARCXMLRecord.toXML">
+<tt class="descname">toXML</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MARCXMLRecord.toXML"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MARCXMLRecord.toXML" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert object back to XML string.</p>
+<p>Returned string should be same as parsed, if everything works as
+expected.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.marcxml.MarcSubrecord">
+<em class="property">class </em><tt class="descclassname">aleph.marcxml.</tt><tt class="descname">MarcSubrecord</tt><big>(</big><em>arg</em>, <em>ind1</em>, <em>ind2</em>, <em>other_subfields</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MarcSubrecord"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MarcSubrecord" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">str</span></tt></p>
+<p>This class is used to stored data returned from .getDataRecords() method
+from MARCXMLRecord.</p>
+<p>It looks kinda like overshot, but when you are parsing the MARC XML,
+values from subrecords, you need to know the context in which the subrecord
+is put.</p>
+<p>Specifically the i1/i2 values, but sometimes is usefull to have acces even
+to the other subfields from this subrecord.</p>
+<p>This class provides this acces thru .getI1()/.getI2() and
+.getOtherSubfiedls() getters. As a bonus, it is also fully convertable to
+string, in which case only the value of subrecord is preserved.</p>
+<dl class="method">
+<dt id="aleph.marcxml.MarcSubrecord.getI1">
+<tt class="descname">getI1</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MarcSubrecord.getI1"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MarcSubrecord.getI1" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MarcSubrecord.getI2">
+<tt class="descname">getI2</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MarcSubrecord.getI2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MarcSubrecord.getI2" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="aleph.marcxml.MarcSubrecord.getOtherSubfiedls">
+<tt class="descname">getOtherSubfiedls</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#MarcSubrecord.getOtherSubfiedls"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.MarcSubrecord.getOtherSubfiedls" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="aleph.marcxml.Person">
+<em class="property">class </em><tt class="descclassname">aleph.marcxml.</tt><tt class="descname">Person</tt><a class="reference internal" href="_modules/aleph/marcxml.html#Person"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.Person" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#aleph.marcxml.Person" title="aleph.marcxml.Person"><tt class="xref py py-class docutils literal"><span class="pre">aleph.marcxml.Person</span></tt></a></p>
+<p>This class represents informations about persons as they are defined in
+MARC standards.</p>
+<dl class="docutils">
+<dt>Properties:</dt>
+<dd>.name
+.second_name
+.surname
+.title</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="aleph.marcxml.resorted">
+<tt class="descclassname">aleph.marcxml.</tt><tt class="descname">resorted</tt><big>(</big><em>values</em><big>)</big><a class="reference internal" href="_modules/aleph/marcxml.html#resorted"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#aleph.marcxml.resorted" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sort values, but put numbers after alphabetically sorted words.</p>
+<p>This function is here for outputs, to be diff-compatible with aleph.</p>
+</dd></dl>
+
+</div>
+</div>
+<div class="section" id="module-aleph.settings">
+<span id="settings-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">settings</span></tt> Module<a class="headerlink" href="#module-aleph.settings" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="aleph.tests.html">tests Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="aleph.tests.html#id1"><tt class="docutils literal"><span class="pre">tests</span></tt> Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="aleph.tests.html#inspector-module"><tt class="docutils literal"><span class="pre">inspector</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+
+      </div>
+      <div class="bottomnav">
+      
+        <p>
+        <a class="uplink" href="index.html">Contents</a>
+        </p>
+
+      </div>
+
+    <div class="footer">
+        &copy; Copyright 2013, Jan Stavěl.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
