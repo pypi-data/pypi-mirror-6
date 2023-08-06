@@ -1,0 +1,606 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Leip
+"""
+
+from __future__ import print_function
+
+import argparse
+from collections import defaultdict
+import cPickle
+import logging
+import importlib
+import os
+import sys
+import textwrap
+
+import fantail
+
+logformat = "%(levelname)s|%(name)s|%(module)s|%(message)s"
+logging.basicConfig(format=logformat)
+lg = logging.getLogger(__name__)
+
+# hack to quickly get the verbosity set properly:
+if '-v' in sys.argv:
+    lg.setLevel(logging.DEBUG)
+elif '-q' in sys.argv:
+    lg.setLevel(logging.WARNING)
+else:
+    lg.setLevel(logging.INFO)
+
+# cache config files
+CONFIG = {}
+
+
+def get_config(name, package_name=None, config_files=None,
+               rehash=False):
+
+    global CONFIG
+
+    if package_name is None:
+        package_name = name
+
+    if not rehash and CONFIG.has_key(name):
+        return CONFIG[name]
+
+    conf_dir = os.path.join(os.path.expanduser('~'), '.config', name)
+    if not os.path.exists(conf_dir):
+        os.makedirs(conf_dir)
+
+    conf_location = os.path.join(conf_dir, '{}.config.pickle'.format(name))
+
+    db_existed = (os.path.exists(conf_location) and
+                  os.path.getsize(conf_location) > 0)
+    if db_existed:
+        lg.debug("opening cached configuration: %s", conf_location)
+        with open(conf_location) as F:
+            conf = cPickle.load(F)
+    else:
+        conf = fantail.Fantail()
+
+    CONFIG[name] = conf
+
+    if not rehash and db_existed:
+        lg.debug("finished getting conf - returning cached")
+        return conf
+
+    # Ok - either the path did not exist - or - a rehash is required
+
+    # determine configuration file locations
+    if config_files is None:
+        config_files = [
+            'pkg://{}/etc/'.format(package_name),
+            os.path.join(os.path.expanduser('~'), '.config', name + '/'),
+            '/etc/{0}/'.format(name)]
+
+    for c in config_files:
+        lg.warning("config file: {}".format(c))
+        conf.update(fantail.load(c))
+
+    with open(conf_location, 'wb') as F:
+        cPickle.dump(conf, F)
+
+    return conf
+
+
+class app(object):
+
+    def __init__(self,
+                 name=None,
+                 package_name=None,
+                 config_files=None,
+                 set_name='set',
+                 rehash_name='rehash'):
+        """
+
+        :param name: base name of the applications
+        :type name: string
+        :param config_files: list of configuration files, if ommitted
+             the app defaults to `/etc/<NAME>.yaml` and
+             `~/.config/<NAME>/config.yaml`. The order is important, the last
+             config file is the one to which changes will be saved
+        :type config_files: a list of tuples: (id, filename)
+        :param set_name: name of the command to set new values,
+           if set to None, no set function is available. Default='set'
+        :type set_name: string
+
+        """
+        lg.debug("Starting Leip app")
+
+        if name is None:
+            name = os.path.basename(sys.argv[0])
+
+        if package_name is None:
+            package_name = name
+
+        self.name = name
+        self.package_name = package_name
+
+        self.config_files = config_files
+
+        self.leip_commands = {}
+        self.leip_subparsers = {}
+        self.plugins = {}
+
+        self.hooks = defaultdict(list)
+
+        self.parser = argparse.ArgumentParser()
+
+        self.parser.add_argument('-v', '--verbose', action='store_true')
+        self.parser.add_argument('-q', '--quiet', action='store_true')
+        self.parser.add_argument('--profile', action='store_true',
+                                 help=argparse.SUPPRESS)
+
+        self.subparser = self.parser.add_subparsers(
+            title='command', dest='command',
+            help='"{}" command to execute'.format(name))
+
+        # contains transient data - execution specific
+        self.trans = fantail.Fantail()
+
+        # contains configuration data
+        self.conf = get_config(self.name,
+                               package_name=self.package_name,
+                               config_files=self.config_files)
+
+        # check for and load plugins
+        plugins = self.conf['plugin']
+        for plugin_name in plugins:
+
+            plugin = plugins[plugin_name]
+
+            lg.debug("loading plugin %s" % plugin_name)
+
+            module_name = plugin.get('module')
+            if not module_name:
+                continue
+
+            enabled = plugin.get('enabled', True)
+            if not enabled:
+                continue
+
+            lg.debug("attempting to load plugin from module {0}".format(
+                module_name))
+            mod = importlib.import_module(module_name)
+
+            self.plugins[plugin_name] = mod
+            self.discover(mod)
+
+        # register command run as a hook
+        def _run_command(app):
+
+            command = self.trans['args'].command
+
+            profile = self.trans['args'].profile
+
+            # if profile:
+            #     lg.warning("running profiler!")
+            #     import cProfile
+            #     import os
+            #     import pstats
+            #     import tempfile
+            #     pr = cProfile.Profile()
+            #     pr.enable()
+            #     app.run()
+            #     pr.disable()
+            #     handle = tempfile.NamedTemporaryFile(
+            #         delete=False, dir=os.getcwd(), prefix='Mad2.', suffix='.profiler')
+            #     sortby = 'cumulative'
+            #     ps = pstats.Stats(pr, stream=handle).sort_stats(sortby)
+            #     ps.print_stats()
+            #     handle.close()
+
+            if command is None:
+                self.parser.print_help()
+                sys.exit(0)
+
+            lg.debug("run command: {}".format(command))
+            if command in self.leip_subparsers:
+                subcommand = getattr(self.trans['args'], command)
+                function = self.leip_subparsers[command][subcommand]
+                function(self, self.trans['args'])
+            else:
+                func = self.leip_commands[command]
+                lg.debug("run function: {}".format(func))
+                func(self, self.trans['args'])
+
+        self.register_hook('run', 50, _run_command)
+
+        # register parse arguments as a hook
+        def _prep_args(app):
+            args = self.parser.parse_args()
+            self.trans['args'] = args
+            rootlogger = logging.getLogger()
+            if self.trans['args'].verbose:
+                rootlogger.setLevel(logging.DEBUG)
+            elif self.trans['args'].quiet:
+                rootlogger.setLevel(logging.WARNING)
+            else:
+                rootlogger.setLevel(logging.INFO)
+
+        self.register_hook('prepare', 50, _prep_args)
+
+        # hook run order
+        self.hook_order = ['prepare', 'run', 'finish']
+
+        # discover locally
+        self.discover(globals())
+
+    def discover(self, mod):
+        """
+        discover all hooks & commands in the provided module or
+        module namespace (globals())
+
+        :param mod: an imported module or a globals dict
+        """
+
+        if isinstance(mod, dict):
+            mod_objects = mod
+        else:
+            mod_objects = mod.__dict__
+
+        self.run_init_hook(mod_objects)
+        self.discover_2(mod_objects)
+
+    def run_init_hook(self, mod_objects):
+        """
+        Run prediscovery initialization hook for this module.
+
+        This might allow, for example, flexible creation of functions
+        to be discovered later on.
+
+        For a hook to be executed as a prediscovery init hook, it needs to be
+        decorated with: ''@leip.init''
+        """
+
+        leip_init_hook = None
+        for obj_name in mod_objects:
+            obj = mod_objects[obj_name]
+
+            if isinstance(obj, fantail.Fantail):
+                continue
+
+            # see if this is a function decorated as hook
+            if hasattr(obj, '__call__') and \
+                    hasattr(obj, '_leip_init_hook'):
+                leip_init_hook = obj
+
+        if not leip_init_hook is None:
+            # execute init_hook - with the app - so
+            # the module has access to configuration
+            leip_init_hook(self)
+
+    def discover_2(self, mod_objects):
+        """
+        Execute actual discovery of leip tagged functions & hooks
+        """
+
+        subcommands = []
+
+        for obj_name in mod_objects:
+            obj = mod_objects[obj_name]
+
+            if isinstance(obj, fantail.Fantail):
+                continue
+
+            # see if this is a function decorated as hook
+            if not hasattr(obj, '__call__'):
+                continue
+
+            if hasattr(obj, '_leip_hook'):
+                hook = obj._leip_hook
+                if isinstance(hook, fantail.Fantail):
+                    continue
+                prio = obj.__dict__.get('_leip_hook_priority', 100)
+                lg.debug("discovered hook %s (%d) in %s" % (
+                    hook, prio, obj.__name__))
+                self.hooks[hook].append(
+                    (prio, obj))
+
+            if hasattr(obj, '_leip_subcommand'):
+                subcommands.append(obj)
+            elif hasattr(obj, '_leip_command'):
+                self.register_command(obj)
+
+        for subcommand in subcommands:
+            self.register_command(subcommand)
+
+    def register_command(self, function):
+
+        cname = function._leip_command
+
+        is_subcommand = False
+        parent = None
+        subcommand_name = getattr(function, '_leip_subcommand', False)
+        if subcommand_name:
+            is_subcommand = True
+            parent = function._leip_parent
+
+        is_subparser = False
+        if hasattr(function, '_leip_is_subparser') and \
+                function._leip_is_subparser:
+            is_subparser = True
+
+        lg.debug("command %s subp %s subc %s",
+                 cname, is_subparser, is_subcommand)
+
+        if hasattr(function, '_leip_usage'):
+            usage = function._leip_usage
+        else:
+            usage = None
+
+        lg.debug("discovered command %s, %s", cname, function)
+        self.leip_commands[cname] = function
+
+        # create a help text from the docstring - if possible
+        _desc = [cname]
+        if function.__doc__:
+            _desc = function.__doc__.strip().split("\n", 1)
+
+        if len(_desc) == 2:
+            short_description, long_description = _desc
+        else:
+            short_description, long_description = _desc[0], ""
+
+        long_description = textwrap.dedent(long_description)
+
+        if not is_subcommand:
+            # regular command:
+            cp = self.subparser.add_parser(
+                cname, usage=usage, help=short_description,
+                description=long_description)
+
+            # if this function is a subparser - add one - so we
+            # can later add subcommands
+            if is_subparser:
+                self.leip_subparsers[cname] = {}
+                subp = cp.add_subparsers(title=cname, dest=cname)
+                function._leip_subparser = subp
+        else:
+            parent_name = parent._leip_command
+            self.leip_subparsers[parent_name][subcommand_name] = function
+            cp = parent._leip_subparser.add_parser(
+                subcommand_name, usage=usage,
+                help=short_description,
+                description=long_description)
+
+        if hasattr(function, '_leip_args'):
+            for args, kwargs in function._leip_args:
+                cp.add_argument(*args, **kwargs)
+
+        function._leip_command_parser = cp
+
+    def register_hook(self, name, priority, function):
+        lg.debug("registering hook {0} / {1}".format(name, function))
+        self.hooks[name].append(
+            (priority, function))
+
+    def run_hook(self, name, *args, **kw):
+        """
+        Execute hook
+        """
+        to_run = sorted(self.hooks[name])
+        lg.debug("running hook %s" % name)
+
+        for priority, func in to_run:
+            lg.debug("running hook %s" % func)
+            func(self, *args, **kw)
+
+    def run(self):
+        for hook in self.hook_order:
+            lg.debug("running hook {}".format(hook))
+            self.run_hook(hook)
+
+
+#
+# Command decorators
+#
+def command(f):
+    """
+    Tag a function to become a command - take the function name and
+    use it as the name of the command.
+    """
+    f._leip_command = f.__name__
+    f._leip_args = []
+    lg.debug("marking function as leip command: %s" % f.__name__)
+    return f
+
+
+def subparser(f):
+    """
+    Mark this function as being a subparser
+    """
+    f._leip_command = f.__name__
+    f._leip_args = []
+    f._leip_is_subparser = True
+    lg.debug("marking function as leip subcommand: %s" % f.__name__)
+    return f
+
+
+def subcommand(parent, command_name=None):
+    """
+    Mark this function as being a subcommand
+    """
+    def decorator(f):
+        lg.debug("marking function as leip subcommand: %s" % command_name)
+        f._leip_subcommand = True
+        f._leip_parent = parent
+        f._leip_subcommand = command_name
+        f._leip_command = "{}.{}".format(parent._leip_command, command_name)
+        f._leip_args = []
+        return f
+    return decorator
+
+
+def commandName(name):
+    """
+    as command, but provide a specific name
+    """
+    def decorator(f):
+        lg.debug("marking function as leip command: %s" % name)
+        f._leip_command = name
+        f._leip_args = []
+        return f
+    return decorator
+
+
+def usage(usage):
+    """
+    add a usage string to a command
+    """
+    def decorator(f):
+        lg.debug("adding usage argument {0}".format(usage))
+        f._leip_usage = usage
+        return f
+    return decorator
+
+
+def arg(*args, **kwargs):
+    """
+    add an argument to a command - use the full argparse syntax
+    """
+    def decorator(f):
+        lg.debug(
+            "adding leip argument {0}, {1}".format(str(args), str(kwargs)))
+        f._leip_args.append((args, kwargs))
+        return f
+    return decorator
+
+
+def flag(*args, **kwargs):
+    """
+    Add a flag to (default false - true if specified) any command
+    """
+    def decorator(f):
+        lg.debug("adding leip flag {0}, {1}".format(str(args), str(kwargs)))
+        kwargs['action'] = kwargs.get('action', 'store_true')
+        kwargs['default'] = kwargs.get('default', False)
+        f._leip_args.append((args, kwargs))
+        return f
+    return decorator
+
+
+#
+# Pre discovery init hook decorators
+#
+def init(f):
+    """
+    Mark this function as a pre discovery init hook.get_config.
+
+    Only one per module is expected.
+    """
+    f._leip_init_hook = f.__name__
+    return f
+
+
+#
+# Hook decorators
+#
+def hook(name, priority=50):
+    """
+    mark this function as a hook for later execution
+
+    :param name: name of the hook to call
+    :type name: string
+    :param priority: inidicate how soon this hook must be called.
+        Lower means sooner (default: 50)
+    :type priority: int
+    """
+    def _hook(f):
+        lg.debug("registering '%s' hook in %s priority %d" % (
+            name, f.__name__, priority))
+        f._leip_hook = name
+        f._leip_hook_priority = priority
+        return f
+
+    return _hook
+
+
+#
+# configuration code
+#
+
+@subparser
+def conf(app, args):
+    """
+    Manage configuration
+    """
+    pass  # this function is never called - it's just a placeholder
+
+
+@arg('value', help="value to set it to")
+@arg('key', help="key to set")
+@subcommand(conf, "set")
+def conf_set(app, args):
+    """
+    set a variable
+    """
+    app.conf[args.key] = args.value
+
+
+@arg("key", nargs='?')
+@subcommand(conf, "get")
+def conf_get(app, args):
+    """
+    Get the value of a configuration variable
+    """
+    print(app.conf.get(args.key, ""))
+
+
+@arg("prefix", nargs='?')
+@subcommand(conf, "show")
+def conf_show(app, args):
+    """
+    list all configuration variables
+    """
+    if args.prefix:
+        data = app.conf[args.prefix]
+    else:
+        data = app.conf
+
+    for k in data.keys():
+        if args.prefix:
+            print('{0}.{1}: {2}'.format(args.prefix, k, data[k]))
+        else:
+            print(k, data[k])
+
+
+@arg("prefix", nargs='?')
+@subcommand(conf, "keys")
+def conf_keys(app, args):
+    """
+    list all configuration keys, optionally with a prefix
+    """
+    if args.prefix:
+        data = app.conf[args.prefix]
+    else:
+        data = app.conf
+
+    for k in data.keys():
+        if args.prefix:
+            print('{0}.{1}'.format(args.prefix, k))
+        else:
+            print(k)
+
+
+@flag('-c', '--clear', help='clear configuration db first')
+@subcommand(conf, "rehash")
+def _conf_rehash(app, args):
+    """
+    Read & set configuration from the default pacakge data
+    """
+    app.conf.clear()
+    app.conf = get_config(
+        app.name,
+        package_name=app.package_name,
+        config_files=app.config_files,
+        rehash=True)
+
+
+@subcommand(conf, "clear")
+def _conf_clear(app, args):
+    """
+    Clear configuratino database
+    """
+    app.conf.clear()
