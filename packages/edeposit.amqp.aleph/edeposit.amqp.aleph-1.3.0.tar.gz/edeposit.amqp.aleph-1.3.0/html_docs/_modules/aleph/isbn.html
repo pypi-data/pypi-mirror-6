@@ -1,0 +1,235 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>aleph.isbn</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="" href="../../index.html" />
+    <link rel="up" title="aleph" href="../aleph.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html"></a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../aleph.html" accesskey="U">aleph</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for aleph.isbn</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c">#</span>
+<span class="c"># Interpreter version: python 2.7</span>
+<span class="c">#</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This module is providing funcionality to validate ISBN checksums and also</span>
+<span class="sd">allows to compute ISBN&#39;s checksum digits.a</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">wraps</span>
+
+
+<span class="c">#= Functions &amp; objects ========================================================</span>
+<span class="k">def</span> <span class="nf">_clean_isbn</span><span class="p">(</span><span class="n">isbn</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Remove all non-digit and non &quot;x&quot; characters from given string.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        isbn (str): isbn string, which will be cleaned.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        list: array of numbers (if &quot;x&quot; is found, it is converted to 10).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">isbn</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">isbn</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">isbn</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+
+        <span class="c"># filter digits and &quot;x&quot;</span>
+        <span class="n">isbn</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()</span> <span class="ow">or</span> <span class="n">x</span> <span class="o">==</span> <span class="s">&quot;x&quot;</span><span class="p">,</span> <span class="n">isbn</span><span class="p">)</span>
+
+    <span class="c"># convert ISBN to numbers</span>
+    <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="mi">10</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="s">&quot;x&quot;</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">isbn</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_isbn_cleaner</span><span class="p">(</span><span class="n">fn</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Decorator for calling other functions from this modules. Purpose of this</span>
+<span class="sd">    decorator is to clean the ISBN string from garbage and return list.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        fn (function): function in which will be :func:`_clean_isbn(isbn)` call</span>
+<span class="sd">                       wrapped.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nd">@wraps</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">wrapper</span><span class="p">(</span><span class="n">isbn</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">fn</span><span class="p">(</span><span class="n">_clean_isbn</span><span class="p">(</span><span class="n">isbn</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">wrapper</span>
+
+
+<span class="nd">@_isbn_cleaner</span>
+<div class="viewcode-block" id="get_isbn10_checksum"><a class="viewcode-back" href="../../api/aleph.isbn.html#aleph.isbn.get_isbn10_checksum">[docs]</a><span class="k">def</span> <span class="nf">get_isbn10_checksum</span><span class="p">(</span><span class="n">isbn</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Args:</span>
+<span class="sd">        isbn (str/list): ISBN number as string or list of digits</span>
+
+<span class="sd">    Warning:</span>
+<span class="sd">        Function expects that `isbn` is only 9 digits long.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        int: last checksum digit for given `isbn`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">sum</span><span class="p">([(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">x</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">isbn</span><span class="p">)])</span> <span class="o">%</span> <span class="mi">11</span>
+
+</div>
+<span class="nd">@_isbn_cleaner</span>
+<div class="viewcode-block" id="is_isbn10_valid"><a class="viewcode-back" href="../../api/aleph.isbn.html#aleph.isbn.is_isbn10_valid">[docs]</a><span class="k">def</span> <span class="nf">is_isbn10_valid</span><span class="p">(</span><span class="n">isbn</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Check if given `isbn` 10 is valid.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        isbn (str/list): ISBN number as string or list of digits</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        bool: True if ISBN is valid</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">isbn</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">10</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">False</span>
+
+    <span class="k">return</span> <span class="n">get_isbn10_checksum</span><span class="p">(</span><span class="n">isbn</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">==</span> <span class="n">isbn</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+</div>
+<span class="nd">@_isbn_cleaner</span>
+<div class="viewcode-block" id="get_isbn13_checksum"><a class="viewcode-back" href="../../api/aleph.isbn.html#aleph.isbn.get_isbn13_checksum">[docs]</a><span class="k">def</span> <span class="nf">get_isbn13_checksum</span><span class="p">(</span><span class="n">isbn</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Args:</span>
+<span class="sd">        isbn (str/list): ISBN number as string or list of digits</span>
+
+<span class="sd">    Warning:</span>
+<span class="sd">        Function expects that `isbn` is only 12 digits long.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        int: last checksum digit for given `isbn`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">multipliers</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="nb">list</span><span class="p">(</span><span class="s">&quot;13&quot;</span> <span class="o">*</span> <span class="mi">6</span><span class="p">))</span>
+    <span class="k">return</span> <span class="mi">10</span> <span class="o">-</span> <span class="nb">sum</span><span class="p">([</span><span class="n">i</span> <span class="o">*</span> <span class="n">x</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">multipliers</span><span class="p">,</span> <span class="n">isbn</span><span class="p">)])</span> <span class="o">%</span> <span class="mi">10</span>
+
+</div>
+<span class="nd">@_isbn_cleaner</span>
+<div class="viewcode-block" id="is_isbn13_valid"><a class="viewcode-back" href="../../api/aleph.isbn.html#aleph.isbn.is_isbn13_valid">[docs]</a><span class="k">def</span> <span class="nf">is_isbn13_valid</span><span class="p">(</span><span class="n">isbn</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Check if given `isbn` 13 is valid.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        isbn (str/list): ISBN number as string or list of digits</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        bool: True if ISBN is valid</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">isbn</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">13</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">False</span>
+
+    <span class="k">return</span> <span class="n">get_isbn13_checksum</span><span class="p">(</span><span class="n">isbn</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">==</span> <span class="n">isbn</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+</div>
+<span class="nd">@_isbn_cleaner</span>
+<div class="viewcode-block" id="is_valid_isbn"><a class="viewcode-back" href="../../api/aleph.isbn.html#aleph.isbn.is_valid_isbn">[docs]</a><span class="k">def</span> <span class="nf">is_valid_isbn</span><span class="p">(</span><span class="n">isbn</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Validate given `isbn`.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        isbn (str/list): ISBN number as string or list of digits</span>
+
+<span class="sd">    Note:</span>
+<span class="sd">        Function doesn&#39;t require `isbn` type to be specified (it can be both</span>
+<span class="sd">        10/13 isbn&#39;s versions).</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        bool: True if ISBN is valid</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">isbn</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">length</span> <span class="o">==</span> <span class="mi">10</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">is_isbn10_valid</span><span class="p">(</span><span class="n">isbn</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">length</span> <span class="o">==</span> <span class="mi">13</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">is_isbn13_valid</span><span class="p">(</span><span class="n">isbn</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="bp">False</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../../index.html">
+              <img class="logo" src="../../_static/nkp_logo.png" alt="Logo"/>
+            </a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html"></a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../aleph.html" >aleph</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
