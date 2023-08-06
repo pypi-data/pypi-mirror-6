@@ -1,0 +1,138 @@
+Metadata-Version: 2.0
+Name: delocate
+Version: 0.2.1
+Summary: Move OSX dynamic libraries into package
+Home-page: http://github.com/matthew-brett/delocate
+Author: Matthew Brett
+Author-email: matthew.brett@gmail.com
+License: BSD license
+Platform: UNKNOWN
+Classifier: Intended Audience :: Developers
+Classifier: Environment :: Console
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Programming Language :: Python
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Development Status :: 3 - Alpha
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Software Development :: Build Tools
+Requires-Dist: wheel
+
+.. image:: https://travis-ci.org/matthew-brett/delocate.svg?branch=master
+    :target: https://travis-ci.org/matthew-brett/delocate
+
+########
+Delocate
+########
+
+OSX utilities to:
+
+* find dynamic libraries imported from python extensions
+* copy needed dynamic libraries to directory within package
+* update OSX ``install_names`` and ``rpath`` to cause code to load from copies
+  of libraries
+
+Provides scripts:
+
+* ``delocate-listdeps`` -- show libraries a tree depends on
+* ``delocate-path`` -- copy libraries a tree depends on into the tree and relink
+* ``delocate-wheel`` -- rewrite wheel having copied and relinked library
+  dependencies into the wheel tree.
+
+.. warning::
+
+    Please be careful - this software is alpha quality and has not been much
+    tested in the wild.  Make backups of your paths and wheels before trying the
+    utilities on them, please report any problems on the issue tracker (see
+    below).
+
+***********
+The problem
+***********
+
+Let's say you have built a wheel somewhere, but it's linking to dynamic
+libraries elsewhere on the machine, so you can't distribute it, because others
+may not have these same libraries.  Here we analyze the dependencies for a scipy
+wheel::
+
+    $ delocate-listdeps scipy-0.14.0b1-cp34-cp34m-macosx_10_6_intel.whl
+    /usr/local/Cellar/gfortran/4.8.2/gfortran/lib/libgcc_s.1.dylib
+    /usr/local/Cellar/gfortran/4.8.2/gfortran/lib/libgfortran.3.dylib
+    /usr/local/Cellar/gfortran/4.8.2/gfortran/lib/libquadmath.0.dylib
+
+By default, this does not include libraries in ``/usr/lib`` and ``/System``.
+See those too with::
+
+    $ delocate-listdeps --all scipy-0.14.0b1-cp34-cp34m-macosx_10_6_intel.whl
+    /System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate
+    /usr/lib/libSystem.B.dylib
+    /usr/lib/libstdc++.6.dylib
+    /usr/local/Cellar/gfortran/4.8.2/gfortran/lib/libgcc_s.1.dylib
+    /usr/local/Cellar/gfortran/4.8.2/gfortran/lib/libgfortran.3.dylib
+    /usr/local/Cellar/gfortran/4.8.2/gfortran/lib/libquadmath.0.dylib
+
+The output tells me that scipy has picked up dynamic libraries from my homebrew
+installation of ``gfortran`` (as well as the system libs).
+
+.. warning::
+
+    If you see any dependencies starting with ``@`` in a wheel that has not yet
+    been processed with ``delocate-wheel``, the delocation process below will
+    likely not work, and leave you with - er - a broken wheel.
+
+**********
+A solution
+**********
+
+We can fix like this::
+
+    $ delocate-wheel -w fixed_wheels -v scipy-0.14.0b1-cp34-cp34m-macosx_10_6_intel.whl
+    Fixing: scipy-0.14.0b1-cp34-cp34m-macosx_10_6_intel.whl
+    Copied to package .dylibs directory:
+    /usr/local/Cellar/gfortran/4.8.2/gfortran/lib/libgcc_s.1.dylib
+    /usr/local/Cellar/gfortran/4.8.2/gfortran/lib/libgfortran.3.dylib
+    /usr/local/Cellar/gfortran/4.8.2/gfortran/lib/libquadmath.0.dylib
+
+The ``-w`` flag tells delocate-wheel to output to a new wheel directory instead
+of overwriting the old wheel.  ``-v`` (verbose) tells you what delocate-wheel is
+doing.  In this case it has made a new directory in the wheel zipfile, named
+``scipy/.dylibs``. It has copied all the library dependencies that are outside
+the OSX system trees into this directory, and patched the python ``.so``
+extensions in the wheel to use these copies instead of looking in
+``/usr/local/Cellar/gfortran/4.8.2/gfortran/lib``.
+
+Check the links again to confirm::
+
+    $ delocate-listdeps fixed_wheels/scipy-0.14.0b1-cp34-cp34m-macosx_10_6_intel.whl
+    @loader_path/libgcc_s.1.dylib
+    @loader_path/libquadmath.0.dylib
+    @rpath/libgcc_s.1.dylib
+    @rpath/libgfortran.3.dylib
+    @rpath/libquadmath.0.dylib
+
+So - system dylibs the same, but the others moved into the wheel tree.
+
+This makes the wheel more likely to work on another machine which does not have
+the same version of gfortran installed - in this example.
+
+****
+Code
+****
+
+See https://github.com/matthew-brett/delocate
+
+Released under the BSD two-clause license - see the file ``LICENSE`` in the
+source distribution.
+
+`travis-ci <https://travis-ci.org/matthew-brett/delocate>`_ kindly tests the
+code automatically under Python 2.7, 3.3 and 3.4.
+
+The latest released version is at https://pypi.python.org/pypi/delocate
+
+*******
+Support
+*******
+
+Please put up issues on the `delocate issue tracker
+<https://github.com/matthew-brett/delocate/issues>`_.
+
+
