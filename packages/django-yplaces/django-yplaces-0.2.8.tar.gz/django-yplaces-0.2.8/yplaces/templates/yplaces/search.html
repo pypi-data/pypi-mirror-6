@@ -1,0 +1,146 @@
+{% extends 'yplaces/base.html' %}
+
+{% load i18n %}
+
+{% load staticfiles %}
+
+{% block title %}{% trans 'Search' %}{% endblock %}
+
+{% block head %}
+  <link href="{% static 'yplaces/css/search.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+
+<div class="search">
+
+  <!--
+    Left Container
+  -->
+	<div class="left-container round-border-shadow">
+    <h1>{% trans 'Search Results' %}</h1>
+    {% if search_results %}
+      <div class="results">
+        <table class="table table-hover">
+          <tbody>
+            {% for place in search_results %}
+              <tr place-id="{{ place.pk }}">
+                <td>
+                  <a href="{% url 'yplaces:slug' pk=place.pk slug=place.name|slugify %}">{{ place.name }}</a>
+                  <div class="star-rating-sm">
+                  {% if place.rating %}
+                    <div style="width:{{ place.rating.get_average_percentage|stringformat:'f' }}%"></div>
+                  {% else %}
+                    <div style="width:0%"></div>
+                  {% endif %}
+                  </div>              
+                  {{ place.address }} {{ place.postal_code }} {{ place.city }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if search_results.has_previous or search_results.has_next %}
+          <div class="pagination">
+            <ul class="pager">
+              {% if search_results.has_previous %}
+                <li><a href="?name={{ request.GET.name }}&location={{ request.GET.location }}&page={{ search_results.previous_page_number }}">&larr; Previous</a></li>
+              {% else %}
+                <li class="disabled"><a>&larr; Previous</a></li>
+              {% endif %}
+              <li class="current">{{ search_results.number }} of {{ search_results.paginator.num_pages }}</li>
+              {% if search_results.has_next %}
+                <li><a href="?name={{ request.GET.name }}&location={{ request.GET.location }}&page={{ search_results.next_page_number }}">Next &rarr;</a></li>
+              {% else %}
+                <li class="disabled"><a>Next &rarr;</a></li>
+              {% endif %}
+            </ul>
+          </div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="no-results">
+        <p>{% trans 'Your search did not match any results.' %}</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <!--
+    Right Container
+  -->
+  <div class="right-container">
+    <div class="fixer">
+      <div id="map" class="round-border-shadow">
+        <i class="fa fa-map-marker fa-5x"></i>
+        <br>
+        {% trans 'Loading Map' %}
+        <br>
+        <img src="{% static 'yplaces/images/ajax-loader-16x16.gif' %}">
+      </div>
+    </div>
+  </div>
+
+  <!--
+    Much containers. Wow place them. So well!
+  -->
+  <div class="clear"></div>
+
+</div>
+
+{% endblock %}
+
+{% block javascript %}
+  <script src="http://maps.google.com/maps/api/js?libraries=geometry&sensor=false"></script>
+  <script src="{% static 'yplaces/js/search.js' %}"></script>
+  <script>
+      /*
+       * Assorted variables.
+       */
+      var map;
+      var marker;
+      var places = [];
+      var infowindow;
+      var places_api_url = '{{ places_api_url }}';
+      var static_url = '{{ STATIC_URL }}';
+      var place_href = "{% url 'yplaces:slug' pk=1 slug="place-slug" %}";
+
+      /*
+       * Results.
+       */
+      var search_results = [];
+      {% for place in search_results %}
+          var place = {
+              id: {{ place.id }},
+              name: '{{ place.name }}',
+              slug: '{{ place.slug }}',
+              address: '{{ place.address }}',
+              postal_code: '{{ place.postal_code }}',
+              city: '{{ place.city }}',
+              state: '{{ place.state }}',
+              country: '{{ place.country }}',
+              latitude: {{ place.latitude|stringformat:'f' }},
+              longitude: {{ place.longitude|stringformat:'f' }},
+              marker_image_url: '{{ place.get_marker_image_url }}',
+              rating: {{ place.get_rating_value|safe }}
+          }
+          search_results.push(place);
+      {% endfor %}
+
+      /*
+       * When a place is hovered from the list, show it on the map.
+       */
+      $('.search .left-container .results table tbody tr').on('click', function() {
+          showPlace($(this).attr('place-id'));
+      });
+
+      /*
+       * What to do after page finishes loading.
+       */
+      $(document).ready(function() {
+          // Fetch user's location based on the IP address and initialize map.
+          $.getJSON('http://www.openlinkmap.org/api/ippos.php?format=json&callback=?', function(data, status, xhr) {
+              initializeMap(data.lat, data.lon, true);
+          });
+      });
+  </script>
+{% endblock %}

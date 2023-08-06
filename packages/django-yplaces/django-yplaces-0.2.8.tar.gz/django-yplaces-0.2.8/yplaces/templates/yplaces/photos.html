@@ -1,0 +1,169 @@
+{% extends 'yplaces/base.html' %}
+
+{% load i18n %}
+
+{% load staticfiles %}
+
+{% block title %}{% trans 'Photos of' %} {{ place.name }}{% endblock %}
+
+{% block description %}{{ place.address }}, {{ place.postal_code }} {{ place.city }}. {{ place.country }}.{% endblock %}
+
+{% block head %}
+  <link href="{% static 'yplaces/css/photos.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+
+<div class="place-photos">
+
+  <!-- Details -->
+  <div class="details round-border-shadow">
+
+    <!-- Name & Address -->
+    <div class="name">
+      <div class="picture">
+        <img src="{% static 'yplaces/images/photo_placeholder.png' %}" class="img-rounded">
+      </div>
+      <div class="address">
+        <h1>
+          <a href="{% url 'yplaces:slug' pk=place.pk slug=place.name|slugify %}">{{ place.name }}</a>
+        </h1>
+        <p>{{ place.address }}, {{ place.postal_code }} {{ place.city }}</p>
+        <div class="star-rating-sm rating">
+          {% if rating %}
+            <div style="width:{{ rating.get_average_percentage|stringformat:'f' }}%"></div>
+          {% else %}
+            <div style="width:0%"></div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="meta">
+        <h2>{{ place.photo_set.all|length }} {% trans 'Photos' %}</h2>
+        <button class="btn btn-default btn-sm" onclick="uploadPhoto()">
+          <i class="fa fa-camera"></i>
+          {% trans 'Add Photo' %}
+        </button>
+      </div>
+      <div class="clear"></div>
+    </div>
+
+    <!-- Photos -->
+    <div class="gallery">
+      {% if place.photo_set.all %}
+        {% for photo in place.photo_set.all %}
+          <div class="item">
+            <a class="fancybox" rel="gallery" href="{{ photo.file.url }}">
+              <img src="{{ photo.file.url }}" class="photo img-thumbnail">
+            </a>
+            <div class="user-info">
+              <div class="avatar">
+                <img src="{{ photo.added_by.get_photo_url }}" class="img-rounded">
+              </div>
+              <div class="info">
+                <p>
+                  {{ photo.added_by.name }}
+                  <br>
+                  <span>{{ photo.added_at }}</span>
+                </p>
+                {% if photo.review %}
+                  <div class="star-rating-sm rating"><div style="width:{{ photo.review.get_rating_percentage|stringformat:'f' }}%"></div></div>
+                {% endif %}
+              </div>
+              {% if request.user.is_staff %}
+                <div style="float: right; padding: 9px 9px 0 0;">
+                  <button class="btn btn-xs btn-danger" onclick="deletePhoto(this, {{ photo.pk }});">
+                    <span class="glyphicon glyphicon-trash"></span>
+                  </button>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="item">     
+          {% trans 'No photos :(' %}
+        </div>
+      {% endif %}
+      <div class="clear" style="float: none;"></div>
+    </div>
+
+  </div>
+</div>
+
+<!--
+  Add Photo Modal
+-->
+<div class="modal fade" id="addPhoto" tabindex="-1" role="dialog" aria-labelledby="addPhotoLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h4 class="modal-title" id="addPhotoLabel">{% trans 'Add Photo' %}</h4>
+      </div>
+      <div class="modal-body">
+        <form role="form" data-validate="salsa">
+          <div id="messages"></div>
+          <div class="form-group">
+            <label>{% trans 'File' %}</label>
+            <input id="file" type="file" accept="image/*" name="photo" data-required="true">
+          </div>
+          <div class="form-group" style="display:none;">
+            <label>{% trans 'Preview' %}</label>
+            <div id="preview"></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">{% trans 'Cancel' %}</button>
+        <button id="submit" type="button" class="btn btn-primary" data-loading-text="{% trans 'Uploading...' %}">{% trans 'Submit' %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block javascript %}
+  <script src="{% static 'yplaces/js/photos.js' %}"></script>
+  <script>
+      /*
+       * Assorted variables.
+       */
+      var photos_api_url = '{{ photos_api_url }}';
+      var request_path = '{{ request.path }}';
+
+      /*
+       * If user is authenticated, open photo submission modal. If not, redirect to login page with respective 'next' URL
+       * pointing back to this (i.e. opening this same page and issuing the modal to be opened).
+       */
+      function uploadPhoto() {
+          if('{{ request.user.is_authenticated }}' == 'True') {
+              $('#addPhoto').modal();
+          } else {
+              window.location = "{% url 'yaccounts:login' %}?next={{ request.path }}?action=upload";
+          }
+      }
+
+      /*
+       * What to do after page finishes loading.
+       */
+      $(document).ready(function() {
+
+          // Initialize photo gallery.
+          $('.fancybox').fancybox({ openEffect: 'none', closeEffect: 'none', nextEffect : 'none', prevEffect: 'none' });
+
+          // Initialize stuff.
+          initializePhotoModal();
+
+          // If user is authenticated and 'upload' action is requested..
+          if('{{ request.GET.action }}' == 'upload') {
+
+            // Clear action from URL (to avoid refresh always opening modal)
+            history.pushState('data', '', '{{ request.path }}');
+
+            // Request upload photo modal.
+            uploadPhoto();
+          }
+      });
+  </script>
+{% endblock %}
