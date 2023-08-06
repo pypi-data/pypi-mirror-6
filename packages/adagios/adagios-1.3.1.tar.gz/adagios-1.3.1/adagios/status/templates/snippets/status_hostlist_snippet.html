@@ -1,0 +1,86 @@
+<!-- snippet status_hostlist_snippet.html starts -->
+{% load adagiostags %}
+
+<table class="table table-condensed well searchtable" id="hoststable" style="font-size:12px;">
+    <thead>
+    <tr>
+        <th class="small">
+            <div class="btn-group" class="select_bar">
+                <a class="" data-toggle="dropdown" href="#">
+                    <input style="margin-left: -1px; padding: 0px;" type="checkbox" class="select_many">
+                </a>
+                <ul class="dropdown-menu">
+                    <li><a class="select_all"> All</a></li>
+                    <li><a class="select_none"> None</a></li>
+                    <li><a class="select_unhandled_problems" > Unhandled Problems</a></li>
+                    <li><a class="select_problems"> All Problems</a></li>
+                </ul>
+            </div>
+        </th>
+        <th></th>
+        <th>Host Name</th>
+        <th>Address</th>
+        <th>Last Check</th>
+        <th>Host Status</th>
+        <th>Service Status</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for row in hosts %}
+        <tr class="mainrow" id="row_{{ forloop.counter }}" >
+            <td class="selectable small">
+                <input class="chkbox"  type="checkbox" name="host" data-host_name="{{ row.name }}" data-object_type="host" value="{{ row.name }}" style="margin: -1px; padding: 0px;">
+                <input type="hidden" class="input_hostname" name="host_name" value="{{ row.name }}">
+            </td>
+            <td class=small style="cursor: pointer;" onclick='$(".hostsubrow_{{ forloop.counter }}").toggle();'>
+                <a href="#">
+                <div class="hostsubrow_{{ forloop.counter }}">&#x25b7;</div>
+                <div class="hostsubrow_{{ forloop.counter }} hide">&#x25bd;</div>
+                </a>
+            </td>
+            <td>
+                <a id="{{ row.name }}" href="{% url status.views.status_detail %}?host_name={{ row.name }}">
+                    {{ row.name }}
+                </a>
+            </td>
+            <td>{{ row.address }}</td>
+            <td>
+            {% if row.last_check != 0 %}
+                {{ row.last_check|timestamp|timesince }} ago
+            {% else %}
+                never
+            {% endif %}
+            </td>
+            {% if row.last_check == 0 %}
+                <td class="alert alert-info">Pending</td>
+            {% else %}
+                {% if row.state  == 0 %}
+                    <td class="alert alert-success">Host UP</td>
+                {% else %}
+                    <td class="alert alert-danger">{% if row.childs %}Network outage {% else %}Host Down {% endif %}</td>
+                {% endif %}
+            {% endif %}
+            <td>
+                <div class="progress" >
+                    <div class="bar bar-success" style="width: {{ row.percent_ok }}%;"></div>
+                    <div class="bar bar-warning" style="width: {{ row.percent_warn }}%;"></div>
+                    <div class="bar bar-danger" style="width: {{ row.percent_crit }}%;"></div>
+                    <div class="bar bar-unknown" style="width: {{ row.percent_unknown }}%;"></div>
+                </div>
+            </td>
+        </tr>
+        {% for i in row.services_with_info %}
+            <tr class="subrow {{ row.name }} hostsubrow_{{ forloop.parentloop.counter }} hide">
+                <td></td>
+                <td colspan=5>
+                    <div style="margin-left: 10px;" class="circle state_{{ i.1 }}"></div>
+                    <span>
+                    <a href="{% url status.views.status_detail %}?host_name={{ row.name }}&service_description={{ i.0 }}">{{i.0 }}</a> - {{ i.3 }}
+                    </span>
+                </td>
+            </tr>
+        {% endfor %}
+    {% endfor %}
+    </tbody>
+</table>
+<!-- snippet status_hostlist_snippet.html ends -->

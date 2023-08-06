@@ -1,0 +1,270 @@
+{% extends "base_status.html" %}
+
+{% block title %}Business Process{% endblock %}
+{% block smallheader %}edit{% endblock %}
+{% block largeheader %}Business Process{% endblock %}
+
+{% block nav1 %}{{ block.super }}{% endblock %}
+{% block nav2 %}<a href="{% url bi.views.index %}">Business Process</a>{% endblock %}
+
+{% load adagiostags %}
+
+{% block content %}
+    <style>
+        #business_rules_table input {
+            width: 100px;
+        }
+    </style>
+    <ul class="nav nav-tabs" id="objecttab">
+        <li><a href="#basic" class="active" data-toggle="tab">Basic Information</a></li>
+        <li><a href="#subprocesses" data-toggle="tab">Sub Processes</a></li>
+        <li><a href="#rules" data-toggle="tab">Business Rules</a></li>
+        <li><a href="#graphs" data-toggle="tab">Graphs</a></li>
+        <li><a href="#other" data-toggle="tab">Other</a></li>
+    </ul>
+    <div class="tab-content">
+
+        <div class="tab-pane active" id="basic">
+
+            {% if form %}
+                <form action="" method="post" class="form-horizontal">{% csrf_token %}
+                    {% include "bootstrap_fields.html" with fields=form %}
+                    <div class="form-actions">
+                        <button name="save_process" class="btn btn-success" type="submit">Save</button>
+                    </div>
+                </form>
+            {% else %}
+                Could not find Business process. {{ process_name }}
+            {% endif %}
+        </div>
+
+        <div class="tab-pane " id="subprocesses">
+
+            <div id="sub_processes">
+                <form action="{% url bi.views.add_subprocess %}" method="get">
+                    <button class="pull-right btn btn-small enable_on_select" name=test>
+                        <i class="glyph-circle-plus " title="Add new ..."> </i> Add to another businessgroup
+                    </button>
+
+                <table class="well table table-condensed">
+                    <tr>
+                        <th class="small">
+                            <div class="btn-group">
+                                <a data-toggle="dropdown" ><input type="checkbox" class="select_many"></a>
+                                <ul class="dropdown-menu">
+                                    <li><a class="select_all"> All</a></li>
+                                    <li><a class="select_none"> None</a></li>
+                                </ul>
+                            </div>
+                        </th>
+
+                        <th>Name</th>
+                        <th>Alias</th>
+                        <th>Status Method</th>
+                        <th>Sub Processes</th>
+                        <th>Tags</th>
+                        <th><button name="remove_process" class="close status_ok" type="submit">×</button></th>
+                    </tr>
+                    {% for i in bp.get_processes %}
+                        <tr class="subprocess-row">
+                            <td class="small selectable">
+                                <input type=checkbox class="chkbox" name="{{ i.process_type }}" value="{{ i.name }}">
+                            </td>
+                            <td>
+                                <div title="State is '{{ i.get_status }}'" class="circle state_{{ i.get_status }}"></div>
+                                {{ i.process_type }}: {{ i.name }}
+                            </td>
+                            <td>{{ i.display_name }}</td>
+                            <td>{{ i.status_method }}</td>
+                            <td>{{ i.processes|length }}</td>
+                            <td>{{ i.tags }}</td>
+                            <td>
+                                <form action="asd" method="POST">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="process_name" value="{{ i.name }}">
+                                    <input type="hidden" name="process_type" value="{{ i.process_type }}">
+                                    <button name="remove_process" type=submit title="Remove group from this business process" class="close status_critical" >×</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </table>
+                </form>
+            </div>
+
+
+    </div>
+
+    <div class="tab-pane " id="rules">
+        <table id="business_rules_table" class="well table table-condensed">
+            <tr>
+                <th>Trigger</th>
+                <th></th>
+                <th>Action</th>
+            </tr>
+            {% for i in bp.rules %}
+                <tr>
+
+                    <td>When a sub process with tag <input value="{{ i.0 }}"/> has at least <input value="{{ i.1 }}"> problems</td>
+                    <td></td>
+                    <td ><span>Mark this business group as </span>
+                        <span style="background-color: transparent;">
+                            <select style="width: 120px">
+                                <option value="ok" {% if i.2 == "ok" %}selected=selected{% endif %}>ok</option>
+                                <option value="minor" {% if i.2 == "minor" %}selected=selected{% endif %}>minor problem</option>
+                                <option value="major" {% if i.2 == "major" %}selected=selected{% endif %}>major problem</option>
+                            </select>
+                        </span>
+                    </td>
+
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="tab-pane " id="graphs">
+        {% if bp.graphs %}
+            <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <th>Host</th>
+                        <th>Service</th>
+                        <th>Metric Name</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for i in bp.graphs %}
+                    <tr>
+                        <td>{{ i.host_name }}</td>
+                        <td>{{ i.service_description }}</td>
+                        <td>{{ i.metric_name }}</td>
+                        <td>{{ i.notes }}</td>
+                    </tr>
+                {% endfor %}
+
+                </tbody>
+
+            </table>
+        {% else %}
+            No graphs have been added to this business process
+        {% endif %}
+    </div>
+    <div class="tab-pane " id="other">
+    </div>
+</div>
+
+
+
+
+
+
+    <!-- Add subprocess modal -->
+    <div class="modal hide fade" id="add_subprocess_modal">
+        <form class="form-horizontal" method="post" action="">{% csrf_token %}
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h3>Add sub process</h3>
+            </div>
+            <div class="modal-body">
+                <p>Ok lets add a new sub process.</p>
+                {% include "bootstrap_fields.html" with fields=add_subprocess_form %}
+            </div>
+            <div class="modal-footer">
+                <a href="" class="btn" onclick='$("#add_subprocess_modal").modal("hide");'>Cancel</a>
+                <button type="submit" id="add_subprocess_submit_button" name="add_subprocess_submit_button" class="btn btn-primary">Ok add this process</button>
+            </div>
+        </form>
+    </div>
+    <!-- Add subprocess modal ends -->
+
+
+        <!-- Add graphs modal -->
+        <div class="modal hide fade" id="add_graph_modal">
+            <form class="form-horizontal" method="post" action="">{% csrf_token %}
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                    <h3>Add graph to this business process</h3>
+                </div>
+                <div class="modal-body">
+                    <p>Ok, lets add some graphs to this business process</p>
+                    {% include "bootstrap_fields.html" with fields=add_graph_form %}
+                </div>
+                <div class="modal-footer">
+                    <a href="" class="btn" onclick='$("#add_graph_modal").modal("hide");'>Cancel</a>
+                    <button type="submit" id="add_graph_submit_button" name="add_graph_submit_button" class="btn btn-primary">Add Graph</button>
+                </div>
+            </form>
+        </div>
+        <!-- Add subprocess modal ends -->
+
+
+{% endblock %}
+
+
+
+{% block view_buttons %}
+
+{% endblock %}
+{% block action_buttons %}
+
+    <div class="pull-left">
+
+    <a class="btn" id="open_subprocess_modal" data-toggle="modal" data-target="#add_subprocess_modal" href="#">
+        <i class="glyph-circle-plus " title="Add new ..."> </i> Add sub item
+    </a>
+    <a class="btn" id="open_public_view" href="{% url bi.views.view bp.process_type bp.name  %}">
+        <i class="glyph-eye-open " title="Add new ..."> </i> Public view for this process
+    </a>
+    <a class="btn" id="open_graphs_modal" data-toggle="modal" data-target="#add_graph_modal" href="#">
+        <i class="glyph-circle-plus " title="Add new ..."> </i> Add graphs
+    </a>
+
+    </div>
+
+
+{% endblock %}
+{% block toolbar %}{{ block.super }}{% endblock %}
+
+{% block footer %}
+{{ block.super }}
+    <script id="select2_fields">
+        $(document).ready(function() {
+
+            // When somebody clicks the add subprocess button, lets change the process type to default hostgroup
+            $('#add_subprocess_modal').on('shown', function () {
+                var default_choice = "businessprocess";
+                $("#id_process_type").select2("val", default_choice);
+                $("#id_process_name").select2({
+                    minimumInputLength: 0,
+                    query: function(query) { adagios.objectbrowser.select2_business_process(query); }
+                });
+            });
+
+            $("#id_process_type").change(function() {
+                var str = "";
+                $("#id_process_type option:selected").each(function () {
+                    str += $(this).text();
+                });
+                // process_name select box behaves a little differently depending
+                // on if we a searching a businessproces or a nagios object
+                var query_function;
+                if (str == 'businessprocess') {
+                    query_function = function(query) { adagios.objectbrowser.select2_business_process(query); };
+                }
+                else {
+                    query_function = function(query) { adagios.objectbrowser.select2_objects_query(str, query); };
+                }
+                $("#id_process_name").select2({
+                    minimumInputLength: 0,
+                    query: query_function
+                });
+                $("#id_process_name").css('width', '700px;');
+            });
+
+            {% if add_subprocess_failed %}
+                $("#add_subprocess_modal").modal('show');
+            {% endif %}
+
+        });
+    </script>
+{% endblock %}

@@ -1,0 +1,79 @@
+<!-- snippet status_servicelist_snippet.html starts -->
+{% load adagiostags %}
+
+<table class="statustable table table-condensed well searchtable" id="datatable">
+    <thead>
+    <tr>
+        <th class="small">
+            <div class="btn-group" class="select_bar">
+                <a class="" data-toggle="dropdown" href="#">
+                    <input type="checkbox" class="select_many">
+                </a>
+                <ul class="dropdown-menu">
+                    <li><a class="select_all"> All</a></li>
+                    <li><a class="select_none"> None</a></li>
+                    <li><a class="select_unhandled_problems" > Unhandled Problems</a></li>
+                    <li><a class="select_problems"> All Problems</a></li>
+                </ul>
+            </div>
+        </th>
+        <th>Host</th>
+        <th>Service Check</th>
+        <td></td>
+        <th>Duration</th>
+        <th>Last Check</th>
+    </tr>
+    </thead>
+    <tbody class="">
+        {% for service in services %}
+            <tr class="mainrow">
+                <td class="selectable">
+                    <input class="chkbox {{ service.tags }}"  type="checkbox" name="service" value="{{ service.host_name }}/{{ service.description }}" data-host_name="{{ service.host_name }}" data-object_type="service" data-service_description="{{ service.description }}">
+                    <input type="hidden" class="input_hostname" name="host_name" value="{{ service.host_name }}">
+                    <input type="hidden" class="input_service_description" name="service_description" value="{{ service.description }}">
+                </td>
+
+                <td class="host">
+                    {% ifchanged service.host_name %}
+                        <div title="{{ service.host_plugin_output }}" class="circle  state_{{ service.host_state }}"></div>
+                        <a href="{% url status.views.status_detail%}?host_name={{ service.host_name }}" title='Details for host {{ service.host_name }}'>{{ service.host_name }}</a>
+                    {% else %}
+                        <div class="repeated_content hide">
+                            <div title="{{ service.host_plugin_output }}" class="circle state_{{ service.host_state }}"></div>
+                            <a href="{% url status.views.status_detail%}?host_name={{ service.host_name }}" title='Details for host {{ service.host_name }}'>{{ service.host_name }}</a>
+                        </div>
+                    {% endifchanged %}
+                </td>
+                <td class="service">
+                    <a href="{% url status.views.status_detail %}?host_name={{ service.host_name }}&service_description={{ service.description }}" title='{{ service.status }} for the past {{ service.last_state_change|timestamp|timesince }}'>
+                        <div class="circle circle_{{ service.unhandled }}  state_{{ service.state }}{{ service.unhandled }}"> </div> {{ service.description }}</a>
+                    <!-- TODO: Instead of all this slicing crap... proper ellipse effect in CSS -->
+                                <span title="{{ service.plugin_output }}" class="service_description_short plugin_output">
+                                         {{ service.plugin_output|slice:"70" }}
+                                 </span>
+
+                </td>
+                <td>
+                    {% if service.comments_with_info  %}
+                        <i class="glyph-chat glyph-grey" data-placement=left rel=tooltip title="Comments" data-content="{% for i in service.comments_with_info %}<div class='alert alert-info'><b>{{ i.1 }}:</b> {{ i.2 }}</div>{% endfor %}"></i>
+                    {% endif %}
+                </td>
+                <td class="service_small">
+                    {% if service.last_check != 0 %}
+                    {{ service.last_state_change|timestamp|timesince }}
+                    {% endif %}
+                </td>
+                <td class="service_small">
+                    {% if service.last_check != 0 %}
+                    {{ service.last_check|timestamp|date:'Y-m-d H:i' }}
+                    {% else %}
+                    never
+                    {% endif %}
+                </td>
+                <!-- <td class="state_{{ service.state }}"><b>{{ service.status }}</b></td> -->
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{{ services|length }} objects found.
+<!-- snippet status_servicelist_snippet.html ends -->

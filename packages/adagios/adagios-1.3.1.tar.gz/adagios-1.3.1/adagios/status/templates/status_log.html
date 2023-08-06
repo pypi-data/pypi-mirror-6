@@ -1,0 +1,279 @@
+{% extends "base_status.html" %}
+
+{% block title %}Status Log{% endblock %}
+{% block smallheader %}{% endblock %}
+{% block largeheader %}Status Log{% endblock %}
+
+{% block nav1 %}{{ block.super }}{% endblock %}
+{% block nav2 %}<a href="{% url status.views.status_log %}">Log</a>{% endblock %}
+{% load adagiostags %}
+
+{% block content %}
+    <form method="GET" action="#tab_all" name="datetimepicker">
+        <div class="pull-left">
+            <div class="date pull-left">
+                <input name="start_time_picker" style="width: 70px" type="text">
+            </div>
+            <div class="control-group pull-left">
+                &nbsp;<input name="start_hours" style="width: 40px" type="text">
+            </div>
+            <div class="pull-left">
+                &nbsp;To&nbsp;
+            </div>
+
+            <div class="date pull-left">
+                <input style="width: 70px" name="end_time_picker" type="text">
+            </div>
+            <div class="control-group pull-left">
+                &nbsp;<input name="end_hours" style="width: 40px" type="text">
+            </div>
+
+        </div>
+        <div class="pull-left" style="padding-left: 8px">
+            <input name="search" id="search_field" value="{{ request.GET.search }}" class="search-query" placeholder="search logs">
+            <button type="submit" name="submit" >Search</button>
+        </div>
+        <div class="clearfix">
+            <!-- <input type="text" class="slider" value=""> -->
+        </div>
+    </form>
+
+    <ul class="nav nav-tabs" id="objecttab">
+        <li class="active"><a href="#all" data-toggle="tab">All Logs</a></li>
+        <li><a href="#alerts" data-toggle="tab">State Changes</a></li>
+        <li><a href="#notifications_tab" data-toggle="tab">Notifications</a></li>
+        <li><a href="#warning" data-toggle="tab">Warnings</a></li>
+        <li><a href="#flapping" data-toggle="tab">Flapping Alerts</a></li>
+        <li><a href="#commands" data-toggle="tab" >External Commands</a></li>
+        <li><a href="#passive" data-toggle="tab" >Passive checks</a></li>
+        <li><a href="#unclassified" data-toggle="tab">Other</a></li>
+    </ul>
+    <div class="tab-content">
+        <div class="tab-pane" id="alerts">
+            Last {{ logs.alerts|length }} state changes:
+            <table style="font-size: 80%;" class="table well table-condensed table-striped">
+                <thead>
+                <th>Time</th>
+                <th>Host</th>
+                <th>Service</th>
+                <th></th>
+                <th>Message</th>
+                </thead>
+                {% for line in logs.alerts %}
+                    {% ifchanged line.time|timestamp|date:"Y-m-d" %}
+                        <!-- <tr><td colspan=4></td></tr> -->
+                    {% endifchanged %}
+                    <tr>
+                        <td style="white-space: nowrap;">{{ line.time|timestamp|date:'Y-m-d H:i' }} </td>
+                        <td><a href="{% url status.views.status_detail %}?host_name={{ line.host_name }}">{{ line.host_name }}</a></td>
+                        <td><a href="{% url status.views.status_detail %}?host_name={{ line.host_name }}&service_description={{ line.service_description }}">{{ line.service_description }}</a></td>
+                        <td><div class="circle-spin circle state_{{ line.state }}"></div></td>
+                        <td>
+                            <div>{{ line.text }}</div></td>
+                    </tr>
+                {% endfor %}
+            </table>
+
+        </div>
+        <div class="tab-pane " id="notifications_tab">
+            Last {{ logs.notification|length }} notifications:
+            <table style="font-size: 80%;" class="table well table-condensed table-striped">
+            <thead>
+            <th>Time</th>
+            <th>Contact</th>
+            <th>Host</th>
+            <th>Service</th>
+            <th></th>
+            <th>Message</th>
+            </thead>
+            {% for line in logs.notification %}
+                {% ifchanged line.time|timestamp|date:"Y-m-d" %}
+                    <!-- <tr><td colspan=4></td></tr> -->
+                {% endifchanged %}
+                <tr>
+                    <td style="white-space: nowrap;">{{ line.time|timestamp|date:'Y-m-d H:i' }} </td>
+                    <td>{{ line.contact_name }}</td>
+                    <td>{{ line.host_name }}</td>
+                    <td>{{ line.service_description }}</td>
+                    <td><div class="circle state_{{ line.state }}"></div></td>
+                    <td>
+                        <div>{{ line.text }}</div></td>
+                </tr>
+            {% endfor %}
+            </table>
+        </div>
+        <div class="tab-pane " id="flapping">
+            Last {{ logs.flapping|length }} Flapping alerts:
+            <table style="font-size: 80%;" class="table well table-condensed">
+                <thead>
+                <th>Time</th>
+                <th></th>
+                <th>Message</th>
+                </thead>
+                {% for line in logs.flapping %}
+                    {% ifchanged line.time|timestamp|date:"Y-m-d" %}
+                        <!-- <tr><td colspan=4></td></tr> -->
+                    {% endifchanged %}
+                    <tr>
+                        <td style="white-space: nowrap;">{{ line.time|timestamp|date:'Y-m-d H:i' }} </td>
+                        <td><div class="circle state_{{ line.state }}"></div></td>
+                        <td>
+                            <div>{{ line.text }}</div></td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+        <div class="tab-pane " id="warning">
+            Last {{ logs.warning|length }} Warnings:
+            <table style="font-size: 80%;" class="table well table-condensed">
+                <thead>
+                <th>Time</th>
+                <th></th>
+                <th>Message</th>
+                </thead>
+                {% for line in logs.warning %}
+                    {% ifchanged line.time|timestamp|date:"Y-m-d" %}
+                        <!-- <tr><td colspan=4></td></tr> -->
+                    {% endifchanged %}
+                    <tr>
+                        <td style="white-space: nowrap;">{{ line.time|timestamp|date:'Y-m-d H:i' }} </td>
+                        <td><div class="circle state_{{ line.state }}"></div></td>
+                        <td>
+                            <div>{{ line.text }}</div></td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+        <div class="tab-pane " id="commands">
+            Last {{ logs.command|length }} External commands:
+            <table style="font-size: 80%;" class="table well table-condensed">
+                <thead>
+                <th>Time</th>
+                <th>Command</th>
+                <th></th>
+                <th>Message</th>
+                </thead>
+                {% for line in logs.command %}
+                    {% ifchanged line.time|timestamp|date:"Y-m-d" %}
+                        <!-- <tr><td colspan=4></td></tr> -->
+                    {% endifchanged %}
+                    <tr>
+                        <td style="white-space: nowrap;">{{ line.time|timestamp|date:'Y-m-d H:i' }} </td>
+                        <td><a href="?command_name={{ line.command_name }}">{{ line.command_name }}</a></td>
+                        <td><div class="circle state_{{ line.state }}"></div></td>
+                        <td>
+                            <div style="white-space: nowrap;">{{ line.text }}</div></td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+        <div class="tab-pane " id="passive">
+            Last {{ logs.passive|length }} passive check results:
+            <table style="font-size: 80%;" class="table well table-condensed">
+                <thead>
+                <th>Time</th>
+                <th>Host</th>
+                <th>Service</th>
+                <th></th>
+                <th>Message</th>
+                </thead>
+                {% for line in logs.passive %}
+                    {% ifchanged line.time|timestamp|date:"Y-m-d" %}
+                        <!-- <tr><td colspan=4></td></tr> -->
+                    {% endifchanged %}
+                    <tr>
+                        <td style="white-space: nowrap;">{{ line.time|timestamp|date:'Y-m-d H:i' }} </td>
+                        <td><a href="?class_name={{ request.GET.class_name }}&host_name={{ line.host_name }}">{{ line.host_name }}</a></td>
+                        <td><a href="?class_name={{ request.GET.class_name }}&host_name={{ line.host_name }}&service_description={{ line.service_description }}">{{ line.service_description }}</a></td>
+                        <td><div class="circle-spin circle state_{{ line.state }}"></div></td>
+                        <td>
+                            <div>{{ line.text }}</div></td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+        <div class="tab-pane " id="unclassified">
+            Last {{ logs.unclassified|length }} misc entries:
+            <table style="font-size: 80%;" class="table well table-condensed">
+                <thead>
+                <th>Time</th>
+                <th></th>
+                <th>Message</th>
+                </thead>
+                {% for line in logs.unclassified %}
+                    {% ifchanged line.time|timestamp|date:"Y-m-d" %}
+                        <!-- <tr><td colspan=4></td></tr> -->
+                    {% endifchanged %}
+                    <tr>
+                        <td style="white-space: nowrap;">{{ line.time|timestamp|date:'Y-m-d H:i' }} </td>
+                        <td>
+                            <a title="{{ line.class_name }} - {{ line.type }} "href="?type={{ line.type }}">
+                                <div class="circle state_{{ line.state }}"></div>
+                            </a>
+
+                        <td>
+                            <div style="white-space: nowrap;">{{ line.options }}</div></td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+        <div class="tab-pane active" id="all">
+            Last {{ logs.all|length }} log entries:
+            <table style="font-size: 80%;" class="table well table-condensed">
+                <thead>
+                <th>Time</th>
+                <th>Type</th>
+                <th></th>
+                <th>Message</th>
+                </thead>
+                {% for line in logs.all %}
+                    {% ifchanged line.time|timestamp|date:"Y-m-d" %}
+                        <!-- <tr><td colspan=4></td></tr> -->
+                    {% endifchanged %}
+                    <tr>
+                        <td style="white-space: nowrap;">{{ line.time|timestamp|date:'Y-m-d H:i' }} </td>
+                        <td class="nowrap">{{ line.type }}</td>
+                        <td>
+                            <a title="{{ line.class_name }} - {{ line.type }} "href="?type={{ line.type }}">
+                                <div class="circle state_{{ line.state }}"></div>
+                            </a>
+
+                        <td>
+                            <div style="white-space: nowrap;">{{ line.options }}</div></td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block toolbar %} {% endblock %}
+
+{% block footer %} {{ block.super }}
+    <script type="text/javascript">
+
+
+        $(document).ready(function() {
+            var start_time = new Date();
+            if ("{{ start_time }}" != "None") {
+                start_time = {{ start_time }};
+            } else {
+                start_time.setDate(start_time.getDate() - 1);
+                start_time = start_time.valueOf() / 1000;
+            }
+
+            var end_time = new Date();
+            if ("{{ end_time }}" != "None") {
+                end_time = {{ end_time }};
+            } else {
+                end_time.setHours(23);
+                end_time.setMinutes(59);
+                end_time.setSeconds(59);
+                end_time = end_time.valueOf() / 1000;
+            }
+            $("form[name='datetimepicker']").adagios_datetimepicker(start_time, end_time);
+        });
+    </script>
+
+{% endblock %}
