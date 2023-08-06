@@ -1,0 +1,75 @@
+#!/usr/bin/env python
+
+# VOEvent sender.
+# John Swinbank, <swinbank@transientskp.org>.
+
+# Python standard library
+import sys
+
+# Twisted
+from twisted.python.log import startLogging
+from twisted.python import usage
+from twisted.internet import reactor
+from twisted.internet.endpoints import clientFromString
+
+# VOEvent transport protocol
+from comet.tcp.protocol import VOEventSenderFactory
+
+# Encapsulation of event
+from comet.utility.xml import xml_document
+import lxml.etree as ElementTree
+
+from comet.utility import log
+
+class Options(usage.Options):
+    optParameters = [
+        ["host", "h", "localhost", "Host to send to."],
+        ["port", "p", 8098, "Port to send to.", int],
+        ["file", "f", "-", "Where to read XML text to send (- is stdin)."]
+    ]
+
+class OneShotSender(VOEventSenderFactory):
+    """
+    A factory that shuts down the reactor when we lose the connection to the
+    remote host. That either means that our event has been sent or that we
+    failed.
+    """
+    def clientConnectionLost(self, connector, reason):
+        reactor.stop()
+
+    def clientConnectionFailed(self, connector, reason):
+        log.warning("Connection failed")
+        reactor.stop()
+
+if __name__ == "__main__":
+    config = Options()
+    config.parseOptions()
+
+    startLogging(sys.stdout)
+
+    if config["file"] == "-":
+        f = sys.stdin
+    else:
+        f = open(config["file"])
+
+    try:
+        factory = OneShotSender(xml_document(f.read()))
+    except IOError:
+        log.warning("Reading XML document failed")
+        reactor.callWhenRunning(reactor.stop)
+    except ElementTree.Error:
+        log.warning("Could not parse event text")
+        reactor.callWhenRunning(reactor.stop)
+    else:
+        reactor.connectTCP(config['host'], config['port'], factory)
+    finally:
+        f.close()
+
+    reactor.run()
+
+    # If our factory didn't get an acknowledgement of receipt, we'll exit with
+    # status 1.
+    if locals().has_key("factory") and factory.ack:
+        sys.exit(0)
+    else:
+        sys.exit(1)
