@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# Copyright © 2013 Miguel González <migonzalvar@activitycentral.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>
+
+import argparse
+import sys
+
+import xs_authserver
+
+
+def runserver(debug=False):
+    xs_authserver.app.run(host='0.0.0.0', port=5000, debug=debug)
+
+
+def init_db():
+    ret = xs_authserver.init_db()
+    if ret == False:
+        print("WARNING: Database was not initialized")
+        sys.exit(2)
+
+
+if __name__ == '__main__':
+    description = "xs-authserver command utility"
+
+    epilog = [
+        "xs-authserver uses environment variables for configuration.  "
+        "If they are not defined it will use default values instead.  "
+    ]
+    for env_var, default in xs_authserver.ENV_VARS.iteritems():
+        msg = "`{env}` default value is '{default}'.  ".format(
+            env=xs_authserver.ENV_PREFIX + "_" + env_var,
+            default=default
+        )
+        epilog.append(msg)
+    epilog = "".join(epilog)
+
+    parser = argparse.ArgumentParser(description=description, epilog=epilog)
+
+    parser.add_argument('command', choices=['runserver', 'initdb'])
+
+    parser.add_argument('--debug', dest='debug', action='store_true')
+    parser.add_argument('--no-debug', dest='debug', action='store_false')
+    parser.set_defaults(debug=False)
+
+    args = parser.parse_args()
+
+    if args.command == 'runserver':
+        runserver(debug=args.debug)
+    elif args.command == 'initdb':
+        init_db()
