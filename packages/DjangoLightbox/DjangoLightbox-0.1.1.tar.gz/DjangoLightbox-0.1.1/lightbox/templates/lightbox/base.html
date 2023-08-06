@@ -1,0 +1,138 @@
+{% load i18n thumbnail lightbox %}
+{% thumbnail object_list.0.image.path lightbox_height upscale=False as im %}
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+   "http://www.w3.org/TR/html4/loose.dtd">
+
+<html lang="en">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<title>{% block title %}{{object_list.0.label}}{% endblock title %}</title>
+	<meta name="generator" content="TextMate http://macromates.com/">
+	<meta name="author" content="Geert Dekkers">
+	<!-- Date: 2012-07-15 -->
+	<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<script type="text/javascript">
+
+		$(function(){
+			
+			var factors = $.parseJSON('{{ factors|jsonify }}');
+			
+			$('.wraptocenter').hide();
+			$(window).load(function(){
+				$('.wraptocenter').fadeIn('slow');
+			})
+
+
+			$(window).bind('load resize', function(){
+
+				var h = $(window).height() * factors['view_height'];
+				var w = $(window).width() * factors['view_width'];
+				$('.wraptocenter').css(
+					{
+						'height': h + 'px',
+						'width': w + 'px'
+					});
+
+
+				var win_height = $(window).height();
+				var win_width = $(window).width();
+				var win_ratio = (win_height/win_width);
+				var im_width = parseInt({{ im.width }});
+				var im_height = parseInt({{ im.height }});
+				var im_ratio = (im_height/im_width);
+
+				if (im_ratio > win_ratio){
+					var img_height = win_height * factors['height_ratio'];
+					var img_width = img_height * 1/im_ratio; 
+					$('.wraptocenter img').attr('height', Math.ceil(img_height))
+					.attr('width', Math.ceil(img_width));	
+				}else{
+					var img_width = win_width * factors['width_ratio'];
+					var img_height = img_width * im_ratio;
+					$('.wraptocenter img').attr('width', Math.ceil(img_width))
+					.attr('height', Math.ceil(img_height));	
+				}
+
+
+			});
+
+		});
+
+
+	</script>
+	<style type="text/css" media="screen">
+		body{background:{{ styles.bgcolor }}; padding-left: 7%;}
+		a{text-decoration:none;color:{{ styles.color }};font-size:3em;}
+		.top{width:99%;text-align:right;}
+		.next,.prev{position:fixed;top:43%;}
+		.next{right:2%;}
+		.prev{left:2%;}
+		.wraptocenter {
+	    display: table-cell;
+	    text-align: center;
+		font-family: Lucida, Arial, sans-serif;
+		
+		}
+
+		div#debug{position: absolute; color: {{ styles.color }};display:none;}
+
+		div.label{color: {{ styles.color }}; width: 100%; margin: 3% 0 0 0;}
+
+		/*http://www.brunildo.org/test/img_center.html*/
+		.wraptocenter * {
+		    vertical-align: middle;
+		}
+
+		</style>
+		<!--[if lt IE 8]><style>
+		.wraptocenter span {
+		    display: inline-block;
+		    height: 100%;
+		}
+		</style><![endif]-->
+
+{% block extrahead %}{% endblock %}
+</head>
+
+<body>
+	<div id="debug"></div>
+
+	{% block controls %}
+	<div class="top"><a href="{% decode path %}">&times;</a></div>
+	
+	<div class="prev">
+		{% if page_obj.has_previous %}
+		<a href="{% url lightbox pk path %}?page={{ page_obj.previous_page_number }}">&lt;</a>
+		{% endif %}
+	</div>
+	
+	<div class="next">
+		{% if page_obj.has_next %}
+		<a href="{% url lightbox pk path %}?page={{ page_obj.next_page_number }}">&gt;</a>
+		{% endif %}
+	</div>
+
+	{% endblock %}
+	
+	<div class="wraptocenter">
+		{% block content %}
+		<span></span>
+		{% if lightbox_image_clickable %}
+		<a target="_blank" href="{{ MEDIA_URL }}{{ object_list.0.image }}">
+		{% endif %}
+		{% if object_list.0.image.path|is_portrait %}
+		
+		<img border="0" src="{{im.url}}" width="{{im.width}}" height="{{im.height}}" alt="{{object_list.0.label}}"/>
+
+		{% else %}
+		
+		<img border="0" src="{{im.url}}" {% if im.width < 650 %}height="{{ im.height }}" width="{{ im.width }}"{% else %} width="100%" {% endif %} />
+		
+		{% endif %}{% if lightbox_image_clickable %}</a>{% endif %}
+
+		{% if object_list.0.label %}<div class="label">{{object_list.0.label|linebreaks}}</div>{% endif %}
+		{% endblock content %}
+	</div>
+</body>
+</html>
+{% endthumbnail %}
