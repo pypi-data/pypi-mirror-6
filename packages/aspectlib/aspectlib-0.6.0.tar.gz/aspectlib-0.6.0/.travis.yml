@@ -1,0 +1,55 @@
+language: python
+os:
+  - linux
+  - osx
+python:
+  - "2.5"
+  - "2.7"
+  - "2.6"
+  - "3.3"
+  - "pypy"
+env:
+  global:
+    PYTHONPATH=src:tests
+    PYTHONUNBUFFERED=yes
+  matrix:
+    - WITH_COVERAGE=no
+    - WITH_COVERAGE=yes
+before_install:
+  - |
+    if python --version |& grep PyPy; then
+      deactivate
+      sudo apt-add-repository --yes ppa:pypy/ppa
+      sudo apt-get update
+      sudo apt-get install pypy
+      source ~/virtualenv/pypy/bin/activate
+    fi
+    if python --version |& grep "Python 2.5"; then
+      sudo apt-get update
+      sudo apt-get install python3.4-dev
+      virtualenv ve-3.4 --python=$(which python3.4)
+      source ve-3.4/bin/activate
+    fi
+    python --version
+    uname -a
+    lsb_release -a
+install:
+  - pip install tox
+script:
+  - |
+    if [[ $WITH_COVERAGE == yes ]]; then
+      tox -v -e $TRAVIS_PYTHON_VERSION
+    else
+      tox -v -e $TRAVIS_PYTHON_VERSION -- py.test
+    fi
+after_success:
+  - |
+    if [[ $WITH_COVERAGE == yes ]]; then
+      .tox/$TRAVIS_PYTHON_VERSION/bin/coverage combine
+      .tox/$TRAVIS_PYTHON_VERSION/bin/coverage report
+      .tox/$TRAVIS_PYTHON_VERSION/bin/coveralls
+    fi
+notifications:
+  email:
+    on_success: never
+    on_failure: always
