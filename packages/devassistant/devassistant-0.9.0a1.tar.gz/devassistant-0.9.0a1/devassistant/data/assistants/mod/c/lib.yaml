@@ -1,0 +1,49 @@
+fullname: Adding library
+description: 'This assistant will help you add library into already created project by devassistant.
+  Just run it in the projects directory and specify which library you want to add and check.'
+
+args:
+  path:
+    use: common_args
+
+  library:
+    flags:
+    - -l
+    - --library
+    help:
+        Specify library which will be added into configure.ac.
+    required: True
+
+  function:
+    flags:
+    - -f
+    - --function
+    help:
+        Specify function provided by library.
+    required: True
+
+pre_run:
+- if $path:
+  - cl: cd "$path"
+- dda_r: .
+
+run:
+- if "$library":
+  - log_i: Library "$library" will be added into configure.ac
+  - if $(echo "$library" | grep "^lib"):
+    - $library: $(echo "$library" | sed 's/^lib//')
+  - log_i: Adding library "$library" into configure.ac
+  - if not "$function":
+    - log_e: You have to provide at least one function defined within library
+  - if $(grep "AC_CHECK_LIB" configure.ac | grep $library):
+    - log_i: Library already exists in configure.ac
+  - else:
+    - cl: sed -i "s|\(# DEFINE YOUR OWN LIBRARY CHECK.*\)|\1\\nAC_CHECK_LIB([$library],[$function], ,[AC_MSG_ERROR(You need to have lib$library)])|" "configure.ac"
+    - log_i: Library was added into configure.ac
+- log_i: Project will be build up with new configure.ac
+- log_i: Calling autoreconf
+- cl: autoreconf -vfi
+- log_i: Calling configure script
+- cl: ./configure
+- log_i: Building project by make command
+- cl: make

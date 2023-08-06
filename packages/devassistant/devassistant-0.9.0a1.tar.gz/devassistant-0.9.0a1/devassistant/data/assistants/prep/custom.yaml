@@ -1,0 +1,57 @@
+fullname: Custom Project
+description:
+  Only use this with projects whose upstream you trust, since the project
+  can specify arbitrary custom commands that will run on your machine.
+  The custom assistant sets up environment for developing custom project previously
+  created with DevAssistant.
+
+args:
+  url:
+    flags:
+    - -u
+    - --url
+    help:
+      Url of the project git repo (uses http/https/git).
+    required:
+      True
+  path:
+    use: common_args
+    help:
+      Path where to checkout the repo (will be created if it does not exist).
+  gh_fork:
+    flags: [--gh-fork]
+    help: Fork the repo, assuming it's on Github. Pass your GH username as argument if it's
+          different from your system username.
+    action: [default_iff_used, '']
+    nargs: '?'
+    gui_hints:
+      default: $(whoami)
+
+run:
+- if not $(test -e "$path"):
+  - cl: mkdir -p "$path"
+- cl: cd "$path"
+- if defined $gh_fork:
+  - $oldurl: $url
+  - $lres, $url~:
+    - github:
+      - create_fork
+      - login: $gh_fork
+        repo_url: $url
+  - if not $lres:
+    - log_e: Failed to fork github repo, exiting ...
+- log_i: "Cloning project from remote git repo ..."
+- $git_output~: $(git clone "$url")
+- $dirname~: $(echo "$git_output" | grep "Cloning into" | sed "s|.*'\(.*\)'.*|\1|")
+- if not "$dirname":
+  - log_e: Could not checkout sources - $git_output
+- cl: cd "$dirname"
+- if defined $gh_fork:
+  - log_i: Adding original upstream project as "upstream" git remote.
+  - cl: git remote add upstream $oldurl
+- if $(test -e .devassistant):
+  - dda_dependencies: .
+  - dda_run: .
+- else:
+  - log_i: "No .devassistant file found, skipping project-specific setup."
+- log_i: "Your project is prepared in $path/$dirname."
