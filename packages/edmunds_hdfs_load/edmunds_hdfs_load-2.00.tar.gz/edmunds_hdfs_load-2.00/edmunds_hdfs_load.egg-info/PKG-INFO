@@ -1,0 +1,101 @@
+Metadata-Version: 1.1
+Name: edmunds-hdfs-load
+Version: 2.00
+Summary: Moves files to hdfs by creating hive tables 
+Home-page: UNKNOWN
+Author: Sam Shuster
+Author-email: sshuster@edmunds.com
+License: None
+Description: How to setup Python with PIP on Windows:
+        
+        1. Install python 2.7
+        
+        https://www.python.org/download/releases/2.7.6
+        
+        2. Set up Python environment variable
+        System Properties-->Advanced Tab-->Environment Variables.(right click "My Computer " select "properties", "Advanced Tab" "Environment Variables" Button).
+        
+        Add a new system wide variable named PYTHON_HOME which is equal to C:\python27 (or where ever python was installed)
+        
+        Open up the environment variable PATH and add to the end:
+        :%PYTHON_HOME%
+        
+        3. Open up MS DOS Prompt and type in python. If all goes well it should take you to the python interpreter (you can exit out of this by typing ctl-d)
+        
+        4. Install Pip
+        
+        http://www.pip-installer.org/en/latest/installing.html
+        
+        1. Get the get-pip.py file
+        2. Run "python get-pip.py" (in the directory where get-pip.py is located)
+        
+        
+        5. If all went well you now have python and pip on your computer and can now easily install any third party python packages 
+        	a. For this script we need a package called 'paramiko':
+        		run 'pip install paramiko' in ms dos prompt
+        	b. Now go to https://pypi.python.org/pypi/edmunds_hdfs_load/0.1 and download the windows executable
+        
+        Project to move local files all the way to hdfs
+        
+        Requirements:
+        python 2.7
+        paramiko
+        
+        Lets go over the assumptions that this script has about your data:
+        
+        1. You have a parent folder that contains (possibly nested folders) with .csv files where each .csv file corresponds to a different Hive table that you wish to create.
+        2. These .csv files have headers in them that specify what each column means
+        3. The name of the .csv file will be used as the name of the Hive table that will be created.
+        4. Only non-existing hive tables will be created. Thus if a hive table already exists, it will not be removed.
+        5. You have access to the production hadoop cluster. If you do not have this, then please make a ticket with AppOps for ssh access to the production cluster: pl1rhd402.internal.edmunds.com
+        6. If you are building the Hive tables automatically, all of the types will be STRING
+        7. Partitions for your hive tables will be created based on the date that you run the script. Thus, you only will ever need to create the tables once, after that you can just keep loading data into 
+        the tables and it will not even overwrite existing data unless you need to upload data that is different more than once a day. If this is the case please email me at sshuster@edmunds.com
+        
+        OK great! If you are ok with all of the above lets now go over the config files which is where you can provide all of the information required to do the job
+        
+        First look at the sample_config/allinfo_load.cfg which is where you will be specifying all parameters about the hive tables you are going to create.
+        Lets go line by line:
+        
+        [LocalPaths]
+        #This is the parent directory containing all of your .csv files on your local machine
+        local_dir: /Users/sshuster/Documents/Common_Data_Platform_Challenge_Team/allinfo_sample
+        #If these tables in hive do not exist yet, ddl sql will need to be created and stored locally (you can delete this later) specify a folder where these files can be written to
+        local_sql_dir: /Users/sshuster/Documents/Common_Data_Platform_Challenge_Team/allinfo_sql
+        
+        [RemotePaths]
+        #This is the folder on the remote server where your csv files will be moved -> only modify after the base_remote
+        dest_dir: %(base_remote)s/allinfo
+        #This is the folder on the remote server where your hive ddl will be moved to -> only modify after the base_remote
+        sql_dest_dir: %(base_remote)s/allinfo_sql
+        
+        #The server to connect to
+        server: dl1rhd401.internal.edmunds.com
+        username=sshuster
+        password=[your password here]
+        #Do not change
+        base_remote=/misc/%(username)s
+        
+        [HDFSLocation]
+        #This is the folder on HDFS where your hive tables will reside. NOTE you will need to contact the DWH team to have a folder created for your team as otherwise you will not have permission to write to a folder
+        hdfs_base_folder: /stats_team
+        
+        [Hive]
+        #Set equal to True if you want to create the hive tables, otherwise False
+        create_tables: True
+        #Set equal to True if you want to overwrite existing tables, otherwise False (ONLY SET TO TRUE IF YOU WANT TO DELETE ALL EXISTING DATA!!)
+        overwrite_existing_hive: False
+        #The Delimiter of your csv files
+        delimiter = ,
+        
+        
+        
+        How do you run?
+        
+        python hdfs_load.py [path to your config file]
+        
+        
+Keywords: hive hdfs
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Topic :: Utilities
