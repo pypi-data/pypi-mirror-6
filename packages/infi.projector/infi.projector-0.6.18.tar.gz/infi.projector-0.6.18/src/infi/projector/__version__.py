@@ -1,0 +1,10 @@
+__version__ = "0.6.18"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.6.18)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '02bc10bc682ce001e8d34ff39645ab3c144005eb'
+__git_head_subject__ = 'TRIVIAL DevEnvPlugin.install_sections_by_recipe: support for sub-commands of recipes'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
