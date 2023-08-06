@@ -1,0 +1,1267 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+
+#    Copyright (C) 2013 Yahoo! Inc. All Rights Reserved.
+#
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
+
+import contextlib
+import errno
+import fnmatch
+import functools
+import logging
+import optparse
+import os
+import shutil
+import sys
+import tempfile
+import thread
+import threading
+import time
+
+from datetime import datetime
+
+from six.moves import queue
+
+import git
+import requests
+import six
+import urwid
+
+LOG = logging.getLogger(__name__)
+
+### DEFAULT SETTINGS
+
+ZUUL_URL = 'http://zuul.openstack.org/status.json'
+ZUUL_FREQ = 30
+ZUUL_MIN_FREQ = 5
+ALARM_FREQ = 1.0
+SCREENS = 3
+
+### GUI CONSTANTS
+
+PALETTE = (
+    # General gui usage
+    ('body', urwid.DEFAULT, urwid.DEFAULT),
+    ('title', urwid.LIGHT_CYAN, urwid.DEFAULT, 'standout'),
+    ('clear', urwid.WHITE, urwid.DEFAULT, 'standout'),
+    ('author', urwid.DARK_GREEN, urwid.DEFAULT, 'standout'),
+    # Time usage
+    ('ok', urwid.LIGHT_GREEN, urwid.DEFAULT),
+    ('dead', urwid.DARK_RED, urwid.DEFAULT, 'bold,underline'),
+    ('slow', urwid.YELLOW, urwid.DEFAULT),
+    ('veryslow', urwid.LIGHT_RED, urwid.DEFAULT),
+    ('superslow', urwid.LIGHT_MAGENTA, urwid.DEFAULT, 'bold,underline'),
+    # Progress bar usage
+    ('normal', urwid.WHITE, urwid.DARK_GRAY),
+    ('complete', urwid.WHITE, urwid.DARK_BLUE),
+    ('smooth', urwid.WHITE, urwid.LIGHT_BLUE),
+    # Column usage
+    ('selected', urwid.DARK_GRAY, urwid.DEFAULT),
+)
+LEFT_RIGHT_KEYS = (urwid.CURSOR_LEFT, urwid.CURSOR_RIGHT)
+UP_DOWN_KEYS = (urwid.CURSOR_UP, urwid.CURSOR_DOWN)
+MOVE_KEYS = list(LEFT_RIGHT_KEYS) + list(UP_DOWN_KEYS)
+MOVE_KEYS.extend([
+    urwid.CURSOR_PAGE_UP,
+    urwid.CURSOR_PAGE_DOWN,
+    urwid.CURSOR_MAX_LEFT,
+    urwid.CURSOR_MAX_RIGHT,
+])
+MOVE_KEYS = tuple(MOVE_KEYS)
+QUIT_KEYS = ('q', 'Q', 'esc')
+REFRESH_KEYS = ('r', 'R')
+
+# Other constants
+NO_DETAIL_STATES = ('detailed', 'detailing', 'ignored', 'errored')
+JOB_RESULT_FAILURES = ('FAILURE',)
+START = 'start'
+END = 'end'
+
+
+@contextlib.contextmanager
+def temp_dir(**kwargs):
+    d = tempfile.mkdtemp(**kwargs)
+    try:
+        yield d
+    finally:
+        try:
+            shutil.rmtree(d)
+        except Exception:
+            LOG.exception("Failed deleting temporary directory %s", d)
+
+
+def select_time_attr(secs):
+    secs = max(0, int(secs))
+    if secs <= 300:
+        return 'ok'
+    if secs <= 600:
+        return 'slow'
+    if secs <= 1800:
+        return 'veryslow'
+    return 'superslow'
+
+
+def format_time(secs, mins, only_mins=False):
+    if only_mins:
+        if mins <= 0.0:
+            return "0m"
+        else:
+            return "%0.1fm" % (mins)
+    else:
+        if mins <= 0.0:
+            return "%ss/0m" % (secs)
+        else:
+            return "%ss/%0.1fm" % (secs, mins)
+
+
+def calculate_completion(review):
+    jobs_total = 0
+    jobs_remaining = 0
+    for j in review.get("jobs", []):
+        jobs_total += 1
+        if get_int_key("remaining_time", j) > 0:
+            jobs_remaining += 1
+    if not jobs_total:
+        return 1.0
+    jobs_finished = max(0, jobs_total - jobs_remaining)
+    percent_complete = float(jobs_finished) / float(jobs_total)
+    if percent_complete > 1.0:
+        return 1.0
+    if percent_complete < 0:
+        return 0.0
+    return percent_complete
+
+
+def decode_millis(millis):
+    if millis < 0:
+        millis = 0
+    secs = millis / 1000
+    minutes = secs / 60.0
+    return (secs, minutes)
+
+
+def detail_commit(commit):
+
+    def detail_actor(actor):
+        return {
+            'name': actor.name,
+            'email': actor.email,
+        }
+
+    return {
+        'summary': commit.summary,
+        'message': commit.message,
+        'sha': commit.hexsha,
+        'type': commit.type,
+        'committer': detail_actor(commit.committer),
+        'author': detail_actor(commit.author),
+        'dates': {
+            'committed': datetime.fromtimestamp(commit.committed_date),
+            'authored': datetime.fromtimestamp(commit.authored_date),
+        },
+    }
+
+
+def clone_project(git_server, project, code_path):
+    # Create a temporary directory, clone there, then attempt to move to the
+    # main directory, if the move fails, that's ok, but the initial clone
+    # should not.
+    with temp_dir() as tmp_d:
+        git_server = git_server.rstrip("/")
+        git_uri = "%s/%s" % (git_server, project)
+        repo_path = os.path.join(tmp_d, os.path.basename(project))
+        os.makedirs(repo_path)
+        repo = git.Repo.clone_from(git_uri, repo_path)
+        try:
+            shutil.move(repo.working_dir, code_path)
+        except IOError as e:
+            if e.errno != errno.EEXIST:
+                raise
+        return git.Repo(code_path)
+
+
+def reset_repo(repo):
+    origin = repo.remotes.origin
+    origin.update()
+    origin = repo.remotes.origin
+    for ref in origin.refs:
+        if ref.remote_head == 'HEAD':
+            continue
+        repo.create_head(ref.remote_head, ref, force=True)
+    repo.head.reference = origin.refs['HEAD']
+    repo.head.reset(index=True, working_tree=True)
+    repo.git.clean('-x', '-f', '-d')
+
+
+def get_int_key(k, in_what, default=0):
+    try:
+        return int(in_what[k])
+    except (KeyError, ValueError, TypeError):
+        return default
+
+
+def validate_entry(ok_set, entry):
+    if not entry:
+        return False
+    if len(ok_set) == 0:
+        return True
+    for pat in ok_set:
+        if pat == entry:
+            return True
+        if fnmatch.fnmatch(entry, pat):
+            return True
+    return False
+
+
+def clear_extra_remotes(repo):
+    try:
+        origin_name = repo.remotes.origin.name
+    except AttributeError:
+        pass
+    else:
+        deletions = set()
+        for r in repo.remotes:
+            if r.name != origin_name:
+                deletions.add(r.name)
+        for remote_name in deletions:
+            LOG.debug("Deleting remote '%s' from repo %s", remote_name, repo)
+            try:
+                repo.delete_remote(remote_name)
+            except Exception:
+                pass
+
+
+def iter_pipelines(data):
+    for raw_data in data.get('pipelines', []):
+        name = raw_data.get("name", '')
+        description = raw_data.get("description", '')
+        if not all([name, description]):
+            continue
+        p = ZuulPipeline(name, description)
+        yield (p, raw_data)
+
+
+def iter_reviews(data, pipeline=None):
+    for q in data.get('change_queues', []):
+        for h in q.get('heads', []):
+            for raw_data in h:
+                review_id = raw_data.get("id")
+                project = raw_data.get("project")
+                zuul_ref = raw_data.get("zuul_ref")
+                if not all([review_id, project, zuul_ref]):
+                    continue
+                r = ZuulReview(review_id, project, zuul_ref,
+                               pipeline=pipeline,
+                               url=raw_data.get('url'))
+                yield (r, raw_data)
+
+
+def make_columns(column_count):
+
+    def column_maker():
+        c = urwid.Pile([])
+        w = urwid.ListBox(urwid.SimpleFocusListWalker([c]))
+        w = urwid.AttrWrap(w, 'body')
+        w = urwid.AttrMap(urwid.LineBox(w), 'selected', 'body')
+        return (c, w)
+
+    return MultiColumns(column_maker, column_count)
+
+
+class Finder(threading.Thread):
+    def __init__(self, frame):
+        super(Finder, self).__init__()
+        self.options = frame.options
+        self.daemon = True
+        self.work = queue.PriorityQueue()
+        self.lock = threading.RLock()
+        self.delayed_callbacks = frame.delayed_callbacks
+        self._fetched = 0
+        self._state = None
+
+    def _change_state(self, state):
+        with self.lock:
+            self._state = state
+            LOG.debug("Changing finder state to: %s", list(self.activity()))
+
+    def activity(self):
+        with self.lock:
+            return (self._fetched, self.work.qsize(), self._state)
+
+    def process(self, review):
+        project = review.project
+        review_id = six.text_type(review.review_id)
+        change_id = review.change_id
+
+        if change_id is None:
+            raise ValueError("Can not detail review %s if it has no change"
+                             " identifier" % (review))
+
+        LOG.debug("Fetching details for %s - %s/%s",
+                  project, review_id, change_id)
+        path_components = project.strip("/").split("/")
+        code_path = os.path.join(self.options.clone_dir, *path_components)
+        try:
+            base_path = os.path.dirname(code_path)
+            if not os.path.isdir(base_path):
+                os.makedirs(base_path)
+        except IOError as e:
+            if e.errno != errno.EEXIST:
+                raise
+        if not os.path.exists(code_path):
+            self._change_state("Cloning %s for %s" % (project,
+                                                      review.pretty_id))
+            repo = clone_project(self.options.git_server, project, code_path)
+        else:
+            repo = git.Repo(code_path)
+
+        self._change_state("Cleaning %s for %s" % (project, review.pretty_id))
+        clear_extra_remotes(repo)
+        reset_repo(repo)
+
+        remote_server = self.options.remote_server
+        remote_server = remote_server.rstrip("/")
+        remote_uri = "%s/%s" % (remote_server, project)
+        remote = repo.create_remote(review_id, remote_uri)
+        sub_id = review_id[-2:]
+        ref_id = 'refs/changes/%s/%s/%s' % (sub_id, review_id, change_id)
+
+        # The git.remote.fetch method may read in git progress info and
+        # interpret it improperly causing an AssertionError. Because the
+        # data was fetched properly subsequent fetches don't seem to fail.
+        # So try again if an AssertionError is caught.
+        self._change_state("Fetching remote for %s" % (review.pretty_id))
+        try:
+            remote.fetch(ref_id)
+        except AssertionError:
+            remote.fetch(ref_id)
+        repo.git.checkout("FETCH_HEAD")
+
+        self._change_state("Detailing %s" % (review.pretty_id))
+        return detail_commit(repo.head.object)
+
+    def run(self):
+
+        def display(review, details, frame):
+            review.on_details(details)
+
+        running = True
+        while running:
+            self._change_state(None)
+            priority, review = self.work.get(True)
+            with self.lock:
+                self._fetched += 1
+                self._change_state("Processing %s" % (review.pretty_id))
+            try:
+                details = self.process(review)
+            except KeyboardInterrupt:
+                running = False
+                thread.interrupt_main()
+            except ValueError:
+                with review.lock:
+                    review.state = 'ignored'
+            except Exception:
+                LOG.exception("Exception encountered while processing"
+                              " review: %s", review)
+                with review.lock:
+                    review.state = 'errored'
+            else:
+                cb = functools.partial(display, review, details)
+                self.delayed_callbacks.put(cb)
+
+
+class Watcher(threading.Thread):
+    def __init__(self, frame):
+        super(Watcher, self).__init__()
+        self.options = frame.options
+        self.daemon = True
+        self.data = {}
+        self.event = threading.Event()
+        self.lock = threading.RLock()
+        self._fetches = 0
+        self._state = None
+
+    def activity(self):
+        with self.lock:
+            return (self._state, self._fetches)
+
+    def fetch(self, url, timeout):
+        response = None
+        try:
+            response = requests.get(url, timeout=timeout)
+        except requests.RequestException:
+            LOG.exception("Failed fetching zuul data from %s", url)
+        return response
+
+    def process(self, response):
+        if not response:
+            return
+        data = response.json()
+        if isinstance(data, dict):
+            with self.lock:
+                data['fetch_count'] = self._fetches
+                self.data = data
+        else:
+            raise TypeError("Expected dict type, got '%s'" % type(data))
+
+    def run(self):
+        running = True
+        url = self.options.server
+        timeout = self.options.frequency * 0.50
+        while running:
+            self.event.wait()
+            with self.lock:
+                self._fetches += 1
+                self._state = "Fetching from %s" % (url)
+            try:
+                self.process(self.fetch(url, timeout))
+            except KeyboardInterrupt:
+                running = False
+                thread.interrupt_main()
+            except (ValueError, TypeError):
+                LOG.exception("Failed extracting data from %s", url)
+            finally:
+                self.event.clear()
+                with self.lock:
+                    self._state = None
+
+
+class ZuulReviewJob(urwid.Pile):
+    ignore_focus = False
+
+    def __init__(self, name):
+        super(ZuulReviewJob, self).__init__([])
+        self.name = name
+        self.remaining = urwid.AttrMap(urwid.Text("", align='right'), 'ok')
+        self.name_widget = urwid.Text("- %s" % name, align='left')
+        rows = [
+            self.name_widget,
+            (urwid.WEIGHT, 0.333, self.remaining),
+        ]
+        self.contents.append((urwid.Columns(rows), (urwid.WEIGHT, 1)))
+        self.expanded = False
+        self.url = None
+        self.voting = False
+        self.result = None
+
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        return key
+
+    def _create_expand_widget(self):
+
+        def title_format(text):
+            if not text:
+                return None
+            return text.lower().title()
+
+        filler_size = 3
+        display = [
+            ('Result', self.result, True, title_format),
+            ('Voting', self.voting, False, lambda v: v),
+            ('Url', self.url, True, lambda v: v),
+        ]
+        filler = []
+        keys_values = []
+        for (key, value, check, formatter) in display:
+            value = formatter(value)
+            if check and not value:
+                continue
+            keys_values.append(urwid.Text("%s - %s" % (key, value),
+                                          wrap='any'))
+            filler.append(urwid.Text(" " * filler_size))
+        if not keys_values:
+            return None
+        else:
+            cols = [
+                (urwid.FIXED, filler_size, urwid.Pile(filler)),
+                urwid.Pile(keys_values),
+            ]
+            return urwid.Columns(cols)
+
+    def expand(self):
+        w = self._create_expand_widget()
+        if w is not None:
+            self.name_widget.set_text("+ %s" % self.name)
+            self.contents.append((w, (urwid.WEIGHT, 1)))
+            self.expanded = True
+
+    def collapse(self):
+        if self.expanded:
+            self.name_widget.set_text("- %s" % self.name)
+            self.contents.pop()
+            self.expanded = False
+
+    def refresh_expanded(self, raw_data):
+
+        def has_changed():
+            url = raw_data.get("url")
+            if url != self.url:
+                return True
+            result = raw_data.get("result")
+            if result != self.result:
+                return True
+            voting = raw_data.get("voting")
+            if voting != self.voting:
+                return True
+            return False
+
+        if has_changed():
+            self.collapse()
+
+    def refresh(self, raw_data):
+        self.refresh_expanded(raw_data)
+        self.url = raw_data.get("url")
+        self.result = raw_data.get("result")
+        self.voting = raw_data.get("voting")
+        failure = False
+        millis = get_int_key("remaining_time", raw_data)
+        (secs, mins) = decode_millis(millis)
+        time_add_on = ""
+        if self.result in JOB_RESULT_FAILURES and self.voting:
+            time_attr = 'dead'
+            time_add_on = '!'
+            failure = True
+        else:
+            time_attr = select_time_attr(secs)
+        remaining = self.remaining.original_widget
+        remaining.set_text(format_time(secs, mins) + time_add_on)
+        self.remaining.set_attr_map({None: time_attr})
+        return (millis, failure)
+
+
+class ZuulReview(urwid.Pile):
+    ignore_focus = False
+
+    def __init__(self, review_id, project, zuul_ref, pipeline=None, url=None):
+        super(ZuulReview, self).__init__([])
+        try:
+            self.change_id = int(review_id.split(",", 1)[1].strip())
+            self.review_id = int(review_id.split(",", 1)[0].strip())
+        except (TypeError, IndexError, ValueError):
+            self.change_id = None
+            self.review_id = review_id
+        self.project = project
+        self.pipeline = pipeline
+        self.jobs = []
+        self.zuul_ref = zuul_ref
+        self.progress_bar = urwid.ProgressBar('normal', 'complete',
+                                              0.0, 1.0, 'smooth')
+        self.progress_bar.set_completion(0.0)
+        title_pieces = [("title", review_id)]
+        if url:
+            title_pieces.append(("body", " @ %s" % (url)))
+        title = urwid.Text(title_pieces)
+        self.eta_text = urwid.Text([('clear', "ETA")], align='right')
+        rows = [
+            urwid.Columns([title, (urwid.FIXED, 12, self.eta_text)]),
+            self.progress_bar,
+        ]
+        for item in rows:
+            self.contents.append((item, (urwid.WEIGHT, 1)))
+        self.state = None
+        self.details = {}
+        self.lock = threading.RLock()
+        ident_pieces = [
+            self.review_id,
+            self.change_id,
+            self.zuul_ref,
+            self.project,
+            self.pipeline,
+        ]
+        self.unique_id = ",".join([six.text_type(p)
+                                   for p in ident_pieces if p is not None])
+        pretty_pieces = [
+            self.review_id,
+            self.change_id,
+        ]
+        self.pretty_id = ",".join([six.text_type(p)
+                                   for p in pretty_pieces if p is not None])
+        if self.pipeline:
+            self.pretty_id += " (%s)" % self.pipeline
+
+    def __str__(self):
+        return "%s; %s" % (self.unique_id, self.state)
+
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        m_key = self._command_map[key]
+        LOG.debug("Key %s (%s) pressed on %s", key, m_key, self)
+        if m_key == urwid.CURSOR_UP:
+            i = self.focus_position - 1
+            while i >= 0:
+                if self.contents[i][0].selectable():
+                    break
+                i = i - 1
+            if i >= 0:
+                self.focus_position = i
+                return None
+        if m_key == urwid.CURSOR_DOWN:
+            i = self.focus_position + 1
+            while i < len(self.contents):
+                if self.contents[i][0].selectable():
+                    break
+                i = i + 1
+            if i < len(self.contents):
+                self.focus_position = i
+                return None
+        if m_key == urwid.ACTIVATE:
+            i = self.focus_position
+            if i < len(self.contents) and i >= 0:
+                try:
+                    w = self.contents[i][0].original_widget
+                except AttributeError:
+                    w = None
+                if isinstance(w, ZuulReviewJob):
+                    if w.expanded:
+                        LOG.debug("Collapsing %s", w.name)
+                        w.collapse()
+                    else:
+                        LOG.debug("Expanding %s", w.name)
+                        w.expand()
+                    return None
+        return key
+
+    def on_details(self, details):
+        with self.lock:
+            if self.state == 'detailed':
+                return
+            self.details.update(details)
+            extra_rows = []
+            summary = details.get("summary")
+            if summary:
+                extra_rows.extend([
+                    urwid.Text([('title', summary)], align='center'),
+                ])
+            if extra_rows:
+                extra_rows.insert(0, urwid.Divider(u'─'))
+                extra_rows.append(urwid.Divider(u'─'))
+                extra_pile = urwid.Pile(extra_rows)
+                self.contents.insert(0, (extra_pile, (urwid.WEIGHT, 1)))
+            self.state = 'detailed'
+
+    def safe_refresh(self, raw_data):
+        try:
+            with self.lock:
+                self.refresh(raw_data)
+        except (KeyError, TypeError, ValueError):
+            pass
+
+    def refresh(self, raw_data):
+        remaining_millis = []
+        failures = 0
+        for job_data in raw_data.get("jobs", []):
+            if not job_data.get("name"):
+                continue
+            job_name = six.text_type(job_data['name'])
+            job = None
+            for j in self.jobs:
+                if j.name == job_name:
+                    job = j
+                    break
+            if job is None:
+                job = ZuulReviewJob(job_name)
+                self.jobs.append(job)
+                (p_bar, p_bar_options) = self.contents.pop()
+                w = urwid.AttrMap(job, 'selected', 'body')
+                self.contents.append((w, (urwid.WEIGHT, 1)))
+                self.contents.append((p_bar, p_bar_options))
+            millis, failure = job.refresh(job_data)
+            failures += int(failure)
+            remaining_millis.append(millis)
+        self.progress_bar.set_completion(calculate_completion(raw_data))
+        if remaining_millis:
+            max_remaining_millis = max(remaining_millis)
+        else:
+            max_remaining_millis = 0
+        (secs, mins) = decode_millis(max_remaining_millis)
+        time_txt = format_time(secs, mins, only_mins=True)
+        time_markup = [
+            ('clear', "ETA ["),
+            ('clear', "]"),
+        ]
+        if failures > 0:
+            time_attr = 'dead'
+            time_txt += "!"
+        else:
+            time_attr = select_time_attr(secs)
+        time_markup.insert(1, (time_attr, time_txt))
+        self.eta_text.set_text(time_markup)
+        for i, (w, attrs) in enumerate(self.contents):
+            if w.selectable():
+                self.focus_position = i
+                break
+
+
+class ZuulPipeline(urwid.Pile):
+    def __init__(self, name, description):
+        super(ZuulPipeline, self).__init__([])
+        self.name = six.text_type(name)
+        title_pieces = [('clear', self.name.title())]
+        self.description = description
+        if description:
+            description = description[0].lower() + description[1:]
+            title_pieces.append(("body", ", %s" % description))
+        rows = [
+            urwid.Divider(u'─'),
+            urwid.Text(title_pieces),
+            urwid.Divider(u'─')
+        ]
+        for h in rows:
+            self.contents.append((h, (urwid.WEIGHT, 1)))
+
+    def selectable(self):
+        return False
+
+
+class MultiColumns(urwid.Columns):
+    def __init__(self, maker, count):
+        super(MultiColumns, self).__init__([])
+        assert int(count) > 0, 'Column count must be > 0'
+        self.columns = []
+        self.count = int(count)
+        self.maker = maker
+        self.index = 0
+        for _i in range(0, self.count):
+            (c, w) = self.maker()
+            self.contents.append((w, (urwid.WEIGHT, 1, False)))
+            self.columns.append((c, w))
+        self.right_arrow = urwid.SolidFill(u"⇢")
+        self.right_arrow_on = False
+        self.left_arrow = urwid.SolidFill(u"⇠")
+        self.left_arrow_on = False
+
+    def clear(self):
+        while len(self.columns) > self.count:
+            self.columns.pop()
+        self.index = 0
+        for (c, w) in self.columns:
+            while len(c.contents):
+                c.contents.pop()
+        self._clear_contents()
+        self.right_arrow_on = False
+        self.left_arrow_on = False
+        for i in range(0, self.count):
+            w = self.columns[i][1]
+            self.contents.append((w, (urwid.WEIGHT, 1, False)))
+
+    def place(self, w, max_rows, max_cols):
+
+        def is_over_size(c, item_rows=0):
+            if len(c.contents) == 0:
+                return False
+            remaining = max_rows - item_rows
+            for w, (_f, _height) in c.contents:
+                rows = w.rows((max_cols,), c.focus_item == w)
+                remaining -= rows
+            if remaining <= 0:
+                return True
+            return False
+
+        w_rows = w.rows((max_cols,), False)
+        column = None
+        for (c, _w2) in self.columns:
+            if is_over_size(c, w_rows):
+                continue
+            column = c
+            break
+        if column is None:
+            (c, w2) = self.maker()
+            self.columns.append((c, w2))
+            column = c
+        column.contents.append((w, (urwid.PACK, None)))
+
+        if len(self.columns) > len(self.contents) and not self.right_arrow_on:
+            self.right_arrow_on = True
+            self.contents.append((self.right_arrow, (urwid.GIVEN, 1, False)))
+
+        return column
+
+    def _clear_contents(self):
+        while len(self.contents):
+            self.contents.pop()
+
+    def shift_contents_left(self):
+        if (self.index + self.count) == len(self.columns):
+            return False
+        self.index += 1
+        j = self.index
+        self._clear_contents()
+        for _i in range(0, self.count):
+            w = self.columns[j][1]
+            self.contents.append((w, (urwid.WEIGHT, 1, False)))
+            j += 1
+        if self.index > 0:
+            self.left_arrow_on = True
+        if j == len(self.columns):
+            self.right_arrow_on = False
+        if self.right_arrow_on:
+            self.contents.append((self.right_arrow, (urwid.GIVEN, 1, False)))
+        if self.left_arrow_on:
+            self.contents.insert(0, (self.left_arrow, (urwid.GIVEN, 1, False)))
+        return True
+
+    def shift_contents_right(self):
+        if self.index == 0:
+            return False
+        self.index -= 1
+        j = self.index
+        self._clear_contents()
+        for _i in range(0, self.count):
+            w = self.columns[j][1]
+            self.contents.append((w, (urwid.WEIGHT, 1, False)))
+            j += 1
+        if self.index > 0:
+            self.right_arrow_on = True
+        if self.index == 0:
+            self.left_arrow_on = False
+        if self.right_arrow_on:
+            self.contents.append((self.right_arrow, (urwid.GIVEN, 1, False)))
+        if self.left_arrow_on:
+            self.contents.insert(0, (self.left_arrow, (urwid.GIVEN, 1, False)))
+        return True
+
+    def keypress(self, size, key):
+
+        def o_w(w):
+            try:
+                return w.original_widget
+            except AttributeError:
+                return w
+
+        def autoshift_refocus(m_key):
+            LOG.debug("Autofocusing in response to %s", m_key)
+            w = self.contents[self.focus_position][0]
+            LOG.debug("Focus @ %s", w)
+            if m_key == urwid.CURSOR_RIGHT:
+                target = START
+            else:
+                target = END
+            col = None
+            for (c, w2) in self.columns:
+                if w2 == w:
+                    col = c
+                    break
+            if col is None:
+                return
+            LOG.debug("At column %s (%s)", col, len(col.contents))
+            if target == START:
+                candidates = list(range(0, len(col.contents)))
+            else:
+                candidates = list(reversed(range(0, len(col.contents))))
+            first_focus = -1
+            for i in candidates:
+                c_w = o_w(col.contents[i][0])
+                adjusted = False
+                if isinstance(c_w, ZuulReview):
+                    if target == END:
+                        subcandidates = list(reversed(range(0, len(c_w.contents))))
+                    else:
+                        subcandidates = list((range(0, len(c_w.contents))))
+                    for j in subcandidates:
+                        c_j = o_w(c_w.contents[j][0])
+                        if isinstance(c_j, ZuulReviewJob):
+                            if c_j.selectable:
+                                c_w.focus_position = j
+                                adjusted = True
+                                LOG.debug("Reset focus of %s to %s", c_w, j)
+                                break
+                if adjusted and first_focus == -1:
+                    first_focus = i
+            if first_focus != -1:
+                LOG.debug("Reset focus of %s to %s", col, first_focus)
+                col.focus_position = first_focus
+
+        if key is None:
+            return
+        if self.focus_position is None:
+            return key
+        widths = self.column_widths(size)
+        if self.focus_position >= len(widths):
+            return key
+        i = self.focus_position
+        mc = widths[i]
+        w, (t, n, b) = self.contents[i]
+        m_key = self._command_map[key]
+        LOG.debug("Calling keypress (%s) on %s", m_key, w)
+        if len(size) == 1 and b:
+            key = w.keypress((mc, self.rows(size, True)), key)
+        else:
+            key = w.keypress((mc,) + size[1:], key)
+        m_key_after = self._command_map[key]
+        autoshifted = False
+        if all([m_key in UP_DOWN_KEYS, m_key_after in UP_DOWN_KEYS]):
+            autoshifted = True
+            if m_key == urwid.CURSOR_UP:
+                m_key = urwid.CURSOR_LEFT
+            else:
+                m_key = urwid.CURSOR_RIGHT
+        if m_key not in LEFT_RIGHT_KEYS:
+            return key
+        k = i
+        content_len = len(self.contents)
+        if self.left_arrow_on:
+            k -= 1
+            content_len -= 1
+        if self.right_arrow_on:
+            content_len -= 1
+        if k == 0:
+            if m_key == urwid.CURSOR_LEFT:
+                if self.shift_contents_right():
+                    if autoshifted:
+                        autoshift_refocus(m_key)
+                    return None
+        if k + 1 == content_len:
+            if m_key == urwid.CURSOR_RIGHT:
+                if self.shift_contents_left():
+                    for m in reversed(list(range(0, len(self.contents)))):
+                        if not self.contents[m][0].selectable():
+                            continue
+                        self.focus_position = m
+                        break
+                    if autoshifted:
+                        autoshift_refocus(m_key)
+                    return None
+        candidates = []
+        if m_key == urwid.CURSOR_RIGHT:
+            candidates.extend(range(i + 1, len(self.contents)))
+        else:
+            candidates.extend(reversed(list(range(0, i))))
+        for j in candidates:
+            if not self.contents[j][0].selectable():
+                continue
+            self.focus_position = j
+            if autoshifted:
+                autoshift_refocus(m_key)
+            return None
+        return key
+
+
+class Renderer(threading.Thread):
+    def __init__(self, frame):
+        super(Renderer, self).__init__()
+        self.delayed_callbacks = frame.delayed_callbacks
+        self.finder = frame.finder
+        self.options = frame.options
+        self.daemon = True
+        self.work = queue.Queue()
+        self.last_reviews = {}
+        self.allowed_projects = set([p.lower()
+                                     for p in self.options.projects if p])
+        self.allowed_pipelines = set([p.lower()
+                                      for p in self.options.pipelines if p])
+
+    def render(self, zuul_data, screen_size):
+        columns = make_columns(self.options.screens)
+        maxcol, maxrow = screen_size
+        maxcol = maxcol / self.options.screens
+        pipes = {}
+        valid_pipeline = functools.partial(validate_entry,
+                                           self.allowed_pipelines)
+        for (p, raw_data) in iter_pipelines(zuul_data):
+            if not valid_pipeline(p.name):
+                continue
+            pipes[p.name] = {
+                'pipeline': p,
+                'reviews': [],
+                'data': raw_data,
+            }
+
+        reviews = {}
+        delayed_refresh = []
+        valid_project = functools.partial(validate_entry,
+                                          self.allowed_projects)
+        for name in sorted(pipes.keys()):
+            for (r, raw_data) in iter_reviews(pipes[name]['data'],
+                                              pipeline=name):
+                if not valid_project(r.project):
+                    continue
+                delay_refresh = False
+                if r.unique_id in self.last_reviews:
+                    r = self.last_reviews[r.unique_id]
+                    delay_refresh = True
+                if not delay_refresh:
+                    r.safe_refresh(raw_data)
+                else:
+                    delayed_refresh.append((r, raw_data))
+                reviews[r.unique_id] = r
+                pipes[name]['reviews'].append(r)
+
+        def cmp_reviews(r1, r2):
+            return cmp((r1.review_id, r1.change_id),
+                       (r2.review_id, r2.change_id))
+
+        self.last_reviews = reviews
+        columns_placed = []
+        for name in sorted(pipes.keys()):
+            c = columns.place(pipes[name]['pipeline'], maxrow, maxcol)
+            columns_placed.append(c)
+            for r in reversed(sorted(pipes[name]['reviews'], cmp=cmp_reviews)):
+                w = urwid.AttrMap(r, "selected", "body")
+                c = columns.place(w, maxrow, maxcol)
+                columns_placed.append(c)
+        for column in columns_placed:
+            for i, (w, details) in enumerate(column.contents):
+                if w.selectable():
+                    column.focus_position = i
+                    break
+
+        fetch_id = zuul_data['fetch_count']
+        detailed, awaiting, state = self.finder.activity()
+        text = "%s pipelines (%sr, %sw, %sf, %sd)"
+        text = text % (len(pipes), len(reviews),
+                       len(columns.columns), fetch_id, detailed)
+        return (columns, text, delayed_refresh)
+
+    def run(self):
+
+        def display(columns, text, delayed_refresh, frame):
+            for r, raw_data in delayed_refresh:
+                r.safe_refresh(raw_data)
+            frame.body = columns
+            frame.right_footer.set_text(text)
+            frame.rendering = False
+
+        def followup(review, frame):
+            if not self.options.detail:
+                return
+            with review.lock:
+                if review.state in NO_DETAIL_STATES:
+                    LOG.debug("Skipping %s", review)
+                    return
+                review.state = 'detailing'
+            priority = sys.maxint
+            try:
+                priority = -1 * int(review.review_id)
+            except (TypeError, ValueError):
+                pass
+            LOG.debug("Submitting %s (%s) for detailing", review, priority)
+            self.finder.work.put((priority, review))
+
+        running = True
+        while running:
+            zuul_data, screen_size = self.work.get(True)
+            try:
+                rendering = self.render(zuul_data, screen_size)
+            except KeyboardInterrupt:
+                running = False
+                thread.interrupt_main()
+            except Exception:
+                LOG.exception("Failed rendering...")
+            else:
+                cb = functools.partial(display, *rendering)
+                self.delayed_callbacks.put(cb)
+            for review in list(six.itervalues(self.last_reviews)):
+                cb = functools.partial(followup, review)
+                self.delayed_callbacks.put(cb)
+
+
+class ZuulFrame(urwid.Frame):
+    def __init__(self, options):
+        super(ZuulFrame, self).__init__(make_columns(options.screens))
+        self.options = options
+        self.right_footer = urwid.Text('', align='right')
+        self.center_footer = urwid.Text('', align='center')
+        self.left_footer = urwid.Text("Initializing...", align='left')
+        footer = urwid.AttrWrap(
+            urwid.Columns((self.left_footer,
+                           self.center_footer, self.right_footer)), 'body')
+        self.footer = footer
+        self.last_fetch_id = -1
+        self.rendering = False
+        self.last_refreshed = None
+        self.delayed_callbacks = queue.Queue()
+        self.lock = threading.RLock()
+        self.watcher = Watcher(self)
+        self.finder = Finder(self)
+        self.renderer = Renderer(self)
+
+    def keypress(self, size, key):
+        if key in REFRESH_KEYS:
+            self._poke_watcher()
+            return None
+        m_key = self._command_map[key]
+        with self.lock:
+            if self.rendering and m_key in MOVE_KEYS:
+                return key
+        return super(ZuulFrame, self).keypress(size, key)
+
+    def _poke_watcher(self):
+        LOG.debug("Poking")
+        self.watcher.event.set()
+
+    def start(self):
+        with self.lock:
+            self.watcher.start()
+            self.renderer.start()
+            if self.options.detail:
+                self.finder.start()
+
+    def refresh(self, screen, screen_size):
+        if screen_size is None or not all(screen_size):
+            return
+        with self.lock:
+            self._refresh(screen, screen_size)
+
+    def _refresh(self, screen, screen_size):
+        with self.watcher.lock:
+            zuul_data = self.watcher.data
+            state, fetches = self.watcher.activity()
+
+        if not zuul_data:
+            if not state:
+                text = "Waiting for initial data..."
+                self._poke_watcher()
+            else:
+                text = "%s..." % (state)
+            self.left_footer.set_text(text)
+            return
+
+        while not self.delayed_callbacks.empty():
+            callback = self.delayed_callbacks.get()
+            try:
+                callback(self)
+            except Exception:
+                LOG.exception("Failed calling callback %s", callback)
+
+        text = ''
+        if not self.rendering:
+            fetch_id = zuul_data['fetch_count']
+            if fetch_id > self.last_fetch_id:
+                self.rendering = True
+                self.renderer.work.put((zuul_data, screen_size))
+                self.last_fetch_id = fetch_id
+                self.last_refreshed = time.time()
+            if not self.rendering:
+                if not state:
+                    next_fetch = self.last_refreshed + self.options.frequency
+                    refresh_in = int(max(0, next_fetch - time.time()))
+                    text = "Refresh expected in %s seconds..." % (refresh_in)
+                    if refresh_in <= 0:
+                        self._poke_watcher()
+                else:
+                    text = text = "%s..." % (state)
+        if self.rendering:
+            text = "Rendering..."
+        self.left_footer.set_text(text)
+
+        text = ""
+        fetched, awaiting, state = self.finder.activity()
+        active_count = int(bool(state)) + awaiting
+        if active_count > 0:
+            text += "%s reviews waiting to be detailed" % (active_count)
+            if state:
+                text += "\n- %s -" % (state)
+        self.center_footer.set_text(text)
+
+
+def setup_logging(filename):
+    if not filename:
+        logging.basicConfig(level=logging.ERROR,
+                            format='%(asctime)s %(levelname)s: %(message)s',
+                            stream=sys.stderr)
+    else:
+        logging.basicConfig(level=logging.DEBUG,
+                            format='%(asctime)s %(levelname)s: %(message)s',
+                            filename=filename)
+
+
+def refresh_zuul(loop, frame):
+    frame.refresh(loop.screen, loop.screen_size)
+
+
+def on_unhandled_input(key):
+    if key in QUIT_KEYS:
+        raise urwid.ExitMainLoop()
+
+
+def on_idle(loop, frame):
+    loop.set_alarm_in(ALARM_FREQ, refresh_zuul, user_data=frame)
+
+
+def main():
+    parser = optparse.OptionParser()
+    parser.add_option("-s", "--server", dest="server", action='store',
+                      help="zuul server [default: %default]",
+                      metavar="URL", default=ZUUL_URL)
+    parser.add_option("--split-screens", dest="screens", action='store',
+                      help="split screen count [default: %default]",
+                      type=int, metavar="SCREENS", default=SCREENS)
+    parser.add_option("-p", "--pipeline", dest="pipelines", action='append',
+                      help="only show given pipelines reviews",
+                      metavar="PIPELINE", default=[])
+    parser.add_option("-r", "--refresh", dest="frequency", action='store',
+                      type=int,
+                      help="refresh every X seconds [default: %default]",
+                      metavar="SECONDS", default=ZUUL_FREQ)
+    parser.add_option("--project", dest="projects", action='append',
+                      help="only show given projects reviews",
+                      metavar="PROJECT", default=[])
+    parser.add_option("--details", dest="detail", action='store_true',
+                      help="fetch each reviews details"
+                           " [default: %default]", default=False)
+    parser.add_option("--detail-dir", dest="clone_dir", action='store',
+                      help="store git checkout locations at"
+                           " [default: %default]",
+                      default=os.path.join(tempfile.gettempdir(), 'czuul'))
+    parser.add_option("-v", "--verbose", dest="verbose_where", action='store',
+                      help="run in verbose mode and log output to the given file",
+                      metavar="FILE", default=None)
+    parser.add_option("--detail-git", dest="git_server", action='store',
+                      help="fetch git repositories from this git"
+                           " server [default: %default]",
+                      default='git://git.openstack.org/')
+    parser.add_option("--detail-remote", dest="remote_server", action='store',
+                      help="fetch review remotes from this gerrit server"
+                           " [default: %default]",
+                      default='https://review.openstack.org/')
+    (options, args) = parser.parse_args()
+    if options.frequency < ZUUL_MIN_FREQ:
+        parser.error("poll frequency must be greater or equal to %s seconds"
+                     " and not %s seconds" % (ZUUL_MIN_FREQ,
+                                              options.frequency))
+    if options.screens <= 0:
+        parser.error("one or more split-screens must be provided")
+
+    if options.detail:
+        if not options.remote_server:
+            parser.error("missing required remote server")
+        if not options.git_server:
+            parser.error("missing required git server")
+        if not options.clone_dir:
+            parser.error("missing required cloning directory")
+        if not os.path.isdir(options.clone_dir):
+            os.makedirs(options.clone_dir)
+
+    setup_logging(options.verbose_where)
+    frame = ZuulFrame(options)
+    frame.start()
+    loop = urwid.MainLoop(frame, PALETTE,
+                          handle_mouse=False,
+                          unhandled_input=on_unhandled_input)
+    loop.event_loop.enter_idle(functools.partial(on_idle, loop, frame))
+    try:
+        loop.run()
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

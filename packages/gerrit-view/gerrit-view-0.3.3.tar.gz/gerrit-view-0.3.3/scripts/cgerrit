@@ -1,0 +1,953 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+
+#    Copyright (C) 2013 Yahoo! Inc. All Rights Reserved.
+#
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
+
+import collections
+import errno
+import functools
+import getpass
+import json
+import logging
+import optparse
+import re
+import sys
+import threading
+import time
+
+import Queue
+
+from datetime import datetime
+
+from gerritlib import gerrit
+import paramiko
+import six
+import urwid
+from urwid.signals import connect_signal
+from urwid import widget
+
+LOG = logging.getLogger(__name__)
+
+### DEFAULT SETTINGS
+
+GERRIT_HOST = 'review.openstack.org'
+GERRIT_PORT = 29418
+BACKOFF_ATTEMPTS = 5
+VISIBLE_LIST_LEN = 50
+PREFETCH_LEN = VISIBLE_LIST_LEN
+ALARM_FREQ = 1.0
+SANITY_QUERY = 'status:open limit:%s'
+QUEUE_MAX_SIZE = 1000
+
+### GUI CONSTANTS
+
+PALETTE = (
+    ('body', urwid.DEFAULT, urwid.DEFAULT),
+    ('merged', urwid.LIGHT_CYAN, urwid.DEFAULT, 'bold'),
+    ('approved', urwid.LIGHT_GREEN, urwid.DEFAULT),
+    ('abandoned', urwid.YELLOW, urwid.DEFAULT),
+    ('verified', urwid.LIGHT_GRAY, urwid.DEFAULT),
+    ('restored', urwid.LIGHT_BLUE, urwid.DEFAULT),
+    ('rejected', urwid.LIGHT_RED, urwid.DEFAULT, 'bold'),
+    ('failed', urwid.LIGHT_RED, urwid.DEFAULT, 'bold'),
+    ('succeeded', urwid.LIGHT_GREEN, urwid.DEFAULT),
+    ('open', urwid.WHITE, urwid.DEFAULT),
+)
+COLUMNS = (
+    'Username',
+    "Topic",
+    "Url",
+    "Project",
+    'Subject',
+    'Created On',
+    'Updated On',
+    'Status',
+    'Comment',
+)
+COLUMN_TRUNCATES = {
+    # This determines how the columns will be trucated (at what length will
+    # truncation be forced to avoid huge strings).
+    'comment': 140,
+    'subject': 60,
+}
+COLUMN_TRUNCATES['reason'] = COLUMN_TRUNCATES['comment']
+COLUMN_ATTRIBUTES = {
+    'Created On': (urwid.WEIGHT, 0.33),
+    'Updated On': (urwid.WEIGHT, 0.33),
+    'Status': (urwid.FIXED, 9),
+    'Username': (urwid.WEIGHT, 0.33),
+    'Project': (urwid.WEIGHT, 0.5),
+    'Topic': (urwid.WEIGHT, 0.33),
+    'Url': (urwid.FIXED, 35),
+    'Subject': (urwid.WEIGHT, 0.8),
+    'Comment': (urwid.WEIGHT, 0.8),
+}
+HIGHLIGHT_WORDS = {
+    # These words get special colored highlighting.
+    #
+    # word -> palette name
+    'succeeded': 'succeeded',
+    'success': 'succeeded',
+    'successful': 'succeeded',
+    'failure': 'failed',
+    'failed': 'failed',
+    'fails': 'failed',
+}
+COLUMN_2_IDX = dict((k, i) for (i, k) in enumerate(COLUMNS))
+REFRESH_KEYS = (
+    urwid.CURSOR_UP,
+    urwid.CURSOR_DOWN,
+    urwid.CURSOR_PAGE_UP,
+    urwid.CURSOR_PAGE_DOWN,
+)
+SORT_CHANGE_KEYS = ('s', 'S')
+QUIT_KEYS = ('q', 'Q', 'esc')
+
+### HELPERS
+
+
+def _format_text(text, align=None):
+    text_pieces = []
+    for t in re.split(r"([\s.\-,!])", text):
+        if t.lower() in HIGHLIGHT_WORDS:
+            text_pieces.append((HIGHLIGHT_WORDS[t.lower()], t))
+        else:
+            text_pieces.append(t)
+    return _make_text(text_pieces, align=align)
+
+
+def _make_text(text, align=None):
+    if not align:
+        align = 'left'
+    return urwid.Text(text, wrap='any', align=align)
+
+
+def _format_date(when=None):
+    if when is None:
+        when = datetime.now()
+    return when.strftime('%I:%M %p %m/%d/%Y')
+
+
+def _get_date(k, row):
+    v = _get_text(k, row)
+    if not v:
+        return None
+    try:
+        return datetime.fromtimestamp(int(v))
+    except (ValueError, TypeError):
+        return None
+
+
+def _get_text(k, container):
+    if k not in container:
+        return ""
+    text = container[k]
+    if not isinstance(text, six.string_types):
+        text = str(text)
+    max_len = COLUMN_TRUNCATES.get(k.lower())
+    if max_len is not None and len(text) > max_len:
+        text = text[0:max_len] + "..."
+    return text
+
+
+class GerritWatcher(threading.Thread):
+    def __init__(self, queue, server, port, username, keyfile, **kwargs):
+        super(GerritWatcher, self).__init__()
+        self.queue = queue
+        self.keyfile = keyfile
+        self.port = port
+        self.server = server
+        self.username = username
+        self.daemon = True
+        self.gerrit = None
+        self.prefetch = int(kwargs.get("prefetch", 0))
+        self.has_prefetched = False
+        self.record_file = kwargs.get("record")
+        self.has_read_record = False
+        self.state = "IDLE"
+        self.failures = []
+
+    def _prefetch_check(self):
+        fetch_am = 1
+        if not self.has_prefetched:
+            fetch_am = max(fetch_am, self.prefetch)
+
+        def event_sort(ev1, ev2):
+            p1 = ev1['patchSet']
+            p2 = ev2['patchSet']
+            return cmp(p1['createdOn'], p2['createdOn'])
+
+        q = SANITY_QUERY % (fetch_am)
+        LOG.info("Using '%s' for sanity query.", q)
+        results = self.gerrit.bulk_query(q)
+        translated = []
+        for r in results:
+            if not isinstance(r, (dict)):
+                continue
+            if r.get('type') == 'stats':
+                continue
+            # Translate it into what looks like a patch-set created
+            # event and then send this via the queue to showup on the gui
+            ev = {
+                'type': 'patchset-created',
+                'uploader': r.pop('owner'),
+                'patchSet': {
+                    'createdOn': r.pop('createdOn'),
+                    'lastUpdated': r.pop('lastUpdated', None),
+                },
+            }
+            ev['change'] = dict(r)
+            translated.append(ev)
+
+        # For some reason we can get more than requested, even though
+        # we send a limit, huh??
+        LOG.info("Received %s sanity check results.", len(translated))
+        translated = translated[0:fetch_am]
+        self.has_prefetched = True
+        return list(sorted(translated, cmp=event_sort))
+
+    @property
+    def connected(self):
+        if self.gerrit is None:
+            return False
+        if self.gerrit.watcher_thread is None:
+            return False
+        if not self.gerrit.watcher_thread.is_alive():
+            return False
+        return True
+
+    def _connect_and_prefetch(self):
+
+        def connect():
+            if self.gerrit is None:
+                self.gerrit = gerrit.Gerrit(self.server, self.username,
+                                            self.port, self.keyfile)
+            # NOTE(harlowja): only after the sanity query passes do we have
+            # some level of confidence that the watcher thread will actually
+            # correctly connect.
+            events = self._prefetch_check()
+            self.gerrit.startWatching()
+            LOG.info('Started watching gerrit event stream.')
+            return events
+
+        events = []
+        failures = []
+        for i in xrange(0, BACKOFF_ATTEMPTS):
+            retry = True
+            try:
+                events = connect()
+            except paramiko.SSHException:
+                # Likely this will not be fixed by retrying...
+                failures.append(sys.exc_info())
+                retry = False
+            except Exception:
+                failures.append(sys.exc_info())
+            if not self.connected and retry:
+                sleep_time = 2**i
+                if i + 1 < BACKOFF_ATTEMPTS:
+                    LOG.warn("Trying connection again in %s seconds",
+                             sleep_time)
+                time.sleep(sleep_time)
+            else:
+                break
+        return (failures, events)
+
+    def _handle_event(self, event):
+        LOG.debug('Placing event on producer queue: %s', event)
+        self.queue.put(event)
+
+    def _consume_record(self):
+        if not self.record_file:
+            return
+
+        def check_input(data):
+            if not isinstance(data, (dict)):
+                return False
+            for k in ('change', 'type'):
+                if k not in data:
+                    return False
+            return True
+
+        try:
+            with open(self.record_file, "rb") as fh:
+                for line in iter(fh):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                        if check_input(event):
+                            yield event
+                    except ValueError:
+                        pass
+        except IOError as e:
+            if e.errno != errno.ENOENT:
+                LOG.exception("Could not read record file at %s",
+                              self.record_file)
+
+    def _record_event(self, event):
+        if not self.record_file:
+            return
+        try:
+            event_f = json.dumps(event)
+        except (ValueError, TypeError):
+            LOG.exception("Failed at formatting event to json")
+            return
+        try:
+            with open(self.record_file, "ab") as fh:
+                fh.write(event_f)
+                fh.write("\n")
+        except IOError:
+            LOG.exception("Failed writing event to %s", self.record_file)
+
+    def _consume(self):
+        try:
+            event = self.gerrit.getEvent()
+            self._handle_event(event)
+            self._record_event(event)
+        except Exception:
+            LOG.exception('Exception encountered in event loop')
+            if self.gerrit.watcher_thread is not None \
+               and not self.gerrit.watcher_thread.is_alive():
+                self.gerrit = None
+
+    def run(self):
+        self.state = "CONNECTING"
+        failures, events = self._connect_and_prefetch()
+        if self.connected:
+            self.state = "CONSUMING"
+            while True:
+                if not self.connected:
+                    break
+                else:
+                    if not self.has_read_record:
+                        for event in self._consume_record():
+                            self._handle_event(event)
+                        self.has_read_record = True
+                    for event in events:
+                        self._handle_event(event)
+                        self._record_event(event)
+                    self._consume()
+        else:
+            self.failures.extend(failures)
+        self.state = "DEAD"
+
+
+def _consume_queue(queue):
+    events = []
+    while True:
+        try:
+            events.append(queue.get(block=False))
+        except Queue.Empty:
+            break
+    return events
+
+
+def _get_change_status(event):
+    change_type = None
+    for approval in event.get('approvals', []):
+        if not isinstance(approval, (dict)):
+            continue
+        try:
+            approval_value = int(approval['value'])
+        except (ValueError, TypeError, KeyError):
+            approval_value = None
+        if approval.get('type') == 'VRIF':
+            if approval_value == -2:
+                change_type = 'Failed'
+            if approval_value == -1:
+                change_type = 'Verified'
+            if approval_value == 2:
+                change_type = 'Succeeded'
+        if approval.get('type') == 'CRVW':
+            if approval_value == -2:
+                change_type = 'Rejected'
+            if approval_value == 2:
+                change_type = 'Approved'
+    return change_type
+
+
+class ToggleText(urwid.Text):
+    ignore_focus = False
+
+    def render(self, size, focus=False):
+        # Be nice if there was a way to avoid having to copy this code from
+        # the parent class....
+        (maxcol,) = size
+        text, attr = self.get_text()
+        if focus:
+            text = u'•' + (text)
+        self._invalidate()
+        trans = self.get_line_translation(maxcol, ta=(text, attr))
+        return widget.apply_text_layout(text, attr, trans, maxcol)
+
+    def keypress(self, size, key):
+        return key
+
+    def selectable(self):
+        return True
+
+    def rows(self, size, focus=False):
+        (maxcol,) = size
+        text, attr = self.get_text()
+        if focus:
+            text = u'•' + (text)
+        self._invalidate()
+        return len(self.get_line_translation(maxcol, ta=(text, attr)))
+
+    def pack(self, size=None, focus=False):
+        text, attr = self.get_text()
+        if focus:
+            text = u'•' + (text)
+        self._invalidate()
+
+        # Be nice if there was a way to avoid having to copy this code from
+        # the parent class....
+        if size is not None:
+            (maxcol,) = size
+            if not hasattr(self.layout, "pack"):
+                return size
+            trans = self.get_line_translation(maxcol, ta=(text, attr))
+            cols = self.layout.pack(maxcol, trans)
+            return (cols, len(trans))
+
+        i = 0
+        cols = 0
+        while i < len(text):
+            j = text.find('\n', i)
+            if j == -1:
+                j = len(text)
+            c = urwid.calc_width(text, i, j)
+            if c > cols:
+                cols = c
+            i = j + 1
+        return (cols, text.count('\n') + 1)
+
+
+class ReviewDate(urwid.Text):
+    def __init__(self, when=None):
+        super(ReviewDate, self).__init__('')
+        self.when = when
+        if when is not None:
+            self.set_text(_format_date(when))
+
+
+class ReviewTable(urwid.ListBox):
+    def __init__(self, max_size=1):
+        super(ReviewTable, self).__init__(urwid.SimpleListWalker([]))
+        assert int(max_size) > 0, "Max size must be > 0"
+        self._max_size = int(max_size)
+        self._sort_by = [
+            (None, None),  # no sorting
+            ('Created On (Desc)', self._sort_date("Created On", False)),
+            ('Created On (Asc)', self._sort_date("Created On", True)),
+            ('Updated On (Desc)', self._sort_date("Updated On", False)),
+            ('Updated On (Asc)', self._sort_date("Updated On", True)),
+            ('Subject (Desc)', self._sort_text("Subject", False)),
+            ('Subject (Asc)', self._sort_text("Subject", True)),
+            ('Username (Desc)', self._sort_text("Username", False)),
+            ('Username (Asc)', self._sort_text("Username", True)),
+            ('Project (Desc)', self._sort_text("Project", False)),
+            ('Project (Asc)', self._sort_text("Project", True)),
+            ('Topic (Desc)', self._sort_text("Topic", False)),
+            ('Topic (Asc)', self._sort_text("Topic", True)),
+        ]
+        self._sort_idx = 0
+        self._rows = []
+
+    def _sort_text(self, col_name, asc):
+        col_idx = COLUMN_2_IDX[col_name]
+        flip_map = {
+            0: 0,
+            -1: 1,
+            1: -1,
+        }
+
+        def sorter(i1, i2):
+            t1 = i1.contents[col_idx][0]
+            t2 = i2.contents[col_idx][0]
+            r = cmp(t1.text, t2.text)
+            if not asc:
+                r = flip_map[r]
+            return r
+
+        return sorter
+
+    def _sort_date(self, col_name, asc):
+        col_idx = COLUMN_2_IDX[col_name]
+        flip_map = {
+            0: 0,
+            -1: 1,
+            1: -1,
+        }
+
+        def sorter(i1, i2):
+            d1 = i1.contents[col_idx][0]
+            d2 = i2.contents[col_idx][0]
+            if d1.when is None and d2.when is None:
+                r = 0
+            if d1.when is None and d2.when is not None:
+                r = -1
+            if d1.when is not None and d2.when is None:
+                r = 1
+            if d1.when is not None and d2.when is not None:
+                r = cmp(d1.when, d2.when)
+            if not asc:
+                r = flip_map[r]
+            return r
+
+        return sorter
+
+    @property
+    def entries(self):
+        return len(self.body)
+
+    @property
+    def max_size(self):
+        return self._max_size
+
+    def _add_row(self, row):
+        if len(row.contents) != len(COLUMNS):
+            raise RuntimeError("Attempt to add a row with differing"
+                               " column count")
+        if len(self._rows) >= self.max_size:
+            self._rows.pop()
+        self._rows.insert(0, row)
+        (_sort_title, sort_functor) = self._sort_by[self._sort_idx]
+        if sort_functor:
+            self._refill(sorted(self._rows, cmp=sort_functor))
+        else:
+            if len(self.body) >= self.max_size:
+                self.body.pop()
+            self.body.insert(0, row)
+
+    def _find_change(self, change):
+        url_i = COLUMN_2_IDX['Url']
+        m_c = None
+        for c in self.body:
+            url = c.contents[url_i]
+            if url[0].text == change.get('url'):
+                m_c = c
+                break
+        return m_c
+
+    def _update_last_updated(self, match):
+        updated_i = COLUMN_2_IDX['Updated On']
+        new_contents = list(match.contents[updated_i])
+        new_contents[0] = ReviewDate(datetime.now())
+        match.contents[updated_i] = tuple(new_contents)
+        (sort_title, sort_functor) = self._sort_by[self._sort_idx]
+        if sort_title and sort_title.startswith("Updated On"):
+            self._refill(sorted(self._rows, cmp=sort_functor))
+
+    def _set_status(self, match, text):
+        if not text or match is None:
+            return None
+        status_i = COLUMN_2_IDX['Status']
+        new_contents = list(match.contents[status_i])
+        new_contents[0] = urwid.AttrWrap(_make_text(text), text.lower())
+        match.contents[status_i] = tuple(new_contents)
+        return match
+
+    def on_change_merged(self, event):
+        change = event['change']
+        match = self._find_change(change)
+        if match is not None:
+            self._set_status(match, 'Merged')
+            self._update_last_updated(match)
+
+    def on_change_restored(self, event):
+        change = event['change']
+        match = self._find_change(change)
+        if match is not None:
+            reason = _get_text('reason', event)
+            if len(reason):
+                comment_i = COLUMN_2_IDX['Comment']
+                new_column = list(match.contents[comment_i])
+                new_column[0] = _format_text(reason)
+                match.contents[comment_i] = tuple(new_column)
+            self._set_status(match, 'Restored')
+            self._update_last_updated(match)
+
+    def on_comment_added(self, event):
+        change = event['change']
+        match = self._find_change(change)
+        if match is not None:
+            comment = _get_text('comment', event)
+            if len(comment):
+                comment_i = COLUMN_2_IDX['Comment']
+                new_column = list(match.contents[comment_i])
+                new_column[0] = _format_text(comment)
+                match.contents[comment_i] = tuple(new_column)
+            self._set_status(match, _get_change_status(event))
+            self._update_last_updated(match)
+
+    def on_change_abandoned(self, event):
+        change = event['change']
+        match = self._find_change(change)
+        if match is not None:
+            reason = _get_text('reason', event)
+            if len(reason):
+                comment_i = COLUMN_2_IDX['Comment']
+                new_column = list(match.contents[comment_i])
+                new_column[0] = _format_text(reason)
+                match.contents[comment_i] = tuple(new_column)
+            self._set_status(match, 'Abandoned')
+            self._update_last_updated(match)
+
+    def on_patchset_created(self, event):
+        change = event['change']
+        match = self._find_change(change)
+        if match is not None:
+            # NOTE(harlowja): already being actively displayed
+            return
+        patch_set = event['patchSet']
+        uploader = event['uploader']
+        last_updated = _get_date('lastUpdated', patch_set)
+        if last_updated is None:
+            last_updated = datetime.now()
+        row = [
+            ToggleText(_get_text('username', uploader),
+                       wrap='space', align='left'),
+            _get_text('topic', change),
+            _get_text('url', change),
+            _get_text('project', change),
+            _get_text('subject', change),
+            ReviewDate(_get_date('createdOn', patch_set)),
+            ReviewDate(last_updated),
+            "",  # status
+            "",  # comment
+        ]
+        attr_row = []
+        for (i, v) in enumerate(row):
+            col_name = COLUMNS[i]
+            try:
+                col_attrs = list(COLUMN_ATTRIBUTES[col_name])
+            except (KeyError, TypeError):
+                col_attrs = []
+            if isinstance(v, six.string_types):
+                col_attrs.append(_format_text(v))
+            else:
+                col_attrs.append(v)
+            attr_row.append(tuple(col_attrs))
+        cols = urwid.Columns(attr_row, dividechars=1)
+        self._set_status(cols, 'Open')
+        self._add_row(cols)
+
+    def _refill(self, new_body):
+        while len(self.body):
+            self.body.pop()
+        self.body.extend(new_body)
+
+    def next_sort(self):
+        self._sort_idx += 1
+        self._sort_idx = self._sort_idx % len(self._sort_by)
+        (sort_title, sort_functor) = self._sort_by[self._sort_idx]
+        if not all([sort_title, sort_functor]):
+            self._refill(self._rows)
+        else:
+            self._refill(sorted(self._rows, cmp=sort_functor))
+        return sort_title
+
+
+class SizingFrame(urwid.Frame):
+    def __init__(self, review_table):
+        super(SizingFrame, self).__init__(urwid.AttrWrap(review_table, 'body'))
+        self._review_table = review_table
+        connect_signal(self._review_table.body, 'modified',
+                       self._set_refresh_header_footer)
+        self._refresh_headers = True
+        self._last_size = (-1, -1)
+        self._footer_pieces = [None, None, None]
+
+    @property
+    def review_table(self):
+        return self._review_table
+
+    @property
+    def right_footer(self):
+        if self._footer_pieces[2] is None:
+            self._footer_pieces[2] = urwid.Text('', align='right')
+        return self._footer_pieces[2]
+
+    @property
+    def left_footer(self):
+        if self._footer_pieces[0] is None:
+            self._footer_pieces[0] = urwid.Text('', align='left')
+        return self._footer_pieces[0]
+
+    @property
+    def center_footer(self):
+        if self._footer_pieces[1] is None:
+            self._footer_pieces[1] = urwid.Text('', align='center')
+        return self._footer_pieces[1]
+
+    def _set_refresh_header_footer(self):
+        self._refresh_headers = True
+
+    def _make_header(self, percent_below=None):
+        table_header = []
+        for col_name in COLUMNS:
+            try:
+                col_attrs = list(COLUMN_ATTRIBUTES[col_name])
+            except KeyError:
+                col_attrs = []
+            col_attrs.append(_make_text(col_name))
+            table_header.append(tuple(col_attrs))
+        table_cols = urwid.Columns(table_header, dividechars=1)
+        h_div = urwid.Divider(u'─')
+        if percent_below is not None:
+            comp = urwid.Text(u"⇡%i%%⇡" % (percent_below * 100))
+            header_cols = urwid.Columns([
+                h_div,
+                (urwid.FLOW, comp),
+                h_div,
+            ])
+        else:
+            header_cols = urwid.Columns([h_div])
+        return urwid.Pile([table_cols, header_cols])
+
+    def _make_footer(self, percent_above=None):
+        footer_pieces = [
+            self.left_footer,
+            (urwid.FLOW, self.center_footer),
+            self.right_footer,
+        ]
+        cols = urwid.Columns(footer_pieces)
+        f_div = urwid.Divider(u'─')
+        if percent_above is not None:
+            comp = urwid.Text(u"⇣%i%%⇣" % (percent_above * 100))
+            footer_cols = urwid.Columns([
+                f_div,
+                (urwid.FLOW, comp),
+                f_div,
+            ])
+        else:
+            footer_cols = urwid.Columns([f_div])
+        return urwid.Pile([footer_cols, cols])
+
+    def _reset_footer_header(self, size):
+        item_count = self.review_table.entries
+        if item_count == 0:
+            self.header = self._make_header()
+            self.footer = self._make_footer()
+            return
+        middle, top, bottom = self.review_table.calculate_visible(size, False)
+        row_offset, focus_widget, focus_pos, focus_rows, cursor = middle
+        items_above_visible = len(top[1])
+        items_below_visible = len(bottom[1])
+        items_visible = 1 + items_below_visible + items_above_visible
+        initial_focus_pos = focus_pos - items_above_visible
+        items_above = initial_focus_pos
+        items_below = item_count - (items_above + items_visible)
+        if items_above == 0:
+            self.header = self._make_header()
+        else:
+            self.header = self._make_header(float(items_above) / item_count)
+        if items_below == 0:
+            self.footer = self._make_footer()
+        else:
+            self.footer = self._make_footer(float(items_below) / item_count)
+
+    def keypress(self, size, key):
+        m_key = self._command_map[key]
+        if m_key in REFRESH_KEYS:
+            self._set_refresh_header_footer()
+        key = super(SizingFrame, self).keypress(size, key)
+        if not key:
+            return None
+        if key in SORT_CHANGE_KEYS:
+            sort_title = self.review_table.next_sort()
+            if sort_title:
+                self.center_footer.set_text("Sort: %s" % (sort_title))
+            else:
+                self.center_footer.set_text('')
+            return None
+        return key
+
+    def render(self, size, focus=False):
+        if self._refresh_headers or self._last_size != size:
+            if size is None or len(size) != 2:
+                self.header = self._make_header()
+                self.footer = self._make_footer()
+            else:
+                used_rows, _orig_rows = self.frame_top_bottom(size,
+                                                              focus=focus)
+                (maxcols, maxrows) = size
+                real_size = (maxcols, max(0, maxrows - sum(used_rows)))
+                self._reset_footer_header(real_size)
+            self._refresh_headers = False
+            self._last_size = size
+        return super(SizingFrame, self).render(size, focus)
+
+###
+
+
+def setup_logging(filename):
+    if not filename:
+        logging.basicConfig(level=logging.ERROR,
+                            format='%(asctime)s %(levelname)s: %(message)s',
+                            stream=sys.stderr)
+    else:
+        logging.basicConfig(level=logging.DEBUG,
+                            format='%(asctime)s %(levelname)s: %(message)s',
+                            filename=filename)
+
+
+def main():
+    parser = optparse.OptionParser()
+    parser.add_option("-u", "--user", dest="username", action='store',
+                      help="gerrit user [default: %default]", metavar="USER",
+                      default=getpass.getuser())
+    parser.add_option("-s", "--server", dest="server", action='store',
+                      help="gerrit server [default: %default]",
+                      metavar="SERVER", default=GERRIT_HOST)
+    parser.add_option("-p", "--port", dest="port", action='store',
+                      type="int", help="gerrit port [default: %default]",
+                      metavar="PORT", default=GERRIT_PORT)
+    parser.add_option("--prefetch", dest="prefetch", action='store',
+                      type="int", help="prefetch amount [default: %default]",
+                      metavar="COUNT", default=PREFETCH_LEN)
+    parser.add_option("-k", "--keyfile", dest="keyfile", action='store',
+                      help="gerrit ssh keyfile [default: attempt to use local agent]",
+                      metavar="FILE", default=None)
+    parser.add_option("--project", dest="projects", action='append',
+                      help="only show given projects reviews",
+                      metavar="PROJECT", default=[])
+    parser.add_option("-v", "--verbose", dest="verbose_where", action='store',
+                      help="run in verbose mode and log output to the given file",
+                      metavar="FILE", default=None)
+    parser.add_option("-i", "--items", dest="back", action='store',
+                      type="int",
+                      help="how many items to keep visible"
+                           " [default: %default]",
+                      metavar="COUNT", default=VISIBLE_LIST_LEN)
+    parser.add_option("-r", "--record-file", dest="record", action='store',
+                      help="record file to store past events (also used for "
+                           "initial view population if provided)",
+                      metavar="FILE",
+                      default=None)
+    (options, args) = parser.parse_args()
+    if options.back <= 0:
+        parser.error("Item count must be greater or equal to one.")
+
+    setup_logging(options.verbose_where)
+    gerrit_config = {
+        'keyfile': options.keyfile,
+        'port': int(options.port),
+        'server': options.server,
+        'username': options.username,
+        'prefetch': max(0, options.prefetch),
+        'record': options.record,
+    }
+    event_queue = Queue.Queue(maxsize=QUEUE_MAX_SIZE)
+    gerrit_reader = GerritWatcher(event_queue, **gerrit_config)
+    gerrit_details = collections.defaultdict(int)
+    review_table = ReviewTable(max_size=options.back)
+    frame = SizingFrame(review_table)
+    frame.left_footer.set_text("Initializing...")
+
+    def filter_event(event):
+        if len(options.projects) == 0:
+            return False
+        project = None
+        try:
+            project = event['change']['project']
+        except (KeyError, TypeError, ValueError):
+            pass
+        if project in options.projects:
+            return False
+        return True
+
+    def on_unhandled_input(key):
+        if key in QUIT_KEYS:
+            raise urwid.ExitMainLoop()
+
+    def process_event(event):
+        if not isinstance(event, (dict)) or not 'type' in event:
+            return
+        if filter_event(event):
+            return
+        event_type = str(event['type'])
+        gerrit_details[event_type] += 1
+        if event_type == 'patchset-created':
+            review_table.on_patchset_created(event)
+        elif event_type == 'comment-added':
+            review_table.on_comment_added(event)
+        elif event_type == 'change-merged':
+            review_table.on_change_merged(event)
+        elif event_type == 'change-restored':
+            review_table.on_change_restored(event)
+        elif event_type == 'change-abandoned':
+            review_table.on_change_abandoned(event)
+        else:
+            raise RuntimeError("Unknown event type: '%s'" % (event_type))
+
+    def update_footer(events):
+        detail_text = "%s, %s events received (%sp, %sc, %sm, %sr, %sa)"
+        detail_text = detail_text % (_format_date(),
+                                     sum(gerrit_details.values()),
+                                     gerrit_details.get('patchset-created', 0),
+                                     gerrit_details.get('comment-added', 0),
+                                     gerrit_details.get('change-merged', 0),
+                                     gerrit_details.get('change-restored', 0),
+                                     gerrit_details.get('change-abandoned', 0))
+        frame.right_footer.set_text(detail_text)
+        if gerrit_reader.state in ['CONNECTING', 'CONSUMING']:
+            if gerrit_reader.state == 'CONNECTING':
+                frame.left_footer.set_text("Connecting...")
+            else:
+                if events == 0:
+                    frame.left_footer.set_text("Waiting for events...")
+                else:
+                    frame.left_footer.set_text("Processing events...")
+        else:
+            if gerrit_reader.state == 'DEAD':
+                if gerrit_reader.failures:
+                    exc_info = gerrit_reader.failures[-1]
+                    raise exc_info[0], exc_info[1], exc_info[2]
+                else:
+                    raise IOError("The gerrit connection could "
+                                  "not be established.")
+            else:
+                frame.left_footer.set_text("Initializing...")
+
+    def process_gerrit(loop, user_data):
+        evs = _consume_queue(event_queue)
+        for e in evs:
+            try:
+                process_event(e)
+            except Exception:
+                LOG.exception("Failed handling event: %s", e)
+        update_footer(len(evs))
+
+    def on_idle(loop):
+        loop.set_alarm_in(ALARM_FREQ, process_gerrit)
+
+    loop = urwid.MainLoop(urwid.LineBox(frame), PALETTE,
+                          handle_mouse=False,
+                          unhandled_input=on_unhandled_input)
+    gerrit_reader.start()
+    loop.event_loop.enter_idle(functools.partial(on_idle, loop))
+    try:
+        loop.run()
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()
