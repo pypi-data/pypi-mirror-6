@@ -1,0 +1,304 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>audiodiff &mdash; audiodiff 0.3.0.dev1 documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:'../',
+        VERSION:'0.3.0.dev1',
+        COLLAPSE_INDEX:false,
+        FILE_SUFFIX:'.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+    <link rel="top" title="audiodiff 0.3.0.dev1 documentation" href="../index.html"/>
+        <link rel="up" title="Module code" href="index.html"/> 
+
+  <script src="//cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="../index.html" class="icon icon-home"> audiodiff</a>
+        <form class="wy-form" action="../search.html" method="get">
+  <input type="text" name="q" placeholder="Search docs" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix">
+        
+        
+            
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top">
+        <i data-toggle="wy-nav-top" class="icon icon-reorder"></i>
+        <a href="/">audiodiff</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <ul class="wy-breadcrumbs">
+  <li><a href="../index.html">Docs</a> &raquo;</li>
+  <li><a href="">audiodiff</a></li>
+  
+</ul>
+<hr/>
+
+          
+  <h1>Source code for audiodiff</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   audiodiff</span>
+<span class="sd">   ~~~~~~~~~</span>
+
+<span class="sd">   This module contains functions for comparing audio files.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">chunk</span>
+<span class="kn">import</span> <span class="nn">filecmp</span>
+<span class="kn">import</span> <span class="nn">hashlib</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">mutagenwrapper</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">mutagenwrapper</span> <span class="o">=</span> <span class="bp">None</span>
+
+
+<span class="n">__version__</span> <span class="o">=</span> <span class="s">&#39;0.3.0.dev1&#39;</span>
+
+
+<span class="c">#: Supported audio formats (extensions)</span>
+<span class="n">AUDIO_FORMATS</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;wav&#39;</span><span class="p">,</span> <span class="s">&#39;flac&#39;</span><span class="p">,</span> <span class="s">&#39;m4a&#39;</span><span class="p">,</span> <span class="s">&#39;mp3&#39;</span><span class="p">]</span>
+
+<span class="c">#: Default FFmpeg path</span>
+<span class="n">FFMPEG_BIN</span> <span class="o">=</span> <span class="s">&#39;ffmpeg&#39;</span>
+
+
+<div class="viewcode-block" id="equal"><a class="viewcode-back" href="../index.html#audiodiff.equal">[docs]</a><span class="k">def</span> <span class="nf">equal</span><span class="p">(</span><span class="n">name1</span><span class="p">,</span> <span class="n">name2</span><span class="p">,</span> <span class="n">ffmpeg_bin</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compares two files and returns ``True`` if they are considered equal.</span>
+<span class="sd">    For audio files, they are equal if their uncompressed audio streams and</span>
+<span class="sd">    tags (as reported by mutagenwrapper, except for ``encodedby`` which is</span>
+<span class="sd">    ignored) are equal. For non-audio files, they must have the same content to</span>
+<span class="sd">    be equal.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">is_supported_format</span><span class="p">(</span><span class="n">name1</span><span class="p">)</span> <span class="ow">and</span> <span class="n">is_supported_format</span><span class="p">(</span><span class="n">name2</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">audio_equal</span><span class="p">(</span><span class="n">name1</span><span class="p">,</span> <span class="n">name2</span><span class="p">,</span> <span class="n">ffmpeg_bin</span><span class="p">)</span> <span class="ow">and</span> <span class="n">tags_equal</span><span class="p">(</span><span class="n">name1</span><span class="p">,</span>
+                                                                    <span class="n">name2</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">filecmp</span><span class="o">.</span><span class="n">cmp</span><span class="p">(</span><span class="n">name1</span><span class="p">,</span> <span class="n">name2</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="audio_equal"><a class="viewcode-back" href="../index.html#audiodiff.audio_equal">[docs]</a><span class="k">def</span> <span class="nf">audio_equal</span><span class="p">(</span><span class="n">name1</span><span class="p">,</span> <span class="n">name2</span><span class="p">,</span> <span class="n">ffmpeg_bin</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compares two audio files and returns ``True`` if they have the same</span>
+<span class="sd">    audio streams.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">checksum</span><span class="p">(</span><span class="n">name1</span><span class="p">,</span> <span class="n">ffmpeg_bin</span><span class="p">)</span> <span class="o">==</span> <span class="n">checksum</span><span class="p">(</span><span class="n">name2</span><span class="p">,</span> <span class="n">ffmpeg_bin</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="tags_equal"><a class="viewcode-back" href="../index.html#audiodiff.tags_equal">[docs]</a><span class="k">def</span> <span class="nf">tags_equal</span><span class="p">(</span><span class="n">name1</span><span class="p">,</span> <span class="n">name2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compares two audio files and returns ``True`` if they have the same tags</span>
+<span class="sd">    reported by mutagenwrapper.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">tags</span><span class="p">(</span><span class="n">name1</span><span class="p">)</span> <span class="o">==</span> <span class="n">tags</span><span class="p">(</span><span class="n">name2</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="checksum"><a class="viewcode-back" href="../index.html#audiodiff.checksum">[docs]</a><span class="k">def</span> <span class="nf">checksum</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">ffmpeg_bin</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns an SHA1 checksum of the uncompressed PCM (signed 24-bit</span>
+<span class="sd">    little-endian) data stream of the audio file. Note that the checksums for</span>
+<span class="sd">    the same file may differ across different platforms if the file format is</span>
+<span class="sd">    lossy, due to floating point problems and different implementations of</span>
+<span class="sd">    decoders.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">ffmpeg_bin</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">ffmpeg_bin</span> <span class="o">=</span> <span class="n">ffmpeg_path</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">ffmpeg_bin</span><span class="p">,</span>
+        <span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span>
+        <span class="s">&#39;-vn&#39;</span><span class="p">,</span>
+        <span class="s">&#39;-f&#39;</span><span class="p">,</span> <span class="s">&#39;s24le&#39;</span><span class="p">,</span>
+        <span class="s">&#39;-&#39;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="c"># Check if the file is readable and raise an appropriate exception if not</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">devnull</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fnull</span><span class="p">:</span>
+        <span class="n">proc</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span>
+                                <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
+        <span class="n">sha1sum</span> <span class="o">=</span> <span class="n">_compute_sha1</span><span class="p">(</span><span class="n">proc</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+        <span class="n">proc</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">sha1sum</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ExternalLibraryError</span><span class="p">(</span><span class="n">proc</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+            <span class="k">return</span> <span class="n">sha1sum</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">proc</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="n">proc</span><span class="o">.</span><span class="n">stderr</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_compute_sha1</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+    <span class="n">hasher</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha1</span><span class="p">()</span>
+    <span class="n">empty</span> <span class="o">=</span> <span class="bp">True</span>
+    <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">hasher</span><span class="o">.</span><span class="n">block_size</span> <span class="o">*</span> <span class="mi">128</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
+            <span class="k">break</span>
+        <span class="n">empty</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="n">hasher</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">empty</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">None</span>
+    <span class="k">return</span> <span class="n">hasher</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="tags"><a class="viewcode-back" href="../index.html#audiodiff.tags">[docs]</a><span class="k">def</span> <span class="nf">tags</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns tags in the audio file as a :class:`dict`. Its return value is</span>
+<span class="sd">    the same as ``mutagenwrapper.read_tags``, except that single valued items</span>
+<span class="sd">    (lists with length 1) are unwrapped and ``encodedby`` tag is removed. To</span>
+<span class="sd">    read unmodified, but still normalized tags, use</span>
+<span class="sd">    ``mutagenwrapper.read_tags``. For raw tags, use the ``mutagen`` library.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">mutagenwrapper</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s">&#39;mutagenwrapper is required to read tags&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_supported_format</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">UnsupportedFileError</span><span class="p">(</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39; is not a supported audio file&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">get_extension</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="o">==</span> <span class="s">&#39;wav&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">_unwrap</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">mutagenwrapper</span><span class="o">.</span><span class="n">read_tags</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">iteritems</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">key</span> <span class="o">!=</span> <span class="s">&#39;encodedby&#39;</span><span class="p">)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_unwrap</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">None</span>
+    <span class="k">elif</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span>
+
+
+<div class="viewcode-block" id="get_extension"><a class="viewcode-back" href="../index.html#audiodiff.get_extension">[docs]</a><span class="k">def</span> <span class="nf">get_extension</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns the file extension of the specified path. Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; get_extension(&#39;a.pdf&#39;)</span>
+<span class="sd">        &#39;pdf&#39;</span>
+<span class="sd">        &gt;&gt;&gt; get_extension(&#39;b.js.coffee&#39;)</span>
+<span class="sd">        &#39;coffee&#39;</span>
+<span class="sd">        &gt;&gt;&gt; get_extension(&#39;c&#39;)</span>
+<span class="sd">        &#39;&#39;</span>
+<span class="sd">        &gt;&gt;&gt; get_extension(&#39;d/e.txt&#39;)</span>
+<span class="sd">        &#39;txt&#39;</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="s">&#39;&#39;</span>
+
+</div>
+<div class="viewcode-block" id="is_supported_format"><a class="viewcode-back" href="../index.html#audiodiff.is_supported_format">[docs]</a><span class="k">def</span> <span class="nf">is_supported_format</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns True if the specified path has an extension that is one of the</span>
+<span class="sd">    supported formats.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">get_extension</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="ow">in</span> <span class="n">AUDIO_FORMATS</span>
+
+</div>
+<div class="viewcode-block" id="ffmpeg_path"><a class="viewcode-back" href="../index.html#audiodiff.ffmpeg_path">[docs]</a><span class="k">def</span> <span class="nf">ffmpeg_path</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Returns the path to FFmpeg binary.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;FFMPEG_BIN&#39;</span><span class="p">,</span> <span class="n">FFMPEG_BIN</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="AudiodiffException"><a class="viewcode-back" href="../index.html#audiodiff.AudiodiffException">[docs]</a><span class="k">class</span> <span class="nc">AudiodiffException</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;The root class of all audiodiff-related exceptions.&quot;&quot;&quot;</span>
+
+</div>
+<div class="viewcode-block" id="UnsupportedFileError"><a class="viewcode-back" href="../index.html#audiodiff.UnsupportedFileError">[docs]</a><span class="k">class</span> <span class="nc">UnsupportedFileError</span><span class="p">(</span><span class="n">AudiodiffException</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Raised when you pass a non-audio file to a function that expects audio</span>
+<span class="sd">    files.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+</div>
+<div class="viewcode-block" id="ExternalLibraryError"><a class="viewcode-back" href="../index.html#audiodiff.ExternalLibraryError">[docs]</a><span class="k">class</span> <span class="nc">ExternalLibraryError</span><span class="p">(</span><span class="n">AudiodiffException</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Raised when there is an error during running FFmpeg.&quot;&quot;&quot;</span></div>
+</pre></div>
+
+          <footer>
+  
+
+  <hr/>
+
+  <p>
+      &copy; Copyright 2013, Choongmin Lee.
+  </p>
+
+  <a href="https://www.github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="http://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+</body>
+</html>

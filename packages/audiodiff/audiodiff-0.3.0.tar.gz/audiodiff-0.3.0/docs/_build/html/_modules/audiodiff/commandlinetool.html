@@ -1,0 +1,418 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>audiodiff.commandlinetool &mdash; audiodiff 0.3.0.dev1 documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:'../../',
+        VERSION:'0.3.0.dev1',
+        COLLAPSE_INDEX:false,
+        FILE_SUFFIX:'.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+    <link rel="top" title="audiodiff 0.3.0.dev1 documentation" href="../../index.html"/>
+        <link rel="up" title="audiodiff" href="../audiodiff.html"/> 
+
+  <script src="//cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="../../index.html" class="icon icon-home"> audiodiff</a>
+        <form class="wy-form" action="../../search.html" method="get">
+  <input type="text" name="q" placeholder="Search docs" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix">
+        
+        
+            
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top">
+        <i data-toggle="wy-nav-top" class="icon icon-reorder"></i>
+        <a href="/">audiodiff</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <ul class="wy-breadcrumbs">
+  <li><a href="../../index.html">Docs</a> &raquo;</li>
+  <li><a href="">audiodiff.commandlinetool</a></li>
+  
+</ul>
+<hr/>
+
+          
+  <h1>Source code for audiodiff.commandlinetool</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">   audiodiff.commandlinetool</span>
+<span class="sd">   ~~~~~~~~~~~~~~~~~~~~~~~~~</span>
+
+<span class="sd">   This module contains functions for the ``audiodiff`` commandline tool.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">locale</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">termcolor</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">termcolor</span> <span class="o">=</span> <span class="bp">None</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">__version__</span><span class="p">,</span> <span class="n">is_supported_format</span><span class="p">,</span> <span class="n">equal</span><span class="p">,</span> <span class="n">audio_equal</span><span class="p">,</span> <span class="n">tags</span>
+
+
+<span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">isatty</span><span class="p">()</span> <span class="ow">and</span> <span class="n">termcolor</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">colored</span> <span class="o">=</span> <span class="n">termcolor</span><span class="o">.</span><span class="n">colored</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">colored</span> <span class="o">=</span> <span class="k">lambda</span> <span class="o">*</span><span class="n">options</span><span class="p">:</span> <span class="n">options</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+
+<span class="c">#: Fallback encoding for output. Encoding resolution is done as follows:</span>
+<span class="c">#:</span>
+<span class="c">#: - :data:`sys.stdout.encoding` (or :data:`sys.stderr.encoding`)</span>
+<span class="c">#: - ``PYTHONIOENCODING`` environment variable</span>
+<span class="c">#: - Second item of the return value of :func:`locale.getdefaultlocale`</span>
+<span class="c">#: - :data:`FALLBACK_ENCODING`</span>
+<span class="n">FALLBACK_ENCODING</span> <span class="o">=</span> <span class="s">&#39;UTF-8&#39;</span>
+
+<span class="n">LOCALE_ENCODING</span> <span class="o">=</span> <span class="n">locale</span><span class="o">.</span><span class="n">getdefaultlocale</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+
+
+<span class="c">#: An :class:`argparse.ArgumentParser`</span>
+<span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span>
+    <span class="n">prog</span><span class="o">=</span><span class="s">&#39;audiodiff&#39;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">Compare two files or directories recursively. For supported audio files</span>
+<span class="s">(flac, m4a, mp3), they are treated as if extensions are removed from filenames.</span>
+<span class="s">For example, `audiodiff x y` would compare `x/a.flac` and `y/a.m4a`. Audio</span>
+<span class="s">files are considered equal if they have the same uncompressed audio streams and</span>
+<span class="s">normalized tags (except for `encodedby` tag) reported by mutagenwrapper;</span>
+<span class="s">non-audio files as well as unsupported audio files are equal if they are</span>
+<span class="s">exactly equal, bit by bit.</span>
+<span class="s">&quot;&quot;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">__version__</span><span class="p">),</span>
+    <span class="n">epilog</span><span class="o">=</span><span class="s">&#39;version {0}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">__version__</span><span class="p">))</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+    <span class="s">&#39;files&#39;</span><span class="p">,</span>
+    <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;file&#39;</span><span class="p">,</span>
+    <span class="n">nargs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">help</span><span class="o">=</span><span class="s">&#39;two files or directories to compare&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+    <span class="s">&#39;-a&#39;</span><span class="p">,</span> <span class="s">&#39;--streams&#39;</span><span class="p">,</span>
+    <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+    <span class="n">help</span><span class="o">=</span><span class="s">&#39;compare only audio streams&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+    <span class="s">&#39;-t&#39;</span><span class="p">,</span> <span class="s">&#39;--tags&#39;</span><span class="p">,</span>
+    <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+    <span class="n">help</span><span class="o">=</span><span class="s">&#39;compare only tags; &#39;</span>
+         <span class="s">&#39;useful since comparing audio streams could be slow&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+    <span class="s">&#39;-q&#39;</span><span class="p">,</span> <span class="s">&#39;--brief&#39;</span><span class="p">,</span>
+    <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+    <span class="n">help</span><span class="o">=</span><span class="s">&#39;report only whether files differ&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+    <span class="s">&#39;-s&#39;</span><span class="p">,</span> <span class="s">&#39;--report-identical-files&#39;</span><span class="p">,</span>
+    <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+    <span class="n">dest</span><span class="o">=</span><span class="s">&#39;verbose&#39;</span><span class="p">,</span>
+    <span class="n">help</span><span class="o">=</span><span class="s">&#39;report when two files are the same&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+    <span class="s">&#39;--ffmpeg_bin&#39;</span><span class="p">,</span>
+    <span class="n">metavar</span><span class="o">=</span><span class="s">&#39;path&#39;</span><span class="p">,</span>
+    <span class="n">help</span><span class="o">=</span><span class="s">&#39;specify ffmpeg binary path&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="main_func"><a class="viewcode-back" href="../../index.html#audiodiff.commandlinetool.main_func">[docs]</a><span class="k">def</span> <span class="nf">main_func</span><span class="p">(</span><span class="n">args</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;The entry point for the ``audiodiff`` command line tool. Parses the</span>
+<span class="sd">    command arguments and calls :func:`diff_checked`.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">options</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">diff_checked</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">files</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">options</span><span class="o">.</span><span class="n">files</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">options</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">130</span>
+
+</div>
+<div class="viewcode-block" id="diff_checked"><a class="viewcode-back" href="../../index.html#audiodiff.commandlinetool.diff_checked">[docs]</a><span class="k">def</span> <span class="nf">diff_checked</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Calls :func:`diff_recurse` and handles exceptions if raised.&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">diff_recurse</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">IOError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">_print_error</span><span class="p">(</span><span class="s">&#39;{0}: {1}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">strerror</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">filename</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="mi">2</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">_print_error</span><span class="p">(</span><span class="s">&#39;an error occurred while processing {0} and {1}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="nb">repr</span><span class="p">(</span><span class="n">path1</span><span class="p">),</span> <span class="nb">repr</span><span class="p">(</span><span class="n">path2</span><span class="p">)))</span>
+        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+        <span class="k">return</span> <span class="mi">2</span>
+
+</div>
+<div class="viewcode-block" id="diff_recurse"><a class="viewcode-back" href="../../index.html#audiodiff.commandlinetool.diff_recurse">[docs]</a><span class="k">def</span> <span class="nf">diff_recurse</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Recursively compares files in the specified paths.&quot;&quot;&quot;</span>
+    <span class="n">type1</span> <span class="o">=</span> <span class="n">_get_type</span><span class="p">(</span><span class="n">path1</span><span class="p">)</span>
+    <span class="n">type2</span> <span class="o">=</span> <span class="n">_get_type</span><span class="p">(</span><span class="n">path2</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">type1</span> <span class="o">==</span> <span class="s">&#39;file&#39;</span> <span class="ow">and</span> <span class="n">type2</span> <span class="o">==</span> <span class="s">&#39;file&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">diff_files</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">type1</span> <span class="o">==</span> <span class="s">&#39;dir&#39;</span> <span class="ow">and</span> <span class="n">type2</span> <span class="o">==</span> <span class="s">&#39;dir&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">diff_dirs</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">type1</span> <span class="o">==</span> <span class="s">&#39;file&#39;</span> <span class="ow">and</span> <span class="n">type2</span> <span class="o">==</span> <span class="s">&#39;dir&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">diff_files</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path2</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">path1</span><span class="p">)),</span>
+                          <span class="n">options</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">type1</span> <span class="o">==</span> <span class="s">&#39;dir&#39;</span> <span class="ow">and</span> <span class="n">type2</span> <span class="o">==</span> <span class="s">&#39;file&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">diff_files</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path2</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">path1</span><span class="p">)),</span> <span class="n">path2</span><span class="p">,</span>
+                          <span class="n">options</span><span class="p">)</span>
+    <span class="c"># errors</span>
+    <span class="k">if</span> <span class="n">type1</span> <span class="o">==</span> <span class="s">&#39;nonexistent&#39;</span><span class="p">:</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="s">&quot;No such file or directory: {0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">path1</span><span class="p">))</span>
+    <span class="k">elif</span> <span class="n">type2</span> <span class="o">==</span> <span class="s">&#39;nonexistent&#39;</span><span class="p">:</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="s">&quot;No such file or directory: {0}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">path2</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="s">&#39;Unknown files: {0} and/or {1}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">path1</span><span class="p">),</span> <span class="nb">repr</span><span class="p">(</span><span class="n">path2</span><span class="p">))</span>
+    <span class="n">_print_error</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+    <span class="k">return</span> <span class="mi">2</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_get_type</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;file&#39;</span>
+    <span class="k">elif</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;dir&#39;</span>
+    <span class="k">elif</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;nonexistent&#39;</span>
+
+
+<div class="viewcode-block" id="diff_files"><a class="viewcode-back" href="../../index.html#audiodiff.commandlinetool.diff_files">[docs]</a><span class="k">def</span> <span class="nf">diff_files</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compares the two files and prints the results.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">is_supported_format</span><span class="p">(</span><span class="n">path1</span><span class="p">)</span> <span class="ow">and</span> <span class="n">is_supported_format</span><span class="p">(</span><span class="n">path2</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">streams</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">diff_streams</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">,</span>
+                                <span class="n">options</span><span class="o">.</span><span class="n">ffmpeg_bin</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">options</span><span class="o">.</span><span class="n">tags</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">diff_tags</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">brief</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">diff_streams</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">,</span>
+                                    <span class="n">options</span><span class="o">.</span><span class="n">ffmpeg_bin</span><span class="p">),</span>
+                       <span class="n">diff_tags</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">brief</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">diff_binary</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="diff_dirs"><a class="viewcode-back" href="../../index.html#audiodiff.commandlinetool.diff_dirs">[docs]</a><span class="k">def</span> <span class="nf">diff_dirs</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compares the two directories and prints the results.&quot;&quot;&quot;</span>
+    <span class="n">ret</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">cnames1</span> <span class="o">=</span> <span class="n">_cnames</span><span class="p">(</span><span class="n">path1</span><span class="p">)</span>
+    <span class="n">cnames2</span> <span class="o">=</span> <span class="n">_cnames</span><span class="p">(</span><span class="n">path2</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">cname</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">cnames1</span><span class="o">.</span><span class="n">iterkeys</span><span class="p">())</span> <span class="o">|</span> <span class="nb">set</span><span class="p">(</span><span class="n">cnames2</span><span class="o">.</span><span class="n">iterkeys</span><span class="p">())):</span>
+        <span class="n">names1</span> <span class="o">=</span> <span class="n">cnames1</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cname</span><span class="p">)</span>
+        <span class="n">names2</span> <span class="o">=</span> <span class="n">cnames2</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cname</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">names1</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names2</span><span class="p">:</span>
+                <span class="n">_print</span><span class="p">(</span><span class="s">u&#39;Only in {0}: {1}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">_decode_path</span><span class="p">(</span><span class="n">path2</span><span class="p">),</span>
+                                                  <span class="n">_decode_path</span><span class="p">(</span><span class="n">name</span><span class="p">)))</span>
+                <span class="n">ret</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">names2</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names1</span><span class="p">:</span>
+                <span class="n">_print</span><span class="p">(</span><span class="s">u&#39;Only in {0}: {1}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">_decode_path</span><span class="p">(</span><span class="n">path1</span><span class="p">),</span>
+                                                  <span class="n">_decode_path</span><span class="p">(</span><span class="n">name</span><span class="p">)))</span>
+                <span class="n">ret</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">name1</span><span class="p">,</span> <span class="n">name2</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="n">names1</span><span class="p">,</span> <span class="n">names2</span><span class="p">):</span>
+                <span class="n">np1</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">name1</span><span class="p">)</span>
+                <span class="n">np2</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path2</span><span class="p">,</span> <span class="n">name2</span><span class="p">)</span>
+                <span class="n">ret</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="n">diff_checked</span><span class="p">(</span><span class="n">np1</span><span class="p">,</span> <span class="n">np2</span><span class="p">,</span> <span class="n">options</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">ret</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_cnames</span><span class="p">(</span><span class="n">d</span><span class="p">):</span>
+    <span class="n">names</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+    <span class="n">names</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+    <span class="n">cnames</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">is_supported_format</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+            <span class="n">cname</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">cnames</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">cname</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">cnames</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">cnames</span>
+
+
+<div class="viewcode-block" id="diff_streams"><a class="viewcode-back" href="../../index.html#audiodiff.commandlinetool.diff_streams">[docs]</a><span class="k">def</span> <span class="nf">diff_streams</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">ffmpeg_bin</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Prints whether the two audio files&#39; streams differ or are identical.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">audio_equal</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">ffmpeg_bin</span><span class="p">):</span>
+        <span class="n">_print</span><span class="p">(</span><span class="s">u&#39;Audio streams in {0} and {1} differ&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">_decode_path</span><span class="p">(</span><span class="n">path1</span><span class="p">),</span> <span class="n">_decode_path</span><span class="p">(</span><span class="n">path2</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="k">elif</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="n">_print</span><span class="p">(</span><span class="s">u&#39;Audio streams in {0} and {1} are identical&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">_decode_path</span><span class="p">(</span><span class="n">path1</span><span class="p">),</span> <span class="n">_decode_path</span><span class="p">(</span><span class="n">path2</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="mi">0</span>
+
+</div>
+<div class="viewcode-block" id="diff_tags"><a class="viewcode-back" href="../../index.html#audiodiff.commandlinetool.diff_tags">[docs]</a><span class="k">def</span> <span class="nf">diff_tags</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">brief</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Prints whether the two audio files&#39; tags differ or are identical.&quot;&quot;&quot;</span>
+    <span class="n">tags1</span> <span class="o">=</span> <span class="n">tags</span><span class="p">(</span><span class="n">path1</span><span class="p">)</span>
+    <span class="n">tags2</span> <span class="o">=</span> <span class="n">tags</span><span class="p">(</span><span class="n">path2</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">tags1</span> <span class="o">==</span> <span class="n">tags2</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="n">_print</span><span class="p">(</span><span class="s">u&#39;Tags in {0} and {1} are identical&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="n">_decode_path</span><span class="p">(</span><span class="n">path1</span><span class="p">),</span> <span class="n">_decode_path</span><span class="p">(</span><span class="n">path2</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="mi">0</span>
+    <span class="k">if</span> <span class="n">brief</span><span class="p">:</span>
+        <span class="n">_print</span><span class="p">(</span><span class="s">u&#39;Tags in {0} and {1} differ&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">_decode_path</span><span class="p">(</span><span class="n">path1</span><span class="p">),</span> <span class="n">_decode_path</span><span class="p">(</span><span class="n">path2</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">_compare_dicts</span><span class="p">(</span><span class="n">tags1</span><span class="p">,</span> <span class="n">tags2</span><span class="p">)</span>
+    <span class="n">colors</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;-&#39;</span><span class="p">:</span> <span class="s">&#39;red&#39;</span><span class="p">,</span> <span class="s">&#39;+&#39;</span><span class="p">:</span> <span class="s">&#39;green&#39;</span><span class="p">,</span> <span class="s">&#39; &#39;</span><span class="p">:</span> <span class="bp">None</span><span class="p">}</span>
+    <span class="n">_print</span><span class="p">(</span><span class="n">colored</span><span class="p">(</span><span class="s">u&#39;--- {0}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">_decode_path</span><span class="p">(</span><span class="n">path1</span><span class="p">)),</span> <span class="n">colors</span><span class="p">[</span><span class="s">&#39;-&#39;</span><span class="p">]))</span>
+    <span class="n">_print</span><span class="p">(</span><span class="n">colored</span><span class="p">(</span><span class="s">u&#39;+++ {0}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">_decode_path</span><span class="p">(</span><span class="n">path2</span><span class="p">)),</span> <span class="n">colors</span><span class="p">[</span><span class="s">&#39;+&#39;</span><span class="p">]))</span>
+    <span class="k">for</span> <span class="n">sign</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">sign</span> <span class="o">==</span> <span class="s">&#39; &#39;</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">unicode</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">repr</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="p">[:</span><span class="mi">92</span><span class="p">]</span> <span class="o">+</span> <span class="s">&#39;...&#39;</span> <span class="o">+</span> <span class="n">value</span><span class="p">[</span><span class="o">-</span><span class="mi">5</span><span class="p">:]</span>
+        <span class="n">_print</span><span class="p">(</span><span class="n">colored</span><span class="p">(</span><span class="s">u&#39;{0}{1}: {2}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sign</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">),</span> <span class="n">colors</span><span class="p">[</span><span class="n">sign</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="mi">1</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_compare_dicts</span><span class="p">(</span><span class="n">dict1</span><span class="p">,</span> <span class="n">dict2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compares two dictionary-like objects and returns a list of tuples</span>
+<span class="sd">    (*sign*, *key*, *value*). *sign* is &#39;-&#39; if the key is present</span>
+<span class="sd">    in the first object but not in the second, or the key is present in</span>
+<span class="sd">    both objects but the values differ. A &#39;+&#39; sign means the opposite.</span>
+<span class="sd">    A &#39; &#39; sign means the key and value are present in both objects.</span>
+
+<span class="sd">    Examples::</span>
+
+<span class="sd">        &gt;&gt;&gt; compare_dicts({&#39;a&#39;: 1, &#39;b&#39;: 2, &#39;c&#39;: 3}, {&#39;b&#39;: 2, &#39;c&#39;: 5, &#39;d&#39;: 7})</span>
+<span class="sd">        [(&#39;-&#39;, &#39;a&#39;, 1), (&#39; &#39;, &#39;b&#39;, 2), (&#39;-&#39;, &#39;c&#39;, 3), (&#39;+&#39;, &#39;c&#39;, 5),</span>
+<span class="sd">         (&#39;+&#39;, &#39;d&#39;, 7)]</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">keys1</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">dict1</span><span class="o">.</span><span class="n">iterkeys</span><span class="p">())</span>
+    <span class="n">keys2</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">dict2</span><span class="o">.</span><span class="n">iterkeys</span><span class="p">())</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys1</span> <span class="o">-</span> <span class="n">keys2</span><span class="p">:</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s">&#39;-&#39;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">dict1</span><span class="p">[</span><span class="n">key</span><span class="p">]))</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys2</span> <span class="o">-</span> <span class="n">keys1</span><span class="p">:</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s">&#39;+&#39;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">dict2</span><span class="p">[</span><span class="n">key</span><span class="p">]))</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys1</span> <span class="o">&amp;</span> <span class="n">keys2</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">dict1</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">!=</span> <span class="n">dict2</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
+            <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s">&#39;-&#39;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">dict1</span><span class="p">[</span><span class="n">key</span><span class="p">]))</span>
+            <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s">&#39;+&#39;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">dict2</span><span class="p">[</span><span class="n">key</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">dict1</span><span class="p">[</span><span class="n">key</span><span class="p">]))</span>
+    <span class="n">data</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">data</span>
+
+
+<div class="viewcode-block" id="diff_binary"><a class="viewcode-back" href="../../index.html#audiodiff.commandlinetool.diff_binary">[docs]</a><span class="k">def</span> <span class="nf">diff_binary</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Prints whether the two non-audio files differ or are identical.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">equal</span><span class="p">(</span><span class="n">path1</span><span class="p">,</span> <span class="n">path2</span><span class="p">):</span>
+        <span class="n">_print</span><span class="p">(</span><span class="s">u&#39;Files {0} and {1} differ&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">_decode_path</span><span class="p">(</span><span class="n">path1</span><span class="p">),</span>
+                                                  <span class="n">_decode_path</span><span class="p">(</span><span class="n">path2</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="k">elif</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="n">_print</span><span class="p">(</span><span class="s">u&#39;Files {0} and {1} are identical&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">_decode_path</span><span class="p">(</span><span class="n">path1</span><span class="p">),</span>
+                                                         <span class="n">_decode_path</span><span class="p">(</span><span class="n">path2</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="mi">0</span>
+
+
+<span class="c"># Due to a bug in Sphinx, we cannot use from __future__ import print_function</span>
+<span class="c"># https://bitbucket.org/birkenfeld/sphinx/issue/1385/sphinxpycodemoduleanalyzer-fails-with</span></div>
+<span class="k">def</span> <span class="nf">_print</span><span class="p">(</span><span class="n">message</span><span class="p">):</span>
+    <span class="k">print</span> <span class="n">message</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">_encoding_for</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">),</span> <span class="s">&#39;replace&#39;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_print_error</span><span class="p">(</span><span class="n">message</span><span class="p">):</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&#39;{0}: {1}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">prog</span><span class="p">,</span> <span class="n">message</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">_encoding_for</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">),</span> <span class="s">&#39;replace&#39;</span><span class="p">))</span>
+
+
+<span class="k">def</span> <span class="nf">_encoding_for</span><span class="p">(</span><span class="nb">file</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="nb">file</span><span class="o">.</span><span class="n">encoding</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;PYTHONIOENCODING&#39;</span><span class="p">)</span> <span class="ow">or</span>
+            <span class="n">LOCALE_ENCODING</span> <span class="ow">or</span> <span class="n">FALLBACK_ENCODING</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_decode_path</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">path</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">LOCALE_ENCODING</span> <span class="ow">or</span> <span class="n">FALLBACK_ENCODING</span><span class="p">,</span> <span class="s">&#39;replace&#39;</span><span class="p">)</span>
+</pre></div>
+
+          <footer>
+  
+
+  <hr/>
+
+  <p>
+      &copy; Copyright 2013, Choongmin Lee.
+  </p>
+
+  <a href="https://www.github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="http://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+</body>
+</html>
