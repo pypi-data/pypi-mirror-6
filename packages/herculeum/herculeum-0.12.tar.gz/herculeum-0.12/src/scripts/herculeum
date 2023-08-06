@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+#   Copyright 2010-2014 Tuukka Turto
+#
+#   This file is part of pyherc.
+#
+#   pyherc is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   pyherc is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with pyherc.  If not, see <http://www.gnu.org/licenses/>.
+
+"""
+Herculeum is a dungeon adventure in the spirit of Nethack and Rogue.
+
+Usage:
+  herculeum [--ui=MODE] [--log-level=LEVEL] [--silent] [--start-level=NAME]
+  herculeum (-l | --license)
+  herculeum (-h | --help)
+  herculeum (-v | --version)
+
+Options:
+  -h --help            Show this screen.
+  -l --license         Show license.
+  -v --version         Show version.
+  --ui=<mode>          User interface to use (qt or curses) [default: qt]
+  --log-level=<level>  Log level to use [default: warning]
+  --silent             Turns off logging completely
+  --start-level=<name> Starting level [default: upper catacombs]
+
+"""
+import hy  # noqa
+
+from pyherc.aspects import set_logger
+from pyherc.version import PYHERC_VERSION
+from docopt import docopt
+import logging
+
+arguments = docopt(__doc__, version='Herculeum ' + PYHERC_VERSION)
+set_logger(arguments['--log-level'],
+           arguments['--silent'])
+
+from herculeum.application import Application
+
+from herculeum.ui.gui import QtUserInterface, QtControlsConfiguration
+from herculeum.ui.gui import QtSurfaceManager
+import herculeum.ui.gui.resources  # noqa
+
+try:
+    from herculeum.ui.text import CursesUserInterface
+    from herculeum.ui.text import CursesControlsConfiguration
+    from herculeum.ui.text import CursesSurfaceManager
+except:
+    print('Curses user interface is not available')
+
+
+def process_command_line(arguments):
+    """
+    Process command line options
+    """
+    log_levels = {'debug': logging.DEBUG,
+                  'info': logging.INFO,
+                  'warning': logging.WARNING,
+                  'error': logging.ERROR,
+                  'critical': logging.CRITICAL}
+
+    log_level = log_levels[arguments['--log-level']]
+    silent = arguments['--silent']
+    ui_mode = arguments['--ui']
+    start_level = arguments['--start-level']
+    if not start_level:
+        start_level = 'first gate'
+
+    return (log_level, silent, ui_mode, start_level)
+
+if __name__ == "__main__":
+    app = Application()
+
+    if arguments['--license']:
+        print('Herculeum is free software: you can redistribute it and/or modify')  # noqa
+        print('it under the terms of the GNU General Public License as published by')  # noqa
+        print('the Free Software Foundation, either version 3 of the License, or')  # noqa
+        print('(at your option) any later version.')
+        print('')
+        print('Herculeum is distributed in the hope that it will be useful,')
+        print('but WITHOUT ANY WARRANTY; without even the implied warranty of')
+        print('MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the')
+        print('GNU General Public License for more details.')
+        print('')
+        print('You should have received a copy of the GNU General Public License')  # noqa
+        print('along with Herculeum.  If not, see <http://www.gnu.org/licenses/>.')  # noqa
+    else:
+
+        log_level, silent, ui_mode, start_level = process_command_line(arguments)  # noqa
+
+        app.log_level = log_level
+        app.silent = silent
+
+        if ui_mode == 'qt':
+            user_interface = QtUserInterface(app)
+            surface_manager = QtSurfaceManager()
+            controls_configuration = QtControlsConfiguration()
+        else:
+            user_interface = CursesUserInterface(app)
+            surface_manager = CursesSurfaceManager()
+            controls_configuration = CursesControlsConfiguration()
+
+        user_interface.show_splash_screen()
+        app.start_logging()
+        app.load_configuration(controls_configuration,
+                               surface_manager)
+        app.config.start_level = start_level
+
+        app.run(user_interface)
