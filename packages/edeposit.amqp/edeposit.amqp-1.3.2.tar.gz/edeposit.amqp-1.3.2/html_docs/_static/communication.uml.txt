@@ -1,0 +1,53 @@
+@startuml
+participant "AMQP User" as User
+participant AlephDaemon << (C, #ADD1B2) >>
+participant reactToAMQPMessage << (F, red) >>
+participant aleph.py << (M, green) >>
+
+box "edeposit.amqp"
+    participant AlephDaemon
+end box
+
+box "edeposit.amqp.aleph"
+    participant reactToAMQPMessage
+    participant aleph.py
+end box
+
+User -> AlephDaemon: <<JSON Request>>
+activate AlephDaemon
+
+note right of User
+  AMQP message with data
+  serialized using
+  edeposit.amqp.serializers.
+end note
+
+AlephDaemon -> reactToAMQPMessage: <<Request namedtuple>>
+activate reactToAMQPMessage
+
+reactToAMQPMessage -> aleph.py: Query Aleph
+activate aleph.py
+
+note left of aleph.py
+  EPublications structure
+  contains parsed data and
+  also original XML structure
+  returned from Aleph.
+end note
+
+aleph.py -> reactToAMQPMessage: <<EPublication namedtuple>>
+deactivate aleph.py
+
+reactToAMQPMessage -> AlephDaemon: <<Result namedtuple>>
+deactivate reactToAMQPMessage
+
+AlephDaemon --> User: <<Response class in JSON>>
+AlephDaemon --> User: <<Exception in AMQP>>
+deactivate AlephDaemon
+
+note right of User
+  Exceptions have all
+  information stored
+  in headers.
+end note
+@enduml
