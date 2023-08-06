@@ -1,0 +1,56 @@
+#!/usr/bin/env python
+
+"""Google News Crawler
+
+Fetches (news) articles referenced by the Google News feed 'feed name'
+and stores the in (subdirectories) of 'output dir'.
+
+Usage:
+  rss.feed.py --feed=FEED --datastore=DATASTORE [options]
+
+Options:
+  -f=FEED, --feed=FEED   Name/url of the Google News feed to crawl
+  -d=DS, --datastore=DS  Datastore backend to use, options are: FS, ES
+  --log-config=FNAME     YAML file containing the logging configuration
+                         [default: logging.yaml]
+  -h, --help             This help.
+
+"""
+
+from logging.config import dictConfig
+
+import yaml
+from docopt import docopt
+
+from google_news_crawler import data_store
+from google_news_crawler.gnc import GoogleNewsCrawler
+
+
+def setup_logging(fname):
+    with open(fname) as f:
+        dictConfig(yaml.load(f))
+
+
+def main():
+    args = docopt(__doc__, version='0.3.1')
+    setup_logging(args['--log-config'])
+
+    feed_name = args['--feed']
+    ds_name = args['--datastore']
+
+    # TODO: DSFactory anyone?
+    if ds_name == 'FS':
+        output_dir = 'output'
+        ds = data_store.FileSystemDatastore(output_dir)
+    elif ds_name == 'ES':
+        index = 'docdocdocs'
+        ds = data_store.ElasticSearchDatastore(index, create_index=False)
+    else:
+        raise data_store.UnknownDatastoreException()
+
+    crawler = GoogleNewsCrawler(feed_name, ds)
+    crawler.process_feed()
+
+
+if __name__ == '__main__':
+    main()
