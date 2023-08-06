@@ -1,0 +1,215 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>lupyne.engine.spatial &mdash; Lupyne 1.6 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/theme.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '1.6',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Lupyne 1.6 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Lupyne 1.6 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for lupyne.engine.spatial</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Geospatial fields.</span>
+
+<span class="sd">Latitude/longitude coordinates are encoded into the quadkeys of MS Virtual Earth,</span>
+<span class="sd">which are also compatible with Google Maps and OSGEO Tile Map Service.</span>
+<span class="sd">See http://www.maptiler.org/google-maps-coordinates-tile-bounds-projection/.</span>
+
+<span class="sd">The quadkeys are then indexed using a prefix tree, creating a cartesian tier of tiles.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">from</span> <span class="nn">.globalmaptiles</span> <span class="kn">import</span> <span class="n">GlobalMercator</span>
+<span class="kn">from</span> <span class="nn">..queries</span> <span class="kn">import</span> <span class="n">Query</span>
+<span class="kn">from</span> <span class="nn">..documents</span> <span class="kn">import</span> <span class="n">NumericField</span>
+
+<div class="viewcode-block" id="Tiler"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.Tiler">[docs]</a><span class="k">class</span> <span class="nc">Tiler</span><span class="p">(</span><span class="n">GlobalMercator</span><span class="p">):</span>
+    <span class="s">&quot;Utilities for transforming lat/lngs, projected coordinates, and tile coordinates.&quot;</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">project</span> <span class="o">=</span> <span class="n">GlobalMercator</span><span class="o">.</span><span class="n">LatLonToMeters</span>
+<div class="viewcode-block" id="Tiler.coords"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.Tiler.coords">[docs]</a>    <span class="k">def</span> <span class="nf">coords</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tile</span><span class="p">):</span>
+        <span class="s">&quot;Return TMS coordinates of tile.&quot;</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">tile</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">base</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">tile</span><span class="p">)):</span>
+            <span class="n">x</span> <span class="o">|=</span> <span class="p">(</span><span class="n">n</span> <span class="o">&amp;</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">i</span>
+            <span class="n">y</span> <span class="o">|=</span> <span class="p">(</span><span class="n">n</span> <span class="o">&amp;</span> <span class="mi">2</span><span class="p">)</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">i</span>
+            <span class="n">n</span> <span class="o">&gt;&gt;=</span> <span class="mi">2</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="mi">2</span><span class="o">**</span><span class="nb">len</span><span class="p">(</span><span class="n">tile</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">y</span></div>
+<div class="viewcode-block" id="Tiler.encode"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.Tiler.encode">[docs]</a>    <span class="k">def</span> <span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lat</span><span class="p">,</span> <span class="n">lng</span><span class="p">,</span> <span class="n">precision</span><span class="p">):</span>
+        <span class="s">&quot;Return tile from latitude, longitude and precision level.&quot;</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">LatLonToMeters</span><span class="p">(</span><span class="n">lat</span><span class="p">,</span> <span class="n">lng</span><span class="p">)</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">MetersToTile</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">QuadTree</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span></div>
+<div class="viewcode-block" id="Tiler.decode"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.Tiler.decode">[docs]</a>    <span class="k">def</span> <span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tile</span><span class="p">):</span>
+        <span class="s">&quot;Return lat/lng bounding box (bottom, left, top, right) of tile.&quot;</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coords</span><span class="p">(</span><span class="n">tile</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">TileLatLonBounds</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tile</span><span class="p">))</span></div>
+<div class="viewcode-block" id="Tiler.walk"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.Tiler.walk">[docs]</a>    <span class="k">def</span> <span class="nf">walk</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="n">top</span><span class="p">,</span> <span class="n">precision</span><span class="p">):</span>
+        <span class="s">&quot;Generate tile keys which span bounding box of meters.&quot;</span>
+        <span class="n">left</span><span class="p">,</span> <span class="n">bottom</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">MetersToTile</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span>
+        <span class="n">right</span><span class="p">,</span> <span class="n">top</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">MetersToTile</span><span class="p">(</span><span class="n">right</span><span class="p">,</span> <span class="n">top</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span> <span class="nb">range</span><span class="p">(</span><span class="n">bottom</span><span class="p">,</span> <span class="n">top</span><span class="o">+</span><span class="mi">1</span><span class="p">)):</span>
+            <span class="k">yield</span> <span class="bp">self</span><span class="o">.</span><span class="n">QuadTree</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span></div>
+<div class="viewcode-block" id="Tiler.radiate"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.Tiler.radiate">[docs]</a>    <span class="k">def</span> <span class="nf">radiate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lat</span><span class="p">,</span> <span class="n">lng</span><span class="p">,</span> <span class="n">distance</span><span class="p">,</span> <span class="n">precision</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)):</span>
+        <span class="s">&quot;Generate tile keys within distance of given point, adjusting precision to limit the number considered.&quot;</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">LatLonToMeters</span><span class="p">(</span><span class="n">lat</span><span class="p">,</span> <span class="n">lng</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">precision</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">precision</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">left</span><span class="p">,</span> <span class="n">bottom</span> <span class="o">=</span> <span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">MetersToTile</span><span class="p">(</span><span class="n">x</span><span class="o">-</span><span class="n">distance</span><span class="p">,</span> <span class="n">y</span><span class="o">-</span><span class="n">distance</span><span class="p">,</span> <span class="n">precision</span><span class="p">))</span>
+            <span class="n">right</span><span class="p">,</span> <span class="n">top</span> <span class="o">=</span> <span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">value</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span> <span class="o">**</span> <span class="n">precision</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">MetersToTile</span><span class="p">(</span><span class="n">x</span><span class="o">+</span><span class="n">distance</span><span class="p">,</span> <span class="n">y</span><span class="o">+</span><span class="n">distance</span><span class="p">,</span> <span class="n">precision</span><span class="p">))</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">right</span> <span class="o">-</span> <span class="n">left</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">top</span> <span class="o">-</span> <span class="n">bottom</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="p">:</span>
+                <span class="k">break</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">),</span> <span class="nb">range</span><span class="p">(</span><span class="n">bottom</span><span class="p">,</span> <span class="n">top</span><span class="p">)):</span>
+            <span class="n">left</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="n">top</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">TileBounds</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span>
+            <span class="n">dx</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">x</span><span class="o">-</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="o">-</span><span class="n">x</span><span class="p">)</span>
+            <span class="n">dy</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">y</span><span class="o">-</span><span class="n">bottom</span><span class="p">,</span> <span class="n">top</span><span class="o">-</span><span class="n">y</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">dx</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">dy</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">distance</span><span class="o">**</span><span class="mi">2</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="bp">self</span><span class="o">.</span><span class="n">QuadTree</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span>
+</div></div>
+<div class="viewcode-block" id="PointField"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.PointField">[docs]</a><span class="k">class</span> <span class="nc">PointField</span><span class="p">(</span><span class="n">NumericField</span><span class="p">,</span> <span class="n">Tiler</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Geospatial points, which create a tiered index of tiles.</span>
+<span class="sd">    Points must still be stored if exact distances are required upon retrieval.</span>
+<span class="sd">    </span>
+<span class="sd">    :param precision: zoom level, i.e., length of encoded value</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">precision</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">Tiler</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">NumericField</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">precision</span> <span class="o">=</span> <span class="n">precision</span>
+<div class="viewcode-block" id="PointField.items"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.PointField.items">[docs]</a>    <span class="k">def</span> <span class="nf">items</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">points</span><span class="p">):</span>
+        <span class="s">&quot;Generate tiles from points (lng, lat).&quot;</span>
+        <span class="n">tiles</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">lat</span><span class="p">,</span> <span class="n">lng</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">precision</span><span class="p">)</span> <span class="k">for</span> <span class="n">lng</span><span class="p">,</span> <span class="n">lat</span> <span class="ow">in</span> <span class="n">points</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">NumericField</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">tile</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">base</span><span class="p">)</span> <span class="k">for</span> <span class="n">tile</span> <span class="ow">in</span> <span class="n">tiles</span><span class="p">))</span></div>
+<div class="viewcode-block" id="PointField.ranges"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.PointField.ranges">[docs]</a>    <span class="k">def</span> <span class="nf">ranges</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tiles</span><span class="p">):</span>
+        <span class="s">&quot;Generate range queries by grouping adjacent tiles.&quot;</span>
+        <span class="n">precision</span><span class="p">,</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">len</span><span class="p">,</span> <span class="n">tiles</span><span class="p">))</span>
+        <span class="n">step</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">base</span> <span class="o">**</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">precision</span> <span class="o">-</span> <span class="n">precision</span><span class="p">)</span>
+        <span class="n">tiles</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">tile</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">base</span><span class="p">)</span> <span class="o">*</span> <span class="n">step</span> <span class="k">for</span> <span class="n">tile</span> <span class="ow">in</span> <span class="n">tiles</span><span class="p">)</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">tiles</span><span class="p">)</span>
+        <span class="n">stop</span> <span class="o">=</span> <span class="n">start</span> <span class="o">+</span> <span class="n">step</span>
+        <span class="k">for</span> <span class="n">tile</span> <span class="ow">in</span> <span class="n">tiles</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">tile</span> <span class="o">!=</span> <span class="n">stop</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="bp">self</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">)</span>
+                <span class="n">start</span> <span class="o">=</span> <span class="n">tile</span>
+            <span class="n">stop</span> <span class="o">=</span> <span class="n">tile</span> <span class="o">+</span> <span class="n">step</span>
+        <span class="k">yield</span> <span class="bp">self</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">)</span></div>
+<div class="viewcode-block" id="PointField.prefix"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.PointField.prefix">[docs]</a>    <span class="k">def</span> <span class="nf">prefix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tile</span><span class="p">):</span>
+        <span class="s">&quot;Return range query which is equivalent to the prefix of the tile.&quot;</span>
+        <span class="k">return</span> <span class="nb">next</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ranges</span><span class="p">([</span><span class="n">tile</span><span class="p">]))</span></div>
+<div class="viewcode-block" id="PointField.near"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.PointField.near">[docs]</a>    <span class="k">def</span> <span class="nf">near</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lng</span><span class="p">,</span> <span class="n">lat</span><span class="p">,</span> <span class="n">precision</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="s">&quot;Return prefix query for point at given precision.&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">lat</span><span class="p">,</span> <span class="n">lng</span><span class="p">,</span> <span class="n">precision</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">precision</span><span class="p">))</span></div>
+<div class="viewcode-block" id="PointField.within"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.PointField.within">[docs]</a>    <span class="k">def</span> <span class="nf">within</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lng</span><span class="p">,</span> <span class="n">lat</span><span class="p">,</span> <span class="n">distance</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">Tiler</span><span class="o">.</span><span class="n">base</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return range queries for any tiles which could be within distance of given point.</span>
+<span class="sd">        </span>
+<span class="sd">        :param lng,lat: point</span>
+<span class="sd">        :param distance: search radius in meters</span>
+<span class="sd">        :param limit: maximum number of tiles to consider</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">tiles</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">radiate</span><span class="p">(</span><span class="n">lat</span><span class="p">,</span> <span class="n">lng</span><span class="p">,</span> <span class="n">distance</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">precision</span><span class="p">,</span> <span class="n">limit</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">Query</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">ranges</span><span class="p">(</span><span class="n">tiles</span><span class="p">))</span>
+</div></div>
+<div class="viewcode-block" id="PolygonField"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.PolygonField">[docs]</a><span class="k">class</span> <span class="nc">PolygonField</span><span class="p">(</span><span class="n">PointField</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;PointField which implicitly supports polygons (technically linear rings of points).</span>
+<span class="sd">    Differs from points in that all necessary tiles are included to match the points&#39; boundary.</span>
+<span class="sd">    As with PointField, the tiered tiles are a search optimization, not a distance calculator.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="PolygonField.items"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.PolygonField.items">[docs]</a>    <span class="k">def</span> <span class="nf">items</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">polygons</span><span class="p">):</span>
+        <span class="s">&quot;Generate all covered tiles from polygons.&quot;</span>
+        <span class="n">tiles</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">points</span> <span class="ow">in</span> <span class="n">polygons</span><span class="p">:</span>
+            <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">lat</span><span class="p">,</span> <span class="n">lng</span><span class="p">)</span> <span class="k">for</span> <span class="n">lng</span><span class="p">,</span> <span class="n">lat</span> <span class="ow">in</span> <span class="n">points</span><span class="p">))</span>
+            <span class="n">tiles</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">precision</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">NumericField</span><span class="o">.</span><span class="n">items</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">tile</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">base</span><span class="p">)</span> <span class="k">for</span> <span class="n">tile</span> <span class="ow">in</span> <span class="n">tiles</span><span class="p">))</span>
+</div></div>
+<div class="viewcode-block" id="DistanceComparator"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.DistanceComparator">[docs]</a><span class="k">class</span> <span class="nc">DistanceComparator</span><span class="p">(</span><span class="n">Tiler</span><span class="p">):</span>
+    <span class="s">&quot;Distance comparator computed from cached lat/lngs.&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lng</span><span class="p">,</span> <span class="n">lat</span><span class="p">,</span> <span class="n">lngs</span><span class="p">,</span> <span class="n">lats</span><span class="p">):</span>
+        <span class="n">Tiler</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">lat</span><span class="p">,</span> <span class="n">lng</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lngs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">lats</span> <span class="o">=</span> <span class="n">lngs</span><span class="p">,</span> <span class="n">lats</span>
+<div class="viewcode-block" id="DistanceComparator.__getitem__"><a class="viewcode-back" href="../../../engine.html#lupyne.engine.spatial.DistanceComparator.__getitem__">[docs]</a>    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">):</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lats</span><span class="p">[</span><span class="nb">id</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">lngs</span><span class="p">[</span><span class="nb">id</span><span class="p">])</span>
+        <span class="k">return</span> <span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">y</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">**</span> <span class="mf">0.5</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Lupyne 1.6 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2009-2014, Aric Coady.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

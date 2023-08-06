@@ -1,0 +1,341 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>lupyne.client &mdash; Lupyne 1.6 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/theme.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.6',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Lupyne 1.6 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Lupyne 1.6 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for lupyne.client</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Restful json clients.</span>
+
+<span class="sd">Use `Resource`_ for a connection to a single host.</span>
+<span class="sd">Use `Pool`_ for persistent thread-safe connections to a single host.</span>
+<span class="sd">Use `Resources`_ for multiple hosts with simple partitioning or replication.</span>
+<span class="sd">Use `Shards`_ for horizontally partitioning hosts by different keys.</span>
+<span class="sd">Use `Replicas`_ in coordination with automatic host synchronization.</span>
+
+<span class="sd">`Resources`_ optionally reuse connections, handling request timeouts.</span>
+<span class="sd">Broadcasting to multiple resources is parallelized with asynchronous requests and responses.</span>
+
+<span class="sd">The load balancing strategy is randomized, biased by the number of cached connections available.</span>
+<span class="sd">This inherently provides limited failover support, but applications must still handle exceptions as desired.</span>
+<span class="sd">`Replicas`_ will automatically retry if host is unreachable.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">future_builtins</span> <span class="kn">import</span> <span class="nb">map</span><span class="p">,</span> <span class="nb">zip</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">import</span> <span class="nn">io</span><span class="o">,</span> <span class="nn">gzip</span><span class="o">,</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">httplib</span><span class="o">,</span> <span class="nn">urllib</span><span class="o">,</span> <span class="nn">urlparse</span>
+<span class="kn">import</span> <span class="nn">socket</span><span class="o">,</span> <span class="nn">errno</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">simplejson</span> <span class="kn">as</span> <span class="nn">json</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">json</span>
+
+<div class="viewcode-block" id="Response"><a class="viewcode-back" href="../../client.html#lupyne.client.Response">[docs]</a><span class="k">class</span> <span class="nc">Response</span><span class="p">(</span><span class="n">httplib</span><span class="o">.</span><span class="n">HTTPResponse</span><span class="p">):</span>
+    <span class="s">&quot;A completed response which handles json and caches its body.&quot;</span>
+    <span class="n">content_type</span> <span class="o">=</span> <span class="s">&#39;application/json&#39;</span>
+    <span class="k">def</span> <span class="nf">end</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">time</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getheader</span><span class="p">(</span><span class="s">&#39;x-response-time&#39;</span><span class="p">,</span> <span class="s">&#39;nan&#39;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="s">&#39;gzip&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">getheader</span><span class="p">(</span><span class="s">&#39;content-encoding&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="n">gzip</span><span class="o">.</span><span class="n">GzipFile</span><span class="p">(</span><span class="n">fileobj</span><span class="o">=</span><span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">body</span><span class="p">))</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+<div class="viewcode-block" id="Response.__nonzero__"><a class="viewcode-back" href="../../client.html#lupyne.client.Response.__nonzero__">[docs]</a>    <span class="k">def</span> <span class="nf">__nonzero__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s">&quot;Return whether status is successful.&quot;</span>
+        <span class="k">return</span> <span class="n">httplib</span><span class="o">.</span><span class="n">OK</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">&lt;</span> <span class="n">httplib</span><span class="o">.</span><span class="n">MULTIPLE_CHOICES</span></div>
+<div class="viewcode-block" id="Response.__call__"><a class="viewcode-back" href="../../client.html#lupyne.client.Response.__call__">[docs]</a>    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="s">&quot;Return evaluated response body or raise exception.&quot;</span>
+        <span class="n">body</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">body</span>
+        <span class="k">if</span> <span class="n">body</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">getheader</span><span class="p">(</span><span class="s">&#39;content-type&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">content_type</span><span class="p">):</span>
+            <span class="n">body</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+        <span class="n">code</span><span class="p">,</span> <span class="n">agent</span><span class="p">,</span> <span class="n">text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getheader</span><span class="p">(</span><span class="s">&#39;warning&#39;</span><span class="p">,</span> <span class="s">&#39;  &#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">agent</span> <span class="o">==</span> <span class="s">&#39;lupyne&#39;</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">text</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">body</span>
+        <span class="k">raise</span> <span class="n">httplib</span><span class="o">.</span><span class="n">HTTPException</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">reason</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span>
+</div></div>
+<div class="viewcode-block" id="Resource"><a class="viewcode-back" href="../../client.html#lupyne.client.Resource">[docs]</a><span class="k">class</span> <span class="nc">Resource</span><span class="p">(</span><span class="n">httplib</span><span class="o">.</span><span class="n">HTTPConnection</span><span class="p">):</span>
+    <span class="s">&quot;Synchronous connection which handles json responses.&quot;</span>
+    <span class="n">response_class</span> <span class="o">=</span> <span class="n">Response</span>
+    <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;accept-encoding&#39;</span><span class="p">:</span> <span class="s">&#39;compress, gzip&#39;</span><span class="p">,</span> <span class="s">&#39;content-length&#39;</span><span class="p">:</span> <span class="s">&#39;0&#39;</span><span class="p">}</span>
+<div class="viewcode-block" id="Resource.request"><a class="viewcode-back" href="../../client.html#lupyne.client.Resource.request">[docs]</a>    <span class="k">def</span> <span class="nf">request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="s">&quot;Send request after handling body and headers.&quot;</span>
+        <span class="n">headers</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">headers</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">body</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">body</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+            <span class="n">headers</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s">&#39;content-length&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">body</span><span class="p">)),</span> <span class="s">&#39;content-type&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_class</span><span class="o">.</span><span class="n">content_type</span><span class="p">})</span>
+        <span class="n">httplib</span><span class="o">.</span><span class="n">HTTPConnection</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">headers</span><span class="p">)</span></div>
+<div class="viewcode-block" id="Resource.getresponse"><a class="viewcode-back" href="../../client.html#lupyne.client.Resource.getresponse">[docs]</a>    <span class="k">def</span> <span class="nf">getresponse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">):</span>
+        <span class="s">&quot;Return completed response, optionally write response body to a file.&quot;</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">httplib</span><span class="o">.</span><span class="n">HTTPConnection</span><span class="o">.</span><span class="n">getresponse</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">response</span> <span class="ow">and</span> <span class="n">filename</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">output</span><span class="p">:</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">copyfileobj</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">response</span></div>
+<div class="viewcode-block" id="Resource.call"><a class="viewcode-back" href="../../client.html#lupyne.client.Resource.call">[docs]</a>    <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="p">(),</span> <span class="n">redirect</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="s">&quot;Send request and return completed `response`_.&quot;</span>
+        <span class="k">if</span> <span class="n">params</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">+=</span> <span class="s">&#39;?&#39;</span> <span class="o">+</span> <span class="n">urllib</span><span class="o">.</span><span class="n">urlencode</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">doseq</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getresponse</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">redirect</span> <span class="ow">and</span> <span class="n">httplib</span><span class="o">.</span><span class="n">MULTIPLE_CHOICES</span> <span class="o">&lt;=</span> <span class="n">response</span><span class="o">.</span><span class="n">status</span> <span class="o">&lt;</span> <span class="n">httplib</span><span class="o">.</span><span class="n">NOT_MODIFIED</span><span class="p">:</span>
+            <span class="n">url</span> <span class="o">=</span> <span class="n">urlparse</span><span class="o">.</span><span class="n">urlparse</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">getheader</span><span class="p">(</span><span class="s">&#39;location&#39;</span><span class="p">))</span>
+            <span class="k">assert</span> <span class="n">url</span><span class="o">.</span><span class="n">netloc</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">)</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;{0}: {1}&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">reason</span><span class="p">,</span> <span class="n">url</span><span class="o">.</span><span class="n">path</span><span class="p">),</span> <span class="ne">DeprecationWarning</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">url</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">redirect</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">response</span></div>
+<div class="viewcode-block" id="Resource.download"><a class="viewcode-back" href="../../client.html#lupyne.client.Resource.download">[docs]</a>    <span class="k">def</span> <span class="nf">download</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="s">&quot;Download response body from GET request to a file.&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="s">&#39;GET&#39;</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">getresponse</span><span class="p">(</span><span class="n">filename</span><span class="p">)()</span></div>
+<div class="viewcode-block" id="Resource.multicall"><a class="viewcode-back" href="../../client.html#lupyne.client.Resource.multicall">[docs]</a>    <span class="k">def</span> <span class="nf">multicall</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">requests</span><span class="p">):</span>
+        <span class="s">&quot;Pipeline requests (method, path[, body]) and generate completed responses.&quot;</span>
+        <span class="n">responses</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">request</span> <span class="ow">in</span> <span class="n">requests</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="o">*</span><span class="n">request</span><span class="p">)</span>
+            <span class="n">responses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">response_class</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sock</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">debuglevel</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">strict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_method</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_HTTPConnection__state</span> <span class="o">=</span> <span class="s">&#39;Idle&#39;</span>
+        <span class="k">for</span> <span class="n">response</span> <span class="ow">in</span> <span class="n">responses</span><span class="p">:</span>
+            <span class="n">response</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span>
+            <span class="n">response</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+            <span class="k">yield</span> <span class="n">response</span></div>
+<div class="viewcode-block" id="Resource.get"><a class="viewcode-back" href="../../client.html#lupyne.client.Resource.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="s">&quot;Return response body from GET request.&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="s">&#39;GET&#39;</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">)()</span></div>
+<div class="viewcode-block" id="Resource.post"><a class="viewcode-back" href="../../client.html#lupyne.client.Resource.post">[docs]</a>    <span class="k">def</span> <span class="nf">post</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="s">&quot;Return response body from POST request.&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="s">&#39;POST&#39;</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)()</span></div>
+<div class="viewcode-block" id="Resource.put"><a class="viewcode-back" href="../../client.html#lupyne.client.Resource.put">[docs]</a>    <span class="k">def</span> <span class="nf">put</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="s">&quot;Return response body from PUT request.&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="s">&#39;PUT&#39;</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)()</span></div>
+<div class="viewcode-block" id="Resource.delete"><a class="viewcode-back" href="../../client.html#lupyne.client.Resource.delete">[docs]</a>    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">):</span>
+        <span class="s">&quot;Return response body from DELETE request.&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="s">&#39;DELETE&#39;</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">)()</span>
+</div></div>
+<span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">httplib</span><span class="p">,</span> <span class="s">&#39;HTTPSConnection&#39;</span><span class="p">):</span>
+    <span class="k">class</span> <span class="nc">SResource</span><span class="p">(</span><span class="n">Resource</span><span class="p">,</span> <span class="n">httplib</span><span class="o">.</span><span class="n">HTTPSConnection</span><span class="p">,</span> <span class="nb">object</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+<div class="viewcode-block" id="Pool"><a class="viewcode-back" href="../../client.html#lupyne.client.Pool">[docs]</a><span class="k">class</span> <span class="nc">Pool</span><span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">deque</span><span class="p">):</span>
+    <span class="s">&quot;Thread-safe resource pool for one host.&quot;</span>
+    <span class="n">resource_class</span> <span class="o">=</span> <span class="n">Resource</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="n">collections</span><span class="o">.</span><span class="n">deque</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">maxlen</span><span class="o">=</span><span class="n">limit</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">host</span> <span class="o">=</span> <span class="n">host</span>
+<div class="viewcode-block" id="Pool.stream"><a class="viewcode-back" href="../../client.html#lupyne.client.Pool.stream">[docs]</a>    <span class="k">def</span> <span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="s">&quot;Generate resource, initial response, and final response while handling timeouts.&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">resource</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">popleft</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">IndexError</span><span class="p">:</span>
+            <span class="n">resource</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_class</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">)</span>
+        <span class="n">resource</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">resource</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">getresponse</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">httplib</span><span class="o">.</span><span class="n">BadStatusLine</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">except</span> <span class="n">socket</span><span class="o">.</span><span class="n">error</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">exc</span><span class="o">.</span><span class="n">errno</span> <span class="o">!=</span> <span class="n">errno</span><span class="o">.</span><span class="n">ECONNRESET</span><span class="p">:</span>
+                <span class="k">raise</span>
+        <span class="k">if</span> <span class="n">response</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">response</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">httplib</span><span class="o">.</span><span class="n">REQUEST_TIMEOUT</span> <span class="ow">or</span> <span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">httplib</span><span class="o">.</span><span class="n">BAD_REQUEST</span> <span class="ow">and</span> <span class="n">response</span><span class="o">.</span><span class="n">body</span> <span class="o">==</span> <span class="s">&#39;Illegal end of headers.&#39;</span><span class="p">):</span>
+            <span class="n">resource</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="n">resource</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">response</span>
+            <span class="k">yield</span> <span class="n">resource</span><span class="o">.</span><span class="n">getresponse</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">resource</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">response</span>
+            <span class="k">yield</span> <span class="n">response</span></div>
+<div class="viewcode-block" id="Pool.call"><a class="viewcode-back" href="../../client.html#lupyne.client.Pool.call">[docs]</a>    <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="s">&quot;Send request and return completed `response`_.&quot;</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">))[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+</div></div>
+<div class="viewcode-block" id="Resources"><a class="viewcode-back" href="../../client.html#lupyne.client.Resources">[docs]</a><span class="k">class</span> <span class="nc">Resources</span><span class="p">(</span><span class="nb">dict</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Thread-safe mapping of hosts to resource pools.</span>
+<span class="sd">    </span>
+<span class="sd">    :param hosts: host[:port] strings</span>
+<span class="sd">    :param limit: maximum number of cached resources per host</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hosts</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update</span><span class="p">((</span><span class="n">host</span><span class="p">,</span> <span class="n">Pool</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">limit</span><span class="p">))</span> <span class="k">for</span> <span class="n">host</span> <span class="ow">in</span> <span class="n">hosts</span><span class="p">)</span>
+<div class="viewcode-block" id="Resources.priority"><a class="viewcode-back" href="../../client.html#lupyne.client.Resources.priority">[docs]</a>    <span class="k">def</span> <span class="nf">priority</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">):</span>
+        <span class="s">&quot;Return priority for host.  None may be used to eliminate from consideration.&quot;</span>
+        <span class="k">return</span> <span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">host</span><span class="p">])</span></div>
+<div class="viewcode-block" id="Resources.choice"><a class="viewcode-back" href="../../client.html#lupyne.client.Resources.choice">[docs]</a>    <span class="k">def</span> <span class="nf">choice</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hosts</span><span class="p">):</span>
+        <span class="s">&quot;Return chosen host according to priority.&quot;</span>
+        <span class="n">priorities</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">host</span> <span class="ow">in</span> <span class="n">hosts</span><span class="p">:</span>
+            <span class="n">priorities</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">priority</span><span class="p">(</span><span class="n">host</span><span class="p">)]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">host</span><span class="p">)</span>
+        <span class="n">priorities</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">priorities</span><span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="n">priorities</span><span class="p">)])</span></div>
+<div class="viewcode-block" id="Resources.unicast"><a class="viewcode-back" href="../../client.html#lupyne.client.Resources.unicast">[docs]</a>    <span class="k">def</span> <span class="nf">unicast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">hosts</span><span class="o">=</span><span class="p">()):</span>
+        <span class="s">&quot;Send request and return `response`_ from any host, optionally from given subset.&quot;</span>
+        <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">hosts</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="n">host</span><span class="p">]</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span></div>
+<div class="viewcode-block" id="Resources.broadcast"><a class="viewcode-back" href="../../client.html#lupyne.client.Resources.broadcast">[docs]</a>    <span class="k">def</span> <span class="nf">broadcast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">hosts</span><span class="o">=</span><span class="p">()):</span>
+        <span class="s">&quot;Send requests and return responses from all hosts, optionally from given subset.&quot;</span>
+        <span class="n">hosts</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">hosts</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span>
+        <span class="n">streams</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="p">[</span><span class="n">host</span><span class="p">]</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span> <span class="k">for</span> <span class="n">host</span> <span class="ow">in</span> <span class="n">hosts</span><span class="p">]</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">streams</span><span class="p">))[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+</div></div>
+<div class="viewcode-block" id="Shards"><a class="viewcode-back" href="../../client.html#lupyne.client.Shards">[docs]</a><span class="k">class</span> <span class="nc">Shards</span><span class="p">(</span><span class="nb">dict</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Mapping of keys to host clusters, with associated `resources`_.</span>
+<span class="sd">    </span>
+<span class="sd">    :param items: host, key pairs</span>
+<span class="sd">    :param limit: maximum number of cached connections per host</span>
+<span class="sd">    :param multimap: mapping of hosts to multiple keys</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">choice</span> <span class="o">=</span> <span class="n">Resources</span><span class="o">.</span><span class="n">__dict__</span><span class="p">[</span><span class="s">&#39;choice&#39;</span><span class="p">]</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">items</span><span class="o">=</span><span class="p">(),</span> <span class="n">limit</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="o">**</span><span class="n">multimap</span><span class="p">):</span>
+        <span class="n">pairs</span> <span class="o">=</span> <span class="p">((</span><span class="n">host</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">host</span> <span class="ow">in</span> <span class="n">multimap</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">multimap</span><span class="p">[</span><span class="n">host</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">host</span><span class="p">,</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="n">items</span><span class="p">,</span> <span class="n">pairs</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">host</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resources</span> <span class="o">=</span> <span class="n">Resources</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span> <span class="n">limit</span><span class="p">)</span>
+<div class="viewcode-block" id="Shards.priority"><a class="viewcode-back" href="../../client.html#lupyne.client.Shards.priority">[docs]</a>    <span class="k">def</span> <span class="nf">priority</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hosts</span><span class="p">):</span>
+        <span class="s">&quot;Return combined priority for hosts.&quot;</span>
+        <span class="n">priorities</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">priority</span><span class="p">,</span> <span class="n">hosts</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">None</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">priorities</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">priorities</span><span class="p">),</span> <span class="nb">sum</span><span class="p">(</span><span class="n">priorities</span><span class="p">)</span></div>
+<div class="viewcode-block" id="Shards.unicast"><a class="viewcode-back" href="../../client.html#lupyne.client.Shards.unicast">[docs]</a>    <span class="k">def</span> <span class="nf">unicast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="s">&quot;Send request and return `response`_ from any host for corresponding key.&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">unicast</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">])</span></div>
+<div class="viewcode-block" id="Shards.broadcast"><a class="viewcode-back" href="../../client.html#lupyne.client.Shards.broadcast">[docs]</a>    <span class="k">def</span> <span class="nf">broadcast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="s">&quot;Send requests and return responses from all hosts for corresponding key.&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">broadcast</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">])</span></div>
+<div class="viewcode-block" id="Shards.multicast"><a class="viewcode-back" href="../../client.html#lupyne.client.Shards.multicast">[docs]</a>    <span class="k">def</span> <span class="nf">multicast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Send requests and return responses from a minimal subset of hosts which cover all corresponding keys.</span>
+<span class="sd">        Response overlap is possible depending on partitioning.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">shards</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(),</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+            <span class="n">shards</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">hosts</span><span class="o">.</span><span class="n">union</span><span class="p">([</span><span class="n">host</span><span class="p">])</span> <span class="k">for</span> <span class="n">hosts</span><span class="p">,</span> <span class="n">host</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="n">shards</span><span class="p">,</span> <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">broadcast</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">shards</span><span class="p">))</span>
+</div></div>
+<div class="viewcode-block" id="Replicas"><a class="viewcode-back" href="../../client.html#lupyne.client.Replicas">[docs]</a><span class="k">class</span> <span class="nc">Replicas</span><span class="p">(</span><span class="n">Resources</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Resources which failover assuming the hosts are being automatically synchronized.</span>
+<span class="sd">    Writes are dispatched to the first host and sequentially failover.</span>
+<span class="sd">    Reads are balanced among all remaining hosts.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">get</span><span class="p">,</span> <span class="n">post</span><span class="p">,</span> <span class="n">put</span><span class="p">,</span> <span class="n">delete</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">Resource</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">__getitem__</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;get&#39;</span><span class="p">,</span> <span class="s">&#39;post&#39;</span><span class="p">,</span> <span class="s">&#39;put&#39;</span><span class="p">,</span> <span class="s">&#39;delete&#39;</span><span class="p">])</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hosts</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hosts</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">deque</span><span class="p">(</span><span class="n">hosts</span><span class="p">)</span>
+        <span class="n">Resources</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hosts</span><span class="p">,</span> <span class="n">limit</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">pool</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="n">pool</span><span class="o">.</span><span class="n">failure</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">def</span> <span class="nf">priority</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">):</span>
+        <span class="n">pool</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">host</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">pool</span><span class="o">.</span><span class="n">failure</span><span class="p">:</span>
+            <span class="k">return</span> <span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="n">pool</span><span class="p">)</span>
+<div class="viewcode-block" id="Replicas.discard"><a class="viewcode-back" href="../../client.html#lupyne.client.Replicas.discard">[docs]</a>    <span class="k">def</span> <span class="nf">discard</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">):</span>
+        <span class="s">&quot;Remove host from availablity.&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hosts</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">host</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="k">pass</span></div>
+<div class="viewcode-block" id="Replicas.call"><a class="viewcode-back" href="../../client.html#lupyne.client.Replicas.call">[docs]</a>    <span class="k">def</span> <span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="p">(),</span> <span class="n">retry</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Send request and return completed `response`_, even if hosts are unreachable.</span>
+<span class="sd">        </span>
+<span class="sd">        :param retry: optionally retry request on http errors as well, such as waiting for indexer promotion</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">params</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">+=</span> <span class="s">&#39;?&#39;</span> <span class="o">+</span> <span class="n">urllib</span><span class="o">.</span><span class="n">urlencode</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">doseq</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&#39;GET&#39;</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">hosts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">host</span><span class="p">]</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">socket</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
+            <span class="bp">self</span><span class="p">[</span><span class="n">host</span><span class="p">]</span><span class="o">.</span><span class="n">failure</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">method</span> <span class="o">!=</span> <span class="s">&#39;GET&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="n">host</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">retry</span><span class="o">=</span><span class="n">retry</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">response</span> <span class="k">if</span> <span class="p">(</span><span class="n">response</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">retry</span><span class="p">)</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">retry</span><span class="o">=</span><span class="n">retry</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Lupyne 1.6 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2009-2014, Aric Coady.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,781 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>server &mdash; Lupyne 1.6 documentation</title>
+    
+    <link rel="stylesheet" href="_static/theme.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.6',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Lupyne 1.6 documentation" href="index.html" />
+    <link rel="next" title="client" href="client.html" />
+    <link rel="prev" title="engine" href="engine.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="client.html" title="client"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="engine.html" title="engine"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Lupyne 1.6 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="server">
+<h1>server<a class="headerlink" href="#server" title="Permalink to this headline">¶</a></h1>
+<div class="highlight-text"><div class="highlight"><pre>Usage: python -m lupyne.server [index_directory ...]
+
+Options:
+  -h, --help            show this help message and exit
+  -r, --read-only       expose only read methods; no write lock
+  -c CONFIG, --config=CONFIG
+                        optional configuration file or json object of global
+                        params
+  -p FILE, --pidfile=FILE
+                        store the process id in the given file
+  -d, --daemonize       run the server as a daemon
+  --autoreload=SECONDS  automatically reload modules; replacement for
+                        engine.autoreload
+  --autoupdate=SECONDS  automatically update index version and commit any
+                        changes
+  --autosync=HOST[:PORT][/PATH],...
+                        automatically synchronize searcher with remote hosts
+                        and update
+  --real-time           search in real-time without committing
+</pre></div>
+</div>
+<span class="target" id="module-lupyne.server"></span><p>Restful json <a class="reference external" href="http://cherrypy.org/">CherryPy</a> server.</p>
+<p>The server script mounts a <a class="reference internal" href="#websearcher">WebSearcher</a> (read_only) or <a class="reference internal" href="#webindexer">WebIndexer</a> root.
+Standard <a class="reference external" href="http://docs.cherrypy.org/en/latest/tutorial/config.html">CherryPy configuration</a> applies,
+and the provided <a class="reference external" href="#tools">custom tools</a> are also configurable.
+All request and response bodies are <a class="reference external" href="http://tools.ietf.org/html/rfc4627.html#section-2.1">application/json values</a>.</p>
+<p>WebSearcher exposes resources for an IndexSearcher.
+In addition to search requests, it provides access to term and document information in the index.</p>
+<blockquote>
+<div><ul class="simple">
+<li><a class="reference internal" href="#lupyne.server.WebSearcher.index" title="lupyne.server.WebSearcher.index"><tt class="xref py py-meth docutils literal"><span class="pre">/</span></tt></a></li>
+<li><a class="reference internal" href="#lupyne.server.WebSearcher.search" title="lupyne.server.WebSearcher.search"><tt class="xref py py-meth docutils literal"><span class="pre">/search</span></tt></a></li>
+<li><a class="reference internal" href="#lupyne.server.WebSearcher.docs" title="lupyne.server.WebSearcher.docs"><tt class="xref py py-meth docutils literal"><span class="pre">/docs</span></tt></a></li>
+<li><a class="reference internal" href="#lupyne.server.WebSearcher.terms" title="lupyne.server.WebSearcher.terms"><tt class="xref py py-meth docutils literal"><span class="pre">/terms</span></tt></a></li>
+<li><a class="reference internal" href="#lupyne.server.WebSearcher.update" title="lupyne.server.WebSearcher.update"><tt class="xref py py-meth docutils literal"><span class="pre">/update</span></tt></a></li>
+<li><a class="reference internal" href="#lupyne.server.WebSearcher.queries" title="lupyne.server.WebSearcher.queries"><tt class="xref py py-meth docutils literal"><span class="pre">/queries</span></tt></a></li>
+</ul>
+</div></blockquote>
+<p>WebIndexer extends WebSearcher, exposing additional resources and methods for an Indexer.
+Single documents may be added, deleted, or replaced by a unique indexed field.
+Multiples documents may also be added or deleted by query at once.
+By default changes are not visible until the update resource is called to commit a new index version.
+If a near real-time Indexer is used, then changes are instantly searchable.
+In such cases a commit still hasn&#8217;t occurred, and the index based <a class="reference internal" href="#lupyne.server.validate" title="lupyne.server.validate"><tt class="xref py py-meth docutils literal"><span class="pre">last-modified</span> <span class="pre">header</span></tt></a> shouldn&#8217;t be used for caching.</p>
+<blockquote>
+<div><ul class="simple">
+<li><a class="reference internal" href="#lupyne.server.WebIndexer.index" title="lupyne.server.WebIndexer.index"><tt class="xref py py-meth docutils literal"><span class="pre">/</span></tt></a></li>
+<li><a class="reference internal" href="#lupyne.server.WebIndexer.search" title="lupyne.server.WebIndexer.search"><tt class="xref py py-meth docutils literal"><span class="pre">/search</span></tt></a></li>
+<li><a class="reference internal" href="#lupyne.server.WebIndexer.docs" title="lupyne.server.WebIndexer.docs"><tt class="xref py py-meth docutils literal"><span class="pre">/docs</span></tt></a></li>
+<li><a class="reference internal" href="#lupyne.server.WebIndexer.fields" title="lupyne.server.WebIndexer.fields"><tt class="xref py py-meth docutils literal"><span class="pre">/fields</span></tt></a></li>
+<li><a class="reference internal" href="#lupyne.server.WebIndexer.update" title="lupyne.server.WebIndexer.update"><tt class="xref py py-meth docutils literal"><span class="pre">/update</span></tt></a></li>
+</ul>
+</div></blockquote>
+<p>Custom servers should create and mount WebSearchers and WebIndexers as needed.
+<a class="reference internal" href="#lupyne.server.WebSearcher.update" title="lupyne.server.WebSearcher.update"><tt class="xref py py-meth docutils literal"><span class="pre">Caches</span></tt></a> and <a class="reference internal" href="#lupyne.server.WebIndexer.fields" title="lupyne.server.WebIndexer.fields"><tt class="xref py py-meth docutils literal"><span class="pre">field</span> <span class="pre">settings</span></tt></a> can then be applied directly before <a class="reference external" href="#start">starting</a> the server.
+WebSearchers and WebIndexers can of course also be subclassed for custom interfaces.</p>
+<dl class="docutils">
+<dt>CherryPy and Lucene VM integration issues:</dt>
+<dd><ul class="first last simple">
+<li>Monitors (such as autoreload) are not compatible with the VM unless threads are attached.</li>
+<li>WorkerThreads must be also attached to the VM.</li>
+<li>VM initialization must occur after daemonizing.</li>
+<li>Recommended that the VM ignores keyboard interrupts (-Xrs) for clean server shutdown.</li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Lucene doc ids are ephemeral;  only use doc ids across requests for the same index version.</p>
+</div>
+<div class="section" id="tools">
+<h2>tools<a class="headerlink" href="#tools" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference external" href="http://docs.cherrypy.org/stable/progguide/extending/customtools.html">CherryPy tools</a> enabled by default:  tools.{json_in,json_out,allow,timer,validate}.on</p>
+<dl class="function">
+<dt id="lupyne.server.json_in">
+<tt class="descclassname">lupyne.server.</tt><tt class="descname">json_in</tt><big>(</big><em>process_body=None</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#json_in"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.json_in" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle request bodies in json format.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>content_type</strong> &#8211; request media type</li>
+<li><strong>process_body</strong> &#8211; optional function to process body into request.params</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="lupyne.server.json_out">
+<tt class="descclassname">lupyne.server.</tt><tt class="descname">json_out</tt><big>(</big><em>content_type='application/json'</em>, <em>indent=None</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#json_out"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.json_out" title="Permalink to this definition">¶</a></dt>
+<dd><p>Handle responses in json format.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>content_type</strong> &#8211; response content-type header</li>
+<li><strong>indent</strong> &#8211; indentation level for pretty printing</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="lupyne.server.allow">
+<tt class="descclassname">lupyne.server.</tt><tt class="descname">allow</tt><big>(</big><em>methods=None</em>, <em>paths=()</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#allow"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.allow" title="Permalink to this definition">¶</a></dt>
+<dd><p>Only allow specified methods.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="lupyne.server.timer">
+<tt class="descclassname">lupyne.server.</tt><tt class="descname">timer</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#timer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.timer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return response time in headers.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="lupyne.server.validate">
+<tt class="descclassname">lupyne.server.</tt><tt class="descname">validate</tt><big>(</big><em>etag=True</em>, <em>last_modified=False</em>, <em>max_age=None</em>, <em>expires=None</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#validate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.validate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return and validate caching headers.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>etag</strong> &#8211; return weak entity tag header based on index version and validate if-match headers</li>
+<li><strong>last_modified</strong> &#8211; return last-modified header based on index timestamp and validate if-modified headers</li>
+<li><strong>max_age</strong> &#8211; return cache-control max-age and age headers based on last update timestamp</li>
+<li><strong>expires</strong> &#8211; return expires header offset from last update timestamp</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="websearcher">
+<h2>WebSearcher<a class="headerlink" href="#websearcher" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="lupyne.server.WebSearcher">
+<em class="property">class </em><tt class="descclassname">lupyne.server.</tt><tt class="descname">WebSearcher</tt><big>(</big><em>*directories</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebSearcher"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebSearcher" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dispatch root with a delegated Searcher.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>hosts</strong> &#8211; ordered hosts to synchronize with</td>
+</tr>
+</tbody>
+</table>
+<div class="versionchanged">
+<p><span class="versionmodified">Changed in version 1.2: </span>automatic synchronization and promotion</p>
+</div>
+<dl class="attribute">
+<dt id="lupyne.server.WebSearcher.fields">
+<tt class="descname">fields</tt><a class="headerlink" href="#lupyne.server.WebSearcher.fields" title="Permalink to this definition">¶</a></dt>
+<dd><p>optional field settings will trigger indexer promotion when synchronized hosts are exhausted</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="lupyne.server.WebSearcher.autoupdate">
+<tt class="descname">autoupdate</tt><a class="headerlink" href="#lupyne.server.WebSearcher.autoupdate" title="Permalink to this definition">¶</a></dt>
+<dd><p>optional autoupdate timer for use upon indexer promotion</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="lupyne.server.WebSearcher.docs">
+<tt class="descname">docs</tt><big>(</big><em>name=None</em>, <em>value=''</em>, <em>**options</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebSearcher.docs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebSearcher.docs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return ids or documents.</p>
+<dl class="docutils">
+<dt><strong>GET</strong> /docs</dt>
+<dd><p class="first">Return array of doc ids.</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[<em>int</em>,... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET</strong> /docs/[<em>int</em>|<em>chars</em>/<em>chars</em>]?</dt>
+<dd><p class="first">Return document mapping from id or unique name and value.</p>
+<dl class="docutils">
+<dt>&amp;fields=<em>chars</em>,... &amp;fields.multi=<em>chars</em>,... &amp;fields.indexed=<em>chars</em>[:<em>chars</em>],...</dt>
+<dd>optionally select stored, multi-valued, and cached indexed fields</dd>
+<dt>&amp;fields.vector=<em>chars</em>,... &amp;fields.vector.counts=<em>chars</em>,...</dt>
+<dd>optionally select term vectors with term counts</dd>
+</dl>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">{<em>string</em>: null|<em>string</em>|<em>number</em>|<em>array</em>|<em>object</em>,... }</td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="lupyne.server.WebSearcher.index">
+<tt class="descname">index</tt><big>(</big><em>host=''</em>, <em>path=''</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebSearcher.index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebSearcher.index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return index information and synchronize with remote index.</p>
+<dl class="docutils">
+<dt><strong>GET, POST</strong> /[index]</dt>
+<dd><p class="first">Return a mapping of the directory to the document count.
+Add new segments from remote host.</p>
+<p>{&#8220;host&#8221;: <em>string</em>[, &#8220;path&#8221;: <em>string</em>]}</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">{<em>string</em>: <em>int</em>,... }</td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="lupyne.server.WebSearcher.queries">
+<tt class="descname">queries</tt><big>(</big><em>name=''</em>, <em>value=''</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebSearcher.queries"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebSearcher.queries" title="Permalink to this definition">¶</a></dt>
+<dd><p>Match a document against registered queries.
+Queries are cached by a unique name and value, suitable for document indexing.</p>
+<div class="versionadded">
+<p><span class="versionmodified">New in version 1.4.</span></p>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This interface is experimental and might change in incompatible ways in the next release.</p>
+</div>
+<dl class="docutils">
+<dt><strong>GET</strong> /queries</dt>
+<dd><p class="first">Return query set names.</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[<em>string</em>,... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET, POST</strong> /queries/<em>chars</em></dt>
+<dd><p class="first">Return query values and scores which match given document.</p>
+<p>{<em>string</em>: <em>string</em>,... }</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">{<em>string</em>: <em>number</em>,... }</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET, PUT, DELETE</strong> /queries/<em>chars</em>/<em>chars</em></dt>
+<dd><p class="first">Return, create, or delete a registered query.</p>
+<p><em>string</em></p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body"><em>string</em></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="lupyne.server.WebSearcher.search">
+<tt class="descname">search</tt><big>(</big><em>q=None</em>, <em>count=None</em>, <em>start=0</em>, <em>fields=None</em>, <em>sort=None</em>, <em>facets=''</em>, <em>group=''</em>, <em>hl=''</em>, <em>mlt=None</em>, <em>spellcheck=0</em>, <em>timeout=None</em>, <em>**options</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebSearcher.search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebSearcher.search" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run query and return documents.</p>
+<dl class="docutils">
+<dt><strong>GET</strong> /search?</dt>
+<dd><p class="first">Return array of document objects and total doc count.</p>
+<dl class="docutils">
+<dt>&amp;q=<em>chars</em>&amp;q.type=[term|prefix|wildcard]&amp;q.<em>chars</em>=...,</dt>
+<dd>query, optional type to skip parsing, and optional parser settings: q.field, q.op,...</dd>
+<dt>&amp;filter=<em>chars</em></dt>
+<dd><div class="first last line-block">
+<div class="line">cached filter applied to the query</div>
+<div class="line">if a previously cached filter is not found, the value will be parsed as a query</div>
+</div>
+</dd>
+<dt>&amp;count=<em>int</em>&amp;start=0</dt>
+<dd>maximum number of docs to return and offset to start at</dd>
+<dt>&amp;fields=<em>chars</em>,... &amp;fields.multi=<em>chars</em>,... &amp;fields.indexed=<em>chars</em>[:<em>chars</em>],...</dt>
+<dd>only include selected stored fields; multi-valued fields returned in an array; indexed fields with optional type are cached</dd>
+<dt>&amp;sort=[-]<em>chars</em>[:<em>chars</em>],... &amp;sort.scores[=max]</dt>
+<dd><div class="first last line-block">
+<div class="line">field name, optional type, minus sign indicates descending</div>
+<div class="line">optionally score docs, additionally compute maximum score</div>
+</div>
+</dd>
+<dt>&amp;facets=<em>chars</em>,... &amp;facets.count=<em>int</em>&amp;facets.min=0</dt>
+<dd><div class="first last line-block">
+<div class="line">include facet counts for given field names; facets filters are cached</div>
+<div class="line">optional maximum number of most populated facet values per field, and minimum count to return</div>
+</div>
+</dd>
+<dt>&amp;group=<em>chars</em>[:<em>chars</em>]&amp;group.count=1</dt>
+<dd><div class="first last line-block">
+<div class="line">group documents by field value with optional type, up to given maximum count</div>
+</div>
+</dd>
+</dl>
+<div class="versionchanged">
+<p><span class="versionmodified">Changed in version 1.6: </span>grouping searches use count and start options</p>
+</div>
+<dl class="docutils">
+<dt>&amp;hl=<em>chars</em>,... &amp;hl.count=1&amp;hl.tag=strong&amp;hl.enable=[fields|terms]</dt>
+<dd><div class="first last line-block">
+<div class="line">stored fields to return highlighted</div>
+<div class="line">optional maximum fragment count and html tag name</div>
+<div class="line">optionally enable matching any field or any term</div>
+</div>
+</dd>
+<dt>&amp;mlt=<em>int</em>&amp;mlt.fields=<em>chars</em>,... &amp;mlt.<em>chars</em>=...,</dt>
+<dd><div class="first last line-block">
+<div class="line">doc index (or id without a query) to find MoreLikeThis</div>
+<div class="line">optional document fields to match</div>
+<div class="line">optional MoreLikeThis settings: mlt.minTermFreq, mlt.minDocFreq,...</div>
+</div>
+</dd>
+<dt>&amp;spellcheck=<em>int</em></dt>
+<dd><div class="first last line-block">
+<div class="line">maximum number of spelling corrections to return for each query term, grouped by field</div>
+<div class="line">original query is still run; use q.spellcheck=true to affect query parsing</div>
+</div>
+</dd>
+<dt>&amp;timeout=<em>number</em></dt>
+<dd>timeout search after elapsed number of seconds</dd>
+</dl>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body"><div class="first last line-block">
+<div class="line">{</div>
+<div class="line">&#8220;query&#8221;: <em>string</em>|null,</div>
+<div class="line">&#8220;count&#8221;: <em>int</em>|null,</div>
+<div class="line">&#8220;maxscore&#8221;: <em>number</em>|null,</div>
+<div class="line">&#8220;docs&#8221;: [{&#8220;__id__&#8221;: <em>int</em>, &#8220;__score__&#8221;: <em>number</em>, &#8220;__keys__&#8221;: <em>array</em>,
+&#8220;__highlights__&#8221;: {<em>string</em>: <em>array</em>,... }, <em>string</em>: <em>value</em>,... },... ],</div>
+<div class="line">&#8220;facets&#8221;: {<em>string</em>: {<em>string</em>: <em>int</em>,... },... },</div>
+<div class="line">&#8220;groups&#8221;: [{&#8220;count&#8221;: <em>int</em>, &#8220;value&#8221;: <em>value</em>, &#8220;docs&#8221;: [<em>object</em>,... ]},... ]</div>
+<div class="line">&#8220;spellcheck&#8221;: {<em>string</em>: {<em>string</em>: [<em>string</em>,... ],... },... },</div>
+<div class="line">}</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="lupyne.server.WebSearcher.terms">
+<tt class="descname">terms</tt><big>(</big><em>name=''</em>, <em>value='*'</em>, <em>*path</em>, <em>**options</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebSearcher.terms"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebSearcher.terms" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data about indexed terms.</p>
+<dl class="docutils">
+<dt><strong>GET</strong> /terms?</dt>
+<dd><p class="first">Return field names, with optional selection.</p>
+<p>&amp;indexed=true|false</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[<em>string</em>,... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET</strong> /terms/<em>chars</em>[:int|float]?step=0</dt>
+<dd><p class="first">Return term values for given field name, with optional type and step for numeric encoded values.</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[<em>string</em>,... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET</strong> /terms/<em>chars</em>/<em>chars</em>[*|:<em>chars</em>|~[<em>int</em>]]</dt>
+<dd><p class="first">Return term values (prefix, slices, or fuzzy terms) for given field name.</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[<em>string</em>,... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET</strong> /terms/<em>chars</em>/<em>chars</em>[*|~[<em>int</em>]]?count=<em>int</em></dt>
+<dd><p class="first">Return spellchecked term values ordered by decreasing document frequency.
+Prefixes (*) are optimized to be suitable for real-time query suggestions; all terms are cached.</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[<em>string</em>,... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET</strong> /terms/<em>chars</em>/<em>chars</em></dt>
+<dd><p class="first">Return document count for given term.</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body"><em>int</em></td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET</strong> /terms/<em>chars</em>/<em>chars</em>/docs</dt>
+<dd><p class="first">Return document ids for given term.</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[<em>int</em>,... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET</strong> /terms/<em>chars</em>/<em>chars</em>/docs/counts</dt>
+<dd><p class="first">Return document ids and frequency counts for given term.</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[[<em>int</em>, <em>int</em>],... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET</strong> /terms/<em>chars</em>/<em>chars</em>/docs/positions</dt>
+<dd><p class="first">Return document ids and positions for given term.</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[[<em>int</em>, [<em>int</em>,... ]],... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="lupyne.server.WebSearcher.update">
+<tt class="descname">update</tt><big>(</big><em>**caches</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebSearcher.update"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebSearcher.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Refresh index version.</p>
+<dl class="docutils">
+<dt><strong>POST</strong> /update</dt>
+<dd><p class="first">Reopen searcher, optionally reloading caches, and return document count.</p>
+<p>{&#8220;filters&#8221;|&#8221;sorters&#8221;|&#8221;spellcheckers&#8221;: true,... }</p>
+<div class="versionchanged">
+<p><span class="versionmodified">Changed in version 1.2: </span>request body is an object instead of an array</p>
+</div>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body"><em>int</em></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="webindexer">
+<h2>WebIndexer<a class="headerlink" href="#webindexer" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="lupyne.server.WebIndexer">
+<em class="property">class </em><tt class="descclassname">lupyne.server.</tt><tt class="descname">WebIndexer</tt><big>(</big><em>*args</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebIndexer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebIndexer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#lupyne.server.WebSearcher" title="lupyne.server.WebSearcher"><tt class="xref py py-class docutils literal"><span class="pre">lupyne.server.WebSearcher</span></tt></a></p>
+<p>Dispatch root with a delegated Indexer, exposing write methods.</p>
+<dl class="method">
+<dt id="lupyne.server.WebIndexer.docs">
+<tt class="descname">docs</tt><big>(</big><em>name=None</em>, <em>value=''</em>, <em>**options</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebIndexer.docs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebIndexer.docs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add or return documents.  See <a class="reference internal" href="#lupyne.server.WebSearcher.docs" title="lupyne.server.WebSearcher.docs"><tt class="xref py py-meth docutils literal"><span class="pre">WebSearcher.docs()</span></tt></a> for GET method.</p>
+<dl class="docutils">
+<dt><strong>POST</strong> /docs</dt>
+<dd><p class="first">Add documents to index.</p>
+<p class="last">[{<em>string</em>: <em>string</em>|<em>number</em>|<em>array</em>,... },... ]</p>
+</dd>
+<dt><strong>PUT, DELETE</strong> /docs/<em>chars</em>/<em>chars</em></dt>
+<dd><p class="first">Set or delete document.  Unique term should be indexed and is added to the new document.</p>
+<p class="last">{<em>string</em>: <em>string</em>|<em>number</em>|<em>array</em>,... }</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="lupyne.server.WebIndexer.fields">
+<tt class="descname">fields</tt><big>(</big><em>name=''</em>, <em>**settings</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebIndexer.fields"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebIndexer.fields" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return or store a field&#8217;s settings.</p>
+<dl class="docutils">
+<dt><strong>GET</strong> /fields</dt>
+<dd><p class="first">Return known field names.</p>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[<em>string</em>,... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET, PUT</strong> /fields/<em>chars</em></dt>
+<dd><p class="first">Set and return settings for given field name.</p>
+<p>{&#8220;stored&#8221;|&#8221;indexed&#8221;|...: <em>string</em>|true|false,... }</p>
+<div class="versionchanged">
+<p><span class="versionmodified">Changed in version 1.6: </span>lucene FieldType attributes used as settings</p>
+</div>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">{&#8220;stored&#8221;|&#8221;indexed&#8221;|...: <em>string</em>|true|false,... }</td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="lupyne.server.WebIndexer.index">
+<tt class="descname">index</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebIndexer.index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebIndexer.index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add indexes.  See <a class="reference internal" href="#lupyne.server.WebSearcher.index" title="lupyne.server.WebSearcher.index"><tt class="xref py py-meth docutils literal"><span class="pre">WebSearcher.index()</span></tt></a> for GET method.</p>
+<dl class="docutils">
+<dt><strong>POST</strong> /[index]</dt>
+<dd><p class="first">Add indexes without optimization.</p>
+<p class="last">[<em>string</em>,... ]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="lupyne.server.WebIndexer.search">
+<tt class="descname">search</tt><big>(</big><em>q=None</em>, <em>**options</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebIndexer.search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebIndexer.search" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run or delete a query.  See <a class="reference internal" href="#lupyne.server.WebSearcher.search" title="lupyne.server.WebSearcher.search"><tt class="xref py py-meth docutils literal"><span class="pre">WebSearcher.search()</span></tt></a> for GET method.</p>
+<dl class="docutils">
+<dt><strong>DELETE</strong> /search?q=<em>chars</em></dt>
+<dd>Delete documents which match query.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="lupyne.server.WebIndexer.update">
+<tt class="descname">update</tt><big>(</big><em>id=''</em>, <em>name=''</em>, <em>**options</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#WebIndexer.update"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.WebIndexer.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Commit index changes and refresh index version.</p>
+<dl class="docutils">
+<dt><strong>POST</strong> /update</dt>
+<dd><p class="first">Commit write operations and return document count.  See <a class="reference internal" href="#lupyne.server.WebSearcher.update" title="lupyne.server.WebSearcher.update"><tt class="xref py py-meth docutils literal"><span class="pre">WebSearcher.update()</span></tt></a> for caching options.</p>
+<p>{&#8220;merge&#8221;: true|<em>int</em>,... }</p>
+<div class="versionchanged">
+<p><span class="versionmodified">Changed in version 1.2: </span>request body is an object instead of an array</p>
+</div>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body"><em>int</em></td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET, PUT, DELETE</strong> /update/[snapshot|*int*]</dt>
+<dd><p class="first">Verify, create, or release unique snapshot of current index commit and return array of referenced filenames.</p>
+<div class="versionchanged">
+<p><span class="versionmodified">Changed in version 1.4: </span>lucene 4.4 identifies snapshots by commit generation;  use location header</p>
+</div>
+<table class="last docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">[<em>string</em>,... ]</td>
+</tr>
+</tbody>
+</table>
+</dd>
+<dt><strong>GET</strong> /update/<em>int</em>/<em>chars</em></dt>
+<dd>Download index file corresponding to snapshot id and filename.</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="start">
+<h2>start<a class="headerlink" href="#start" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="lupyne.server.mount">
+<tt class="descclassname">lupyne.server.</tt><tt class="descname">mount</tt><big>(</big><em>root</em>, <em>path=''</em>, <em>config=None</em>, <em>autoupdate=0</em>, <em>app=None</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#mount"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.mount" title="Permalink to this definition">¶</a></dt>
+<dd><p>Attach root and subscribe to plugins.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>root,path,config</strong> &#8211; see cherrypy.tree.mount</li>
+<li><strong>autoupdate</strong> &#8211; see command-line options</li>
+<li><strong>app</strong> &#8211; optionally replace root on existing app</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="lupyne.server.start">
+<tt class="descclassname">lupyne.server.</tt><tt class="descname">start</tt><big>(</big><em>root=None</em>, <em>path=''</em>, <em>config=None</em>, <em>pidfile=''</em>, <em>daemonize=False</em>, <em>autoreload=0</em>, <em>autoupdate=0</em>, <em>callback=None</em><big>)</big><a class="reference internal" href="_modules/lupyne/server.html#start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#lupyne.server.start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Attach root, subscribe to plugins, and start server.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>root,path,config</strong> &#8211; see cherrypy.quickstart</li>
+<li><strong>pidfile,daemonize,autoreload,autoupdate</strong> &#8211; see command-line options</li>
+<li><strong>callback</strong> &#8211; optional callback function scheduled after daemonizing</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">server</a><ul>
+<li><a class="reference internal" href="#tools">tools</a></li>
+<li><a class="reference internal" href="#websearcher">WebSearcher</a></li>
+<li><a class="reference internal" href="#webindexer">WebIndexer</a></li>
+<li><a class="reference internal" href="#start">start</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="engine.html"
+                        title="previous chapter">engine</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="client.html"
+                        title="next chapter">client</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/server.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="client.html" title="client"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="engine.html" title="engine"
+             >previous</a> |</li>
+        <li><a href="index.html">Lupyne 1.6 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2009-2014, Aric Coady.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
