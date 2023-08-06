@@ -1,0 +1,61 @@
+{% set obj=sa_crud['obj'] %}
+{% set obj_cls=sa_crud['table'] %}
+{% set visible_columns=sa_crud['col'] %}
+{% set fk_template = "sacrud/types/ForeignKey.jinja2" %}
+
+<form method="POST"
+  accept-charset="utf-8"
+  enctype="multipart/form-data"
+  {% if sa_crud %}
+    {% if not obj %}
+      action="{{ request.route_url('sa_create', table=obj_cls.__tablename__) }}"
+    {% else %}
+      action="{{ request.route_url('sa_update', table=obj_cls.__tablename__,
+      id=getattr(obj, sa_crud['pk'])) }}"
+    {% endif %}>
+  {% endif %}
+  <div class="sa_table">
+    <table id="index">
+      <tr>
+        <th>Column</th>
+        <th>Value</th>
+      </tr>
+      {% if sa_crud %}
+        {% for col in visible_columns %}
+            {% set css_class=[] %}
+            {# TODO: move to include "set_css_style.jinja2" #}
+            {% if hasattr(obj_cls, 'sacrud_css_class') %}
+              {% for key, value in obj_cls.sacrud_css_class.items() %}
+                {% if col in value %}
+                  {{ css_class.append(key) }}
+                {% endif %}
+              {% endfor %}
+              {% set css_styles=' '.join(css_class) %}
+            {% endif %}
+            {# ============== #}
+
+            <tr>
+                {% if col.info['sacrud_position']=='inline' %}
+                  <td colspan="2">
+                    <h3>{{ col.info['verbose_name'] or col.sacrud_name }}</h3>
+                {% else %}
+                  <td>
+                    {{ col.info['verbose_name'] or col.name }}
+                  </td>
+                  <td>
+                {% endif %}
+                {% if col.info['sacrud_template'] %}
+                  {% include col.info['sacrud_template'] %}
+                {% elif col.foreign_keys %}
+                  {% include fk_template %}
+                {% else %}
+                  {% include get_field_template(col.type.__class__.__name__) %}
+                {% endif %}
+              </td>
+            </tr>
+        {% endfor %}
+      {% endif %}
+    </table>
+  </div>
+  <input type="submit" id="button_save" name="form.submitted" value="Save" />
+</form>
