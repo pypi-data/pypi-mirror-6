@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -ex
+
+install-packages augeas-tools
+
+os-svc-install $TEMPEST_EXTRA_INSTALL_OPTS -i "$TEMPEST_VENV_DIR" -u tempest -r /opt/stack/tempest
+
+source $TEMPEST_VENV_DIR/bin/activate
+cd /opt/stack/tempest
+# bug #1293812 : Avoid easy_install triggering on pbr.
+pip install -U 'pbr>=0.5.21,<1.0'
+
+pip install -r test-requirements.txt
+testr init
+
+# soft link testr into PATH so we can use it directly in run-tempest
+ln -sf $TEMPEST_VENV_DIR/bin/testr /usr/local/bin/testr
+
+install -m 0664 -o root -g root $(dirname $0)/../tests2skip.txt /opt/stack/tempest/tests2skip.txt
+install -m 0775 -o root -g root $(dirname $0)/../tests2skip.py /opt/stack/tempest/tests2skip.py
