@@ -1,0 +1,217 @@
+#! /bin/env python
+'''
+Convert a VCF file to a MOD file.
+
+Created on Sep 11, 2013
+
+@author: Shunping Huang
+'''
+
+import csv
+import gc
+import argparse as ap
+import gzip
+import logging
+from time import localtime, strftime
+
+from modtools.vcfreader import VCFReader
+from modtools.variant import *
+from modtools.utils import *
+from modtools.alias import Alias
+from modtools.refmeta import RefMeta
+
+from modtools import version
+
+DESC = 'A VCF to MOD converter.'
+__version__ = '2.0'
+VERBOSITY = 1
+logger = None
+
+
+def init_logger():
+    global logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter("[%(asctime)s] %(name)-10s: "
+                                  "%(levelname)s: %(message)s",
+                                  "%Y-%m-%d %H:%M:%S")
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+
+if __name__ == '__main__':
+    # Usage:
+    # vcfmod2 [-q][-v][-f][-n][-a alias.csv][-c chrom_list][-o sample.mod]
+    #         ref_name ref_meta_fn sample_name vcf_fn [vcf_fn ...]
+
+    init_logger()
+    p = ap.ArgumentParser(description=DESC,
+                          formatter_class=ap.RawTextHelpFormatter)
+    # Optional arguments
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("-q", dest='quiet', action='store_true',
+                       help='quiet mode')
+    group.add_argument('-v', dest='verbosity', action="store_const", const=2,
+                       default=1, help='verbose mode')
+
+    p.add_argument("-f", dest='force', action='store_true',
+                   help='overwrite existing output (meta and fasta)')
+
+    p.add_argument("-n", dest='no_filter', action='store_true',
+                   help='do not use filter (FI flag) in VCF variants')
+
+    p.add_argument('-a', metavar='alias.csv', dest='alias_fn',
+                   default=None,
+                   help='the csv file for alias classes of sequence name'
+                   ' (default: None)')
+
+    p.add_argument('-c', metavar='chromList', dest='chroms', default=None,
+                   help='a comma-separated list of chromosomes in output'
+                   ' (default: all)')
+
+    p.add_argument('-o', metavar='mod', dest='mod_fn', default=None,
+                   help='the output mod file (default: <sample>.mod)')
+
+    # Required arguments
+    p.add_argument('ref_name', help='reference name')
+    p.add_argument('ref_meta_fn', help='reference meta data')
+    p.add_argument('sample_name', help='requested sample name in VCF')
+    p.add_argument('vcf_fns', metavar='vcf', nargs='+',
+                   help='input VCF file(s)')
+
+    args = p.parse_args()
+
+    if args.quiet:
+        logger.setLevel(logging.CRITICAL)
+    elif args.verbosity == 2:
+        logger.setLevel(logging.DEBUG)
+
+    logger.debug(args)
+
+    is_file_readable(args.ref_meta_fn)
+    for vcf_fn in args.vcf_fns:
+        is_file_readable(vcf_fn)
+
+    if args.mod_fn is None:
+        args.mod_fn = "%s.mod" % args.sample_name
+    is_file_writable(args.mod_fn, args.force)
+
+    if args.alias_fn is not None:
+        is_file_readable(args.alias_fn)
+
+    alias = Alias()
+    try:
+        alias.load(args.alias_fn)
+    except:
+        pass
+
+    nVCFs = len(args.vcf_fns)
+
+    logger.info("from '%s' to '%s'", args.ref_name, args.sample_name)
+    logger.info("input VCF file(s): %s", ', '.join(args.vcf_fns))
+    logger.info("output MOD file: %s", args.mod_fn)
+
+    vcfs = [VCFReader(vcf_fn, [args.sample_name]) for vcf_fn in args.vcf_fns]
+
+    # Use all chromosomes found in any VCFs
+    chroms = []
+    if args.chroms is None:
+        allChroms = set()
+        for vcf in vcfs:
+            allChroms |= set(vcf.tabix_chroms)
+        chroms = sorted(allChroms)
+    else:
+        try:
+            chroms = args.chroms.split(',')
+        except Exception as e:
+            print("Error occured while parsing chromosome list '%s'" %
+                  args.chroms)
+            raise e
+
+    assert len(chroms), "Chromosome list is empty."
+
+    #print(chroms)
+
+    with open(args.mod_fn, 'w') as modfp:
+        modfp.write("#version=%s\n" % version.__mod_version__)
+        modfp.write("#date=%s\n" % strftime("%Y%m%d", localtime()))
+        modfp.write("#reference=%s\n" % args.ref_name)
+        with open(args.ref_meta_fn, 'r') as metafp:
+            for line in metafp:
+                line = line.rstrip()
+                v = RefMeta.parse(line)
+                modfp.write("#refmeta.%s=[%s]\n" % (v.chrom, line))
+
+        modfp.write("#sample=%s\n" % args.sample_name)
+        csvfp = csv.writer(modfp, delimiter='\t', lineterminator='\n')
+
+        for chrom in chroms:   # maybe chromosome names from VCF or user
+            gc.disable()
+            nSub = 0
+            nIns = 0
+            nDel = 0
+            pool = []
+
+            mod_chrom = alias.getName(chrom)
+            chrom_aliases = alias.getAliases(mod_chrom)
+
+            for i in range(nVCFs):  # for each VCF file
+                isAliasFound = False
+
+                for chrom_alias in chrom_aliases:  # try each alias
+                    logger.info("try alias '%s' for chromosome '%s'",
+                                chrom_alias, mod_chrom)
+
+                    if chrom_alias in vcfs[i].tabix_chroms:
+                        isAliasFound = True
+                        count = 0
+                        logger.info("processing chromosome alias '%s' in %s",
+                                    chrom_alias, vcfs[i].fileName)
+
+                        # The second parameter of fetch is 'use_filter'
+                        for tup in vcfs[i].fetch(chrom_alias, not args.no_filter):
+                            v = parseVariant(mod_chrom, tup[1], tup[2], tup[3])
+                            if v.type == SUB:
+                                pool.append(('s', mod_chrom, v.start[1],
+                                             v.extra))
+                                nSub += 1
+                            elif v.type == INS:
+                                pool.append(('i', mod_chrom, v.start[1],
+                                             v.extra))
+                                nIns += v.length
+                            elif v.type == DEL:
+                                # Change non-atomic deletions to atomic
+                                for j in range(v.length):
+                                    pool.append(('d', mod_chrom, v.start[1] + j,
+                                                 v.extra[j]))
+                                nDel += v.length
+                            else:
+                                raise NotImplementedError(
+                                    "Unknown variant type: '%s'" % v.type)
+                            count += 1
+
+                        logger.info("%d variant(s) found in %s",
+                                    count, vcfs[i].fileName)
+                    else:
+                        logger.warning("chromosome alias '%s' not found in %s",
+                                       chrom_alias, vcfs[i].fileName)
+
+                if not isAliasFound:
+                    logger.warning("chromosome '%s' not found in %s",
+                                   mod_chrom, vcfs[i].fileName)
+
+            pool = sorted(set(pool), key=lambda tup: tup[2])
+            csvfp.writerows(pool)
+            logger.info("%d line(s) written to MOD", len(pool))
+
+            if len(pool) > 0:
+                logger.info("SNPs: %d base(s)", nSub)
+                logger.info("Insertions: %d base(s)", nIns)
+                logger.info("Deletions: %d base(s)", nDel)
+
+            del pool
+            gc.enable()
+
+    logger.info("All Done!")
