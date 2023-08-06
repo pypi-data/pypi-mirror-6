@@ -1,0 +1,151 @@
+Bug Reports and Development
+===========================
+
+Please report any problems to `the launchpad bug tracker <https://bugs.launchpad.net/pyvalidate>`_
+
+Description
+===========
+
+This module provides a way to validate data from many different file formats with a condensed
+XML Schema (XSD) subset. Errors are returned using a mirror-tree pattern instead of an exception
+based invalidation.
+
+Based on xsd and xml validation, this is an attempt to provide those functions
+without requiring xml and to allow errors to be fed into machine readable mechanisms.
+
+Synopse
+=======
+
+ from xssd import Validator
+
+ val = Validator( definition )
+ err = val.validate( data )
+
+ print err or "All is well!"
+
+Definitions
+===========
+
+An example definition for registering a user on a website:
+
+ definition = {
+    'root' : [
+        { 'name : 'username',     'type' : 'token'                                   },
+        { 'name : 'password',     'type' : 'password'                                },
+        { 'name : 'confirm',      'type' : 'confirm'                                 },
+        { 'name : 'firstName',    'type' : 'rname'                                   },
+        { 'name : 'familyName',   'type' : 'name',  'minOccurs' : 0                  },
+        { 'name : 'nickName',     'type' : 'name',  'minOccurs' : 0                  },
+        { 'name : 'emailAddress', 'type' : 'email', 'minOccurs' : 1, 'maxOccurs' : 3 },
+        [
+          { 'name' : 'aim',    'type' : 'index'  },
+          { 'name' : 'msn',    'type' : 'email'  },
+          { 'name' : 'jabber', 'type' : 'email'  },
+          { 'name' : 'irc',    'type' : 'string' },
+        ],
+    ],
+
+    'simpleTypes' : {
+      'confirm'  : { 'base' : 'id',   'match'     : '/input/password' },
+      'rname'    : { 'base' : 'name', 'minLength' : 1 },
+      'password' : { 'base' : 'id',   'minLength' : 6 },
+    },
+
+    'complexTypes' : {},
+ }
+
+Data
+====
+
+And this is an example of the data that would validate against it:
+
+  data = {
+      'username'     : 'abcdef',
+      'password'     : '1234567',
+      'confirm'      : '1234567',
+      'firstName'    : 'test',
+      'familyName'   : 'user',
+      'nickName'     : 'foobar',
+      'emailAddress' : [ 'foo@bar.com', 'some@other.or', 'great@nice.con' ],
+      'msn'          : 'foo@msn.com',
+  }
+
+We are asking for a username, a password typed twice, some real names, a nick name, between 1 and 3 email addresses and at least one instant message account, foo is an extra string of information to show that the level is arbitary. bellow the definition and all options are explained.
+
+Errors and Results
+==================
+
+The first result you get is a structure the second is a boolean, the boolean explains the total stuctures pass or fail status.
+
+The structure that is returned is almost a mirror structure of the input:
+
+errors = {
+    'input' : {
+       'username'     : NO_ERROR,
+       'password'     : NO_ERROR,
+       'confirm'      : NO_ERROR,
+       'firstName'    : NO_ERROR,
+       'familyName'   : NO_ERROR,
+       'nickName'     : NO_ERROR,
+       'emailAddress' : NO_ERROR,
+    }
+},
+
+
+Simple Types
+============
+
+A simple type is a definition which will validate data directly, it will never validate lists or dictionaries.
+
+Each simpleType is defined as an item in the definition's 'simpleTypes' list.
+
+  base           - The name of another simple type to first test the value against.
+  fixed          - The value should match this exactly.
+  pattern        - Should be a regular expresion reference which matchs the value.
+  minLength      - The minimum length of a string value.
+  maxLength      - The maximum length of a string value.
+  match          - An XPath link to another data node it should match.
+  notMatch       - An XPath link to another data node it should NOT match.
+  enumeration    - An array reference of possible values of which value should be one.
+  custom         - Should contain a CODE reference which will be called upon to validate the value.
+  minInclusive   - The minimum value of a number value inclusive, i.e greater than or eq to (>=).
+  maxInclusive   - The maximum value of a number value inclusive, i.e less than of eq to (<=).
+  minExclusive   - The minimum value of a number value exlusive, i.e more than (>).
+  maxExclusive   - The maximum value of a number value exlusive, i.e less than (<).
+  fractionDigits - The maximum number of digits on a fractional number.
+
+Complex Types
+=============
+
+A complex type is a definition which will validate a dictionary. The optional very first structure, 'root' is a complex definition and follows the same syntax as all complex types. Each complex type is a list of data which should all occur in the hash, when a list entry is a hash it equates to one named entry in the hash data and has the following options:
+
+  name      - Required name of the entry in the hash data.
+  minOccurs - The minimum number of the named that this data should have in it.
+  maxOccurs - The maximum number of the named that this data should have in it.
+  type      - The type definition which validates the contents of the data.
+
+Where the list entry is an array, it will toggle the combine mode and allow further list entries With in it this allows for parts of the sturcture to be optional only if different parts of the stucture exist.
+
+Inbuilt Types
+=============
+
+  By default these types are available to all definitions as base types.
+
+    string           - /^.*$/
+    integer          - /^[\-]{0,1}\d+$/
+    index            - /^\d+$/
+    double           - /^[0-9\-\.]*$/
+    token            - /^\w+$/
+    boolean          - /^1|0|true|false$/
+    email            - /^.+@.+\..+$/
+    date             - /^\d\d\d\d-\d\d-\d\d$/ + datetime
+    'time'           - /^\d\d:\d\d$/ + datetime
+    datetime         - /^(\d\d\d\d-\d\d-\d\d)?[T ]?(\d\d:\d\d)?$/ + valid_date method
+    percentage       - minInclusive == 0 + maxInclusive == 100 + double
+
+
+Testing
+=======
+
+The test suite provides the full supported schema and tests against itself to ensure sanity.
+
