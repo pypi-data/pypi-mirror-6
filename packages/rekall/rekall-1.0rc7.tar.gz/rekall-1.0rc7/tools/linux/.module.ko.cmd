@@ -1,0 +1,1 @@
+cmd_/usr/local/google/home/scudette/rekall/tools/linux/module.ko := ld -r -m elf_x86_64 -T /usr/src/linux-headers-3.2.5-gg1336/scripts/module-common.lds --build-id  -o /usr/local/google/home/scudette/rekall/tools/linux/module.ko /usr/local/google/home/scudette/rekall/tools/linux/module.o /usr/local/google/home/scudette/rekall/tools/linux/module.mod.o
