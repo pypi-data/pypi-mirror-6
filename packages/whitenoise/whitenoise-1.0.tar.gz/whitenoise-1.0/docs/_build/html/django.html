@@ -1,0 +1,313 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Using WhiteNoise with Django &mdash; WhiteNoise 0.13 documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:'./',
+        VERSION:'0.13',
+        COLLAPSE_INDEX:false,
+        FILE_SUFFIX:'.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+    <link rel="top" title="WhiteNoise 0.13 documentation" href="index.html"/> 
+
+  <script src="//cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="index.html" class="icon icon-home"> WhiteNoise</a>
+        <form class="wy-form" action="search.html" method="get">
+  <input type="text" name="q" placeholder="Search docs" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix">
+        
+        
+            <ul>
+<li class="toctree-l1"><a class="reference internal" href="index.html">WhiteNoise</a></li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top">
+        <i data-toggle="wy-nav-top" class="icon icon-reorder"></i>
+        <a href="/">WhiteNoise</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <ul class="wy-breadcrumbs">
+  <li><a href="index.html">Docs</a> &raquo;</li>
+  <li><a href="">Using WhiteNoise with Django</a></li>
+  
+</ul>
+<hr/>
+
+          
+  <div class="section" id="using-whitenoise-with-django">
+<h1>Using WhiteNoise with Django<a class="headerlink" href="#using-whitenoise-with-django" title="Permalink to this headline">¶</a></h1>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">To use WhiteNoise with a non-Django application see the
+<a class="reference internal" href="base.html"><em>generic WSGI documentation</em></a>.</p>
+</div>
+<p>This guide walks you through setting up a Django project with WhiteNoise.
+In most cases it shouldn&#8217;t take more than a couple of lines of configuration.</p>
+<p>I mention Heroku in a few place as that was the initial use case which prompted me
+to create WhiteNoise, but there&#8217;s nothing Heroku-specific about WhiteNoise and the
+instructions below should apply whatever your hosting platform.</p>
+<div class="section" id="make-sure-staticfiles-is-configured-correctly">
+<h2>1. Make sure <em>staticfiles</em> is configured correctly<a class="headerlink" href="#make-sure-staticfiles-is-configured-correctly" title="Permalink to this headline">¶</a></h2>
+<p>If you&#8217;re familiar with Django you&#8217;ll know what to do. If you&#8217;re just getting started
+with a new Django project (v1.6 and up) then you&#8217;ll need add the following to the bottom of your
+<tt class="docutils literal"><span class="pre">settings.py</span></tt> file:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">STATIC_ROOT</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">BASE_DIR</span><span class="p">,</span> <span class="s">&#39;staticfiles&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As part of deploying your application you&#8217;ll need to run <tt class="docutils literal"><span class="pre">./manage.py</span> <span class="pre">collectstatic</span></tt> to
+put all your static files into <tt class="docutils literal"><span class="pre">STATIC_ROOT</span></tt>. (If you&#8217;re running on Heroku then
+this is done automatically for you.)</p>
+<p>In your templates, make sure you&#8217;re using the <a class="reference external" href="https://docs.djangoproject.com/en/1.7/ref/contrib/staticfiles/#std:templatetag-staticfiles-static">static</a> template tag to refer
+to your static files. For example:</p>
+<div class="highlight-html"><div class="highlight"><pre>{% load static from staticfiles %}
+&lt;img src=&quot;{% static &quot;images/hi.jpg&quot; %}&quot; alt=&quot;Hi!&quot; /&gt;
+</pre></div>
+</div>
+</div>
+<div class="section" id="enable-whitenoise">
+<h2>2. Enable WhiteNoise<a class="headerlink" href="#enable-whitenoise" title="Permalink to this headline">¶</a></h2>
+<p>Edit your <tt class="docutils literal"><span class="pre">wsgi.py</span></tt> file and wrap your WSGI application like so:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.core.wsgi</span> <span class="kn">import</span> <span class="n">get_wsgi_application</span>
+<span class="kn">from</span> <span class="nn">whitenoise.django</span> <span class="kn">import</span> <span class="n">DjangoWhiteNoise</span>
+
+<span class="n">application</span> <span class="o">=</span> <span class="n">get_wsgi_application</span><span class="p">()</span>
+<span class="n">application</span> <span class="o">=</span> <span class="n">DjangoWhiteNoise</span><span class="p">(</span><span class="n">application</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>That&#8217;s it! WhiteNoise will now serve your static files. However, for anything
+other than a quick demo site you&#8217;ll want to proceed to step 3 and enabled gzipping
+and caching.</p>
+</div>
+<div class="section" id="add-gzip-and-caching-support">
+<h2>3. Add gzip and caching support<a class="headerlink" href="#add-gzip-and-caching-support" title="Permalink to this headline">¶</a></h2>
+<p>WhiteNoise comes with a storage backend which automatically takes care of gzipping
+your files and creating unique names for each version so they can safely be cached
+forever. To use it, just add this to your <tt class="docutils literal"><span class="pre">settings.py</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">STATICFILES_STORAGE</span> <span class="o">=</span> <span class="s">&#39;whitenoise.django.GzipManifestStaticFilesStorage&#39;</span>
+</pre></div>
+</div>
+<p>This uses the new ManifestStaticFilesStorage in Django 1.7, with a backport
+provided automatically for older versions of Django.</p>
+</div>
+<div class="section" id="use-a-content-delivery-network-optional">
+<span id="cdn"></span><h2>4. Use a Content-Delivery Network <em>(optional)</em><a class="headerlink" href="#use-a-content-delivery-network-optional" title="Permalink to this headline">¶</a></h2>
+<p>The above steps will get you decent performance on moderate traffic sites, however
+for higher traffic sites, or sites where performance is a concern you should look
+at using a CDN.</p>
+<p>Because WhiteNoise sends appropriate cache headers with your static content, the CDN
+will be able to cache your files and serve them without needing to contact your
+application again.</p>
+<p>Below are instruction for setting up WhiteNoise with Amazon CloudFront, a popular
+choice of CDN. The process for other CDNs should look very similar though.</p>
+<div class="section" id="instructions-for-amazon-cloudfront">
+<h3>Instructions for Amazon CloudFront<a class="headerlink" href="#instructions-for-amazon-cloudfront" title="Permalink to this headline">¶</a></h3>
+<p>Go to CloudFront section of the AWS Web Console, and click &#8220;Create
+Distribution&#8221;. Put your application&#8217;s domain (without the http prefix) in the
+&#8220;Origin Domain Name&#8221; field and leave the rest of the settings as they are.</p>
+<p>It might take a few minutes for your distribution to become active. Once it&#8217;s
+ready, copy the distribution domain name into your <tt class="docutils literal"><span class="pre">settings.py</span></tt> file so it
+looks something like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">STATIC_HOST</span> <span class="o">=</span> <span class="s">&#39;//d4663kmspf1sqa.cloudfront.net&#39;</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">DEBUG</span> <span class="k">else</span> <span class="s">&#39;&#39;</span>
+<span class="n">STATIC_URL</span> <span class="o">=</span> <span class="n">STATIC_HOST</span> <span class="o">+</span> <span class="s">&#39;/static/&#39;</span>
+</pre></div>
+</div>
+<p>Or, even better, you can avoid hardcoding your CDN into your settings by doing something like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">STATIC_HOST</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;DJANGO_STATIC_HOST&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="n">STATIC_URL</span> <span class="o">=</span> <span class="n">STATIC_HOST</span> <span class="o">+</span> <span class="s">&#39;/static/&#39;</span>
+</pre></div>
+</div>
+<p>This way you can configure your CDN just by setting an environment variable.
+For apps on Heroku, you&#8217;d run this command</p>
+<div class="highlight-bash"><div class="highlight"><pre>heroku config:set <span class="nv">DJANGO_STATIC_HOST</span><span class="o">=</span>//d4663kmspf1sqa.cloudfront.net
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="available-settings">
+<h2>Available Settings<a class="headerlink" href="#available-settings" title="Permalink to this headline">¶</a></h2>
+<p>The DjangoWhiteNoise class takes all the same configuration options as the
+WhiteNoise base class, but rather than accepting keyword arguments to its
+constructor it uses Django settings. The setting names are just the keyword
+arguments uppercased with a &#8216;WHITENOISE_&#8217; prefix.</p>
+<dl class="attribute">
+<dt id="WHITENOISE_ROOT">
+<tt class="descname">WHITENOISE_ROOT</tt><a class="headerlink" href="#WHITENOISE_ROOT" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Default:</th><td class="field-body"><tt class="docutils literal"><span class="pre">None</span></tt></td>
+</tr>
+</tbody>
+</table>
+<p>Absolute path to a directory of files which will be served at the root of
+your application (ignored if not set).</p>
+<p>Don&#8217;t use this for the bulk of your static files because you won&#8217;t benefit
+from cache versioning, but it can be convenient for files like
+<tt class="docutils literal"><span class="pre">robots.txt</span></tt> or <tt class="docutils literal"><span class="pre">favicon.ico</span></tt> which you want to serve at a specific
+URL.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="WHITENOISE_MAX_AGE">
+<tt class="descname">WHITENOISE_MAX_AGE</tt><a class="headerlink" href="#WHITENOISE_MAX_AGE" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Default:</th><td class="field-body"><tt class="docutils literal"><span class="pre">60</span></tt></td>
+</tr>
+</tbody>
+</table>
+<p>Time (in seconds) for which browsers and proxies should cache <strong>non-versioned</strong> files.</p>
+<p>Versioned files (i.e. files which have been given a unique name like <em>base.a4ef2389.css</em> by
+including a hash of their contents in the name) are detected automatically and set to be
+cached forever.</p>
+<p>The default is chosen to be short enough not to cause problems with stale versions but
+long enough that, if you&#8217;re running WhiteNoise behind a CND, the CDN will still take
+the majority of the strain during times of heavy load.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="WHITENOISE_CHARSET">
+<tt class="descname">WHITENOISE_CHARSET</tt><a class="headerlink" href="#WHITENOISE_CHARSET" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Default:</th><td class="field-body"><tt class="docutils literal"><span class="pre">settings.FILE_CHARSET</span></tt> (utf-8)</td>
+</tr>
+</tbody>
+</table>
+<p>Charset to add as part of the <tt class="docutils literal"><span class="pre">Content-Type</span></tt> header for all files whose
+mimetype allows a charset.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="WHITENOISE_ALLOW_ALL_ORIGINS">
+<tt class="descname">WHITENOISE_ALLOW_ALL_ORIGINS</tt><a class="headerlink" href="#WHITENOISE_ALLOW_ALL_ORIGINS" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Default:</th><td class="field-body"><tt class="docutils literal"><span class="pre">True</span></tt></td>
+</tr>
+</tbody>
+</table>
+<p>Toggles whether to send an <tt class="docutils literal"><span class="pre">Access-Control-Allow-Origin:</span> <span class="pre">*</span></tt> header for all
+static files.</p>
+<p>This allows cross-origin requests for static files which means your static files
+will continue to work as expected even if they are served via a CDN and therefore
+on a different domain. Without this your static files will <em>mostly</em> work, but you
+may have problems with fonts loading in Firefox, or accessing images in canvas
+elements, or other mysterious things.</p>
+<p>The W3C <a class="reference external" href="http://www.w3.org/TR/cors/#security">explicity state</a> that this behaviour is safe for publicly
+accessible files.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="WHITENOISE_GZIP_EXCLUDE_EXTENSIONS">
+<tt class="descname">WHITENOISE_GZIP_EXCLUDE_EXTENSIONS</tt><a class="headerlink" href="#WHITENOISE_GZIP_EXCLUDE_EXTENSIONS" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Default:</th><td class="field-body"><tt class="docutils literal"><span class="pre">('jpg',</span> <span class="pre">'jpeg',</span> <span class="pre">'png',</span> <span class="pre">'gif',</span> <span class="pre">'webp','zip',</span> <span class="pre">'gz',</span> <span class="pre">'tgz',</span> <span class="pre">'bz2',</span> <span class="pre">'tbz',</span> <span class="pre">'swf',</span> <span class="pre">'flv')</span></tt></td>
+</tr>
+</tbody>
+</table>
+<p>File extensions to skip when gzipping.</p>
+<p>Because the gzip process will only create compressed files where this
+results in an actual size saving, it would be safe to leave this list empty
+and attempt to gzip all files. However, for files which we&#8217;re confident
+won&#8217;t benefit from compression, it speeds up the process if we just skip
+over them.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          <footer>
+  
+
+  <hr/>
+
+  <p>
+      &copy; Copyright 2013, David Evans.
+  </p>
+
+  <a href="https://www.github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="http://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+</body>
+</html>
