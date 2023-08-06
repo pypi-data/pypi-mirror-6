@@ -1,0 +1,387 @@
+.. license:
+    Copyright 2013 - 2014
+    André Malo or his licensors, as applicable
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+
+================
+ Template Tools
+================
+
+The :tdi:`tdi.tools.template` module deals with templates on a higher
+level and can help you organizing your template lists.
+
+
+Overlay Discovery
+~~~~~~~~~~~~~~~~~
+
+Practically any non-trivial project consists of a collection of
+recurring template pieces. Be it the basic document layout or tiny boxes
+appearing here and there. Every outsourced piece is eventually placed in
+the final template via the :doc:`overlay mechanism <overlays>`. That
+way, a template definition is always a list of template sources, which
+are overlayed one by one (starting with the first one) -- and might look
+like this::
+
+    tpl = [
+        'layout.html', # overall frame
+        'index.html',  # page specific frame and main content
+        'header.html', # recurring stuff...
+        'footer.html',
+        'login.html',
+        'widget1.html',
+        'widget2.html',
+        # and so on
+    ]
+
+Creating these lists is easy, as you typically create one page at a
+time. *Maintaining* them is harder, especially in bigger projects.
+Suppose, you place a new snippet into the footer (via overlay) -- you
+have to modify *all* template lists. Both tasks -- creating and
+maintaining -- are very suitable for automating.
+
+The following sections explain the automating mechanism in a bottom-up
+manner. The code typically used by library users is the :class:`Layout`
+class, configured with a :class:`Loader` instance.
+
+
+``discover`` Function
+~~~~~~~~~~~~~~~~~~~~~
+
+.. function:: discover(loader, names, use=None, ignore=None)
+
+  Find templates to use and order them topologically correct
+
+The :tdi:`tdi.tools.template./discover` function is the heart of the
+template tools helping you organizing your templates.
+
+The function takes a base set of template names and finds all additional
+template sources needed to create the final template -- all on the basis
+of overlay dependencies. The base set in the example above might be, for
+example::
+
+    ['layout.html', 'index.html']
+
+``discover`` calculates a list of template names, a set of unresolved
+overlays and a dict of ambiguous overlays (mapping overlay names to
+tuples of template names). Overlay cycles are handled by the following
+algorithm:
+
+#. Immediate cycles, i.e. overlays provided *and* required by a single
+   template are ignored. Those overlays simply not contribute to the
+   dependencies.
+#. In all other cases an exception is raised.
+
+The ``use`` and ``ignore`` parameters are for fine tuning the
+resulting list. They can handle manual overrides and resolve
+ambiguities (when overlays are available in more than one template).
+
+In order to execute the :func:`discover` function, we need another
+abstraction -- the ``loader``, which is responsible for actually finding
+and loading the templates by their names.
+
+
+``Loader`` Class
+~~~~~~~~~~~~~~~~
+
+.. class:: Loader(list, load, select)
+
+  Find, load and select templates
+
+The :tdi:`tdi.tools.template./Loader` is a container class, an interface
+between the :func:`discover` function and the actual code working with
+the templates. The latter is passed to the constructor and split into
+three functions:
+
+``list``
+  This is the template lister. The function is called without parameters
+  and should return a list of all template names. A template name is
+  typically a string, but it can be anything, as long as it's (a) hashable
+  and (b) uniquely identifies a template. The returned list can be
+  filtered later using the ``select`` function. A simple lister function
+  walking through the file system might look like this::
+
+    import os, posixpath
+
+    DIR = '/path/to/templates'
+    IGNORE = ('.svn', 'CVS')
+
+    def onerror(_):
+        """ Bail out in case of error """
+        raise
+
+    def lister():
+        # prepare for stripping the path prefix and normalizing to /
+        baselen = len(os.path.join(DIR, ''))
+        slashed = os.path.sep == '/'
+        def norm(path):
+            path = path[baselen:]
+            if not slashed:
+                path = path.replace(os.path.sep, '/')
+            return path
+
+        for path, dirs, files in os.walk(DIR, onerror=onerror):
+            # strip unwanted sub directories
+            dirs[:] = [dir for dir in dirs if dir not in IGNORE]
+
+            # yield all but hidden .html files
+            path = norm(path)
+            for name in files:
+                if name.startswith('.') or not name.endswith('.html'):
+                    continue
+                if path:
+                    name = posixpath.join(path, name)
+                yield name
+
+  It yields relative normalized paths (to all html files below a specified
+  directory) and ignores version control directories. Note that
+  case-sensitivity matters are not addressed here for clarity.
+
+``load``
+  This function actually should load a single template. It takes one
+  parameter (a template name as returned by the lister). The function is
+  expected to return an actual :tdi:`tdi.template./Template` object. A
+  trivial file system template loader (working together with the lister
+  above) could be::
+
+    import os
+    from tdi import html
+
+    DIR = '/path/to/templates'
+
+    def loader(name):
+        return html.from_file(os.path.join(DIR, os.path.normpath(name)))
+
+  It is usually a good idea, to use a :ref:`memoized factory
+  <memoizing>` for that.
+
+``select``
+  The selector decides if a particular template source is available for
+  automatic disovery at all (layout and page definition snippets, i.e.
+  the base templates passed to the discover function are usually **not**
+  suitable for auto discovery).
+  ``select`` is called with two parameters -- the loader instance and the
+  template name to check. If it returns a true value, the template
+  should be auto-discovered, otherwise it won't.
+
+  How you select the templates is completely your decision. It could be
+  by name or by content or something completely different, like a flag
+  in a database. The following example selects all templates, which
+  provide a particular (source) overlay named "autowidget"::
+
+    def selector(loader, name):
+        return 'autowidget' in loader.load(name).source_overlay_names
+
+  With this selector, all HTML templates, which should be considered for
+  automatic disovery may look like this:
+
+  .. code-block:: html
+
+    <html tdi:overlay="<autowidget">
+    ...
+    </html>
+
+
+``Layout`` Class
+~~~~~~~~~~~~~~~~
+
+.. class:: Layout(loader, *base, **kwargs)
+
+    Create template lists based on a start configuration
+
+The :tdi:`tdi.tools.template./Layout` class is tailored for day to day
+template list maintenance. Its task is to eventually emit template
+lists. It aims to do so based on input as minimal as possible (so you
+can focus on more important things). In order to achieve this, it is
+possible to derive new layout instances from existing ones, using the
+:meth:`Layout.extend` method. For bigger setups it is actually
+recommended to use this technique to start with a single layout, which
+defines the loader and then build up a hierarchy from there.
+
+The layout constructor takes the following parameters (which are passed
+to every derivation, too):
+
+``loader``
+  The :class:`Loader` object as described above. 
+
+``*base``
+  The list of base template names. This might be, for example
+  ``layout.html``. Or empty.
+
+``**kwargs``
+  The keyword parameters further configure the layout object:
+
+  ``use``
+    Defines a mapping from overlay names to template names. This
+    parameter allows resolving ambiguities on the one hand and may
+    disable resolution for certain overlays by accepting ``None`` as the
+    mapped template name.
+  
+  ``ignore``
+    Accepts an iterable containg template names to ignore completely.
+
+  ``cls``
+    The factory for the template list. If not specified or ``None``,
+    :class:`TemplateList` is used.
+
+  ``lazy``
+    Specifies, when the template resolution should happen. If true, the
+    templates are discovered, when the template list is accessed. If
+    false, the templates are discovered when the template list is
+    created. If omitted or ``None``, it defaults to true.
+
+The layout object then provides the following methods:
+
+.. method:: Layout.__call__(*names, **kwargs)
+
+  Create a template list from this layout
+
+  The :tdi:`tdi.tools.template./Layout.__call__` method is used to
+  actually produce a template list. The parameters are:
+
+  ``*names``
+    This is a list of base template names, which *extends* the list
+    provided by the layout already. So, you cannot reset the base
+    templates. If you need a different base, then use a different
+    layout.
+
+  ``**kwargs``
+    ``use``
+      This updates the ``use`` mapping. So you may extend or overwrite
+      here.
+
+    ``ignore``
+      This updates the ``ignore`` set. You only can add new ignorables
+      here.
+
+    ``consider``
+      ``consider`` removes template names from the ignore list again. It
+      accepts an iterable of template names. ``consider`` takes
+      precedence over names listed in ``ignore``.
+
+  Depending on the laziness the :meth:`__call__` method calls
+  ``TemplateList.discover`` or returns a proxy which defers this call
+  until the first access. (``TemplateList`` may be changed via the
+  ``cls`` argument of the constructor.)
+
+  Whenever ``TemplateList.discover`` is called, it may raise
+  ``TemplateUndecided`` or ``DependencyCycle`` exceptions, in case
+  something goes wrong.
+
+  Example:
+
+  .. sourcecode:: python
+
+    # at a central place:
+    loader = Loader(...)
+    layout = Layout(loader, 'layout.html')
+
+    # and later somewhere else:
+    tpl_index = layout('index.html')
+
+    # and for another page:
+    tpl_imprint = layout('imprint.html')
+
+
+.. method:: Layout.extend(*base, **kwargs)
+
+  Extend the layout and create a new one.
+
+  :tdi:`tdi.tools.template.Layout./extend` is to derive from a layout in
+  order to create a new one, typically more specialized than the
+  original one. The parameters are similar to the ones of
+  :meth:`Layout.__call__`.
+
+  ``*base``
+    This is a list of base template names, which *extends* the list
+    we're deriving from. So, you cannot reset the base templates. If you
+    need a different base, then extend a different layout.
+
+  ``**kwargs``
+    ``use``
+      This updates the inherited ``use`` mapping. So you may extend or
+      overwrite here.
+
+    ``ignore``
+      This updates the inherited ``ignore`` set. You only can add new
+      ignorables here.
+
+    ``consider``
+      ``consider`` removes template names from the ignore list again. It
+      accepts an iterable of template names. ``consider`` takes
+      precedence over names listed in ``ignore``.
+
+  The :meth:`Layout.extend` method returns a new :class:`Layout` object.
+
+  Example:
+
+  .. sourcecode:: python
+
+    # at a central place:
+    loader = Loader(...)
+    html_layout = Layout(loader)
+
+    # main layout fetching headers & footers & stuff
+    main_layout = html_layout.extend('layout.html')
+
+    # iframe layout starting blank
+    iframe_layout = html_layout.extend('iframe_layout.html')
+
+    # and later somewhere else:
+    tpl_index = main_layout('index.html')
+    tpl_imprint = main_layout('imprint.html')
+
+    # and for an included page
+    tpl_some_frame = iframe_layout('some_frame.html')
+
+
+``TemplateList`` Class
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. class:: TemplateList(*args, **kwargs)
+
+  Container for template names
+
+.. class:: TemplateListProxy(creator, autoreload)
+
+  Proxy :class:`TemplateList` instances for lazy creation
+
+:tdi:`tdi.tools.template./TemplateList` instances are created by
+:class:`Layout` objects. Depending on the configured laziness they are
+either returned directly or indirectly via a
+:tdi:`tdi.tools.template./TemplateListProxy` object. Since the latter
+proxies all relevant methods to the :class:`TemplateList`, both classes
+effectively behave the same way.
+
+:class:`TemplateList` extends python's ``list`` by the following items:
+
+- The constructor accepts a ``MISSING`` argument, which should contain
+  an iterable of all unresolved overlay names (this is the list, the
+  :func:`discover` function returns). The argument is copied into a list
+  and stored in the ``missing`` attribute.
+
+- The ``__repr__`` method emits the ``MISSING`` argument and also always
+  pretty-prints the list contents.  So if you'd like to see the
+  resulting template list of a particular page, just print the template
+  list object in order to get all relevant information.
+
+- It provides a ``discover`` classmethod which is called by the
+  :class:`Layout` class. The ``discover`` method is a small wrapper
+  around the global :func:`discover` function and works as an
+  alternative constructor for the :class:`TemplateList` class. This
+  ``discover`` method is also responsible for raising
+  ``TemplateUndecided`` exceptions.
+
+
+.. vim: ft=rest tw=72

@@ -1,0 +1,466 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Template Tools &mdash; TDI 0.9.9.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/tdi.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.9.9.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="TDI 0.9.9.8 documentation" href="index.html" />
+    <link rel="up" title="Documentation Topics" href="topics.html" />
+    <link rel="next" title="Partial Rendering" href="partial.html" />
+    <link rel="prev" title="CSS Tools" href="css_tools.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="partial.html" title="Partial Rendering"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="css_tools.html" title="CSS Tools"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" accesskey="U">Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="template-tools">
+<h1>Template Tools<a class="headerlink" href="#template-tools" title="Permalink to this headline">¶</a></h1>
+<p>The <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.template-module.html"><span class="pre">→&nbsp;tdi.tools.template</span></a></tt> module deals with templates on a higher
+level and can help you organizing your template lists.</p>
+<div class="section" id="overlay-discovery">
+<h2>Overlay Discovery<a class="headerlink" href="#overlay-discovery" title="Permalink to this headline">¶</a></h2>
+<p>Practically any non-trivial project consists of a collection of
+recurring template pieces. Be it the basic document layout or tiny boxes
+appearing here and there. Every outsourced piece is eventually placed in
+the final template via the <a class="reference internal" href="overlays.html"><em>overlay mechanism</em></a>. That
+way, a template definition is always a list of template sources, which
+are overlayed one by one (starting with the first one) &#8211; and might look
+like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">tpl</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s">&#39;layout.html&#39;</span><span class="p">,</span> <span class="c"># overall frame</span>
+    <span class="s">&#39;index.html&#39;</span><span class="p">,</span>  <span class="c"># page specific frame and main content</span>
+    <span class="s">&#39;header.html&#39;</span><span class="p">,</span> <span class="c"># recurring stuff...</span>
+    <span class="s">&#39;footer.html&#39;</span><span class="p">,</span>
+    <span class="s">&#39;login.html&#39;</span><span class="p">,</span>
+    <span class="s">&#39;widget1.html&#39;</span><span class="p">,</span>
+    <span class="s">&#39;widget2.html&#39;</span><span class="p">,</span>
+    <span class="c"># and so on</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>Creating these lists is easy, as you typically create one page at a
+time. <em>Maintaining</em> them is harder, especially in bigger projects.
+Suppose, you place a new snippet into the footer (via overlay) &#8211; you
+have to modify <em>all</em> template lists. Both tasks &#8211; creating and
+maintaining &#8211; are very suitable for automating.</p>
+<p>The following sections explain the automating mechanism in a bottom-up
+manner. The code typically used by library users is the <a class="reference internal" href="#Layout" title="Layout"><tt class="xref py py-class docutils literal"><span class="pre">Layout</span></tt></a>
+class, configured with a <a class="reference internal" href="#Loader" title="Loader"><tt class="xref py py-class docutils literal"><span class="pre">Loader</span></tt></a> instance.</p>
+</div>
+<div class="section" id="discover-function">
+<h2><tt class="docutils literal"><span class="pre">discover</span></tt> Function<a class="headerlink" href="#discover-function" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="discover">
+<tt class="descname">discover</tt><big>(</big><em>loader</em>, <em>names</em>, <em>use=None</em>, <em>ignore=None</em><big>)</big><a class="headerlink" href="#discover" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find templates to use and order them topologically correct</p>
+</dd></dl>
+
+<p>The <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.template-module.html#discover"><span class="pre">→&nbsp;discover</span></a></tt> function is the heart of the
+template tools helping you organizing your templates.</p>
+<p>The function takes a base set of template names and finds all additional
+template sources needed to create the final template &#8211; all on the basis
+of overlay dependencies. The base set in the example above might be, for
+example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">[</span><span class="s">&#39;layout.html&#39;</span><span class="p">,</span> <span class="s">&#39;index.html&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p><tt class="docutils literal"><span class="pre">discover</span></tt> calculates a list of template names, a set of unresolved
+overlays and a dict of ambiguous overlays (mapping overlay names to
+tuples of template names). Overlay cycles are handled by the following
+algorithm:</p>
+<ol class="arabic simple">
+<li>Immediate cycles, i.e. overlays provided <em>and</em> required by a single
+template are ignored. Those overlays simply not contribute to the
+dependencies.</li>
+<li>In all other cases an exception is raised.</li>
+</ol>
+<p>The <tt class="docutils literal"><span class="pre">use</span></tt> and <tt class="docutils literal"><span class="pre">ignore</span></tt> parameters are for fine tuning the
+resulting list. They can handle manual overrides and resolve
+ambiguities (when overlays are available in more than one template).</p>
+<p>In order to execute the <a class="reference internal" href="#discover" title="discover"><tt class="xref py py-func docutils literal"><span class="pre">discover()</span></tt></a> function, we need another
+abstraction &#8211; the <tt class="docutils literal"><span class="pre">loader</span></tt>, which is responsible for actually finding
+and loading the templates by their names.</p>
+</div>
+<div class="section" id="loader-class">
+<h2><tt class="docutils literal"><span class="pre">Loader</span></tt> Class<a class="headerlink" href="#loader-class" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="Loader">
+<em class="property">class </em><tt class="descname">Loader</tt><big>(</big><em>list</em>, <em>load</em>, <em>select</em><big>)</big><a class="headerlink" href="#Loader" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find, load and select templates</p>
+</dd></dl>
+
+<p>The <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.template.Loader-class.html"><span class="pre">→&nbsp;Loader</span></a></tt> is a container class, an interface
+between the <a class="reference internal" href="#discover" title="discover"><tt class="xref py py-func docutils literal"><span class="pre">discover()</span></tt></a> function and the actual code working with
+the templates. The latter is passed to the constructor and split into
+three functions:</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">list</span></tt></dt>
+<dd><p class="first">This is the template lister. The function is called without parameters
+and should return a list of all template names. A template name is
+typically a string, but it can be anything, as long as it&#8217;s (a) hashable
+and (b) uniquely identifies a template. The returned list can be
+filtered later using the <tt class="docutils literal"><span class="pre">select</span></tt> function. A simple lister function
+walking through the file system might look like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">posixpath</span>
+
+<span class="n">DIR</span> <span class="o">=</span> <span class="s">&#39;/path/to/templates&#39;</span>
+<span class="n">IGNORE</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;.svn&#39;</span><span class="p">,</span> <span class="s">&#39;CVS&#39;</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">onerror</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Bail out in case of error &quot;&quot;&quot;</span>
+    <span class="k">raise</span>
+
+<span class="k">def</span> <span class="nf">lister</span><span class="p">():</span>
+    <span class="c"># prepare for stripping the path prefix and normalizing to /</span>
+    <span class="n">baselen</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">DIR</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">))</span>
+    <span class="n">slashed</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span> <span class="o">==</span> <span class="s">&#39;/&#39;</span>
+    <span class="k">def</span> <span class="nf">norm</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">path</span><span class="p">[</span><span class="n">baselen</span><span class="p">:]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">slashed</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span><span class="p">,</span> <span class="s">&#39;/&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">path</span>
+
+    <span class="k">for</span> <span class="n">path</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">DIR</span><span class="p">,</span> <span class="n">onerror</span><span class="o">=</span><span class="n">onerror</span><span class="p">):</span>
+        <span class="c"># strip unwanted sub directories</span>
+        <span class="n">dirs</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">[</span><span class="nb">dir</span> <span class="k">for</span> <span class="nb">dir</span> <span class="ow">in</span> <span class="n">dirs</span> <span class="k">if</span> <span class="nb">dir</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">IGNORE</span><span class="p">]</span>
+
+        <span class="c"># yield all but hidden .html files</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">norm</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">name</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;.html&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">path</span><span class="p">:</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">posixpath</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">name</span>
+</pre></div>
+</div>
+<p class="last">It yields relative normalized paths (to all html files below a specified
+directory) and ignores version control directories. Note that
+case-sensitivity matters are not addressed here for clarity.</p>
+</dd>
+<dt><tt class="docutils literal"><span class="pre">load</span></tt></dt>
+<dd><p class="first">This function actually should load a single template. It takes one
+parameter (a template name as returned by the lister). The function is
+expected to return an actual <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.template.Template-class.html"><span class="pre">→&nbsp;Template</span></a></tt> object. A
+trivial file system template loader (working together with the lister
+above) could be:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+
+<span class="n">DIR</span> <span class="o">=</span> <span class="s">&#39;/path/to/templates&#39;</span>
+
+<span class="k">def</span> <span class="nf">loader</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">html</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">DIR</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="n">name</span><span class="p">)))</span>
+</pre></div>
+</div>
+<p class="last">It is usually a good idea, to use a <a class="reference internal" href="loading.html#memoizing"><em>memoized factory</em></a> for that.</p>
+</dd>
+<dt><tt class="docutils literal"><span class="pre">select</span></tt></dt>
+<dd><p class="first">The selector decides if a particular template source is available for
+automatic disovery at all (layout and page definition snippets, i.e.
+the base templates passed to the discover function are usually <strong>not</strong>
+suitable for auto discovery).
+<tt class="docutils literal"><span class="pre">select</span></tt> is called with two parameters &#8211; the loader instance and the
+template name to check. If it returns a true value, the template
+should be auto-discovered, otherwise it won&#8217;t.</p>
+<p>How you select the templates is completely your decision. It could be
+by name or by content or something completely different, like a flag
+in a database. The following example selects all templates, which
+provide a particular (source) overlay named &#8220;autowidget&#8221;:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">selector</span><span class="p">(</span><span class="n">loader</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="k">return</span> <span class="s">&#39;autowidget&#39;</span> <span class="ow">in</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">source_overlay_names</span>
+</pre></div>
+</div>
+<p>With this selector, all HTML templates, which should be considered for
+automatic disovery may look like this:</p>
+<div class="last highlight-html"><div class="highlight"><pre><span class="nt">&lt;html</span> <span class="na">tdi:overlay=</span><span class="s">&quot;&lt;autowidget&quot;</span><span class="nt">&gt;</span>
+...
+<span class="nt">&lt;/html&gt;</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</div>
+<div class="section" id="layout-class">
+<h2><tt class="docutils literal"><span class="pre">Layout</span></tt> Class<a class="headerlink" href="#layout-class" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="Layout">
+<em class="property">class </em><tt class="descname">Layout</tt><big>(</big><em>loader</em>, <em>*base</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#Layout" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create template lists based on a start configuration</p>
+</dd></dl>
+
+<p>The <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.template.Layout-class.html"><span class="pre">→&nbsp;Layout</span></a></tt> class is tailored for day to day
+template list maintenance. Its task is to eventually emit template
+lists. It aims to do so based on input as minimal as possible (so you
+can focus on more important things). In order to achieve this, it is
+possible to derive new layout instances from existing ones, using the
+<a class="reference internal" href="#Layout.extend" title="Layout.extend"><tt class="xref py py-meth docutils literal"><span class="pre">Layout.extend()</span></tt></a> method. For bigger setups it is actually
+recommended to use this technique to start with a single layout, which
+defines the loader and then build up a hierarchy from there.</p>
+<p>The layout constructor takes the following parameters (which are passed
+to every derivation, too):</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">loader</span></tt></dt>
+<dd>The <a class="reference internal" href="#Loader" title="Loader"><tt class="xref py py-class docutils literal"><span class="pre">Loader</span></tt></a> object as described above.</dd>
+<dt><tt class="docutils literal"><span class="pre">*base</span></tt></dt>
+<dd>The list of base template names. This might be, for example
+<tt class="docutils literal"><span class="pre">layout.html</span></tt>. Or empty.</dd>
+<dt><tt class="docutils literal"><span class="pre">**kwargs</span></tt></dt>
+<dd><p class="first">The keyword parameters further configure the layout object:</p>
+<dl class="last docutils">
+<dt><tt class="docutils literal"><span class="pre">use</span></tt></dt>
+<dd>Defines a mapping from overlay names to template names. This
+parameter allows resolving ambiguities on the one hand and may
+disable resolution for certain overlays by accepting <tt class="docutils literal"><span class="pre">None</span></tt> as the
+mapped template name.</dd>
+<dt><tt class="docutils literal"><span class="pre">ignore</span></tt></dt>
+<dd>Accepts an iterable containg template names to ignore completely.</dd>
+<dt><tt class="docutils literal"><span class="pre">cls</span></tt></dt>
+<dd>The factory for the template list. If not specified or <tt class="docutils literal"><span class="pre">None</span></tt>,
+<a class="reference internal" href="#TemplateList" title="TemplateList"><tt class="xref py py-class docutils literal"><span class="pre">TemplateList</span></tt></a> is used.</dd>
+<dt><tt class="docutils literal"><span class="pre">lazy</span></tt></dt>
+<dd>Specifies, when the template resolution should happen. If true, the
+templates are discovered, when the template list is accessed. If
+false, the templates are discovered when the template list is
+created. If omitted or <tt class="docutils literal"><span class="pre">None</span></tt>, it defaults to true.</dd>
+</dl>
+</dd>
+</dl>
+<p>The layout object then provides the following methods:</p>
+<dl class="method">
+<dt id="Layout.__call__">
+<tt class="descclassname">Layout.</tt><tt class="descname">__call__</tt><big>(</big><em>*names</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#Layout.__call__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a template list from this layout</p>
+<p>The <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.template.Layout-class.html#__call__"><span class="pre">→&nbsp;Layout.__call__</span></a></tt> method is used to
+actually produce a template list. The parameters are:</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">*names</span></tt></dt>
+<dd>This is a list of base template names, which <em>extends</em> the list
+provided by the layout already. So, you cannot reset the base
+templates. If you need a different base, then use a different
+layout.</dd>
+<dt><tt class="docutils literal"><span class="pre">**kwargs</span></tt></dt>
+<dd><dl class="first last docutils">
+<dt><tt class="docutils literal"><span class="pre">use</span></tt></dt>
+<dd>This updates the <tt class="docutils literal"><span class="pre">use</span></tt> mapping. So you may extend or overwrite
+here.</dd>
+<dt><tt class="docutils literal"><span class="pre">ignore</span></tt></dt>
+<dd>This updates the <tt class="docutils literal"><span class="pre">ignore</span></tt> set. You only can add new ignorables
+here.</dd>
+<dt><tt class="docutils literal"><span class="pre">consider</span></tt></dt>
+<dd><tt class="docutils literal"><span class="pre">consider</span></tt> removes template names from the ignore list again. It
+accepts an iterable of template names. <tt class="docutils literal"><span class="pre">consider</span></tt> takes
+precedence over names listed in <tt class="docutils literal"><span class="pre">ignore</span></tt>.</dd>
+</dl>
+</dd>
+</dl>
+<p>Depending on the laziness the <a class="reference internal" href="#Layout.__call__" title="Layout.__call__"><tt class="xref py py-meth docutils literal"><span class="pre">__call__()</span></tt></a> method calls
+<tt class="docutils literal"><span class="pre">TemplateList.discover</span></tt> or returns a proxy which defers this call
+until the first access. (<tt class="docutils literal"><span class="pre">TemplateList</span></tt> may be changed via the
+<tt class="docutils literal"><span class="pre">cls</span></tt> argument of the constructor.)</p>
+<p>Whenever <tt class="docutils literal"><span class="pre">TemplateList.discover</span></tt> is called, it may raise
+<tt class="docutils literal"><span class="pre">TemplateUndecided</span></tt> or <tt class="docutils literal"><span class="pre">DependencyCycle</span></tt> exceptions, in case
+something goes wrong.</p>
+<p>Example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># at a central place:</span>
+<span class="n">loader</span> <span class="o">=</span> <span class="n">Loader</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<span class="n">layout</span> <span class="o">=</span> <span class="n">Layout</span><span class="p">(</span><span class="n">loader</span><span class="p">,</span> <span class="s">&#39;layout.html&#39;</span><span class="p">)</span>
+
+<span class="c"># and later somewhere else:</span>
+<span class="n">tpl_index</span> <span class="o">=</span> <span class="n">layout</span><span class="p">(</span><span class="s">&#39;index.html&#39;</span><span class="p">)</span>
+
+<span class="c"># and for another page:</span>
+<span class="n">tpl_imprint</span> <span class="o">=</span> <span class="n">layout</span><span class="p">(</span><span class="s">&#39;imprint.html&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="Layout.extend">
+<tt class="descclassname">Layout.</tt><tt class="descname">extend</tt><big>(</big><em>*base</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#Layout.extend" title="Permalink to this definition">¶</a></dt>
+<dd><p>Extend the layout and create a new one.</p>
+<p><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.template.Layout-class.html#extend"><span class="pre">→&nbsp;extend</span></a></tt> is to derive from a layout in
+order to create a new one, typically more specialized than the
+original one. The parameters are similar to the ones of
+<a class="reference internal" href="#Layout.__call__" title="Layout.__call__"><tt class="xref py py-meth docutils literal"><span class="pre">Layout.__call__()</span></tt></a>.</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">*base</span></tt></dt>
+<dd>This is a list of base template names, which <em>extends</em> the list
+we&#8217;re deriving from. So, you cannot reset the base templates. If you
+need a different base, then extend a different layout.</dd>
+<dt><tt class="docutils literal"><span class="pre">**kwargs</span></tt></dt>
+<dd><dl class="first last docutils">
+<dt><tt class="docutils literal"><span class="pre">use</span></tt></dt>
+<dd>This updates the inherited <tt class="docutils literal"><span class="pre">use</span></tt> mapping. So you may extend or
+overwrite here.</dd>
+<dt><tt class="docutils literal"><span class="pre">ignore</span></tt></dt>
+<dd>This updates the inherited <tt class="docutils literal"><span class="pre">ignore</span></tt> set. You only can add new
+ignorables here.</dd>
+<dt><tt class="docutils literal"><span class="pre">consider</span></tt></dt>
+<dd><tt class="docutils literal"><span class="pre">consider</span></tt> removes template names from the ignore list again. It
+accepts an iterable of template names. <tt class="docutils literal"><span class="pre">consider</span></tt> takes
+precedence over names listed in <tt class="docutils literal"><span class="pre">ignore</span></tt>.</dd>
+</dl>
+</dd>
+</dl>
+<p>The <a class="reference internal" href="#Layout.extend" title="Layout.extend"><tt class="xref py py-meth docutils literal"><span class="pre">Layout.extend()</span></tt></a> method returns a new <a class="reference internal" href="#Layout" title="Layout"><tt class="xref py py-class docutils literal"><span class="pre">Layout</span></tt></a> object.</p>
+<p>Example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># at a central place:</span>
+<span class="n">loader</span> <span class="o">=</span> <span class="n">Loader</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<span class="n">html_layout</span> <span class="o">=</span> <span class="n">Layout</span><span class="p">(</span><span class="n">loader</span><span class="p">)</span>
+
+<span class="c"># main layout fetching headers &amp; footers &amp; stuff</span>
+<span class="n">main_layout</span> <span class="o">=</span> <span class="n">html_layout</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="s">&#39;layout.html&#39;</span><span class="p">)</span>
+
+<span class="c"># iframe layout starting blank</span>
+<span class="n">iframe_layout</span> <span class="o">=</span> <span class="n">html_layout</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="s">&#39;iframe_layout.html&#39;</span><span class="p">)</span>
+
+<span class="c"># and later somewhere else:</span>
+<span class="n">tpl_index</span> <span class="o">=</span> <span class="n">main_layout</span><span class="p">(</span><span class="s">&#39;index.html&#39;</span><span class="p">)</span>
+<span class="n">tpl_imprint</span> <span class="o">=</span> <span class="n">main_layout</span><span class="p">(</span><span class="s">&#39;imprint.html&#39;</span><span class="p">)</span>
+
+<span class="c"># and for an included page</span>
+<span class="n">tpl_some_frame</span> <span class="o">=</span> <span class="n">iframe_layout</span><span class="p">(</span><span class="s">&#39;some_frame.html&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</div>
+<div class="section" id="templatelist-class">
+<h2><tt class="docutils literal"><span class="pre">TemplateList</span></tt> Class<a class="headerlink" href="#templatelist-class" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="TemplateList">
+<em class="property">class </em><tt class="descname">TemplateList</tt><big>(</big><em>*args</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#TemplateList" title="Permalink to this definition">¶</a></dt>
+<dd><p>Container for template names</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="TemplateListProxy">
+<em class="property">class </em><tt class="descname">TemplateListProxy</tt><big>(</big><em>creator</em>, <em>autoreload</em><big>)</big><a class="headerlink" href="#TemplateListProxy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Proxy <a class="reference internal" href="#TemplateList" title="TemplateList"><tt class="xref py py-class docutils literal"><span class="pre">TemplateList</span></tt></a> instances for lazy creation</p>
+</dd></dl>
+
+<p><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.template.TemplateList-class.html"><span class="pre">→&nbsp;TemplateList</span></a></tt> instances are created by
+<a class="reference internal" href="#Layout" title="Layout"><tt class="xref py py-class docutils literal"><span class="pre">Layout</span></tt></a> objects. Depending on the configured laziness they are
+either returned directly or indirectly via a
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.template.TemplateListProxy-class.html"><span class="pre">→&nbsp;TemplateListProxy</span></a></tt> object. Since the latter
+proxies all relevant methods to the <a class="reference internal" href="#TemplateList" title="TemplateList"><tt class="xref py py-class docutils literal"><span class="pre">TemplateList</span></tt></a>, both classes
+effectively behave the same way.</p>
+<p><a class="reference internal" href="#TemplateList" title="TemplateList"><tt class="xref py py-class docutils literal"><span class="pre">TemplateList</span></tt></a> extends python&#8217;s <tt class="docutils literal"><span class="pre">list</span></tt> by the following items:</p>
+<ul class="simple">
+<li>The constructor accepts a <tt class="docutils literal"><span class="pre">MISSING</span></tt> argument, which should contain
+an iterable of all unresolved overlay names (this is the list, the
+<a class="reference internal" href="#discover" title="discover"><tt class="xref py py-func docutils literal"><span class="pre">discover()</span></tt></a> function returns). The argument is copied into a list
+and stored in the <tt class="docutils literal"><span class="pre">missing</span></tt> attribute.</li>
+<li>The <tt class="docutils literal"><span class="pre">__repr__</span></tt> method emits the <tt class="docutils literal"><span class="pre">MISSING</span></tt> argument and also always
+pretty-prints the list contents.  So if you&#8217;d like to see the
+resulting template list of a particular page, just print the template
+list object in order to get all relevant information.</li>
+<li>It provides a <tt class="docutils literal"><span class="pre">discover</span></tt> classmethod which is called by the
+<a class="reference internal" href="#Layout" title="Layout"><tt class="xref py py-class docutils literal"><span class="pre">Layout</span></tt></a> class. The <tt class="docutils literal"><span class="pre">discover</span></tt> method is a small wrapper
+around the global <a class="reference internal" href="#discover" title="discover"><tt class="xref py py-func docutils literal"><span class="pre">discover()</span></tt></a> function and works as an
+alternative constructor for the <a class="reference internal" href="#TemplateList" title="TemplateList"><tt class="xref py py-class docutils literal"><span class="pre">TemplateList</span></tt></a> class. This
+<tt class="docutils literal"><span class="pre">discover</span></tt> method is also responsible for raising
+<tt class="docutils literal"><span class="pre">TemplateUndecided</span></tt> exceptions.</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Template Tools</a><ul>
+<li><a class="reference internal" href="#overlay-discovery">Overlay Discovery</a></li>
+<li><a class="reference internal" href="#discover-function"><tt class="docutils literal"><span class="pre">discover</span></tt> Function</a></li>
+<li><a class="reference internal" href="#loader-class"><tt class="docutils literal"><span class="pre">Loader</span></tt> Class</a></li>
+<li><a class="reference internal" href="#layout-class"><tt class="docutils literal"><span class="pre">Layout</span></tt> Class</a></li>
+<li><a class="reference internal" href="#templatelist-class"><tt class="docutils literal"><span class="pre">TemplateList</span></tt> Class</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="css_tools.html"
+                        title="previous chapter">CSS Tools</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="partial.html"
+                        title="next chapter">Partial Rendering</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="partial.html" title="Partial Rendering"
+             >next</a></li>
+        <li class="right" >
+          <a href="css_tools.html" title="CSS Tools"
+             >previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" >Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 André Malo.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

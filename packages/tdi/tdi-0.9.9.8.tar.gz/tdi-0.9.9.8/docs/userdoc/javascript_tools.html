@@ -1,0 +1,465 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Javascript Tools &mdash; TDI 0.9.9.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/tdi.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.9.9.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="TDI 0.9.9.8 documentation" href="index.html" />
+    <link rel="up" title="Documentation Topics" href="topics.html" />
+    <link rel="next" title="CSS Tools" href="css_tools.html" />
+    <link rel="prev" title="HTML Form Tools" href="html_forms.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="css_tools.html" title="CSS Tools"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="html_forms.html" title="HTML Form Tools"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" accesskey="U">Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="javascript-tools">
+<h1>Javascript Tools<a class="headerlink" href="#javascript-tools" title="Permalink to this headline">¶</a></h1>
+<p>The tools described here can be found in the <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html"><span class="pre">→&nbsp;tdi.tools.javascript</span></a></tt>
+module. The module deals a lot with safe javascript manipulation and
+provides also a minifier.</p>
+<div class="section" id="escaping-javascript-variables">
+<h2>Escaping Javascript Variables<a class="headerlink" href="#escaping-javascript-variables" title="Permalink to this headline">¶</a></h2>
+<p>Escaping is important. And it&#8217;s easy to get wrong. Whenever you modify
+script blocks or attributes, the placed variables need to be properly
+escaped. Otherwise the result is open to <a class="reference external" href="http://en.wikipedia.org/wiki/Cross-site_scripting">XSS attacks</a>. A large part of
+the javascript tools deals with this problem. When escaping stuff for
+javascript, there are various levels of context which need to be taken
+care of:</p>
+<ul class="simple">
+<li>Javascript quotes (<tt class="docutils literal"><span class="pre">&quot;</span></tt>, <tt class="docutils literal"><span class="pre">'</span></tt> &#8211; double and single) and escapes
+(<tt class="docutils literal"><span class="pre">\</span></tt>), of course.</li>
+<li>Unicode, and various issues with encoded characters</li>
+<li>The surrounding HTML (for example, the sequence <tt class="docutils literal"><span class="pre">]]&gt;</span></tt> is harmless in
+javascript, but ends the CDATA block, which possibly contains the
+script itself)</li>
+<li>The replacement implementation. The naïve way to replace multiple
+placeholders is to call <tt class="docutils literal"><span class="pre">str.replace</span></tt> for each of them. However, if
+a malicious or unaware user puts a placeholder into the content,
+you&#8217;re getting a mess.</li>
+</ul>
+<p><em class="tdi">TDI</em> provides two high-level functions,
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#fill"><span class="pre">→&nbsp;javascript.fill</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#fill_attr"><span class="pre">→&nbsp;javascript.fill_attr</span></a></tt>, which handle <em>all</em> these issues.
+Both are based on the more generic <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#replace"><span class="pre">→&nbsp;javascript.replace</span></a></tt>
+function, which itself uses more basic escape functions:
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#escape_string"><span class="pre">→&nbsp;javascript.escape_string</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#escape_inlined"><span class="pre">→&nbsp;javascript.escape_inlined</span></a></tt>.</p>
+<p>When placing complex structures (more complex than simple strings) into
+a script, <a class="reference external" href="http://www.ietf.org/rfc/rfc4627.txt">JSON</a> is the way to go. There are two classes available,
+which connect your structures or already available JSON input with the
+<tt class="docutils literal"><span class="pre">fill</span></tt> and <tt class="docutils literal"><span class="pre">replace</span></tt> functions:
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript.SimpleJSON-class.html"><span class="pre">→&nbsp;SimpleJSON</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript.LiteralJSON-class.html"><span class="pre">→&nbsp;LiteralJSON</span></a></tt>.</p>
+<div class="section" id="replace">
+<span id="javascript-replace"></span><h3>replace<a class="headerlink" href="#replace" title="Permalink to this headline">¶</a></h3>
+<p>The <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#replace"><span class="pre">→&nbsp;replace</span></a></tt> function basically takes a
+script (as a string) and a mapping of placeholders and returns a new
+string with placeholders replaced. The <a class="reference internal" href="#javascript-fill"><em>&#8220;fill&#8221; functions</em></a> described below modify a node in-place. Use those for
+node manipulations.</p>
+<p>The function scans for and replaces the placeholders in a single pass.
+If a placeholder found that way is not in the mapping, it&#8217;s simply left
+as is. The default placeholder pattern looks like <tt class="samp docutils literal"><span class="pre">__</span><em><span class="pre">name</span></em><span class="pre">__</span></tt>.
+You can pass a different pattern if you like. Note however, that the
+default pattern makes placeholders typically look like javascript
+identifiers, which might be helpful, if you run a minifier on the
+original script. On the other hand, the pattern does not allow for names
+containing double underscores.</p>
+<p>The placeholder values are passed to <a class="reference internal" href="#javascript-escape"><em>escape_string</em></a> before being used for replacement &#8211; except when
+those objects provide an <tt class="docutils literal"><span class="pre">as_json([inlined])</span></tt> method (a feature
+that be turned off using the <tt class="docutils literal"><span class="pre">as_json</span></tt> parameter of the
+<a class="reference internal" href="#javascript-replace"><em>replace</em></a> and <a class="reference internal" href="#javascript-fill"><em>fill</em></a>
+functions). If the <tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt> method exists and is allowed to be
+called, it&#8217;s used instead of <tt class="docutils literal"><span class="pre">escape_string</span></tt>. Afterwards the result
+is possibly transcoded to the document&#8217;s character set. If the
+<tt class="docutils literal"><span class="pre">inlined</span></tt> parameter is true, the intermediate result is piped through
+<a class="reference internal" href="#javascript-escape"><em>escape_inlined</em></a> before eventually being used
+as replacement value.</p>
+<p><em class="tdi">TDI</em> ships with two container classes that already provide appropriate
+<tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt> methods: <a class="reference internal" href="#javascript-json"><em>LiteralJSON and SimpleJSON</em></a>. The former is a simple (more or less) pass-through
+container for a JSON string you already have available. The latter takes
+a python object which is passed through the <tt class="docutils literal"><span class="pre">json</span></tt> module before being
+emitted by <tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt>.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">When writing your own <tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt> methods, make sure,
+the result is at least syntactically valid javascript code.</p>
+</div>
+<p>Here&#8217;s a simple example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">javascript</span>
+
+<span class="n">script</span> <span class="o">=</span> <span class="s">u&#39;&#39;&#39;</span>
+<span class="s">var a = __var__;</span>
+<span class="s">var b = &#39;__str__&#39;;</span>
+<span class="s">&#39;&#39;&#39;</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+<span class="k">print</span> <span class="n">javascript</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span>
+    <span class="n">var</span><span class="o">=</span><span class="n">javascript</span><span class="o">.</span><span class="n">SimpleJSON</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]),</span>
+    <span class="nb">str</span><span class="o">=</span><span class="s">u&#39;my &quot;string&quot;&#39;</span>
+<span class="p">))</span>
+</pre></div>
+</div>
+<p><tt class="docutils literal"><span class="pre">SimpleJSON</span></tt> only works if a JSON library is installed: (The
+<a class="reference external" href="http://docs.python.org/2.7/library/json.html">json module</a> as part of the standard library starting with python 2.6
+or <a class="reference external" href="http://pypi.python.org/pypi/simplejson/">simplejson</a> for versions below). However, the output of this little
+script will be:</p>
+<div class="highlight-python"><pre>var a = [1,2,3,4];
+var b = 'my \"string\"';
+</pre>
+</div>
+</div>
+<div class="section" id="fill-fill-attr">
+<span id="javascript-fill"></span><h3>fill, fill_attr<a class="headerlink" href="#fill-fill-attr" title="Permalink to this headline">¶</a></h3>
+<p>In contrast to <a class="reference internal" href="#javascript-replace"><em>the replace function</em></a>,
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#fill"><span class="pre">→&nbsp;fill</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#fill_attr"><span class="pre">→&nbsp;fill_attr</span></a></tt> modifiy a node in-place. Both
+actually call <tt class="docutils literal"><span class="pre">replace</span></tt>, but use different options. The function
+signatures are also simpler than <tt class="docutils literal"><span class="pre">replace</span></tt>&#8216;s, because some options are
+implicit or can be determined directly from the node. Here is how it&#8217;s
+used:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+<span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">javascript</span>
+
+<span class="n">tpl</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="s">&lt;button tdi=&quot;button&quot; onclick=&quot;alert(&#39;__alert__&#39;)&quot;&gt;</span>
+<span class="s">    Click me!</span>
+<span class="s">&lt;/button&gt;</span>
+<span class="s">&lt;script tdi=&quot;script&quot;&gt;</span>
+<span class="s">var a = __var__;</span>
+<span class="s">var b = &#39;__str__&#39;;</span>
+<span class="s">&lt;/script&gt;</span>
+<span class="s">&#39;&#39;&#39;</span><span class="o">.</span><span class="n">lstrip</span><span class="p">())</span>
+
+
+<span class="k">class</span> <span class="nc">Model</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">render_button</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">javascript</span><span class="o">.</span><span class="n">fill_attr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s">&#39;onclick&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">alert</span><span class="o">=</span><span class="s">u&#39;&quot;Hey André! ---]]&gt;&quot;&#39;</span>
+        <span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">render_script</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">javascript</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">var</span><span class="o">=</span><span class="n">javascript</span><span class="o">.</span><span class="n">SimpleJSON</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]),</span>
+            <span class="nb">str</span><span class="o">=</span><span class="s">u&#39;&quot;Hey André! ---]]&gt;&quot;&#39;</span><span class="p">,</span>
+        <span class="p">))</span>
+
+<span class="n">tpl</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">Model</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>And here&#8217;s the result:</p>
+<div class="highlight-html"><div class="highlight"><pre><span class="nt">&lt;button</span> <span class="na">onclick=</span><span class="s">&quot;alert(&#39;\&amp;quot;Hey Andr\xe9! ---]]&amp;gt;\&amp;quot;&#39;)&quot;</span><span class="nt">&gt;</span>
+    Click me!
+<span class="nt">&lt;/button&gt;</span>
+<span class="nt">&lt;script&gt;</span>
+<span class="kd">var</span> <span class="nx">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">];</span>
+<span class="kd">var</span> <span class="nx">b</span> <span class="o">=</span> <span class="s1">&#39;\&quot;Hey Andr\xe9! -\-\-]\]&gt;\&quot;&#39;</span><span class="p">;</span>
+<span class="nt">&lt;/script&gt;</span>
+</pre></div>
+</div>
+<p>Note how the data is escaped for different levels of presentation and
+escaping varies depending on the context:</p>
+<ul class="simple">
+<li>Quotes are escaped for javascript using a backslash</li>
+<li>The same quotes are escaped for HTML using <tt class="docutils literal"><span class="pre">&amp;quot;</span></tt>, but only in
+attribute context. The same goes for the <tt class="docutils literal"><span class="pre">&gt;</span></tt> character.</li>
+<li>potentially dangerous sequences like multiple dashes or <tt class="docutils literal"><span class="pre">]]&gt;</span></tt> are
+hidden from the containing HTML by applying harmless backslashes. This
+is not needed for attributes - and applied to blocks only.</li>
+<li>the <tt class="docutils literal"><span class="pre">é</span></tt> of <tt class="docutils literal"><span class="pre">André</span></tt> is escaped to <tt class="docutils literal"><span class="pre">\xe9</span></tt>, which is an
+encoding-independent representation of the character (JSON-content is
+encoded to the document encoding though; only characters not fitting
+into this encoding are transformed to <tt class="docutils literal"><span class="pre">\uxxxx</span></tt> escapes).</li>
+</ul>
+</div>
+<div class="section" id="escape-string-escape-inlined">
+<span id="javascript-escape"></span><h3>escape_string, escape_inlined<a class="headerlink" href="#escape-string-escape-inlined" title="Permalink to this headline">¶</a></h3>
+<p><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#escape_string"><span class="pre">→&nbsp;javascript.escape_string</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#escape_inlined"><span class="pre">→&nbsp;javascript.escape_inlined</span></a></tt> are the building blocks of
+the <a class="reference internal" href="#javascript-fill"><em>fill</em></a> and <a class="reference internal" href="#javascript-replace"><em>replace</em></a> functions described above. Use those for regular
+placeholder handling.</p>
+<p><tt class="docutils literal"><span class="pre">escape_string</span></tt> takes a string (or calls <tt class="docutils literal"><span class="pre">str()</span></tt> on the passed
+object) and:</p>
+<ul class="simple">
+<li>escapes <tt class="docutils literal"><span class="pre">\</span></tt>, <tt class="docutils literal"><span class="pre">&quot;</span></tt> and <tt class="docutils literal"><span class="pre">'</span></tt> (by prepending them with <tt class="docutils literal"><span class="pre">\</span></tt>)</li>
+<li>encodes non-ASCII and non-printable characters to escape sequences,
+understandable by javascript.</li>
+<li>passes the result (by default) through <tt class="docutils literal"><span class="pre">escape_inlined</span></tt></li>
+</ul>
+<p>Here&#8217;s a little example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">javascript</span>
+
+<span class="k">print</span> <span class="n">javascript</span><span class="o">.</span><span class="n">escape_string</span><span class="p">(</span><span class="s">u&quot;</span><span class="se">\n</span><span class="s"> - é - € - </span><span class="se">\U0001d51e</span><span class="s">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python"><pre>\n - \xe9 - \u20ac - \ud835\udd1e
+</pre>
+</div>
+<p>Now, <tt class="docutils literal"><span class="pre">escape_inlined</span></tt> prepares a string for inclusion in a HTML
+script block by mangeling certain character sequences. These are:</p>
+<ul class="simple">
+<li>multiple consecutive dashes (<tt class="docutils literal"><span class="pre">---</span></tt>) &#8211; two dashes mark the end of an
+HTML comment (in XHTML they are not allowed in comments at all, but
+XHTML has different problems, see the <a class="reference internal" href="#javascript-cdata"><em>cdata</em></a>
+function).</li>
+<li><tt class="docutils literal"><span class="pre">&lt;/</span></tt> - this is the endtag opener (ETAGO), which by HTML&#8217;s rules
+may end the script block.</li>
+<li><tt class="docutils literal"><span class="pre">]]&gt;</span></tt> - this ends a CDATA markup, which possibly contains the
+script.</li>
+</ul>
+<p><tt class="docutils literal"><span class="pre">escape_inlined</span></tt> destroys these sequences by scattering harmless <tt class="docutils literal"><span class="pre">\</span></tt>
+characters inside them. Javascript just strips those backslashes since
+the characters &#8220;escaped&#8221; that way simply represent themselves:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">javascript</span>
+
+<span class="k">print</span> <span class="n">javascript</span><span class="o">.</span><span class="n">escape_inlined</span><span class="p">(</span><span class="s">&quot;----]]&gt; &lt;/script&gt;&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python"><pre>-\-\-\-]\]&gt; &lt;\/script&gt;
+</pre>
+</div>
+</div>
+<div class="section" id="literaljson-and-simplejson">
+<span id="javascript-json"></span><h3>LiteralJSON and SimpleJSON<a class="headerlink" href="#literaljson-and-simplejson" title="Permalink to this headline">¶</a></h3>
+<p>The classes <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript.SimpleJSON-class.html"><span class="pre">→&nbsp;SimpleJSON</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript.LiteralJSON-class.html"><span class="pre">→&nbsp;LiteralJSON</span></a></tt> are designed as data connectors
+for the <a class="reference internal" href="#javascript-fill"><em>fill</em></a> and <a class="reference internal" href="#javascript-replace"><em>replace</em></a> functions. They are initialized with some data
+object and emit this data object via their <tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt> method.</p>
+<p><tt class="xref py py-class docutils literal"><span class="pre">SimpleJSON</span></tt> pipes the input through the simplejson library
+(available as <tt class="docutils literal"><span class="pre">json</span></tt> in the standard library since python 2.6). If
+there&#8217;s neither <tt class="docutils literal"><span class="pre">json</span></tt> nor <tt class="docutils literal"><span class="pre">simplejson</span></tt> available, <tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt>
+raises an <tt class="xref py py-exc docutils literal"><span class="pre">ImportError</span></tt>. The JSON encoder is configured to emit
+the smallest output possible but not modified otherwise. If you need
+something more fancy, like custom data type support, you need to create
+your own class; or simply generate the JSON yourself and pass it to
+<tt class="xref py py-class docutils literal"><span class="pre">LiteralJSON</span></tt>.</p>
+<p><tt class="xref py py-class docutils literal"><span class="pre">LiteralJSON</span></tt> takes some JSON string as input and passes it
+through to the <tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt> method. That&#8217;s needed to avoid
+double-escaping when passing JSON strings to <a class="reference internal" href="#javascript-replace"><em>replace</em></a>.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>When writing your own classes, note the following:</p>
+<ul class="last simple">
+<li><tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt> is expected to return unicode</li>
+<li><tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt> is more or less inserted literally (modulo some
+encoding stuff and inline escaping)</li>
+<li>the signature of <tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt> expects an optional boolean
+<tt class="docutils literal"><span class="pre">inlined</span></tt> argument, indicating whether <tt class="xref py py-meth docutils literal"><span class="pre">as_json()</span></tt> itself
+should do inline escaping. However, <a class="reference internal" href="#javascript-replace"><em>replace</em></a> will always set that to <tt class="docutils literal"><span class="pre">False</span></tt> and do
+that work by itself.</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="section" id="minifying-javascript">
+<h2>Minifying Javascript<a class="headerlink" href="#minifying-javascript" title="Permalink to this headline">¶</a></h2>
+<p>Minifying reduces the size of a document by removing redundant or
+irrelevant content. Typically this includes whitespace and comments.
+Some minifiers also rename variables and functions and remove unneeded
+braces and so on.</p>
+<p><em class="tdi">TDI</em> ships with the latest version of the <a class="reference external" href="http://opensource.perlig.de/rjsmin/">rJSmin</a> minifier, which only
+removes spaces and comments &#8211; but does that very fast.</p>
+<p>There are two use cases here:</p>
+<ol class="arabic simple">
+<li>Minify script blocks within HTML templates during the loading phase</li>
+<li>Minify some standalone javascript</li>
+</ol>
+<p>The first case is handled by hooking the
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#MinifyFilter"><span class="pre">→&nbsp;tdi.tools.javascript.MinifyFilter</span></a></tt> into the template loader. See the
+<a class="reference internal" href="filtering.html"><em>filters documentation</em></a> for a description how to do that.</p>
+<p>For the second case there&#8217;s the <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#minify"><span class="pre">→&nbsp;tdi.tools.javascript.minify</span></a></tt>
+function:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">javascript</span>
+
+<span class="k">print</span> <span class="n">javascript</span><span class="o">.</span><span class="n">minify</span><span class="p">(</span><span class="s">u&quot;&quot;&quot;</span>
+<span class="s">if (n.tagName.toLowerCase() == &#39;label&#39;) {</span>
+<span class="s">    n = n.parentNode;</span>
+<span class="s">    if (t &amp;&amp; n == t) continue;</span>
+<span class="s">    t = n;</span>
+<span class="s">}</span>
+<span class="s">&quot;&quot;&quot;</span><span class="o">.</span><span class="n">lstrip</span><span class="p">())</span>
+</pre></div>
+</div>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="k">if</span><span class="p">(</span><span class="nx">n</span><span class="p">.</span><span class="nx">tagName</span><span class="p">.</span><span class="nx">toLowerCase</span><span class="p">()</span><span class="o">==</span><span class="s1">&#39;label&#39;</span><span class="p">){</span><span class="nx">n</span><span class="o">=</span><span class="nx">n</span><span class="p">.</span><span class="nx">parentNode</span><span class="p">;</span><span class="k">if</span><span class="p">(</span><span class="nx">t</span><span class="o">&amp;&amp;</span><span class="nx">n</span><span class="o">==</span><span class="nx">t</span><span class="p">)</span><span class="k">continue</span><span class="p">;</span><span class="nx">t</span><span class="o">=</span><span class="nx">n</span><span class="p">;}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="masking-script-blocks">
+<h2>Masking Script Blocks<a class="headerlink" href="#masking-script-blocks" title="Permalink to this headline">¶</a></h2>
+<p>HTML has a long history of adding new elements all the time.
+Conceptually this is possible, because browsers simply ignore the
+tags of unknown elements and apply no semantics. That&#8217;s forward
+compatibility. Now if you place something inside these new elements,
+which is not HTML content, you get a backwards compatibility problem.</p>
+<div class="section" id="cdata-and-cleanup">
+<span id="javascript-cdata"></span><h3>cdata and cleanup<a class="headerlink" href="#cdata-and-cleanup" title="Permalink to this headline">¶</a></h3>
+<p>Script elements (and <a class="reference internal" href="css_tools.html#css-cdata"><em>style elements</em></a> for that matter)
+suffer from this problem since they were invented. The first solution
+was to enclose them with comment markers, but add special rules for
+browsers to accept these markers as part of the content:</p>
+<div class="highlight-html"><pre>&lt;script&gt;&lt;!--
+    the script.
+//--&gt;&lt;/script&gt;</pre>
+</div>
+<p>Then XHTML was invented. The XML parser cannot be tricked into such
+special rules. It would start throwing away the comment again, so people
+gave up backwards compliance and wrote:</p>
+<div class="highlight-html"><div class="highlight"><pre><span class="nt">&lt;script&gt;</span><span class="o">&lt;!</span><span class="p">[</span><span class="nx">CDATA</span><span class="p">[</span>
+    <span class="nx">the</span> <span class="nx">script</span><span class="p">.</span>
+<span class="p">]]</span><span class="o">&gt;</span><span class="nt">&lt;/script&gt;</span>
+</pre></div>
+</div>
+<p>and then, to be compatible with HTML again:</p>
+<div class="highlight-html"><pre>&lt;script&gt;//&lt;![CDATA[
+    the script.
+//]]&gt;&lt;/script&gt;</pre>
+</div>
+<p>Then someone finally figured out <a class="footnote-reference" href="#id2" id="id1">[1]</a> a mix of CDATA and comments
+completely compatible with all HTML/TagSoup parsers, and it looks like
+this:</p>
+<table class="docutils footnote" frame="void" id="id2" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td><a class="reference external" href="http://lists.w3.org/Archives/Public/www-html/2002Apr/0053.html">http://lists.w3.org/Archives/Public/www-html/2002Apr/0053.html</a></td></tr>
+</tbody>
+</table>
+<div class="highlight-html"><pre>&lt;script&gt;&lt;!--//--&gt;&lt;![CDATA[//&gt;&lt;!--
+    the script.
+//--&gt;&lt;!]]&gt;&lt;/script&gt;</pre>
+</div>
+<p>This is funny stuff, but you wouldn&#8217;t want to write it all the time. You
+should consider applying that, however, because browsers are typically
+not the <em>only</em> applications parsing your HTML.</p>
+<p>The functions <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#cdata"><span class="pre">→&nbsp;javascript.cdata</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#cleanup"><span class="pre">→&nbsp;javascript.cleanup</span></a></tt> can do that for you.
+<tt class="xref py py-func docutils literal"><span class="pre">cdata()</span></tt> takes a script and encloses it in such an all-compatible
+CDATA/comment-mix-container. <tt class="xref py py-func docutils literal"><span class="pre">cleanup()</span></tt> does the reverse. It
+looks for common containers (like the ones described above) and <em>strips</em>
+them. In fact, the <tt class="xref py py-func docutils literal"><span class="pre">cdata()</span></tt> function calls <tt class="xref py py-func docutils literal"><span class="pre">cleanup()</span></tt>
+itself in order to avoid doubling itself:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">javascript</span>
+
+<span class="k">print</span> <span class="n">javascript</span><span class="o">.</span><span class="n">cdata</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">//&lt;![CDATA[</span>
+<span class="s">    the script.</span>
+<span class="s">//]]&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+</pre></div>
+</div>
+<div class="highlight-python"><pre>&lt;!--//--&gt;&lt;![CDATA[//&gt;&lt;!--
+the script.
+//--&gt;&lt;!]]&gt;
+</pre>
+</div>
+<p>The <tt class="xref py py-func docutils literal"><span class="pre">cdata()</span></tt> function can be applied automatically to all script
+blocks of a template by hooking the
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#CDATAFilter"><span class="pre">→&nbsp;tdi.tools.javascript.CDATAFilter</span></a></tt> into the template loader. See
+the <a class="reference internal" href="filtering.html"><em>filters documentation</em></a> for a description how to do
+that.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Javascript Tools</a><ul>
+<li><a class="reference internal" href="#escaping-javascript-variables">Escaping Javascript Variables</a><ul>
+<li><a class="reference internal" href="#replace">replace</a></li>
+<li><a class="reference internal" href="#fill-fill-attr">fill, fill_attr</a></li>
+<li><a class="reference internal" href="#escape-string-escape-inlined">escape_string, escape_inlined</a></li>
+<li><a class="reference internal" href="#literaljson-and-simplejson">LiteralJSON and SimpleJSON</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#minifying-javascript">Minifying Javascript</a></li>
+<li><a class="reference internal" href="#masking-script-blocks">Masking Script Blocks</a><ul>
+<li><a class="reference internal" href="#cdata-and-cleanup">cdata and cleanup</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="html_forms.html"
+                        title="previous chapter">HTML Form Tools</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="css_tools.html"
+                        title="next chapter">CSS Tools</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="css_tools.html" title="CSS Tools"
+             >next</a></li>
+        <li class="right" >
+          <a href="html_forms.html" title="HTML Form Tools"
+             >previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" >Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 André Malo.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

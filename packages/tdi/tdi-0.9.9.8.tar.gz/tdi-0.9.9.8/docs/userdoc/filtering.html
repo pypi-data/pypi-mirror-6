@@ -1,0 +1,304 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Filtering &mdash; TDI 0.9.9.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/tdi.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.9.9.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="TDI 0.9.9.8 documentation" href="index.html" />
+    <link rel="up" title="Documentation Topics" href="topics.html" />
+    <link rel="next" title="Template Loading Revisited" href="loading.html" />
+    <link rel="prev" title="Pre-Rendering" href="prerender.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="loading.html" title="Template Loading Revisited"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="prerender.html" title="Pre-Rendering"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" accesskey="U">Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="filtering">
+<h1>Filtering<a class="headerlink" href="#filtering" title="Permalink to this headline">¶</a></h1>
+<p><em class="tdi">TDI</em> allows modifying and extending its parser events before they reach
+the tree builder. Since these filters are applied once before the
+rendering process, they have no performance impact during the actual
+rendering.</p>
+<div class="section" id="understanding-the-build-process">
+<h2>Understanding The Build Process<a class="headerlink" href="#understanding-the-build-process" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="from-template-to-template-tree">
+<h3>From Template To Template Tree<a class="headerlink" href="#from-template-to-template-tree" title="Permalink to this headline">¶</a></h3>
+<p>First let&#8217;s take a look at the basic template tree building logic:</p>
+<div class="figure">
+<img alt="_images/treebuilder.png" src="_images/treebuilder.png" />
+<p class="caption">Processflow: How a template becomes a template tree</p>
+</div>
+<p>It&#8217;s more or less standard compiler logic. The steps are as follows:</p>
+<ol class="arabic simple">
+<li>The template is fed chunk by chunk to the parser (which contains a
+lexer and a &#8220;tokenizer&#8221;).</li>
+<li>The found tokens are just messages or <em class="dfn">events</em> like &#8220;a starttag
+with this name and these attributes&#8221; or &#8220;an endtag with this name&#8221;.
+These events are passed to the tree builder.</li>
+<li>The tree builder creates relations between the events by maintaining
+a stack of them and thus determining the current nesting. This
+information is used to actually build the tree.</li>
+<li>The template tree is the final structure containing all nodes,
+prepared for rendering.</li>
+</ol>
+</div>
+<div class="section" id="adding-filters">
+<h3>Adding Filters<a class="headerlink" href="#adding-filters" title="Permalink to this headline">¶</a></h3>
+<p>Installing event filters into the process flow described above is easy.
+You just need to intercept the events between step 2 (events emitted by
+the parser) and step 3 (events received by the tree builder). The
+following figure visualizes the updated logic:</p>
+<div class="figure">
+<img alt="_images/treebuilder-filtered.png" src="_images/treebuilder-filtered.png" />
+<p class="caption">Processflow: Creating a template tree with filters</p>
+</div>
+<p>And here is, how it&#8217;s implemented:</p>
+<p>The tree builder is an object implementing two interfaces:
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.interfaces.BuilderInterface-class.html"><span class="pre">→&nbsp;BuilderInterface</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.interfaces.BuildingListenerInterface-class.html"><span class="pre">→&nbsp;BuildingListenerInterface</span></a></tt>. The former is used by
+a user of the builder object (the code expecting the result). The latter
+is used by the parser, which feeds the builder with events. Events are
+implemented as different methods of the <tt class="docutils literal"><span class="pre">BuildingListenerInterface</span></tt>,
+like <tt class="xref py py-meth docutils literal"><span class="pre">handle_starttag()</span></tt> or <tt class="xref py py-meth docutils literal"><span class="pre">handle_endtag()</span></tt>.</p>
+<p>A filter is an object, which &#8220;impersonates&#8221; a builder in every
+direction. It has to implement both interfaces and pass along or
+manipulate the method calls it receives. Sometimes filters may even
+generate their own. In other words, a filter object simply wraps the
+builder or the next filter. By stacking them that way you can easily
+combine as many filters as you want.</p>
+</div>
+</div>
+<div class="section" id="using-filters">
+<h2>Using Filters<a class="headerlink" href="#using-filters" title="Permalink to this headline">¶</a></h2>
+<p>Filters can be hooked into different stages of the template loading
+process. But all of them follow the same principle. You need to specify
+a list of filter factories. A second parameter specifies, whether the
+default filters should be applied (usually a good idea). A filter
+factory is a callable returning the filter object
+(<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.interfaces.FilterFactoryInterface-class.html"><span class="pre">→&nbsp;FilterFactoryInterface</span></a></tt>). Often the filter class
+itself can be passed as factory.</p>
+<p>There&#8217;s only one default filter right now - the encoding detection
+filter - which generates <tt class="docutils literal"><span class="pre">handle_encoding</span></tt> events, whenever it sees a
+suitable declaration in the event stream.</p>
+<p><em class="tdi">TDI</em> always adds a filter, which provides the filename of the template
+(which may or may be not something useful). But this filter cannot be
+turned off. (<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.filters.FilterFilename-class.html"><span class="pre">→&nbsp;filters.FilterFilename</span></a></tt>)</p>
+<p>The following sections describe the different places, where you can hook
+in your filters.</p>
+<div class="section" id="load-filters">
+<h3>Load Filters<a class="headerlink" href="#load-filters" title="Permalink to this headline">¶</a></h3>
+<p>Load filters are invoked when initially loading a template into the
+memory. They are specified using the <tt class="docutils literal"><span class="pre">eventfilters</span></tt> and
+<tt class="docutils literal"><span class="pre">default_eventfilters</span></tt> arguments in
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#__init__"><span class="pre">→&nbsp;Factory.__init__</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#replace"><span class="pre">→&nbsp;Factory.replace</span></a></tt>.</p>
+<p>A typical load filter is the <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.html.MinifyFilter-class.html"><span class="pre">→&nbsp;MinifyFilter</span></a></tt>
+provided by the html tools:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">html</span> <span class="k">as</span> <span class="n">html_tools</span>
+<span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+
+<span class="n">tpl</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">eventfilters</span><span class="o">=</span><span class="p">[</span>
+    <span class="n">html_tools</span><span class="o">.</span><span class="n">MinifyFilter</span>
+<span class="p">])</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;head&gt;</span>
+<span class="s">    &lt;title&gt;Hello World!&lt;/title&gt;</span>
+<span class="s">    &lt;style&gt;/*&lt;![CDATA[*/</span>
+<span class="s">        Some    style.</span>
+<span class="s">    /*]]&gt;*/&lt;/style&gt;</span>
+<span class="s">&lt;/head&gt;</span>
+<span class="s">&lt;body&gt;</span>
+<span class="s">    &lt;script&gt;//&lt;![CDATA[</span>
+<span class="s">        Some    script.</span>
+<span class="s">    //]]&gt;&lt;/script&gt;</span>
+<span class="s">    &lt;h1&gt;Hello World!&lt;/h1&gt;</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="o">.</span><span class="n">lstrip</span><span class="p">())</span>
+
+<span class="n">tpl</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Note, how it minifies everything except the <tt class="docutils literal"><span class="pre">&lt;script&gt;</span></tt> and <tt class="docutils literal"><span class="pre">&lt;style&gt;</span></tt>
+elements:</p>
+<div class="highlight-html"><pre>&lt;html&gt;&lt;head&gt;&lt;title&gt;Hello World!&lt;/title&gt;&lt;style&gt;/*&lt;![CDATA[*/
+        Some    style.
+    /*]]&gt;*/&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;script&gt;//&lt;![CDATA[
+        Some    script.
+    //]]&gt;&lt;/script&gt;&lt;h1&gt;Hello World!&lt;/h1&gt;&lt;/body&gt;</pre>
+</div>
+<p>If you want to squash those, too, just add more filters:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">html</span> <span class="k">as</span> <span class="n">html_tools</span>
+<span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">css</span> <span class="k">as</span> <span class="n">css_tools</span>
+<span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">javascript</span> <span class="k">as</span> <span class="n">javascript_tools</span>
+<span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+
+<span class="n">tpl</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">eventfilters</span><span class="o">=</span><span class="p">[</span>
+    <span class="n">html_tools</span><span class="o">.</span><span class="n">MinifyFilter</span><span class="p">,</span>
+    <span class="n">css_tools</span><span class="o">.</span><span class="n">MinifyFilter</span><span class="p">,</span>
+    <span class="n">javascript_tools</span><span class="o">.</span><span class="n">MinifyFilter</span><span class="p">,</span>
+<span class="p">])</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;head&gt;</span>
+<span class="s">    &lt;title&gt;Hello World!&lt;/title&gt;</span>
+<span class="s">    &lt;style&gt;/*&lt;![CDATA[*/</span>
+<span class="s">        Some    style.</span>
+<span class="s">    /*]]&gt;*/&lt;/style&gt;</span>
+<span class="s">&lt;/head&gt;</span>
+<span class="s">&lt;body&gt;</span>
+<span class="s">    &lt;script&gt;//&lt;![CDATA[</span>
+<span class="s">        Some    script.</span>
+<span class="s">    //]]&gt;&lt;/script&gt;</span>
+<span class="s">    &lt;h1&gt;Hello World!&lt;/h1&gt;</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="o">.</span><span class="n">lstrip</span><span class="p">())</span>
+
+<span class="n">tpl</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
+</pre></div>
+</div>
+<div class="highlight-html"><div class="highlight"><pre><span class="nt">&lt;html&gt;&lt;head&gt;&lt;title&gt;</span>Hello World!<span class="nt">&lt;/title&gt;&lt;style&gt;Some</span> <span class="nt">style</span><span class="o">.</span><span class="nt">&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;script&gt;</span><span class="nx">Some</span> <span class="nx">script</span><span class="p">.</span><span class="nt">&lt;/script&gt;&lt;h1&gt;</span>Hello World!<span class="nt">&lt;/h1&gt;&lt;/body&gt;</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>Filter order may be important. For example, the
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#CDATAFilter"><span class="pre">→&nbsp;javascript.CDATAFilter</span></a></tt> adds a CDATA wrapper around
+a script block, while the <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.tools.javascript-module.html#MinifyFilter"><span class="pre">→&nbsp;javascript.MinifyFilter</span></a></tt>
+removes those. So, if you want to create CDATA containers around
+your minified script, the CDATA filter needs to run afterwards.</p>
+<p class="last">Filters are specified in <strong>reverse running order</strong>. That is, if you
+write them vertically (as in the examples above), the builder is
+&#8220;up&#8221; and the parser is &#8220;down&#8221;.</p>
+</div>
+</div>
+<div class="section" id="overlay-filters">
+<h3>Overlay Filters<a class="headerlink" href="#overlay-filters" title="Permalink to this headline">¶</a></h3>
+<p>Overlay filters are applied after all overlaying is done. That&#8217;s right
+before pre-rendering (or rendering, if the template is not
+pre-rendered). The filters are specified using the
+<tt class="docutils literal"><span class="pre">overlay_eventfilters</span></tt> and <tt class="docutils literal"><span class="pre">overlay_default_eventfilters</span></tt> arguments
+in <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#__init__"><span class="pre">→&nbsp;Factory.__init__</span></a></tt>.</p>
+<p>Filtering at this stage is mostly useful if you need to look at the final
+template (constructed by the overlays). For example, you might write a
+filter, which resolves script or style dependencies of the template.</p>
+</div>
+<div class="section" id="prerender-filters">
+<h3>Prerender Filters<a class="headerlink" href="#prerender-filters" title="Permalink to this headline">¶</a></h3>
+<p>Prerender filters are run after pre-rendering, but before actual
+rendering (well, as pre-rendering invokes the parser, it&#8217;s technically
+<em>during</em> the pre-rendering). The point about these filters is - they are
+specified per prerender-model and not per per factory. So you can apply
+different filters for different needs.</p>
+<p><em class="tdi">TDI</em> looks if the prerender-model provides a <tt class="xref py py-meth docutils literal"><span class="pre">prerender_filters()</span></tt>
+method. If it exists, it&#8217;s called without any arguments. The method is
+expected to return a dict, which may contain the well-known
+<tt class="docutils literal"><span class="pre">eventfilters</span></tt> and <tt class="docutils literal"><span class="pre">default_eventfilters</span></tt> keys. The specified
+filters are injected into the parser, which is set up to generate the
+final template tree.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Filtering</a><ul>
+<li><a class="reference internal" href="#understanding-the-build-process">Understanding The Build Process</a><ul>
+<li><a class="reference internal" href="#from-template-to-template-tree">From Template To Template Tree</a></li>
+<li><a class="reference internal" href="#adding-filters">Adding Filters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#using-filters">Using Filters</a><ul>
+<li><a class="reference internal" href="#load-filters">Load Filters</a></li>
+<li><a class="reference internal" href="#overlay-filters">Overlay Filters</a></li>
+<li><a class="reference internal" href="#prerender-filters">Prerender Filters</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="prerender.html"
+                        title="previous chapter">Pre-Rendering</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="loading.html"
+                        title="next chapter">Template Loading Revisited</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="loading.html" title="Template Loading Revisited"
+             >next</a></li>
+        <li class="right" >
+          <a href="prerender.html" title="Pre-Rendering"
+             >previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" >Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 André Malo.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

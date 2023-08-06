@@ -1,0 +1,366 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Template Loading Revisited &mdash; TDI 0.9.9.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/tdi.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.9.9.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="TDI 0.9.9.8 documentation" href="index.html" />
+    <link rel="up" title="Documentation Topics" href="topics.html" />
+    <link rel="next" title="Example Index" href="examples.html" />
+    <link rel="prev" title="Filtering" href="filtering.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="examples.html" title="Example Index"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="filtering.html" title="Filtering"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" accesskey="U">Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="template-loading-revisited">
+<h1>Template Loading Revisited<a class="headerlink" href="#template-loading-revisited" title="Permalink to this headline">¶</a></h1>
+<p>The template loader provides methods to build template objects from any
+source. Additionally it provides caching and refreshing mechanisms.</p>
+<p>From the user&#8217;s point of view template loading is a two-step process.
+The first step is to create a template <em>factory</em> which holds all
+parameters needed to eventually create the actual templates. The second
+step is to call one of the factory&#8217;s methods to pass in the template
+source and get the template object returned.</p>
+<p><em class="tdi">TDI</em> provides a few default factory instances: <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi-module.html#html"><span class="pre">→&nbsp;tdi.html</span></a></tt> (which is
+heavily used in the example scripts as well), <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi-module.html#xml"><span class="pre">→&nbsp;tdi.xml</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi-module.html#text"><span class="pre">→&nbsp;tdi.text</span></a></tt>. While these are not configured for advanced features like
+memoizing or autoreload, they serve as reasonable defaults for many cases.</p>
+<div class="section" id="simple-template-loading">
+<h2>Simple Template Loading<a class="headerlink" href="#simple-template-loading" title="Permalink to this headline">¶</a></h2>
+<p>The template factory provides four methods to create a template from
+a single source:</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_string"><span class="pre">→&nbsp;from_string()</span></a></tt></dt>
+<dd>Takes a simple byte string as template source.</dd>
+<dt><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_file"><span class="pre">→&nbsp;from_file()</span></a></tt></dt>
+<dd>Takes a file name as input. The file is opened from the disk and the
+contents of the file is used as template source.</dd>
+<dt><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_stream"><span class="pre">→&nbsp;from_stream()</span></a></tt></dt>
+<dd>This method expects an open stream object (that needs a <tt class="docutils literal"><span class="pre">read(size)</span></tt>
+method). The stream is read chunk by chunk until its end is reached. The
+read chunks are the template source. Note that the stream is <em>not</em>
+closed by the method. The stream can be anything with a proper
+<tt class="docutils literal"><span class="pre">read(size)</span></tt> method: an open file, a byte stream from a socket, a
+stream from a zipfile, and so on.</dd>
+<dt><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_opener"><span class="pre">→&nbsp;from_opener()</span></a></tt></dt>
+<dd>This is similar to <tt class="xref py py-meth docutils literal"><span class="pre">from_stream()</span></tt>, but takes a stream
+<em>opener</em>. This is a function able to open the desired stream (possibly
+more than once). This is needed for auto-reloading on source changes.</dd>
+</dl>
+<p>The following script shows the basic usage in code form:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+<span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">factory</span>
+
+<span class="n">template</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;body tdi=&quot;body&quot;&gt;</span>
+<span class="s">    some template</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&lt;/html&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+<span class="k">print</span> <span class="n">template</span><span class="o">.</span><span class="n">tree</span>
+
+<span class="n">template</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="s">&#39;loading.html&#39;</span><span class="p">)</span>
+<span class="k">print</span> <span class="n">template</span><span class="o">.</span><span class="n">tree</span>
+
+<span class="n">stream</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s">&#39;loading.html&#39;</span><span class="p">)</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">template</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_stream</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span>
+<span class="k">finally</span><span class="p">:</span>
+    <span class="n">stream</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<span class="k">print</span> <span class="n">template</span><span class="o">.</span><span class="n">tree</span>
+
+<span class="n">template</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_opener</span><span class="p">(</span><span class="n">factory</span><span class="o">.</span><span class="n">file_opener</span><span class="p">,</span> <span class="s">&#39;loading.html&#39;</span><span class="p">)</span>
+<span class="k">print</span> <span class="n">template</span><span class="o">.</span><span class="n">tree</span>
+</pre></div>
+</div>
+<p>Note that <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_file"><span class="pre">→&nbsp;from_file</span></a></tt> is a simple wrapper
+around <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_opener"><span class="pre">→&nbsp;from_opener</span></a></tt>. So the last example is
+effectively the same as the <tt class="docutils literal"><span class="pre">from_file</span></tt> example. However, for non-file
+streams the <tt class="xref py py-meth docutils literal"><span class="pre">from_opener()</span></tt> method becomes interesting.</p>
+</div>
+<div class="section" id="overlayed-template-loading">
+<h2>Overlayed Template Loading<a class="headerlink" href="#overlayed-template-loading" title="Permalink to this headline">¶</a></h2>
+<p>The factory offers two methods to load multiple templates at one go and
+overlay them immediately:</p>
+<dl class="docutils">
+<dt><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_files"><span class="pre">→&nbsp;from_files()</span></a></tt></dt>
+<dd>Takes a list of file names as input. Each file name is passed to
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_file"><span class="pre">→&nbsp;from_file()</span></a></tt> to get a template.</dd>
+<dt><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_streams"><span class="pre">→&nbsp;from_streams()</span></a></tt></dt>
+<dd>This one is more complicated. It takes a list of opaque stream &#8220;tokens&#8221;
+and a <tt class="docutils literal"><span class="pre">streamopen</span></tt> function. The <tt class="docutils literal"><span class="pre">streamopen</span></tt> function is called with
+each of the stream tokens and returns either an open stream or a stream
+opener.</dd>
+</dl>
+<p>Here&#8217;s some code:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+
+<span class="n">file_1</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">()</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">file_2</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">()</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">file_1</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;&quot;&quot;&lt;html lang=&quot;en&quot;&gt;&lt;body tdi:overlay=&quot;huh&quot;&gt;yay.&lt;/body&gt;&lt;/html&gt;&quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="n">file_1</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+
+        <span class="n">file_2</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;&quot;&quot;&lt;html&gt;&lt;body tdi:overlay=&quot;huh&quot;&gt;file 2!&lt;/body&gt;&lt;/html&gt;&quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="n">file_2</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+
+        <span class="n">template</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_files</span><span class="p">([</span><span class="n">file_1</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">file_2</span><span class="o">.</span><span class="n">name</span><span class="p">])</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">file_2</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<span class="k">finally</span><span class="p">:</span>
+    <span class="n">file_1</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+<span class="n">template</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>This example creates two template files and loads them with the
+<tt class="xref py py-meth docutils literal"><span class="pre">from_files()</span></tt> method. The template from the second file is
+overlayed over the template from the first one. This creates a resulting
+template. Now if there would be a third file, its template would be
+overlayed over the just created overlay result (creating a new overlay
+result) and so forth.</p>
+<p>Here&#8217;s the result:</p>
+<div class="highlight-html"><div class="highlight"><pre><span class="nt">&lt;html</span> <span class="na">lang=</span><span class="s">&quot;en&quot;</span><span class="nt">&gt;&lt;body&gt;</span>file 2!<span class="nt">&lt;/body&gt;&lt;/html&gt;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="automatic-reloading-on-change">
+<h2>Automatic Reloading On Change<a class="headerlink" href="#automatic-reloading-on-change" title="Permalink to this headline">¶</a></h2>
+<p>It&#8217;s often very convenient (for example, during development) if changes
+of the template sources are reflected by the template objects.</p>
+<p>Template objects provide methods for recreating themselves from their
+sources (<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.template.Template-class.html#reload"><span class="pre">→&nbsp;reload()</span></a></tt>) and checking themselves
+for up-to-dateness (<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.template.Template-class.html#update_available"><span class="pre">→&nbsp;update_available()</span></a></tt>).</p>
+<p>The <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html"><span class="pre">→&nbsp;Factory</span></a></tt> can be configured to wrap every template
+into a proxy object that invokes these methods on every access to the
+template object. That way the template is always up-to-date. Here&#8217;s how:</p>
+<p>First of all you need to tell the factory. You can either create a new
+factory directly (by instanciating the <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html"><span class="pre">→&nbsp;Factory</span></a></tt>
+class) or create a derivative factory from an existing one, using the
+factory&#8217;s <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#replace"><span class="pre">→&nbsp;replace()</span></a></tt> method.</p>
+<p>The further handling depends on the loading method. Autoupdate is only
+supported by the following methods:</p>
+<ul class="simple">
+<li><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_file"><span class="pre">→&nbsp;Factory.from_file</span></a></tt> (based on the file&#8217;s modification time).</li>
+<li><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_opener"><span class="pre">→&nbsp;Factory.from_opener</span></a></tt> (based on the modification
+time presented by the opener)</li>
+<li><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_files"><span class="pre">→&nbsp;Factory.from_files</span></a></tt> (based on the templates loaded
+by <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_file"><span class="pre">→&nbsp;Factory.from_file</span></a></tt>)</li>
+<li><tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#from_streams"><span class="pre">→&nbsp;Factory.from_streams</span></a></tt> (<em>optional</em>, only for streams
+where the <tt class="docutils literal"><span class="pre">streamopen</span></tt> function returns a stream opener)</li>
+</ul>
+<p>Have a look at the following script (the <tt class="xref py py-func docutils literal"><span class="pre">wait()</span></tt> function is not
+included here for reasons of clarity):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+
+<span class="c"># 1) Tell the factory that we want automatic template updates</span>
+<span class="n">html</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">autoupdate</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+<span class="n">tfile</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">()</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">tfile</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;&quot;&quot;&lt;html&gt;&lt;body tdi=&quot;body&quot;&gt;Yey&lt;/body&gt;&lt;/html&gt;&quot;&quot;&quot;</span><span class="p">)</span>
+    <span class="n">tfile</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+
+    <span class="c"># 2) Load the template from_file</span>
+    <span class="n">template</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="n">tfile</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">print</span> <span class="n">template</span><span class="o">.</span><span class="n">tree</span>
+
+    <span class="c"># (... wait for low-timer-resolution systems ...)</span>
+    <span class="n">wait</span><span class="p">()</span>
+
+    <span class="c"># 3) Update the file</span>
+    <span class="n">tfile</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">tfile</span><span class="o">.</span><span class="n">truncate</span><span class="p">()</span>
+    <span class="n">tfile</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;&quot;&quot;&lt;html&gt;&lt;body tdi=&quot;nobody&quot;&gt;Yup!&lt;/body&gt;&lt;/html&gt;&quot;&quot;&quot;</span><span class="p">)</span>
+    <span class="n">tfile</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+
+    <span class="c"># 4) Voila</span>
+    <span class="k">print</span> <span class="n">template</span><span class="o">.</span><span class="n">tree</span>
+
+<span class="k">finally</span><span class="p">:</span>
+    <span class="n">tfile</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The script emits the current template tree as updated from modification:</p>
+<div class="highlight-python"><pre>/
+  '&lt;html&gt;'
+  body
+    'Yey'
+  '&lt;/html&gt;'
+\
+
+...
+
+/
+  '&lt;html&gt;'
+  nobody
+    'Yup!'
+  '&lt;/html&gt;'
+\
+
+</pre>
+</div>
+<p>The mechanism works for <a class="reference internal" href="overlays.html"><em>combined templates</em></a>, too. The whole
+pile of overlayed templates is checked then and changes bubble up to the
+final template object.</p>
+</div>
+<div class="section" id="memoizing-factory-calls">
+<span id="memoizing"></span><h2>Memoizing Factory Calls<a class="headerlink" href="#memoizing-factory-calls" title="Permalink to this headline">¶</a></h2>
+<p>The factory can be configured to remember the results of the method
+calls depending on the input (i.e. they return the same template object
+if the arguments are the same). This technique is called memoizing. Of
+course, it&#8217;s only useful if it&#8217;s a longer-running script repeating to
+call the same methods again and again.</p>
+<p>Usually this happens transparently. However, because of the complexity
+of the input parameters the memoizing needs to be triggered in a more
+explicit way here. In order to make it work there are two conditions to
+be met:</p>
+<ol class="arabic simple">
+<li>The factory needs to be configured with a memoization storage container.
+Such a container is passed using the memoizer argument of either the
+factory&#8217;s <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#__init__"><span class="pre">→&nbsp;constructor</span></a></tt> or the
+factory&#8217;s <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory.Factory-class.html#replace"><span class="pre">→&nbsp;replace()</span></a></tt> method. The container
+simply needs to provide some of <tt class="docutils literal"><span class="pre">dict</span></tt>&#8216;s methods plus an optional
+<tt class="docutils literal"><span class="pre">lock</span></tt> attribute.</li>
+<li>In order to actually store and remember stuff the methods themselves
+would need to determine a unique key from their input parameters. As
+said, that&#8217;s pretty complicated and next to impossible to do in a
+general way. The solution is to do it in a very specific way - the
+key is simply to be passed to the method (using the <tt class="docutils literal"><span class="pre">key</span></tt> argument).</li>
+</ol>
+<p>Once the memoizer is configured and the particular key is present the
+methods remember their calls. Since it&#8217;s very inconvenient to pass in an
+extra key every time, you can wrap your factory into a proxy object,
+which provides the keys for you. <em class="tdi">TDI</em> provides such a proxy class:
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.factory_memoize.MemoizedFactory-class.html"><span class="pre">→&nbsp;factory_memoize.MemoizedFactory</span></a></tt>. The keys here are
+basically derived from file names and stream tokens. If you need
+something different, take this class as an example or simply inherit
+from it.</p>
+<p>Now finally, here&#8217;s some code visualizing the memoization usage:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">factory_memoize</span>
+<span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+
+<span class="n">t1</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="s">&#39;loading.html&#39;</span><span class="p">)</span>
+<span class="n">t2</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="s">&#39;loading.html&#39;</span><span class="p">)</span>
+
+<span class="c"># t1 and t2 are different template objects here</span>
+<span class="k">print</span> <span class="n">t1</span> <span class="ow">is</span> <span class="n">t2</span> <span class="c"># False</span>
+
+<span class="c"># 1) Tell the factory that we want memoized calls</span>
+<span class="n">html</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">memoizer</span><span class="o">=</span><span class="p">{})</span>
+
+<span class="c"># Wrap into the key provider</span>
+<span class="n">html</span> <span class="o">=</span> <span class="n">factory_memoize</span><span class="o">.</span><span class="n">MemoizedFactory</span><span class="p">(</span><span class="n">html</span><span class="p">)</span>
+
+<span class="n">t1</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="s">&#39;loading.html&#39;</span><span class="p">)</span>
+<span class="n">t2</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_file</span><span class="p">(</span><span class="s">&#39;loading.html&#39;</span><span class="p">)</span>
+
+<span class="c"># t1 and t2 are the same objects here</span>
+<span class="k">print</span> <span class="n">t1</span> <span class="ow">is</span> <span class="n">t2</span> <span class="c"># True</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Template Loading Revisited</a><ul>
+<li><a class="reference internal" href="#simple-template-loading">Simple Template Loading</a></li>
+<li><a class="reference internal" href="#overlayed-template-loading">Overlayed Template Loading</a></li>
+<li><a class="reference internal" href="#automatic-reloading-on-change">Automatic Reloading On Change</a></li>
+<li><a class="reference internal" href="#memoizing-factory-calls">Memoizing Factory Calls</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="filtering.html"
+                        title="previous chapter">Filtering</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="examples.html"
+                        title="next chapter">Example Index</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="examples.html" title="Example Index"
+             >next</a></li>
+        <li class="right" >
+          <a href="filtering.html" title="Filtering"
+             >previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" >Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 André Malo.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,288 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Template Combination With Overlays &mdash; TDI 0.9.9.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/tdi.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.9.9.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="TDI 0.9.9.8 documentation" href="index.html" />
+    <link rel="up" title="Documentation Topics" href="topics.html" />
+    <link rel="next" title="Code Partitioning With Scopes" href="scopes.html" />
+    <link rel="prev" title="Sub-Rendering" href="subrendering.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="scopes.html" title="Code Partitioning With Scopes"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="subrendering.html" title="Sub-Rendering"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" accesskey="U">Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="template-combination-with-overlays">
+<h1>Template Combination With Overlays<a class="headerlink" href="#template-combination-with-overlays" title="Permalink to this headline">¶</a></h1>
+<p>Usually there&#8217;s more than one template in a project and there are certainly
+the same or similar elements on the different pages. In order to avoid
+code duplication, move the common elements into an extra file and load
+them where they are needed. <em class="tdi">TDI</em> provides the concept of
+<em class="dfn">overlays</em> for this purpose:</p>
+<ol class="arabic simple">
+<li>Name the nodes you want to replace with a <tt class="docutils literal"><span class="pre">tdi:overlay</span></tt> attribute.
+These are the overlay targets.</li>
+<li>Name the replacement nodes (usually in a different template) as well.
+These are the overlay sources.</li>
+<li>The python code now decides which template is which and overlays them.
+The result is a new template (which can be overlayed again...)</li>
+</ol>
+<p>Especially the last item gives more flexibility than common include or
+inheritance mechanisms, because the final templates are explicitly
+picked at runtime (and not at template definition time). This allows for
+theming, localization, widgets and probably more use cases all at once.</p>
+<p>As this may still sound complicated, here&#8217;s a picture:</p>
+<div class="figure">
+<img alt="The basic overlay mechanism" src="_images/overlay.png" />
+<p class="caption">Basic Overlay Mechanism</p>
+</div>
+<p>Note that the figure is simplified:</p>
+<ul class="simple">
+<li>It&#8217;s possible to overlay more than one block at the same time</li>
+<li>If the same target block occurs more than once, it will be replaced more
+than once as well. (If the same source block occurs more than once,
+you&#8217;ll get an error.)</li>
+</ul>
+<p>Here&#8217;s some example code:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+<span class="n">content</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;body&gt;</span>
+<span class="s">    &lt;h1 tdi=&quot;doctitle&quot;&gt;doc title goes here&lt;/h1&gt;</span>
+<span class="s">    &lt;ul tdi:overlay=&quot;menu&quot;&gt;&lt;/ul&gt;</span>
+<span class="s">    &lt;p tdi=&quot;intro&quot; class=&quot;edit-intro&quot;&gt;Intro goes here.&lt;/p&gt;</span>
+<span class="s">    &lt;div class=&quot;list&quot; tdi=&quot;list&quot;&gt;</span>
+<span class="s">        ...</span>
+<span class="s">    &lt;/div&gt;</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&lt;/html&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+<span class="n">menu_widget</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;body&gt;</span>
+<span class="s">    &lt;ul tdi:overlay=&quot;menu&quot;&gt;</span>
+<span class="s">        &lt;li tdi=&quot;menu&quot;&gt;&lt;a tdi=&quot;link&quot;&gt;some menu item&lt;/a&gt;&lt;/li&gt;&lt;li tdi=&quot;:-menu&quot;&gt;</span>
+<span class="s">        &lt;/li&gt;</span>
+<span class="s">    &lt;/ul&gt;</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&lt;/html&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">Model</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_menu</span> <span class="o">=</span> <span class="n">menu</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_page</span> <span class="o">=</span> <span class="n">page</span>
+
+    <span class="k">def</span> <span class="nf">render_menu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">repeat_menu</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_menu</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">repeat_menu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="p">(</span><span class="n">href</span><span class="p">,</span> <span class="n">menuitem</span><span class="p">)):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="n">menuitem</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ctx</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_page</span><span class="p">):</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="o">.</span><span class="n">hiddenelement</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="p">[</span><span class="s">&#39;href&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">href</span>
+
+<span class="n">menu</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s">u&#39;/some/&#39;</span><span class="p">,</span> <span class="s">u&#39;Some Menu Item&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">u&#39;/other/&#39;</span><span class="p">,</span> <span class="s">u&#39;Editing Content &amp; Attributes&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">u&#39;/third.html&#39;</span><span class="p">,</span> <span class="s">u&#39;Another Menu Item&#39;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="p">(</span><span class="n">menu</span><span class="o">=</span><span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="n">template</span> <span class="o">=</span> <span class="n">content</span><span class="o">.</span><span class="n">overlay</span><span class="p">(</span><span class="n">menu_widget</span><span class="p">)</span>
+<span class="n">template</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The code deals with three different template objects:</p>
+<ol class="arabic simple">
+<li>The content template, which contains just a small &#8220;placeholder&#8221; for
+the menu to mark where it should go.</li>
+<li>The menu widget template, which contains the whole menu template</li>
+<li>The finally rendered template (the result of
+<tt class="docutils literal"><span class="pre">content.overlay(menu_widget)</span></tt>)</li>
+</ol>
+<p>If it&#8217;s clear whether a <tt class="docutils literal"><span class="pre">tdi:overlay</span></tt> node is an overlay source or a
+target, it&#8217;s recommended to flag them as such:</p>
+<ul class="simple">
+<li>target-only overlays can be flagged with the <tt class="docutils literal"><span class="pre">&gt;</span></tt> character (the
+content flows into the overlay node) (example: <tt class="docutils literal"><span class="pre">tdi:overlay=&quot;&gt;menu&quot;</span></tt>)</li>
+<li>source-only overlays can be flagged with the <tt class="docutils literal"><span class="pre">&lt;</span></tt> character (the
+content flows away from the overlay node) (example: <tt class="docutils literal"><span class="pre">tdi:overlay=&quot;&lt;menu&quot;</span></tt>)</li>
+</ul>
+<p>Flagging properly is generally recommended, because the overlay result
+is likely to be part of a bigger overlay chain (like
+<tt class="docutils literal"><span class="pre">t1.overlay(t2).overlay(t3)</span></tt> ...). If you flag the nodes, there are no
+ambiguities about the purpose of the particular node.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">If your editor doesn&#8217;t like the <tt class="docutils literal"><span class="pre">&lt;</span></tt> and <tt class="docutils literal"><span class="pre">&gt;</span></tt> characters inside an
+HTML attribute, you can write them as <tt class="docutils literal"><span class="pre">&amp;lt;</span></tt> and <tt class="docutils literal"><span class="pre">&amp;gt;</span></tt> as well.</p>
+</div>
+<p>The example code emits the following:</p>
+<div class="highlight-html"><div class="highlight"><pre><span class="nt">&lt;html&gt;</span>
+<span class="nt">&lt;body&gt;</span>
+    <span class="nt">&lt;h1&gt;</span>doc title goes here<span class="nt">&lt;/h1&gt;</span>
+    <span class="nt">&lt;ul&gt;</span>
+        <span class="nt">&lt;li&gt;&lt;a</span> <span class="na">href=</span><span class="s">&quot;/some/&quot;</span><span class="nt">&gt;</span>Some Menu Item<span class="nt">&lt;/a&gt;&lt;/li&gt;</span>
+        <span class="nt">&lt;li&gt;</span>Editing Content <span class="ni">&amp;amp;</span> Attributes<span class="nt">&lt;/li&gt;</span>
+        <span class="nt">&lt;li&gt;&lt;a</span> <span class="na">href=</span><span class="s">&quot;/third.html&quot;</span><span class="nt">&gt;</span>Another Menu Item<span class="nt">&lt;/a&gt;&lt;/li&gt;</span>
+    <span class="nt">&lt;/ul&gt;</span>
+    <span class="nt">&lt;p</span> <span class="na">class=</span><span class="s">&quot;edit-intro&quot;</span><span class="nt">&gt;</span>Intro goes here.<span class="nt">&lt;/p&gt;</span>
+    <span class="nt">&lt;div</span> <span class="na">class=</span><span class="s">&quot;list&quot;</span><span class="nt">&gt;</span>
+        ...
+    <span class="nt">&lt;/div&gt;</span>
+<span class="nt">&lt;/body&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</pre></div>
+</div>
+<div class="section" id="overlay-overrides">
+<h2>Overlay Overrides<a class="headerlink" href="#overlay-overrides" title="Permalink to this headline">¶</a></h2>
+<p>By default a source overlay replaces the target node completely. But
+there are exceptions: If the target overlay specifies <tt class="docutils literal"><span class="pre">tdi</span></tt> or
+<tt class="docutils literal"><span class="pre">tdi:scope</span></tt> attributes, these are kept and override the ones specified
+in the source overlay.</p>
+<p>While this probably doesn&#8217;t make much sense for navigational elements
+like the menu widget above, it has been proven useful for widgets
+included more than once in a page, because it allows to put the overlay
+into a different context.</p>
+<p>The following (meaningless) example shows the principle:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+<span class="n">content</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;body&gt;</span>
+<span class="s">    &lt;h1 tdi=&quot;doctitle&quot;&gt;doc title goes here&lt;/h1&gt;</span>
+<span class="s">    &lt;ul tdi:overlay=&quot;menu&quot; tdi=&quot;mymenu&quot;&gt;&lt;/ul&gt;</span>
+<span class="s">    &lt;p tdi=&quot;intro&quot; class=&quot;edit-intro&quot;&gt;Intro goes here.&lt;/p&gt;</span>
+<span class="s">    &lt;div class=&quot;list&quot; tdi=&quot;list&quot;&gt;</span>
+<span class="s">        ...</span>
+<span class="s">    &lt;/div&gt;</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&lt;/html&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+<span class="n">menu_widget</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;body&gt;</span>
+<span class="s">    &lt;ul tdi:overlay=&quot;menu&quot; tdi=&quot;menucontainer&quot;&gt;</span>
+<span class="s">        &lt;li tdi=&quot;menu&quot;&gt;&lt;a tdi=&quot;link&quot;&gt;some menu item&lt;/a&gt;&lt;/li&gt;&lt;li tdi=&quot;:-menu&quot;&gt;</span>
+<span class="s">        &lt;/li&gt;</span>
+<span class="s">    &lt;/ul&gt;</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&lt;/html&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">Model</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">render_menucontainer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;menucontainer&quot;</span>
+
+    <span class="k">def</span> <span class="nf">render_mymenu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;mymenu&quot;</span>
+
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="p">()</span>
+<span class="n">template</span> <span class="o">=</span> <span class="n">content</span><span class="o">.</span><span class="n">overlay</span><span class="p">(</span><span class="n">menu_widget</span><span class="p">)</span>
+<span class="n">template</span><span class="o">.</span><span class="n">render_string</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>And that&#8217;s the output:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">mymenu</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Template Combination With Overlays</a><ul>
+<li><a class="reference internal" href="#overlay-overrides">Overlay Overrides</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="subrendering.html"
+                        title="previous chapter">Sub-Rendering</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="scopes.html"
+                        title="next chapter">Code Partitioning With Scopes</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="scopes.html" title="Code Partitioning With Scopes"
+             >next</a></li>
+        <li class="right" >
+          <a href="subrendering.html" title="Sub-Rendering"
+             >previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" >Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 André Malo.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,186 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Sub-Rendering &mdash; TDI 0.9.9.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/tdi.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.9.9.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="TDI 0.9.9.8 documentation" href="index.html" />
+    <link rel="up" title="Documentation Topics" href="topics.html" />
+    <link rel="next" title="Template Combination With Overlays" href="overlays.html" />
+    <link rel="prev" title="Copy &amp; Replace" href="copy_replace.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="overlays.html" title="Template Combination With Overlays"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="copy_replace.html" title="Copy &amp; Replace"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" accesskey="U">Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="sub-rendering">
+<h1>Sub-Rendering<a class="headerlink" href="#sub-rendering" title="Permalink to this headline">¶</a></h1>
+<p>Sub-rendering means, that you can prematurely render a node during the
+regular rendering process (i.e. from within a <tt class="samp docutils literal"><span class="pre">render_</span><em><span class="pre">name</span></em></tt>
+method). This is useful if you want to process the render result before
+actually emitting it to the output stream. Sub-rendering is implemented
+by the node&#8217;s <tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.nodetree.Node-class.html#render"><span class="pre">→&nbsp;render</span></a></tt> method.</p>
+<p>Note that the node is copied, before it&#8217;s subrendered. Changes to
+the node or its subnodes are <em>not</em> visible to the &#8220;regular&#8221; rendering
+process.</p>
+<div class="section" id="placing-a-html-node-into-a-javascript-block">
+<h2>Placing a HTML Node Into a Javascript Block<a class="headerlink" href="#placing-a-html-node-into-a-javascript-block" title="Permalink to this headline">¶</a></h2>
+<p>That&#8217;s a typical use case. Imagine you have a piece of HTML code, that
+only makes sense if javascript is enabled, or just a fragment that you
+need later in your script. <em class="tdi">TDI</em> cannot natively render HTML within a
+javascript block (because an inline script is just a piece of text from
+<em class="tdi">TDI</em>&#8216;s point of view).</p>
+<p>The following example shows how to render the HTML in the regular
+template context and then remove it (using <a class="reference internal" href="copy_replace.html#content-picking"><em>the content picking
+method with node.replace()</em></a>) and placing it in the
+javascript content afterwards. It&#8217;s surprisingly simple, given that this
+explanation takes much more space than the code itself:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+<span class="kn">from</span> <span class="nn">tdi.tools</span> <span class="kn">import</span> <span class="n">javascript</span>
+
+<span class="n">template</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;body&gt;</span>
+<span class="s">    &lt;tdi tdi=&quot;-script&quot;&gt;</span>
+<span class="s">    &lt;div tdi=&quot;*html&quot;&gt;&lt;h1 tdi=&quot;h1&quot;&gt;dynamic js-only-content&lt;/h1&gt;&lt;/div&gt;</span>
+<span class="s">    &lt;script tdi=&quot;*script&quot;&gt;</span>
+<span class="s">        document.write(&#39;__html__&#39;)</span>
+<span class="s">    &lt;/script&gt;</span>
+<span class="s">    &lt;/tdi&gt;</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&lt;/html&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="o">.</span><span class="n">lstrip</span><span class="p">())</span>
+
+
+<span class="k">class</span> <span class="nc">Model</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">render_h1</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="s">u&quot;My Heading&quot;</span>
+
+    <span class="k">def</span> <span class="nf">render_script</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">html</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">html</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
+        <span class="n">javascript</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">script</span><span class="p">),</span> <span class="nb">dict</span><span class="p">(</span><span class="n">html</span><span class="o">=</span><span class="n">html</span><span class="p">))</span>
+
+<span class="n">template</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">Model</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>The example produces the following output:</p>
+<div class="highlight-html"><div class="highlight"><pre><span class="nt">&lt;html&gt;</span>
+<span class="nt">&lt;body&gt;</span>
+    <span class="nt">&lt;script&gt;</span>
+        <span class="nb">document</span><span class="p">.</span><span class="nx">write</span><span class="p">(</span><span class="s1">&#39;&lt;div&gt;&lt;h1&gt;My Heading&lt;\/h1&gt;&lt;\/div&gt;&#39;</span><span class="p">)</span>
+    <span class="nt">&lt;/script&gt;</span>
+<span class="nt">&lt;/body&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</pre></div>
+</div>
+<p>The code uses the <tt class="xref py py-func docutils literal"><span class="pre">javascript.fill()</span></tt> function, which is part of the
+<a class="reference internal" href="javascript_tools.html"><em>javascript tools</em></a>.</p>
+<p>Also note, how the contents of the node is rendered using the current
+model.  The options of the <tt class="xref py py-meth docutils literal"><span class="pre">render()</span></tt> method are <a class="reference external" href="../apidoc/tdi.nodetree.Node-class.html#render">described
+in the API documentation</a>.</p>
+</div>
+<div class="section" id="using-a-different-model">
+<h2>Using A Different Model<a class="headerlink" href="#using-a-different-model" title="Permalink to this headline">¶</a></h2>
+<p>The subrender mechanism uses the current model structure by default.
+That way, the nodes are properly handled within their scopes. There are,
+however, use cases, where it&#8217;s useful to provide a different model. If
+you pass your own model, it acts as a &#8220;root&#8221; model: you might need to
+rebuild your scope structure.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Sub-Rendering</a><ul>
+<li><a class="reference internal" href="#placing-a-html-node-into-a-javascript-block">Placing a HTML Node Into a Javascript Block</a></li>
+<li><a class="reference internal" href="#using-a-different-model">Using A Different Model</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="copy_replace.html"
+                        title="previous chapter">Copy &amp; Replace</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="overlays.html"
+                        title="next chapter">Template Combination With Overlays</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="overlays.html" title="Template Combination With Overlays"
+             >next</a></li>
+        <li class="right" >
+          <a href="copy_replace.html" title="Copy &amp; Replace"
+             >previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" >Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 André Malo.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

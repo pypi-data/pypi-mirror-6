@@ -1,0 +1,217 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Pre-Rendering &mdash; TDI 0.9.9.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/tdi.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.9.9.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="TDI 0.9.9.8 documentation" href="index.html" />
+    <link rel="up" title="Documentation Topics" href="topics.html" />
+    <link rel="next" title="Filtering" href="filtering.html" />
+    <link rel="prev" title="Partial Rendering" href="partial.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="filtering.html" title="Filtering"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="partial.html" title="Partial Rendering"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" accesskey="U">Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="pre-rendering">
+<h1>Pre-Rendering<a class="headerlink" href="#pre-rendering" title="Permalink to this headline">¶</a></h1>
+<p>Often some parts of a webpage are more dynamic than others. <em class="tdi">TDI</em> lets
+you render the less dynamic parts independently from the hot stuff.
+Let&#8217;s start with an example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+<span class="n">template</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;body&gt;</span>
+<span class="s">    &lt;h1 tdi=&quot;doctitle&quot;&gt;doc title goes here&lt;/h1&gt;</span>
+<span class="s">    &lt;ul&gt;</span>
+<span class="s">        &lt;li tdi=&quot;menu&quot;&gt;&lt;a tdi=&quot;link&quot;&gt;some menu item&lt;/a&gt;&lt;/li&gt;&lt;li tdi=&quot;:-menu&quot;&gt;</span>
+<span class="s">        &lt;/li&gt;</span>
+<span class="s">    &lt;/ul&gt;</span>
+<span class="s">    &lt;p tdi=&quot;intro&quot; class=&quot;edit-intro&quot;&gt;Intro goes here.&lt;/p&gt;</span>
+<span class="s">    &lt;div class=&quot;list&quot; tdi=&quot;list&quot;&gt;</span>
+<span class="s">        ...</span>
+<span class="s">    &lt;/div&gt;</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&lt;/html&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">PreModel</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_menu</span> <span class="o">=</span> <span class="n">menu</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_page</span> <span class="o">=</span> <span class="n">page</span>
+
+    <span class="k">def</span> <span class="nf">render_menu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">repeat_menu</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_menu</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">repeat_menu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="p">(</span><span class="n">href</span><span class="p">,</span> <span class="n">menuitem</span><span class="p">)):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="n">menuitem</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ctx</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_page</span><span class="p">):</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="o">.</span><span class="n">hiddenelement</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="p">[</span><span class="s">&#39;href&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">href</span>
+
+<span class="k">class</span> <span class="nc">Model</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">render_doctitle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="s">u&quot;Some title&quot;</span>
+
+<span class="n">menu</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s">u&#39;/some/&#39;</span><span class="p">,</span> <span class="s">u&#39;Some Menu Item&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">u&#39;/other/&#39;</span><span class="p">,</span> <span class="s">u&#39;Editing Content &amp; Attributes&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">u&#39;/third.html&#39;</span><span class="p">,</span> <span class="s">u&#39;Another Menu Item&#39;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">premodel</span> <span class="o">=</span> <span class="n">PreModel</span><span class="p">(</span><span class="n">menu</span><span class="o">=</span><span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="p">()</span>
+<span class="n">template</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">prerender</span><span class="o">=</span><span class="n">premodel</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The logic is split into two parts, which are in fact rendered
+independently. First the prerender model is asked. Every node not handled
+there will be kept in the template and can be manipulated by the &#8220;real&#8221;
+model object in the second pass. The second time the template is
+rendered the prerender model won&#8217;t be asked again. Of course, the whole
+thing only makes sense if you intend to keep the template object around
+for the next request.</p>
+<div class="figure">
+<img alt="_images/prerender.png" src="_images/prerender.png" />
+<p class="caption">Pre-rendering Schema</p>
+</div>
+<p>The figure above show the main objects when using the pre-rendering
+feature. The original template is the starting point, but becomes
+pretty unimportant after the first pre-rendering pass.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">Do not pre-render request specific (or worse: user specific)
+data.</p>
+</div>
+<p>By default the pre-rendered template is cached forever. This may be too
+long for some data. The solution for this problem is to version the
+prerendered state. <em class="tdi">TDI</em> checks the prerender model for a method called
+<tt class="xref py py-meth docutils literal"><span class="pre">prerender_version()</span></tt>, which takes the current version (starting
+with <tt class="docutils literal"><span class="pre">None</span></tt>) and returns a tuple containing (a) if the version
+is outdated (bool) and (b) the new version object. The version object
+can be anything. <em class="tdi">TDI</em> doesn&#8217;t even look at it. It&#8217;s just stored
+together with the prerendered state and passed to the
+<tt class="xref py py-meth docutils literal"><span class="pre">prerender_version()</span></tt> method. Here&#8217;s a simplified example (just to
+visualize the method&#8217;s signature):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">PreModel</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">version</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_version</span> <span class="o">=</span> <span class="n">version</span>
+
+    <span class="k">def</span> <span class="nf">prerender_version</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">version</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_version</span> <span class="o">!=</span> <span class="n">version</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_version</span>
+</pre></div>
+</div>
+<div class="section" id="implementation-notes">
+<h2>Implementation Notes<a class="headerlink" href="#implementation-notes" title="Permalink to this headline">¶</a></h2>
+<p>The pre-rendering mechanism exploits the fact that <em class="tdi">TDI</em>&#8216;s template
+syntax is so simple and non-intrusive. Instead of generating output, you
+just generate a new template (which is fed to the parser again and then
+stored for the &#8220;real&#8221; rendering later).</p>
+<p>The template-generation process works semi-automatically by using a
+different adapter between the rendering engine and your model. Actually
+it&#8217;s a wrapper around the regular rendering-adapter. The wrapper asks
+your model for each <tt class="samp docutils literal"><span class="pre">render_</span><em><span class="pre">name</span></em></tt> method and if it doesn&#8217;t
+provide one, it generates its own, which simply restores the <tt class="docutils literal"><span class="pre">tdi</span></tt> and
+<tt class="docutils literal"><span class="pre">tdi:scope</span></tt> attributes. See the source code of
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.model_adapters.PreRenderWrapper-class.html"><span class="pre">→&nbsp;model_adapters.PreRenderWrapper</span></a></tt> and
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.model_adapters.RenderAdapter-class.html"><span class="pre">→&nbsp;model_adapters.RenderAdapter</span></a></tt> for details.</p>
+<p>If you need a different mechanism, you can supply another adapter via
+the <tt class="docutils literal"><span class="pre">preadapter</span></tt> parameter of the
+<tt class="docutils literal"><a class="reference external" href="../apidoc/tdi.template.Template-class.html#render"><span class="pre">→&nbsp;Template.render()</span></a></tt> method.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Pre-Rendering</a><ul>
+<li><a class="reference internal" href="#implementation-notes">Implementation Notes</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="partial.html"
+                        title="previous chapter">Partial Rendering</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="filtering.html"
+                        title="next chapter">Filtering</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="filtering.html" title="Filtering"
+             >next</a></li>
+        <li class="right" >
+          <a href="partial.html" title="Partial Rendering"
+             >previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" >Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 André Malo.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

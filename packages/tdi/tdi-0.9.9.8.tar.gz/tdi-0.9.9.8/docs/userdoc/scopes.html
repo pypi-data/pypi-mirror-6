@@ -1,0 +1,449 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Code Partitioning With Scopes &mdash; TDI 0.9.9.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/tdi.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.9.9.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="TDI 0.9.9.8 documentation" href="index.html" />
+    <link rel="up" title="Documentation Topics" href="topics.html" />
+    <link rel="next" title="Miscellaneous HTML tools" href="html_tools.html" />
+    <link rel="prev" title="Template Combination With Overlays" href="overlays.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="html_tools.html" title="Miscellaneous HTML tools"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="overlays.html" title="Template Combination With Overlays"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" accesskey="U">Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="code-partitioning-with-scopes">
+<h1>Code Partitioning With Scopes<a class="headerlink" href="#code-partitioning-with-scopes" title="Permalink to this headline">¶</a></h1>
+<p><em class="tdi">TDI</em> allows you to bind nodes or groups of nodes to <em class="dfn">scopes</em>. This
+is the counterpart to overlays on the python side. Scopes add the
+capability to edit the template with different model instances.</p>
+<p>It looks like this:</p>
+<div class="highlight-html"><div class="highlight"><pre><span class="nt">&lt;html&gt;</span>
+<span class="nt">&lt;body&gt;</span>
+    <span class="nt">&lt;h1</span> <span class="na">tdi=</span><span class="s">&quot;doctitle&quot;</span><span class="nt">&gt;</span>doc title goes here<span class="nt">&lt;/h1&gt;</span>
+    <span class="nt">&lt;ul</span> <span class="na">tdi:scope=</span><span class="s">&quot;menu&quot;</span><span class="nt">&gt;</span>
+        <span class="nt">&lt;li</span> <span class="na">tdi=</span><span class="s">&quot;item&quot;</span><span class="nt">&gt;&lt;a</span> <span class="na">tdi=</span><span class="s">&quot;link&quot;</span><span class="nt">&gt;</span>some menu item<span class="nt">&lt;/a&gt;&lt;/li&gt;&lt;li</span> <span class="na">tdi=</span><span class="s">&quot;:-item&quot;</span><span class="nt">&gt;</span>
+        <span class="nt">&lt;/li&gt;</span>
+    <span class="nt">&lt;/ul&gt;</span>
+    <span class="nt">&lt;p</span> <span class="na">tdi=</span><span class="s">&quot;intro&quot;</span> <span class="na">class=</span><span class="s">&quot;edit-intro&quot;</span><span class="nt">&gt;</span>Intro goes here.<span class="nt">&lt;/p&gt;</span>
+    <span class="nt">&lt;div</span> <span class="na">class=</span><span class="s">&quot;list&quot;</span> <span class="na">tdi=</span><span class="s">&quot;list&quot;</span><span class="nt">&gt;</span>
+        ...
+    <span class="nt">&lt;/div&gt;</span>
+<span class="nt">&lt;/body&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</pre></div>
+</div>
+<p>Everything within the node marked with <tt class="docutils literal"><span class="pre">tdi:scope</span></tt> (including the node
+itself) belongs to the &#8220;menu&#8221; scope. Each scope eventually refers to its
+own model object, which is looked up as <tt class="samp docutils literal"><span class="pre">scope_</span><em><span class="pre">name</span></em></tt> within the
+current model. Here&#8217;s the code for our menu example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Menu</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_menu</span> <span class="o">=</span> <span class="n">menu</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_page</span> <span class="o">=</span> <span class="n">page</span>
+
+    <span class="k">def</span> <span class="nf">render_item</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">repeat_item</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_menu</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">repeat_item</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="p">(</span><span class="n">href</span><span class="p">,</span> <span class="n">menuitem</span><span class="p">)):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="n">menuitem</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ctx</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_page</span><span class="p">):</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="o">.</span><span class="n">hiddenelement</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="p">[</span><span class="s">&#39;href&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">href</span>
+
+
+<span class="k">class</span> <span class="nc">Model</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scope_menu</span> <span class="o">=</span> <span class="n">Menu</span><span class="p">(</span><span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The essence is, that scopes allow you to split your model code into
+logical pieces. Again, which piece of code belongs to which scope is
+part of the logic, not part of the template.</p>
+<p>More notes on scopes:</p>
+<ul class="simple">
+<li>They can be nested and work cumulative. A scope <tt class="docutils literal"><span class="pre">menu</span></tt> inside a
+scope <tt class="docutils literal"><span class="pre">left_bar</span></tt> is looked up as
+<tt class="docutils literal"><span class="pre">model.scope_left_bar.scope_menu</span></tt>.</li>
+<li>dotted scope names are allowed (for example <tt class="docutils literal"><span class="pre">header.menu</span></tt>), which
+means that two scopes (first <tt class="docutils literal"><span class="pre">header</span></tt> and then <tt class="docutils literal"><span class="pre">menu</span></tt> inside the
+<tt class="docutils literal"><span class="pre">header</span></tt> model) are looked up (<tt class="docutils literal"><span class="pre">model.scope_header.scope_menu</span></tt>)</li>
+<li>scopes can be combined with overlays, of course (you can specify both
+<tt class="docutils literal"><span class="pre">tdi:scope</span></tt> and <tt class="docutils literal"><span class="pre">tdi:overlay</span></tt> within the same node)</li>
+</ul>
+<p>The output of the example:</p>
+<div class="highlight-html"><div class="highlight"><pre><span class="nt">&lt;html&gt;</span>
+<span class="nt">&lt;body&gt;</span>
+    <span class="nt">&lt;h1&gt;</span>doc title goes here<span class="nt">&lt;/h1&gt;</span>
+    <span class="nt">&lt;ul&gt;</span>
+        <span class="nt">&lt;li&gt;&lt;a</span> <span class="na">href=</span><span class="s">&quot;/some/&quot;</span><span class="nt">&gt;</span>Some Menu Item<span class="nt">&lt;/a&gt;&lt;/li&gt;</span>
+        <span class="nt">&lt;li&gt;</span>Editing Content <span class="ni">&amp;amp;</span> Attributes<span class="nt">&lt;/li&gt;</span>
+        <span class="nt">&lt;li&gt;&lt;a</span> <span class="na">href=</span><span class="s">&quot;/third.html&quot;</span><span class="nt">&gt;</span>Another Menu Item<span class="nt">&lt;/a&gt;&lt;/li&gt;</span>
+    <span class="nt">&lt;/ul&gt;</span>
+    <span class="nt">&lt;p</span> <span class="na">class=</span><span class="s">&quot;edit-intro&quot;</span><span class="nt">&gt;</span>Intro goes here.<span class="nt">&lt;/p&gt;</span>
+    <span class="nt">&lt;div</span> <span class="na">class=</span><span class="s">&quot;list&quot;</span><span class="nt">&gt;</span>
+        ...
+    <span class="nt">&lt;/div&gt;</span>
+<span class="nt">&lt;/body&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</pre></div>
+</div>
+<div class="section" id="distributed-scopes">
+<h2>Distributed Scopes<a class="headerlink" href="#distributed-scopes" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="simple-scope-scattering">
+<h3>Simple Scope Scattering<a class="headerlink" href="#simple-scope-scattering" title="Permalink to this headline">¶</a></h3>
+<p>Scopes do not need to be contained by <em>one</em> block. You can easily
+scatter them over the template. If they occur within the same parent
+scope, the same scope model instance will be asked for rendering. That&#8217;s
+very handy for distributed but logically associated content, for
+example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+<span class="n">template</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;body&gt;</span>
+<span class="s">    &lt;ul tdi:scope=&quot;navigation&quot;&gt;</span>
+<span class="s">        &lt;li tdi=&quot;breadcrumb&quot;&gt;&lt;a tdi=&quot;*link&quot;&gt;&lt;/a&gt;&lt;/li&gt;&lt;li tdi=&quot;:-breadcrumb&quot;&gt;</span>
+<span class="s">        &lt;/li&gt;</span>
+<span class="s">    &lt;/ul&gt;</span>
+<span class="s">    ...</span>
+<span class="s">    &lt;ul tdi:scope=&quot;navigation&quot;&gt;</span>
+<span class="s">        &lt;li tdi=&quot;menu&quot;&gt;&lt;a tdi=&quot;*link&quot;&gt;some menu item&lt;/a&gt;&lt;/li&gt;&lt;li tdi=&quot;:-menu&quot;&gt;</span>
+<span class="s">        &lt;/li&gt;</span>
+<span class="s">    &lt;/ul&gt;</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&lt;/html&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="o">.</span><span class="n">lstrip</span><span class="p">())</span>
+
+
+<span class="k">class</span> <span class="nc">Navigation</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">breadcrumb</span><span class="p">,</span> <span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_breadcrumb</span> <span class="o">=</span> <span class="n">breadcrumb</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_menu</span> <span class="o">=</span> <span class="n">menu</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_page</span> <span class="o">=</span> <span class="n">page</span>
+
+    <span class="k">def</span> <span class="nf">render_breadcrumb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">repeat_nav</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_breadcrumb</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_breadcrumb</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">render_menu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">repeat_nav</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_menu</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_page</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">repeat_nav</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="p">(</span><span class="n">href</span><span class="p">,</span> <span class="n">menuitem</span><span class="p">),</span> <span class="n">active</span><span class="p">):</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="n">menuitem</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ctx</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">active</span><span class="p">):</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="o">.</span><span class="n">hiddenelement</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">link</span><span class="p">[</span><span class="s">&#39;href&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">href</span>
+
+
+<span class="k">class</span> <span class="nc">Model</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">breadcrumb</span><span class="p">,</span> <span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scope_navigation</span> <span class="o">=</span> <span class="n">Navigation</span><span class="p">(</span><span class="n">breadcrumb</span><span class="p">,</span> <span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="p">)</span>
+
+
+<span class="n">menu</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s">u&#39;/some/&#39;</span><span class="p">,</span> <span class="s">u&#39;Some Menu Item&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">u&#39;/other/&#39;</span><span class="p">,</span> <span class="s">u&#39;Editing Content &amp; Attributes&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">u&#39;/third.html&#39;</span><span class="p">,</span> <span class="s">u&#39;Another Menu Item&#39;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">breadcrumb</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s">u&#39;/&#39;</span><span class="p">,</span> <span class="s">u&#39;Hompage&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">u&#39;/other/&#39;</span><span class="p">,</span> <span class="s">u&#39;Editing Content &amp; Attributes&#39;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="p">(</span><span class="n">breadcrumb</span><span class="o">=</span><span class="n">breadcrumb</span><span class="p">,</span> <span class="n">menu</span><span class="o">=</span><span class="n">menu</span><span class="p">,</span> <span class="n">page</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">template</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Also note, how the repeater code is reused.</p>
+<div class="highlight-html"><div class="highlight"><pre><span class="nt">&lt;html&gt;</span>
+<span class="nt">&lt;body&gt;</span>
+    <span class="nt">&lt;ul&gt;</span>
+        <span class="nt">&lt;li&gt;&lt;a</span> <span class="na">href=</span><span class="s">&quot;/&quot;</span><span class="nt">&gt;</span>Hompage<span class="nt">&lt;/a&gt;&lt;/li&gt;</span>
+        <span class="nt">&lt;li&gt;</span>Editing Content <span class="ni">&amp;amp;</span> Attributes<span class="nt">&lt;/li&gt;</span>
+    <span class="nt">&lt;/ul&gt;</span>
+    ...
+    <span class="nt">&lt;ul&gt;</span>
+        <span class="nt">&lt;li&gt;&lt;a</span> <span class="na">href=</span><span class="s">&quot;/some/&quot;</span><span class="nt">&gt;</span>Some Menu Item<span class="nt">&lt;/a&gt;&lt;/li&gt;</span>
+        <span class="nt">&lt;li&gt;</span>Editing Content <span class="ni">&amp;amp;</span> Attributes<span class="nt">&lt;/li&gt;</span>
+        <span class="nt">&lt;li&gt;&lt;a</span> <span class="na">href=</span><span class="s">&quot;/third.html&quot;</span><span class="nt">&gt;</span>Another Menu Item<span class="nt">&lt;/a&gt;&lt;/li&gt;</span>
+    <span class="nt">&lt;/ul&gt;</span>
+<span class="nt">&lt;/body&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="parametrized-overlays">
+<h3>Parametrized Overlays<a class="headerlink" href="#parametrized-overlays" title="Permalink to this headline">¶</a></h3>
+<p>There&#8217;s another, more tricky use case. You can <em>extend</em> or <em>parametrize</em>
+an existing scope from within the template. That&#8217;s useful when you have
+<a class="reference internal" href="overlays.html"><em>overlays</em></a>, which provide standard constructions.
+Examples are layouted boxes, flash embedding code and so on. The idea
+is to place a parameter block near the overlay target (usually before
+it, so it can trigger code, before the overlay is actually rendered).
+The parameter block gets the same scope as the overlay and voilà &#8211; the
+scope model will see it. The following code outlines the priniciple:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">tdi</span> <span class="kn">import</span> <span class="n">html</span>
+<span class="kn">from</span> <span class="nn">tdi.tools.html</span> <span class="kn">import</span> <span class="n">decode</span>
+
+<span class="c"># This is some typcial flash embedding code.</span>
+<span class="c"># It serves as a &quot;layout widget&quot;, placed via overlay</span>
+<span class="n">flash</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;!-- &lt;tdi&gt; is used as neutral dummy element (removed due to the - flag) --&gt;</span>
+<span class="s">&lt;tdi tdi:scope=&quot;-flash&quot; tdi:overlay=&quot;&lt;-flash&quot;&gt;</span>
+<span class="s">    &lt;object tdi=&quot;object_ie&quot;</span>
+<span class="s">        classid=&quot;clsid:D27CDB6E-AE6D-11cf-96B8-444553540000&quot; width=&quot;&quot;</span>
+<span class="s">        height=&quot;&quot;&gt;</span>
+<span class="s">        &lt;param tdi=&quot;url&quot; name=&quot;movie&quot; value=&quot;&quot; /&gt;</span>
+<span class="s">        &lt;param tdi=&quot;param&quot; /&gt;</span>
+<span class="s">        &lt;![if !IE]&gt;&lt;object tdi=&quot;object_other&quot;</span>
+<span class="s">            type=&quot;application/x-shockwave-flash&quot; data=&quot;&quot; width=&quot;&quot; height=&quot;&quot;&gt;</span>
+<span class="s">            &lt;param tdi=&quot;param&quot; /&gt;</span>
+<span class="s">        &lt;![endif]&gt;</span>
+<span class="s">        &lt;p tdi=&quot;alternative&quot;&gt;You need to enable &lt;a</span>
+<span class="s">          href=&quot;http://www.adobe.com/go/getflashplayer&quot;&gt;Flash&lt;/a&gt; to view this</span>
+<span class="s">          content.&lt;/p&gt;</span>
+<span class="s">    &lt;![if !IE]&gt;&lt;/object&gt;&lt;![endif]&gt;&lt;/object&gt;</span>
+<span class="s">&lt;/tdi&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="c"># page template, using the flash layout widget, passing parameters</span>
+<span class="n">template</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">&lt;html&gt;</span>
+<span class="s">&lt;body&gt;</span>
+<span class="s">    &lt;h1&gt;some flash&lt;/h1&gt;</span>
+<span class="s">    &lt;tdi tdi:scope=&quot;-flash.param&quot; tdi=&quot;-init&quot;</span>
+<span class="s">            file=&quot;flashfile.swf&quot; width=&quot;400&quot; height=&quot;300&quot;&gt;</span>
+<span class="s">        &lt;tdi tdi=&quot;param&quot; name=&quot;bgcolor&quot; value=&quot;#ffffff&quot; /&gt;</span>
+<span class="s">        &lt;tdi tdi=&quot;param&quot; name=&quot;wmode&quot; value=&quot;transparent&quot; /&gt;</span>
+<span class="s">        &lt;tdi tdi=&quot;param&quot; name=&quot;quality&quot; value=&quot;high&quot; /&gt;</span>
+<span class="s">        &lt;img tdi=&quot;alternative&quot; src=&quot;replacement-image.png&quot; alt=&quot;some cool text&quot; /&gt;</span>
+<span class="s">    &lt;/tdi&gt;</span>
+<span class="s">    &lt;tdi tdi:overlay=&quot;-&gt;flash&quot; /&gt;</span>
+<span class="s">&lt;/body&gt;</span>
+<span class="s">&lt;/html&gt;</span>
+<span class="s">&quot;&quot;&quot;</span><span class="o">.</span><span class="n">lstrip</span><span class="p">())</span><span class="o">.</span><span class="n">overlay</span><span class="p">(</span><span class="n">flash</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">FlashParam</span><span class="p">(</span><span class="nb">dict</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">render_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="n">encoding</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">raw</span><span class="o">.</span><span class="n">encoder</span><span class="o">.</span><span class="n">encoding</span>
+        <span class="bp">self</span><span class="p">[</span><span class="s">&#39;file&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">decode</span><span class="p">(</span><span class="n">node</span><span class="p">[</span><span class="s">u&#39;file&#39;</span><span class="p">],</span> <span class="n">encoding</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">[</span><span class="s">&#39;width&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">decode</span><span class="p">(</span><span class="n">node</span><span class="p">[</span><span class="s">u&#39;width&#39;</span><span class="p">],</span> <span class="n">encoding</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">[</span><span class="s">&#39;height&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">decode</span><span class="p">(</span><span class="n">node</span><span class="p">[</span><span class="s">u&#39;height&#39;</span><span class="p">],</span> <span class="n">encoding</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">[</span><span class="s">&#39;param&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">render_param</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">encoding</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">raw</span><span class="o">.</span><span class="n">encoder</span><span class="o">.</span><span class="n">encoding</span>
+        <span class="bp">self</span><span class="p">[</span><span class="s">&#39;param&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span>
+            <span class="n">decode</span><span class="p">(</span><span class="n">node</span><span class="p">[</span><span class="s">u&#39;name&#39;</span><span class="p">],</span> <span class="n">encoding</span><span class="p">),</span>
+            <span class="n">decode</span><span class="p">(</span><span class="n">node</span><span class="p">[</span><span class="s">u&#39;value&#39;</span><span class="p">],</span> <span class="n">encoding</span><span class="p">),</span>
+        <span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">render_alternative</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="bp">self</span><span class="p">[</span><span class="s">&#39;alt&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+
+<span class="k">class</span> <span class="nc">Flash</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scope_param</span> <span class="o">=</span> <span class="n">FlashParam</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">render_object_ie</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scope_param</span>
+        <span class="n">node</span><span class="p">[</span><span class="s">u&#39;width&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="s">&#39;width&#39;</span><span class="p">]</span>
+        <span class="n">node</span><span class="p">[</span><span class="s">u&#39;height&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="s">&#39;height&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">render_url</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scope_param</span>
+        <span class="n">node</span><span class="p">[</span><span class="s">u&#39;value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="s">&#39;file&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">render_param</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scope_param</span>
+        <span class="k">for</span> <span class="n">pnode</span><span class="p">,</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">iterate</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s">&#39;param&#39;</span><span class="p">]):</span>
+            <span class="n">pnode</span><span class="p">[</span><span class="s">u&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">name</span>
+            <span class="n">pnode</span><span class="p">[</span><span class="s">u&#39;value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="k">def</span> <span class="nf">render_object_other</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scope_param</span>
+        <span class="n">node</span><span class="p">[</span><span class="s">u&#39;width&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="s">&#39;width&#39;</span><span class="p">]</span>
+        <span class="n">node</span><span class="p">[</span><span class="s">u&#39;height&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="s">&#39;height&#39;</span><span class="p">]</span>
+        <span class="n">node</span><span class="p">[</span><span class="s">u&#39;data&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="s">&#39;file&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">render_alternative</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scope_param</span>
+        <span class="k">if</span> <span class="s">&#39;alt&#39;</span> <span class="ow">in</span> <span class="n">p</span><span class="p">:</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="s">&#39;alt&#39;</span><span class="p">])</span>
+
+
+<span class="k">class</span> <span class="nc">Model</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scope_flash</span> <span class="o">=</span> <span class="n">Flash</span><span class="p">()</span>
+
+
+<span class="n">template</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">Model</span><span class="p">())</span>
+</pre></div>
+</div>
+<div class="highlight-html"><div class="highlight"><pre><span class="nt">&lt;html&gt;</span>
+<span class="nt">&lt;body&gt;</span>
+    <span class="nt">&lt;h1&gt;</span>some flash<span class="nt">&lt;/h1&gt;</span>
+    
+    
+    <span class="nt">&lt;object</span> <span class="na">classid=</span><span class="s">&quot;clsid:D27CDB6E-AE6D-11cf-96B8-444553540000&quot;</span> <span class="na">width=</span><span class="s">&quot;400&quot;</span> <span class="na">height=</span><span class="s">&quot;300&quot;</span><span class="nt">&gt;</span>
+        <span class="nt">&lt;param</span> <span class="na">name=</span><span class="s">&quot;movie&quot;</span> <span class="na">value=</span><span class="s">&quot;flashfile.swf&quot;</span> <span class="nt">/&gt;</span>
+        <span class="nt">&lt;param</span> <span class="na">name=</span><span class="s">&quot;bgcolor&quot;</span> <span class="na">value=</span><span class="s">&quot;#ffffff&quot;</span> <span class="nt">/&gt;&lt;param</span> <span class="na">name=</span><span class="s">&quot;wmode&quot;</span> <span class="na">value=</span><span class="s">&quot;transparent&quot;</span> <span class="nt">/&gt;&lt;param</span> <span class="na">name=</span><span class="s">&quot;quality&quot;</span> <span class="na">value=</span><span class="s">&quot;high&quot;</span> <span class="nt">/&gt;</span>
+        <span class="cp">&lt;![if !IE]&gt;</span><span class="nt">&lt;object</span> <span class="na">type=</span><span class="s">&quot;application/x-shockwave-flash&quot;</span> <span class="na">data=</span><span class="s">&quot;flashfile.swf&quot;</span> <span class="na">width=</span><span class="s">&quot;400&quot;</span> <span class="na">height=</span><span class="s">&quot;300&quot;</span><span class="nt">&gt;</span>
+            <span class="nt">&lt;param</span> <span class="na">name=</span><span class="s">&quot;bgcolor&quot;</span> <span class="na">value=</span><span class="s">&quot;#ffffff&quot;</span> <span class="nt">/&gt;&lt;param</span> <span class="na">name=</span><span class="s">&quot;wmode&quot;</span> <span class="na">value=</span><span class="s">&quot;transparent&quot;</span> <span class="nt">/&gt;&lt;param</span> <span class="na">name=</span><span class="s">&quot;quality&quot;</span> <span class="na">value=</span><span class="s">&quot;high&quot;</span> <span class="nt">/&gt;</span>
+        <span class="cp">&lt;![endif]&gt;</span>
+        <span class="nt">&lt;img</span> <span class="na">src=</span><span class="s">&quot;replacement-image.png&quot;</span> <span class="na">alt=</span><span class="s">&quot;some cool text&quot;</span> <span class="nt">/&gt;</span>
+    <span class="cp">&lt;![if !IE]&gt;</span><span class="nt">&lt;/object&gt;</span><span class="cp">&lt;![endif]&gt;</span><span class="nt">&lt;/object&gt;</span>
+
+<span class="nt">&lt;/body&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</pre></div>
+</div>
+<p>This code probably needs some explanations:</p>
+<ul class="simple">
+<li>it uses a <tt class="docutils literal"><span class="pre">&lt;tdi&gt;</span></tt> element as &#8220;neutral&#8221; container for some stuff. This
+is often useful if you need such a semantic-less element. It also fits
+everywhere (which a <tt class="docutils literal"><span class="pre">&lt;span&gt;</span></tt> cannot contain everything and a
+<tt class="docutils literal"><span class="pre">&lt;div&gt;</span></tt> cannot be contained by everything).</li>
+<li>it uses directly a subscope for the parameters. That&#8217;s not exactly
+neccessary, but it&#8217;s useful sometimes &#8211; in this case, because it
+separates the parameters and the (flash-)container rendering on the
+code side. Note how the <tt class="docutils literal"><span class="pre">FlashParam</span></tt> scope model inherits from
+<tt class="docutils literal"><span class="pre">dict</span></tt>.</li>
+<li><tt class="docutils literal"><span class="pre">FlashParam.render_init</span></tt> uses a subtle trick to render its children
+and the remove itself: <a class="reference internal" href="subrendering.html"><em>subrendering</em></a>. This may seem
+like a cheap trick, but it&#8217;s not. The generated result string (which is
+thrown away) is very small and it keeps the code very clear.</li>
+<li>However, <strong>we just invented our own parameter language</strong> here. That&#8217;s
+not a good thing per se. Keep these things small and restrict them to
+the absolutely neccessary cases. They are the source of confusion and
+error.</li>
+</ul>
+<p>Now, while it looks like a lot of effort to build such a code &#8211;
+remember you&#8217;re going to create that once and use often. It will save
+time and nerves directly afterwards.</p>
+</div>
+</div>
+<div class="section" id="absolute-scopes">
+<h2>Absolute Scopes<a class="headerlink" href="#absolute-scopes" title="Permalink to this headline">¶</a></h2>
+<p>You can declare <em class="dfn">absolute</em> scopes by flagging them with <tt class="docutils literal"><span class="pre">=</span></tt>. This
+means, they break out of the current scope nesting. You should avoid
+using this feature regularily. It is, however, useful for:</p>
+<ul class="simple">
+<li>generated templates, in order to ensure a certain structure (it&#8217;s used by the
+prerendering-mechanism, for example)</li>
+<li>truly absolute scopes, which are always located at the root model
+(like statistics snippets, parametrized layout widgets, or, say,
+the main navigation)</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Code Partitioning With Scopes</a><ul>
+<li><a class="reference internal" href="#distributed-scopes">Distributed Scopes</a><ul>
+<li><a class="reference internal" href="#simple-scope-scattering">Simple Scope Scattering</a></li>
+<li><a class="reference internal" href="#parametrized-overlays">Parametrized Overlays</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#absolute-scopes">Absolute Scopes</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="overlays.html"
+                        title="previous chapter">Template Combination With Overlays</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="html_tools.html"
+                        title="next chapter">Miscellaneous HTML tools</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="html_tools.html" title="Miscellaneous HTML tools"
+             >next</a></li>
+        <li class="right" >
+          <a href="overlays.html" title="Template Combination With Overlays"
+             >previous</a> |</li>
+        <li><a href="index.html">TDI 0.9.9.8 documentation</a> &raquo;</li>
+          <li><a href="topics.html" >Documentation Topics</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 André Malo.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
