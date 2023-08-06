@@ -1,0 +1,224 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Utility Functions &mdash; djqgrid 0.2 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="djqgrid 0.2 documentation" href="../index.html" />
+    <link rel="up" title="Reference" href="index.html" />
+    <link rel="prev" title="The djqgrid Template Tag" href="templatetag.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="templatetag.html" title="The djqgrid Template Tag"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">djqgrid 0.2 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Reference</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="utility-functions">
+<h1>Utility Functions<a class="headerlink" href="#utility-functions" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="json-helpers">
+<h2>json_helpers<a class="headerlink" href="#json-helpers" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="module-djqgrid.json_helpers"></span><dl class="function">
+<dt id="djqgrid.json_helpers.function">
+<tt class="descclassname">djqgrid.json_helpers.</tt><tt class="descname">function</tt><big>(</big><em>funcname</em><big>)</big><a class="headerlink" href="#djqgrid.json_helpers.function" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wraps a JavaScript function name with our token, so it can be unquoted when rendering to JSON.</p>
+<p>he jqGrid option object is actually a Python dictionary that is rendered to JSON in the jqgrid template tag.</p>
+<p>Unfortunately, Python&#8217;s <tt class="docutils literal"><span class="pre">json</span></tt> module can&#8217;t output such JSON, it will always put quotes around strings (without the
+quotes, it&#8217;s not legal JSON), so we need to work around it to support unquoted strings.</p>
+<p>The solution is simple and a bit ugly - we use a token that we wrap around function names. We serialize
+the dictionary to a JSON string, look for the token and remove the quotes around it.</p>
+<p>Our token is <tt class="docutils literal"><span class="pre">&#64;&#64;</span></tt>. So in the example about, our Python dict will be: <tt class="docutils literal"><span class="pre">{'loadComplete':</span> <span class="pre">'&#64;&#64;loadCompleteHandler&#64;&#64;')</span></tt>.
+When we create the JSON, we remove the quotes and the &#64;&#64;, and end up with the expected string.</p>
+<p>The <tt class="docutils literal"><span class="pre">function</span></tt> helper function puts the token around the string, so that we can build our dictionary like so:
+<tt class="docutils literal"><span class="pre">d</span> <span class="pre">=</span> <span class="pre">{'loadComplete':</span> <span class="pre">function('loadCompleteHandler'))</span></tt> .</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd>funcname - the function&#8217;s name</dd>
+<dt>Returns:</dt>
+<dd>The wrapped function name</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="djqgrid.json_helpers.dumps">
+<tt class="descclassname">djqgrid.json_helpers.</tt><tt class="descname">dumps</tt><big>(</big><em>o</em>, <em>*args</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#djqgrid.json_helpers.dumps" title="Permalink to this definition">¶</a></dt>
+<dd><p>Serializes an object to JSON, unquoting function names.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd>o: Object to serialize
+<a href="#id1"><span class="problematic" id="id2">*</span></a>args: Additional arguments passed to <tt class="docutils literal"><span class="pre">json.dumps</span></tt>
+<a href="#id3"><span class="problematic" id="id4">**</span></a>kwargs: Additional arguments passed to <tt class="docutils literal"><span class="pre">json.dumps</span></tt></dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-djqgrid.grid_registrar">
+<span id="grid-registrar"></span><h2>grid_registrar<a class="headerlink" href="#module-djqgrid.grid_registrar" title="Permalink to this headline">¶</a></h2>
+<p>This module handles all the grid registration.</p>
+<p>A Grid object is created multiple times - when the HTML containing the grid is rendered, and every time a the grid&#8217;s
+data needs to be retrieved. Since each of these times is an independent HTTP request, we need to somehow pass the
+information of the grid&#8217;s class. This is done with a <em>Grid ID</em>.</p>
+<p>Each HTTP request <em>gets its own Grid instance</em>, we just pass the information of the Grid&#8217;s <em>class</em> around. Since we can&#8217;t
+create a class just because we&#8217;ve received its name in an HTTP request (it&#8217;s a <em>huge</em> security hole), we only create
+classes that have been registered before. We also don&#8217;t want to pass class names in HTTP requests, so we pass class IDs.</p>
+<dl class="function">
+<dt id="djqgrid.grid_registrar.get_grid_class">
+<tt class="descclassname">djqgrid.grid_registrar.</tt><tt class="descname">get_grid_class</tt><big>(</big><em>id</em><big>)</big><a class="headerlink" href="#djqgrid.grid_registrar.get_grid_class" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a class for a given ID.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd>Grid ID</dd>
+<dt>Returns:</dt>
+<dd>The grid&#8217;s class</dd>
+<dt>Raises:</dt>
+<dd>KeyError if the ID hasn&#8217;t been registered</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="djqgrid.grid_registrar.register_grid">
+<tt class="descclassname">djqgrid.grid_registrar.</tt><tt class="descname">register_grid</tt><big>(</big><em>gridcls</em><big>)</big><a class="headerlink" href="#djqgrid.grid_registrar.register_grid" title="Permalink to this definition">¶</a></dt>
+<dd><p>Registers a Grid class in the registry.</p>
+<p>Calls <tt class="docutils literal"><span class="pre">gridcls.get_grid_id</span></tt> to get the class&#8217;s ID.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd>gridcls: Class of Grid to registry</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-djqgrid.views">
+<span id="views"></span><h2>views<a class="headerlink" href="#module-djqgrid.views" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="djqgrid.views.JsonResponse">
+<em class="property">class </em><tt class="descclassname">djqgrid.views.</tt><tt class="descname">JsonResponse</tt><big>(</big><em>content</em>, <em>mimetype='application/json'</em>, <em>status=None</em>, <em>content_type='application/json'</em><big>)</big><a class="headerlink" href="#djqgrid.views.JsonResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a JSON Response</p>
+<p>Takes the content object, json.dumps it and returns it an a response.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd>content: The object to be serialized into JSON
+mimetype: Response mime type. Default is application/json
+status: HTTP status code. Default is NONE.
+content_type: The response content type. Default is application/json</dd>
+<dt>Returns:</dt>
+<dd>A Django response object</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="djqgrid.views.query">
+<tt class="descclassname">djqgrid.views.</tt><tt class="descname">query</tt><big>(</big><em>request</em>, <em>grid_id</em><big>)</big><a class="headerlink" href="#djqgrid.views.query" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the grid content in a JSON response</p>
+<p>query creates a new Grid instance based on the grid_id (which represents the Grid class), and calls
+grid.get_json_data to perform the actual query.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd>request: Django request
+grid_id: ID of the grid. The ID is generated by Grid.get_grid_id</dd>
+<dt>Returns:</dt>
+<dd>The JSON serialized grid contents.</dd>
+</dl>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Utility Functions</a><ul>
+<li><a class="reference internal" href="#json-helpers">json_helpers</a></li>
+<li><a class="reference internal" href="#module-djqgrid.grid_registrar">grid_registrar</a></li>
+<li><a class="reference internal" href="#module-djqgrid.views">views</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="templatetag.html"
+                        title="previous chapter">The djqgrid Template Tag</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/reference/utilities.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="templatetag.html" title="The djqgrid Template Tag"
+             >previous</a> |</li>
+        <li><a href="../index.html">djqgrid 0.2 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Reference</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Itay Zandbank.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
