@@ -1,0 +1,141 @@
+;--------------------------------
+;Include Modern UI
+!include x64.nsh
+!include "MUI2.nsh"
+
+;--------------------------------
+;General
+
+;Name and file
+Name "Longaccess CLI"
+
+;Default installation folder
+InstallDir "$LOCALAPPDATA\LongaccessCLI\"
+
+;Get installation folder from registry if available
+InstallDirRegKey HKCU "Software\LongaccessCLI" ""
+
+;Request application privileges for Windows Vista
+RequestExecutionLevel user
+
+
+
+;--------------------------------
+;Interface Settings
+
+!define MUI_ABORTWARNING
+
+;--------------------------------
+;Pages
+
+!insertmacro MUI_PAGE_LICENSE "..\LICENSE"
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+
+;--------------------------------
+;Languages
+
+!insertmacro MUI_LANGUAGE "English"
+
+
+Var Extension
+Var ExtCmd
+Function un.setExtensionVars
+
+StrCpy $Extension ".longaccess"
+StrCpy $ExtCmd '"$INSTDIR\lacli\lacli.exe" archive extract'
+FunctionEnd
+Function setExtensionVars
+
+StrCpy $Extension ".longaccess"
+StrCpy $ExtCmd '"$INSTDIR\lacli\lacli.exe" archive extract'
+FunctionEnd
+Var Version
+Function setVersion
+nsExec::ExecToStack '"$INSTDIR\lacli\lacli.exe" --version'
+Pop $0 ; exit status
+Pop $1 ; output
+StrCpy $Version $1 ; "" 6
+FunctionEnd
+
+;--------------------------------
+;Installer Sections
+
+Section "Install"
+SetRegView 64
+
+
+SetOutPath "$INSTDIR"
+File /r "dist\lacli"
+
+Call setVersion
+Call setExtensionVars
+
+!define UNINSTALLER_NAME "Uninstall.exe"
+!define REG_UNINSTALL "Software\Microsoft\Windows\CurrentVersion\Uninstall\LongaccessCLI"
+!define WEBSITE_LINK "http://longaccess.com"
+
+WriteRegStr HKCU "${REG_UNINSTALL}" "DisplayName" "Longaccess CLI"
+WriteRegStr HKCU "${REG_UNINSTALL}" "DisplayIcon" "$\"$INSTDIR\lacli\lacli.exe$\""
+WriteRegStr HKCU "${REG_UNINSTALL}" "Publisher" "The Longaccess Company"
+WriteRegStr HKCU "${REG_UNINSTALL}" "DisplayVersion" "$Version"
+WriteRegDWord HKCU "${REG_UNINSTALL}" "EstimatedSize" 48185
+WriteRegStr HKCU "${REG_UNINSTALL}" "HelpLink" "${WEBSITE_LINK}"
+WriteRegStr HKCU "${REG_UNINSTALL}" "URLInfoAbout" "${WEBSITE_LINK}"
+WriteRegStr HKCU "${REG_UNINSTALL}" "InstallLocation" "$\"$INSTDIR$\""
+WriteRegStr HKCU "${REG_UNINSTALL}" "InstallSource" "$\"$EXEDIR$\""
+WriteRegDWord HKCU "${REG_UNINSTALL}" "NoModify" 1
+WriteRegDWord HKCU "${REG_UNINSTALL}" "NoRepair" 1
+WriteRegStr HKCU "${REG_UNINSTALL}" "UninstallString" "$\"$INSTDIR\${UNINSTALLER_NAME}$\""
+WriteRegStr HKCU "${REG_UNINSTALL}" "Comments" "Uninstalls Longaccess."
+
+
+WriteRegStr HKCU "Software\Classes\lacli" "DefaultIcon" "$INSTDIR\lacli\lacli.exe"
+WriteRegStr HKCU "Software\Classes\lacli\shell\open" "" "Open with Long Access CLI"
+WriteRegStr HKCU "Software\Classes\lacli\shell\open\command" "" '$ExtCmd "%1"'
+
+WriteRegStr HKCU "Software\LongaccessCLI" "" $INSTDIR
+WriteRegStr HKCU "Software\LongaccessCLI\Capabilities" "ApplicationDescription" "the Longaccess CLI client"
+WriteRegStr HKCU "Software\LongaccessCLI\Capabilities" "ApplicationName" "lacli"
+WriteRegStr HKCU "Software\LongaccessCLI\Capabilities\FileAssociations" $Extension "lacli"
+
+WriteRegStr HKCU "Software\RegisteredApplications" "lacli" "Software\LongaccessCLI\Capabilities"
+
+
+WriteRegStr HKCU "Software\Classes\.longaccess\OpenWithProgids" "lacli" ""
+
+;Create uninstaller
+WriteUninstaller "$INSTDIR\${UNINSTALLER_NAME}"
+
+;Create shortcuts
+CreateDirectory $SMPROGRAMS\LongaccessCLI
+CreateShortCut "$SMPROGRAMS\LongaccessCLI\LongaccessCLI.lnk" "$INSTDIR\lacli\lacli.exe" "-i" ; use defaults for parameters, icon, etc.
+CreateShortCut "$SMPROGRAMS\LongaccessCLI\Uninstall Longaccess.lnk" "$INSTDIR\Uninstall.exe" ; use defaults for parameters, icon, etc.
+
+SectionEnd
+
+
+;--------------------------------
+;Uninstaller Section
+
+Section "Uninstall"
+SetRegView 64
+
+Call un.setExtensionVars
+
+Delete "$INSTDIR\Uninstall.exe"
+RMDir /r "$INSTDIR"
+Delete "$SMPROGRAMS\LongaccessCLI\Longaccess.lnk"
+Delete "$SMPROGRAMS\LongaccessCLI\Uninstall Longaccess.lnk"
+
+DeleteRegKey HKCU "Software\Classes\lacli"
+DeleteRegValue HKCU "Software\RegisteredApplications" "lacli"
+DeleteRegValue HKCU "Software\Classes\.longaccess\OpenWithProgids" "lacli"
+DeleteRegKey HKCU "Software\LongaccessCLI"
+DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\LongaccessCLI"
+
+SectionEnd
+
