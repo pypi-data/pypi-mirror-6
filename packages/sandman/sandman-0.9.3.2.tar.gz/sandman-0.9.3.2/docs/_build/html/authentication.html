@@ -1,0 +1,182 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Authentication &mdash; sandman 0.9.3.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.9.3.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="sandman 0.9.3.2 documentation" href="index.html" />
+    <link rel="next" title="sandman API" href="sandman.html" />
+    <link rel="prev" title="The sandman Admin Interface" href="admin.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="sandman.html" title="sandman API"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="admin.html" title="The sandman Admin Interface"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">sandman 0.9.3.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="authentication">
+<h1>Authentication<a class="headerlink" href="#authentication" title="Permalink to this headline">¶</a></h1>
+<p><tt class="docutils literal"><span class="pre">sandman</span></tt> supports HTTP basic authentication, meaning a username and password
+must be passed on each request via the <tt class="docutils literal"><span class="pre">Authorization</span></tt> header.</p>
+<div class="section" id="enabling-authentication">
+<h2>Enabling Authentication<a class="headerlink" href="#enabling-authentication" title="Permalink to this headline">¶</a></h2>
+<p>Enabling authentication in your <tt class="docutils literal"><span class="pre">sandman</span></tt> installation is a straight-forward task.
+You&#8217;ll need to define two functions:</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">get_password()</span></tt></li>
+<li><tt class="docutils literal"><span class="pre">before_request()</span></tt></li>
+</ul>
+<p>The former is required by <tt class="docutils literal"><span class="pre">Flask-HTTPAuth</span></tt>, which powers <tt class="docutils literal"><span class="pre">sandman's</span></tt>
+authentication. The latter is used to ensure that _all_ requests are authorized.</p>
+<div class="section" id="get-password">
+<h3><tt class="docutils literal"><span class="pre">get_password</span></tt><a class="headerlink" href="#get-password" title="Permalink to this headline">¶</a></h3>
+<p>The <tt class="docutils literal"><span class="pre">get_password</span></tt> function takes a <tt class="docutils literal"><span class="pre">username</span></tt> as an argument and should
+return the associated password for that user. To notify Flask-HTTPAuth that this
+is the function responsible for returning passwords, it must be wrapped with the
+<tt class="docutils literal"><span class="pre">&#64;auth.get_password</span></tt> decorator (<tt class="docutils literal"><span class="pre">auth</span></tt> is importable from <tt class="docutils literal"><span class="pre">sandman</span></tt>, e.g.
+<tt class="docutils literal"><span class="pre">from</span> <span class="pre">sandman</span> <span class="pre">import</span> <span class="pre">app,</span> <span class="pre">db,</span> <span class="pre">auth</span></tt>). How you implement your user
+management system is up to you; you simply need to implement <tt class="docutils literal"><span class="pre">get_password</span></tt> in
+whatever way is most appropriate for your security setup.</p>
+<p>As a trivial example, here&#8217;s an implementation of <tt class="docutils literal"><span class="pre">get_password</span></tt> that always
+returns <tt class="docutils literal"><span class="pre">secret</span></tt>, meaning <tt class="docutils literal"><span class="pre">secret</span></tt> must be the password, regardless of
+the <tt class="docutils literal"><span class="pre">username</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="nd">@auth.get_password</span>
+<span class="k">def</span> <span class="nf">get_password</span><span class="p">(</span><span class="n">username</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the password for *username*.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="s">&#39;secret&#39;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="before-request">
+<h3><tt class="docutils literal"><span class="pre">before_request</span></tt><a class="headerlink" href="#before-request" title="Permalink to this headline">¶</a></h3>
+<p>Once you&#8217;ve hooked up your password function, it&#8217;s time to tell Flask which
+requests should require authentication. Rather than picking and choosing on a
+request by request basis, we use the <tt class="docutils literal"><span class="pre">&#64;app.before_request</span></tt> decorator included
+in Flask to make sure _all_ requests are authenticated. Here&#8217;s a sample
+implementation:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="nd">@app.before_request</span>
+<span class="nd">@auth.login_required</span>
+<span class="k">def</span> <span class="nf">before_request</span><span class="p">():</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>Notice the function just calls <tt class="docutils literal"><span class="pre">pass</span></tt>; it needn&#8217;t have any logic, since the
+logic is added by Flask-HTTPAuth&#8217;s <tt class="docutils literal"><span class="pre">&#64;auth.login_required</span></tt> decorator.</p>
+</div>
+</div>
+<div class="section" id="token-based-authentication">
+<h2>Token-based Authentication<a class="headerlink" href="#token-based-authentication" title="Permalink to this headline">¶</a></h2>
+<p>There are plans for <tt class="docutils literal"><span class="pre">sandman</span></tt> to support token-based authentication, but this
+currently isn&#8217;t supported and no time frame for implementation has been set.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Authentication</a><ul>
+<li><a class="reference internal" href="#enabling-authentication">Enabling Authentication</a><ul>
+<li><a class="reference internal" href="#get-password"><tt class="docutils literal"><span class="pre">get_password</span></tt></a></li>
+<li><a class="reference internal" href="#before-request"><tt class="docutils literal"><span class="pre">before_request</span></tt></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#token-based-authentication">Token-based Authentication</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="admin.html"
+                        title="previous chapter">The sandman Admin Interface</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="sandman.html"
+                        title="next chapter">sandman API</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/authentication.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="sandman.html" title="sandman API"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="admin.html" title="The sandman Admin Interface"
+             >previous</a> |</li>
+        <li><a href="index.html">sandman 0.9.3.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Jeff Knupp.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
