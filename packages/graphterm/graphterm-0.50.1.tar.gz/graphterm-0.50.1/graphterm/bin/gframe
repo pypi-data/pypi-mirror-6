@@ -1,0 +1,161 @@
+#!/usr/bin/env python
+#
+
+"""
+gframe: Display file (or HTML from stdin) in inline iframe
+
+For multiplexed display use:
+   gframe -r 300 -l 50 -c 4 -b -t -p tty a b c d '[abcd]'
+
+To recursively display terminal /local/tty1, use:
+   gframe --height 300 -b -n -t /local/tty1/watch
+"""
+
+import math
+import mimetypes
+import os
+import random
+import sys
+import termios
+import time
+
+from optparse import OptionParser
+
+import gterm
+
+usage = "usage: %prog [file1|URL1] ..."
+
+form_parser = gterm.FormParser(usage=usage, title="Display URL/file/stdin content within iframe", command="gframe")
+
+form_parser.add_argument(label="URL/filename: ", help="URL/filename to display (optional)")
+form_parser.add_option("prefix", "", short="p", help="URL/path prefix")
+form_parser.add_option("suffix", "", short="s", help="URL/path suffix")
+form_parser.add_option("opacity", 1.0, short="o", help="Frame opacity (default: 1.0)")
+form_parser.add_option("columns", 0, short="c", help="Columns")
+form_parser.add_option("width", "", short="w", help="Frame width (pixels/%)")
+form_parser.add_option("rowheight", "", short="r", help="Frame row height")
+form_parser.add_option("lastheight", "", short="l", help="Last row height")
+form_parser.add_option("fullscreen", False, short="f", help="Fullscreen display")
+form_parser.add_option("border", False, short="b", help="Include border")
+form_parser.add_option("noheader", False, short="n", help="Suppress header")
+form_parser.add_option("echo", False, short="e", help="Do not suppress terminal echo")
+form_parser.add_option("terminal", False, short="t", help="Interpret all arguments as terminal URLs")
+
+(options, args) = form_parser.parse_args()
+
+if args:
+    iframe_urls = []
+    for arg in args:
+        arg = options.prefix + arg + options.suffix
+        if arg.startswith("http:") or arg.startswith("https:"):
+            iframe_urls.append(arg)
+        elif options.terminal:
+            if "/" not in arg:
+                arg = "/" + gterm.env("PATH").split("/")[1] + "/" + arg
+            elif not arg.startswith("/"):
+                print >> sys.stderr, "Invalid terminal path %s; must begin with /" % arg
+                sys.exit(1)
+            arg += "/&" if "?" in arg else "/?"
+            arg += "qauth=%(qauth)"
+            iframe_urls.append(arg)
+        else:
+            if gterm.Export_host:
+                iframe_urls.append(gterm.create_blob(from_file=arg))
+            else:
+                iframe_urls.append(gterm.get_file_url(arg, relative=True, exists=True))
+
+            if not iframe_urls[-1]:
+                print >> sys.stderr, "File %s not found" % arg
+                sys.exit(1)
+else:
+    try:
+        content = sys.stdin.read()
+    except (EOFError, KeyboardInterrupt):
+        content = None
+
+    if not content:
+        print >> sys.stderr, "Error in reading from stdin"
+        sys.exit(1)
+
+    iframe_urls = [gterm.create_blob(content, content_type="text/html")]
+
+headers = {"opacity": options.opacity}
+if not options.fullscreen and not options.rowheight:
+    headers["autosize"] = True
+
+add_class = "gterm-noheader" if options.noheader else ""
+if options.border:
+    add_class += " gterm-border"
+IFRAMEFORMAT = '<iframe id="%s" class="gterm-iframe %s" src="%s" width="%s" %s></iframe>'
+
+iframe_html = ""
+
+nframes = len(iframe_urls)
+ncols = int(options.columns) or nframes
+nrows = ((nframes-1) // ncols) + 1
+
+max_percent = 100.0 if options.noheader else 95.0
+if options.rowheight:
+    frameHeight = ' height="%s" ' % options.rowheight
+elif options.columns:
+    if options.lastheight and nrows > 1:
+        if options.lastheight.endswith("%"):
+            lh_precent = float(options.lastheight[:-1])
+        else:
+            termx, termy = gterm.env("DIMENSIONS").split(";")[1].split("x")
+            lh_precent = 100.0*float(options.lastheight)/float(termy)
+        height_percent = (max_percent - 5 - lh_precent) / (nrows - 1)
+    else:
+        height_percent = (max_percent - 5) / nrows
+    frameHeight = ' height="%d%%" ' % height_percent
+else:
+    frameHeight = ' height="%d%%" ' % max_percent if options.fullscreen else ''
+
+for j, url in enumerate(iframe_urls):
+    irow = j//ncols
+    if irow == nrows-1:
+        # Last row
+        n = ((nframes-1) % ncols)+1
+        if options.lastheight:
+            frameHeight = ' height="%s" ' % options.lastheight
+    else:
+        n = ncols
+    if options.width:
+        width = options.width
+    else:
+        width = str(100 if nframes == 1 else math.floor(96.0/n)) + "%"
+    frameId = "gframe%09d" % random.randrange(0, 10**9)
+    iframe_html += IFRAMEFORMAT % (frameId, add_class+("" if irow else " gterm-iframe-firstrow"), url, width, frameHeight)
+
+if not options.noheader:
+    if options.fullscreen:
+        iframe_html = '<span class="gterm-iframeexpand gterm-iframeheader">&#x29c9;</span><span class="gterm-iframeclose gterm-iframeheader">&#x2a2f;</span>' + iframe_html
+    else:
+        container_id = "gframecontainer%09d" % random.randrange(0, 10**9)
+        iframe_html = '<div id="'+container_id+'"> <span class="gterm-iframeheader gterm-iframedelete" gterm-iframe-container="'+container_id+'">&#215;</span>' + iframe_html + '</div>'
+        
+
+# TODO: Wrap iframe in div box with close X header for non fullscreen mode
+
+gterm.write_pagelet(iframe_html, display=("fullscreen" if options.fullscreen else "block"), add_headers=headers)
+
+if options.fullscreen:
+    if options.echo or not sys.stdout.isatty():
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            gterm.write_blank(exit_page=True)
+    else:
+        saved_settings = termios.tcgetattr(sys.stdout.fileno())
+        new_settings = saved_settings[:]
+        new_settings[3] = new_settings[3] & ~termios.ECHO   # Disable terminal echo
+        try:
+            termios.tcsetattr(sys.stdout.fileno(), termios.TCSADRAIN, new_settings)
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            gterm.write_blank(exit_page=True)
+        finally:
+            termios.tcsetattr(sys.stdout.fileno(), termios.TCSADRAIN, saved_settings)
+
