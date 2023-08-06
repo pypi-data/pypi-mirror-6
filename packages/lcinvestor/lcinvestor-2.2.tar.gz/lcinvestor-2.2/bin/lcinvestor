@@ -1,0 +1,254 @@
+#!/usr/bin/env python
+
+"""
+The MIT License (MIT)
+
+Copyright (c) 2013 Jeremy Gillick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+"""
+
+import sys
+import os
+import signal
+from datetime import datetime
+import argparse
+
+try:
+    from daemon import runner
+    hasDaemonRunner = True
+except ImportError:
+    hasDaemonRunner = False
+
+# Add local paths to support running without installing
+if sys.argv[0][0:2] == './':
+    sys.path.insert(0, '.')
+    sys.path.insert(0, '../')
+
+import lcinvestor
+from lcinvestor.settings import Settings
+
+investor = None
+pid_lockfile = 'lcinvestor.pid'
+
+
+def interupt_handler(signum, frame):
+        """
+        Exit gracefully
+        """
+        if investor:
+            investor.stop()
+        else:
+            print '\n\nStopping program...\n'
+        exit(0)
+signal.signal(signal.SIGINT, interupt_handler)
+
+
+def is_daemon_running():
+    """
+    Check if the pid locked file status.
+    True if the daemon is believed to be running (based on the lockfile)
+    False if it is not.
+    """
+    path = get_lockfile_path()
+    lockfile = runner.make_pidlockfile(path, 1)
+    if lockfile.is_locked():
+        return True
+    return False
+
+
+def get_lockfile_path():
+    """
+    Get the path to the PID lockfile.
+    This file will live in the default user app directory set by the AutoInvestor class
+    """
+    app_dir = lcinvestor.util.get_app_directory()
+    path = os.path.join(app_dir, pid_lockfile)
+    return path
+
+if __name__ == '__main__':
+    description = 'A program that watches your LendingClub account and automatically invests cash as it becomes available based on your personalized investment preferences.'
+
+    # Process command flags
+    if hasDaemonRunner:
+        parser = argparse.ArgumentParser(usage='%(prog)s [options] [start/stop/status]', description=description)
+    else:
+        parser = argparse.ArgumentParser(usage='%(prog)s [options]', description=description)
+
+    parser.add_argument('--email', action='store', dest='email', default=None, help='The email used to login to LendingClub')
+    parser.add_argument('--pass', action='store', dest='password', metavar='pass', default=None, help='Your LendingClub password.')
+    parser.add_argument('-c', '--config', action='store', dest='config_file', default=None, help='A JSON file with the investment settings you want to use.')
+    parser.add_argument('-q', '--quiet', action='store_true', dest='quiet', default=False, help='Don\'t show a confirmation prompt with your investment settings. Must be used with --config.')
+    parser.add_argument('--version', action='store_true', default=False, help='Print the lcinvestor version number')
+    parser.add_argument('--run-once', action='store_true', dest='run_once', default=False, help='Try to invest and then end the program. (Best used with --config, --email, --pass and --quiet flags)')
+    parser.add_argument('-v', '--verbose', action='store_true', dest='verbose', default=False, help='Verbose output')
+
+    if hasDaemonRunner:
+        parser.add_argument('start/stop/status', action='store', type=str, nargs='*', help='Start or stop the this as a background task (daemon). Use status to see the current daemon status')
+
+    # Change section titles
+    parser._positionals.title = 'Daemon Commands'
+    parser._optionals.title = 'Options'
+
+    options = parser.parse_args()
+
+    options.action = options.__dict__['start/stop/status'] if hasDaemonRunner else []
+    action = options.action[0] if (len(options.action) > 0) else None
+    isVerbose = options.verbose
+    isDaemon = (action is not None)
+    isStarting = ('start' == action)
+    isStopping = ('stop' == action)
+
+    # Validate options
+    if len(options.action) > 1:
+        print 'Too many arguments!'
+        exit(1)
+    if action is not None and action not in ['start', 'stop', 'status']:
+        print '\'{0}\' is not a supported action!'.format(action)
+        exit(1)
+    if options.quiet and options.config_file is None:
+        print 'Can not use --quiet without --config'
+        exit(1)
+    if isDaemon and action != 'status' and options.run_once:
+        print 'Cannot use --run-once when starting lcinvestor as a daemon'
+        exit(1)
+
+    # Start program
+    try:
+        investor = lcinvestor.AutoInvestor(verbose=isVerbose)
+
+        # Print version number
+        if options.version:
+            print 'lcinvestor {0}'.format(lcinvestor.util.get_version())
+            exit(0)
+
+        # Print daemon status and exit
+        if action == 'status':
+            if is_daemon_running():
+                print 'The lcinvestor daemon is running'
+
+                # Print info on the last investment
+                last_investment = investor.get_last_investment()
+                if last_investment:
+                    timestamp = datetime.fromtimestamp(last_investment['timestamp'])
+
+                    print '\nLast investment:'
+                    print '${0} was invested at {1}'.format(last_investment['cash'], timestamp.strftime("%A %B %d, %Y at %I:%M%p"))
+                    print investor.get_order_summary(last_investment['investment'])
+            else:
+                print 'The lcinvestor daemon is not running'
+            exit(0)
+
+        # Create settings from config file
+        if options.config_file is not None:
+            if not os.path.exists(options.config_file):
+                print 'The file \'{0}\' doesn\'t exists'.format(options.config_file)
+                exit(1)
+            try:
+                investor.settings.load_investment_settings_file(options.config_file)
+                investor.settings.select_profile('none')
+                if not investor.settings.is_dirty:
+                    print 'Your config file did not set anything.'
+                    exit(1)
+
+            except Exception as e:
+                print str(e)
+                exit(1)
+
+        # Email and password
+        if options.email is not None:
+            investor.settings['email'] = options.email
+        if options.password is not None:
+            investor.settings['pass'] = options.password
+
+        # Get investment settings
+        if isStarting or not isDaemon:
+            investor.welcome_screen()
+
+            # Remove all arguments but the script and the deamon action
+            # Otherwise, daemon runner will throw an error if the action is not the first argument
+            sys.argv = [sys.argv[0], action]
+
+            # Authenticate from email/password on the command line
+            if investor.settings['email'] is not None and investor.settings['pass'] is not None:
+                try:
+                    investor.authenticate()
+                    print 'Authenticated successfully!\n'
+                except Exception as e:
+                    print 'Authentication failed!'
+                    print str(e.value)
+                    exit(1)
+
+            # Show summary, without setup prompts
+            if options.quiet and options.config_file is not None and investor.settings.is_dirty:
+                investor.settings.show_summary()
+
+            # Prompt for investment settings
+            else:
+                investor.setup()
+
+        # Start daemon
+        if hasDaemonRunner and isDaemon:
+
+            # Set daemon attributes
+            logfile_path = os.path.join(investor.app_dir, 'daemon.log')
+            investor.stdin_path = '/dev/null'
+            investor.stdout_path = logfile_path
+            investor.stderr_path = logfile_path
+            investor.pidfile_path = get_lockfile_path()
+            investor.pidfile_timeout = 1
+
+            # Check if the pid locked file status
+            if is_daemon_running():
+                if isStarting:
+                    print 'It looks like an investor daemon is already running!\nIf this is incorrect, delete \'{0}\' and try again.'.format(investor.pidfile_path)
+                    exit(1)
+            else:
+                if isStopping:
+                    print 'It doesn\'t look like there is an investor daemon running.'
+                    exit(1)
+
+            if isStarting:
+                print 'Starting auto investor daemon...'
+                print 'pid at {0}'.format(investor.pidfile_path)
+                print 'Logging output to {0}'.format(logfile_path)
+            else:
+                print 'Stopping auto investor daemon...'
+
+            # Start daemon
+            try:
+                daemon_runner = runner.DaemonRunner(investor)
+                daemon_runner.do_action()
+            except runner.DaemonRunnerStartFailureError as e:
+                print 'Could not start daemon: {0}'.format(str(e))
+            except runner.DaemonRunnerStopFailureError as e:
+                print 'Could not stop daemon: {0}'.format(str(e))
+
+        # Start in the foreground
+        else:
+            # Run once
+            if options.run_once is True:
+                investor.run_once()
+            # Run in loop
+            else:
+                investor.run()
+
+    except lcinvestor.AutoInvestorError as e:
+        print 'ERROR: {0}'.format(str(e))
+        exit(1)
