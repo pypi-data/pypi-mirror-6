@@ -1,0 +1,114 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<title>{{database.name}}</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+<script>
+function toggleInfo(key, cls) {
+    $('.'+cls+'[entry="'+key+'"]').toggleClass('noshow');
+}
+$(function() {
+    jQuery.expr[":"].Contains = jQuery.expr.createPseudo(function(arg) {
+	    return function( elem ) {
+	        return jQuery(elem).text().toUpperCase().indexOf(arg.toUpperCase()) >= 0;
+	    };
+    });
+    $("#qs_field").keyup(function() {
+        var rows = $("#entriesbody").find("tr.entry").show();
+        data = this.value.split(" ");
+        $.each(data, function(i, v) {
+        	rows.filter(":not(:Contains('" + v + "'))").hide();
+        });
+    });
+});
+</script>
+<style type="text/css">
+    form#quicksearch { width: auto; border-style: solid; border-color: gray; border-width: 1px 0px; padding: 0.7em 0.5em; position:relative; }
+	body {
+	   background-color: white;
+	   font-family: Myriad Pro, sans-serif;
+	   font-size: 14px;
+	   color: #2E2E2E;
+	   margin: auto 2em;
+	}
+	table {
+	   width: 100%;
+	   empty-cells: show;
+	   border-spacing: 0em 0.2em;
+	   margin: 1em 0em;
+	   border-style: none;
+	}
+	th, td { border: 1px gray solid; border-width: 1px 1px; padding: 0.5em; vertical-align: top; text-align: left; }
+	th { background-color: #efefef; }
+	td + td, th + th { border-left: none; }
+	
+	td a { color: navy; text-decoration: none; }
+	td a:hover  { text-decoration: underline; }
+	
+	tr.noshow { display: none;}
+	tr.highlight td { background-color: #EFEFEF; border-top: 2px #2E2E2E solid; font-weight: bold; }
+	tr.abstract td, tr.bibsrc td { background-color: #EFEFEF; text-align: justify; border-bottom: 2px #2E2E2E solid; }
+	tr.nextshow td { border-bottom: 1px gray solid; }
+	
+	tr.bibsrc pre { width: 100%; overflow: auto; white-space: pre-wrap;}
+	p.infolinks { margin: 0.3em 0em 0em 0em; padding: 0px; }
+</style>
+</head>
+<body>
+	<h1>
+		{{database.name}}
+	</h1>
+	<p>Database revision {{revision[0]}}, created {{revision[1]}}.</p>
+	<form action="" id="quicksearch">
+        <input id="qs_field" autocomplete="off" placeholder="Type to search..." type="text"> 
+    </form>
+	<table border="1">
+		<thead>
+			<tr>
+				<th width="25%">Author</th>
+				<th width="30%">Title</th>
+				<th width="5%">Date</th>
+				<th width="20%">Journal/Proceedings</th>
+				<th width="5%">Reftype</th>
+				<th width="3%">DOI/URL</th>
+				<th width="6%">Owner</th>
+			</tr>
+		</thead>
+		<tbody id="entriesbody">
+		{% for citekey, entry in database.bibfile.items() %}
+		  <tr id="{{entry.citekey|md5}}" class="entry">
+            <td class="author">{{entry.authorLastNames(2)}}</td>
+            <td class="title">
+              {% if entry["file"] %}<a href="{{docDir}}/{{entry.filename()}}">{% endif %}
+              {{entry["title"]}}
+              {% if entry["file"] %}</a>{% endif %}
+              <p class="infolinks">
+                <a href="javaScript:toggleInfo('{{entry.citekey}}', 'bibsrc')">[BibTeX]</a>
+                {% if entry["abstract"] %} <a href="javaScript:toggleInfo('{{entry.citekey}}', 'abstract')">[Abstract]</a>{% endif %}
+              </p>
+            <td>{{entry["date"] or entry["year"]}}</td>
+            <td class="journal">{{database.strval(entry["journal"])}}</td>
+            <td class="type">{{entry.entrytype}}</td>
+            <td class="urldoi">{% if entry["doi"] %}
+                  <a href="{{entry.doiURL()}}">DOI</a>
+                {% endif %}
+                {% if entry["url"] %}
+                  <a href="{{entry['url']}}">URL</a>
+                {% endif %}
+            </td>
+            <td class="owner">{{entry["owner"]}}</td>
+          </tr>
+          <tr entry="{{entry.citekey}}" class="bibsrc noshow"><td colspan=8><pre>{{entry.bibsrc|e}}</pre></td></tr>
+          {% if entry["abstract"] %}
+              <tr entry="{{entry.citekey}}" class="abstract noshow"><td colspan=8>{{entry["abstract"]}}</td></tr>
+          {% endif %}
+		{% endfor %}
+		</tbody>
+	</table>
+	<footer>
+        <small>Created by <a href="http://pypi.python.org/pypi/bibtexvcs">BibTeX VCS</a> on {{now}}.</small>
+    </footer>
+</body>
+
+</html>
