@@ -1,0 +1,10 @@
+__version__ = "0.2.3"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.2.3)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '80ecf7b4f31f1afc64a272b0fd51f4e3dc05fb6a'
+__git_head_subject__ = 'Windows() fails on Windows-8'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
