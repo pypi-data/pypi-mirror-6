@@ -1,0 +1,10 @@
+__version__ = "0.0.16"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.0.16)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'a3d728a3c8deb478d2f6d93ec15be8ea48f073c2'
+__git_head_subject__ = 'Finished release v0.0.16.'
+__git_head_message__ = '* release/v0.0.16:\n  buildout.cfg: remove infi.recipe.console_scripts from requirements\n  update dependencies'
+__git_dirty_diff__ = ''
