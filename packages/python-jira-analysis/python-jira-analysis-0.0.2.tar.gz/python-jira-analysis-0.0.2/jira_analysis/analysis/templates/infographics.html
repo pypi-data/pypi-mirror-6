@@ -1,0 +1,583 @@
+{% extends "base.html" %}
+{% load extra_tags %}
+
+{% block head-extra %}
+<script type="text/javascript">
+    $(function () {
+
+        //$('#navbar').scrollspy();
+
+        $('#global_throughput_chart').highcharts({
+            chart: {
+                zoomType: 'x',
+                spacingRight: 20
+            },
+            title: {
+                text: 'Historical throughputs'
+            },
+            xAxis: {
+                type: 'datetime',
+                maxZoom: 14 * 24 * 3600000, // fourteen days
+                title: {
+                    text: null
+                }
+            },
+            tooltip: {
+                shared: true,
+                formatter: function() {
+                    var p = '';
+                    p += '<b>' + this.y.toFixed(2) + '</b> per day';
+                    return p;
+                }
+            },
+            series: [{
+                name: 'Global throughput 7 days',
+                type: 'spline',
+                data: [
+                    {% for d in global_historical_data %}
+                        [{{ d.0|date:"U000" }}, {{ d.1.global_throughput_7 }}]{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            }, {
+                name: 'Global throughput 30 days',
+                type: 'spline',
+                data: [
+                    {% for d in global_historical_data %}
+                        [{{ d.0|date:"U000" }}, {{ d.1.global_throughput_30 }}]{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            }]
+        });
+
+        $('#lead_times_chart').highcharts({
+            chart: {
+                zoomType: 'x',
+                spacingRight: 20
+            },
+            title: {
+                text: 'Historical lead times'
+            },
+            xAxis: {
+                type: 'datetime',
+                minRange: 14 * 24 * 3600000, // fourteen days
+                title: {
+                    text: null
+                }
+            },
+            yAxis: {
+                type: 'linear',
+                title: {
+                    text: 'Days'
+                },
+                allowDecimals: false,
+                minTickInterval: 1
+            },
+            tooltip: {
+                shared: true,
+                formatter: function() {
+                    var p = '';
+                    p += '<b>' + this.y.toFixed(2) + '</b> days';
+                    return p;
+                }
+            },
+            series: [{
+                name: 'Lead times median',
+                type: 'spline',
+                data: [
+                    {% for d in global_historical_data %}
+                        [{{ d.0|date:"U000" }}, {{ d.1.global_lead_times_median }}/86400]{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            }, {
+                name: 'Lead times median - Bugs',
+                type: 'spline',
+                data: [
+                    {% for d in global_historical_data %}
+                        [{{ d.0|date:"U000" }}, {{ d.1.global_lead_times_median_bugs }}/86400]{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            }, {
+                name: 'Lead times median - Non bugs',
+                type: 'spline',
+                data: [
+                    {% for d in global_historical_data %}
+                        [{{ d.0|date:"U000" }}, {{ d.1.global_lead_times_median_nonbugs }}/86400]{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            }]
+        });
+
+        $('#estimated_delivery_date_chart').highcharts({
+            chart: {
+                zoomType: 'x',
+                spacingRight: 20
+            },
+            title: {
+                text: 'Historical estimated delivery times'
+            },
+            xAxis: {
+                type: 'datetime',
+                minRange: 14 * 24 * 3600000, // fourteen days
+                title: {
+                    text: null
+                }
+            },
+            yAxis: {
+                type: 'linear',
+                title: {
+                    text: 'Days'
+                },
+                allowDecimals: false,
+                minTickInterval: 1
+            },
+            tooltip: {
+                shared: true,
+                formatter: function() {
+                    var p = '';
+                    p += '<b>' + this.y.toFixed(2) + '</b> days';
+                    return p;
+                }
+            },
+            series: [{
+                name: 'Based on 7 days throughput',
+                type: 'spline',
+                data: [
+                    {% for d in historical_data %}
+                        [{{ d.0|date:"U000" }}, {{ d.1.time_left_based_on_7_days_delivery_rate }}/86400]{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            }, {
+                name: 'Based on 30 days throughput',
+                type: 'spline',
+                data: [
+                    {% for d in historical_data %}
+                        [{{ d.0|date:"U000" }}, {{ d.1.time_left_based_on_30_days_delivery_rate }}/86400]{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            }]
+        });
+
+        $('#times_in_columns_chart').highcharts({
+            chart: {
+                zoomType: 'x',
+                spacingRight: 20
+            },
+            title: {
+                text: 'Historical median times in columns'
+            },
+            xAxis: {
+                type: 'datetime',
+                minRange: 14 * 24 * 3600000, // fourteen days
+                title: {
+                    text: null
+                }
+            },
+            yAxis: {
+                type: 'linear',
+                title: {
+                    text: 'Days'
+                },
+                allowDecimals: false,
+                minTickInterval: 1
+            },
+            series: [
+            {% for summary in times_in_columns_summary %}
+            {
+                name: '{{ status_names|key:summary.0 }}',
+                type: 'spline',
+                data: [
+                    {% for d in historical_data %}
+                        {% with d.1.times_in_columns_dictionary|key:summary.0 as historical_summary %}
+                            [{{ d.0|date:"U000" }}, {% if historical_summary.median %}{{ historical_summary.median }}/86400{% else %}0{% endif %}]{% if not forloop.last %},{% endif %}
+                        {% endwith %}
+                    {% endfor %}
+                ]
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+            ]
+        });
+
+        $('#histogram_container').highcharts({
+            chart: {
+                zoomType: 'x',
+                spacingRight: 20
+            },
+            title: {
+                text: 'Histogram'
+            },
+            xAxis: [{
+                categories: [
+                    {% for v in histogram %}'{{ v.0|days }}'{% if not forloop.last %},{% endif %}{% endfor %}
+                ]
+/*                type: 'datetime',
+                maxZoom: 14 * 24 * 3600000, // fourteen days
+                title: {
+                    text: null
+                }*/
+            }],
+            yAxis: {
+                title: {
+                    text: 'Work items'
+                }
+            },
+            tooltip: {
+                shared: true
+            },
+            legend: {
+                enabled: true
+            },
+            plotOptions: {
+                spline: {
+                    dashStyle: 'Solid',
+                    shadow: true,
+                    lineWidth: 5,
+                    marker: {
+                        enabled: false
+                    }
+                }
+            },
+            series: [{
+                name: 'Work items',
+                type: 'column',
+                data: [{% for v in histogram %}
+                    {{ v.1 }}{% if not forloop.last %},{% endif %}
+                {% endfor %}],
+                tooltip: {
+                    pointFormat: '{point.y:.1f}',
+                }
+            }, {
+                name: 'Bugs',
+                type: 'column',
+                data: [{% for v in histogram %}
+                    {{ v.2 }}{% if not forloop.last %},{% endif %}
+                {% endfor %}],
+                tooltip: {
+                    pointFormat: '{point.y:.1f}',
+                }
+            }, {
+                name: 'Non bugs',
+                type: 'column',
+                data: [{% for v in histogram %}
+                    {{ v.3 }}{% if not forloop.last %},{% endif %}
+                {% endfor %}],
+                tooltip: {
+                    pointFormat: '{point.y:.1f}',
+                }
+            }, {
+                name: 'Work items',
+                type: 'errorbar',
+                data: [[1, 2], [2, 3]
+                ],
+                tooltip: {
+                    pointFormat: '{point.y:.1f}',
+                }
+            }, {
+                type: 'spline',
+                name: 'min',
+                data: [
+                       {% for pr in project_records %}
+                       [{{ pr.record.timestamp|date:"U000" }}, {{pr.effort }}]{% if forloop.last %}{% else %},{% endif %}
+                       {% endfor %}
+                ]
+            }, {
+                type: 'spline',
+                name: 'duration',
+                data: [
+                       {% for pr in project_records %}
+                       [{{ pr.record.timestamp|date:"U000" }}, {{pr.duration }}]{% if forloop.last %}{% else %},{% endif %}
+                       {% endfor %}
+                ]
+            }
+            ]
+        });
+    });
+</script>
+{% endblock %}
+{% block content %}
+<div class="container">
+<a href="{% url 'main' %}">&lt;-- home</a>
+
+<div class="jumbotron">
+    <h1>{{ context.project.1 }}</h1>
+    <h2>version {{ context.version }}</h2>
+</div>
+
+<dl class="dl-horizontal">
+  <dt>Project</dt><dd>{{ context.project }}</dd>
+  <dt>Base JQL</dt><dd>{{ context.jql }}</dd>
+  <dt>Version</dt><dd>{{ context.version }}</dd>
+  <dt>Bug types</dt><dd>{{ context.bugTypes }}</dd>
+  <dt>Histogram bins</dt><dd>{{ context.histogramBins }}</dd>
+</dl>
+
+<div class="page-header">
+    <h1>Schedule</h1>
+</div>
+<div class="row">
+    <p class="lead">
+        Version {{ context.version }} contains
+        {% for type in by_issuetype.items %}
+        <code>{{ type.1 }}</code> {{ type.0}}{{ type.1|pluralize }}{% if forloop.last %}{% else %},{% endif %}{% endfor %} (<code>{{ total_count }}</code> in total).
+        <br/>
+        Out of those <code>{{ unfinished_count }}</code> haven't been finished yet.
+        <div class="progress">
+            <div class="progress-bar {% if progress < 30 %}progress-bar-danger{% elif progress < 60 %}progress-bar-warning{% else %}progress-bar-success{% endif %}" role="progressbar" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100" style="width: {{ progress }}%;"><span class="sr-only">{{ progress }}% Complete</span></div>
+        </div>
+    </p>
+</div>
+
+<div class="page-header">
+    <h1>Metrics</h1>
+</div>
+<div class="row">
+
+    <h2>Lead times</h2>
+    <p class="text-muted">Note: Start statuses are [{% for status in context.startStatuses %}{{ status_names|key:status }}{% if not forloop.last %}, {% endif %}{% endfor %}], end statuses are [{% for status in context.endStatuses %}{{ status_names|key:status }}{% if not forloop.last %}, {% endif %}{% endfor %}]. Lead times are calculated between start and end statuses.</p>
+    <div class="row">
+        <div class="col-sm-6">
+            <p class="lead text-center">Based on last 30 days</p>
+            <ul>
+            <li>Mean: <code>{{ global_lead_times_mean|days }}</code>
+            Bugs: <code>{{ global_lead_times_mean_bugs|days }}</code>
+            Non bugs: <code>{{ global_lead_times_mean_nonbugs|days }}</code></li>
+            <li><strong>Median: <code>{{ global_lead_times_median|days }}</code>
+            Bugs: <code>{{ global_lead_times_median_bugs|days }}</code>
+            Non bugs: <code>{{ global_lead_times_median_nonbugs|days }}</code></strong></li>
+            <li>Std dev: <code>{{ global_lead_times_std|days }}</code>
+            Bugs: <code>{{ global_lead_times_std_bugs|days }}</code>
+            Non bugs: <code>{{ global_lead_times_std_nonbugs|days }}</code></li>
+            </ul>
+            <ul>
+            <li>50% of work items get finished in <code>{{ global_fifty_percent_bin|days }}</code></li>
+            <li>90% of work items get finished in <code>{{ global_ninety_percent_bin|days }}</code></li>
+            </ul>
+        </div>
+        <div class="col-sm-6">
+            <p class="lead text-center">Based on {{ context.version }} items</p>
+            <ul>
+            <li>Mean: <code>{{ lead_times_mean|days }}</code>
+            Bugs: <code>{{ lead_times_mean_bugs|days }}</code>
+            Non bugs: <code>{{ lead_times_mean_nonbugs|days }}</code></li>
+            <li>Median: <code>{{ lead_times_median|days }}</code>
+            Bugs: <code>{{ lead_times_median_bugs|days }}</code>
+            Non bugs: <code>{{ lead_times_median_nonbugs|days }}</code></li>
+            <li>Std dev: <code>{{ lead_times_std|days }}</code>
+            Bugs: <code>{{ lead_times_std_bugs|days }}</code>
+            Non bugs: <code>{{ lead_times_std_nonbugs|days }}</code></li>
+            </ul>
+        </div>
+        <div class="col-sm-12">
+            <div id="lead_times_chart"></div>
+        </div>
+    </div>
+
+    <h2>Delivery rate (throughput)</h2>
+    <div class="row">
+        <div class="col-sm-6">
+            <p class="lead text-center"><code>{{ global_throughput_7|floatformat:2 }}</code> per day based on last 7 days</p>
+            <p class="text-center">(<code>{{ global_closed_within_7_days|length }}</code> items finished or closed)</p>
+        </div>
+        <div class="col-sm-6">
+            <p class="lead text-center"><code>{{ global_throughput_30|floatformat:2 }}</code> per day based on last 30 days</p>
+            <p class="text-center">(<code>{{ global_closed_within_30_days|length }}</code> items finished or closed)</p>
+        </div>
+        <div class="col-sm-12">
+            <div id="global_throughput_chart"></div>
+        </div>
+
+    </div>
+
+    <h2>Estimated delivery date</h2>
+    <p class="lead">Based on delivery rate, all <code>{{ unfinished_count }}</code> items will get finished within <code>{{ time_left_based_on_7_days_delivery_rate|days }}</code> to <code>{{ time_left_based_on_30_days_delivery_rate|days }}</code></p>
+    <div id="estimated_delivery_date_chart"></div>
+
+    <p data-toggle="collapse" data-target="#histogram">[<span class="caret"></span>histogram]</p>
+    <div class="col-sm-12">
+        <div id="histogram" class="collapse">
+            Info:
+            <ul>
+            <li>data from the last 30 days</li>
+            <li>tasks that took less than <code>{{ context.minLeadTime }}s</code> are ignored to not skew the results artifically</li>
+            <li>start statuses are: {% for status in context.startStatuses %}{{ status_names|key:status }}{% if not forloop.last %}, {% endif %}{% endfor %}</li>
+            <li>end statuses are: {% for status in context.endStatuses %}{{ status_names|key:status }}{% if not forloop.last %}, {% endif %}{% endfor %}</li>
+            <li>only finished tasks (i.e. those which reached end status) are taken into account</li>
+            </ul>
+            <div class="clear" id="histogram_container" style="min-width: 860px; height: auto; margin: 0 auto"></div>
+        </div>
+    </div>
+    <!-- Version V-1 consisted of X items (X storeis, Y bugs, Z tasks). [JQL3 - version V-1]
+    There's 50% chance we'll finish them by X (X days left)<br/>
+    There's 90% chance we'll finish them by Y (Y days left)<br/>
+    [histogram details, calculated based on data from last X months: JQL2 stories from last X months]-->
+</div>
+
+
+<div class="page-header">
+    <h1>Contents</h1>
+</div>
+<div class="row">
+    <div class="col-sm-6">
+        <h2>Affected components</h2>
+        <ul>
+        {% for comp in by_component.items %}
+            <li>{{ comp.0 }} ({{ comp.1}} items)</li>
+        {% endfor %}
+        </ul>
+    </div>
+    <div class="col-sm-6">
+        <h2>Affected Epics</h2>
+        - X [details of items]
+        ...
+    </div>
+</div>
+
+
+<div class="page-header">
+    <h1>Quality</h1>
+</div>
+<div class="row">
+    <p class="text-muted">Note: DEV statuses are [{% for status in context.devStatuses %}{{ status_names|key:status }}{% if not forloop.last %}, {% endif %}{% endfor %}], QA statuses are [{% for status in context.qaStatuses %}{{ status_names|key:status }}{% if not forloop.last %}, {% endif %}{% endfor %}]. Moving items from QA to DEV starts fixing phase.</p>
+
+    <p class="lead">
+    We've spent <code>{{ fix_time_summary.2.total_fix_time_alt_p|floatformat:1 }}%</code> of time (<code>{{ fix_time_summary.2.total_fix_time_alt|days }}</code>) fixing work items (includes waiting time).
+    </p>
+    <p>If work on Bugs wasn't treated as fixing time, that would be <code>{{ fix_time_summary.2.total_fix_time_p|floatformat:1 }}%</code> (<code>{{ fix_time_summary.2.total_fix_time|days }}</code>). That's how much time we'd save if nothing was broken or fixing broken work items was instant.</p>
+
+    <p><code>{{ bugs_affect_this_version|length }}</code> bugs were introduced during development of this version (i.e. affect this version).
+    </p>
+    <p><code>{{ fix_time_summary.1.finished_items }}</code> bugs were fixed (includes ones introduced earlier).
+    </p>
+
+    <p>
+    <code>{{ fix_time_summary.2.items_needed_fixing }}</code> items (<code>{{ fix_time_summary.2.items_needed_fixing|percent_of:total_count|floatformat:2 }}%</code>) were broken. QA moved them back into DEV <code>{{ fix_time_summary.2.qa_to_dev_move }}</code> times in total.<br/>
+    </p>
+
+    <div class="row">
+        <div class="col-sm-6">
+            <p class="lead text-center">{{ top_fix_time_results_sorted_by_loops|length }} <strong>most buggy</strong> items (can include bug fixes themselves)</p>
+            <ol>
+            {% for most_buggy in top_fix_time_results_sorted_by_loops %}
+                <li><code>{{ most_buggy.1.loops }}</code> fixes for <a target="blank" href="https://jira.shazamteam.net/browse/{{ most_buggy.0 }}">{{ most_buggy.0 }} {{ most_buggy.1.type }}</a>.
+                Dev: <code>{{ most_buggy.1.dev_time|days }}</code> Fixing: <code>{{ most_buggy.1.fix_time|days }}</code>
+                </li>
+            {% endfor %}
+            </ol>
+        </div>
+        <div class="col-sm-6">
+            <p class="lead text-center">{{ top_fix_time_results_sorted_by_fix_time|length }} items which took <strong>the longest time to fix</strong></p>
+            <ol>
+            {% for longest in top_fix_time_results_sorted_by_fix_time %}
+                <li><code>{{ longest.1.loops }}</code> fixes for <a target="blank" href="https://jira.shazamteam.net/browse/{{ longest.0 }}">{{ longest.0 }} {{ longest.1.type }}</a>.
+                Dev: <code>{{ longest.1.dev_time|days }}</code> Fixing:<code>{{ longest.1.fix_time|days }}</code>
+                </li>
+            {% endfor %}
+            </ol>
+        </div>
+    </div>
+
+    <p data-toggle="collapse" data-target="#fix_time_results">[<span class="caret"></span>all dev/fix times]</p>
+    <div id="fix_time_results" class="collapse">
+        <table class="table">
+        <th>Key></th>
+        <th>Dev time</th><th>% of total dev time</th>
+        <th>Fix time</th><th>% of total fix time</th>
+        <th>Loops</th>
+        {% for fix_time_result in fix_time_results.items %}
+        <tr><td><a target="blank" href="https://jira.shazamteam.net/browse/{{ fix_time_result.0 }}">{{ fix_time_result.0 }} {{ fix_time_result.1.type }}</a></td>
+        <td>{{ fix_time_result.1.dev_time|days }}</td>
+        <td>{{ fix_time_result.1.dev_time|percent_of:fix_time_summary.2.total_dev_time|floatformat:2 }}
+        <td>{{ fix_time_result.1.fix_time|days }}</td>
+        <td>{{ fix_time_result.1.fix_time|percent_of:fix_time_summary.2.total_fix_time|floatformat:2 }}
+        <td>{{ fix_time_result.1.loops }}</td>
+        </tr>
+        {% endfor %}
+        </table>
+    </div>
+
+    <p data-toggle="collapse" data-target="#fixing_time_summary">[<span class="caret"></span>summary details]</p>
+    <div id="fixing_time_summary" class="collapse">
+        <p class="muted-text">Note: 'Fix time alt' treats all work on Bugs as Fix time.</p>
+        <table class="table">
+        <th>Type</th>
+        <th>Dev time > 0</th>
+        <th>Finished</th>
+        <th>Dev time [d]</th>
+        <th>Fix time [d]</th>
+        <th>Fix time [%]</th>
+        <th>Fix time alt [d]</th>
+        <th>Fix time alt [%]</th>
+        <th>Items needed fixing</th>
+        <th>Moved back to Dev</th>
+        {% for summary in fix_time_summary %}
+            <tr><td>
+            {{ summary.type }}
+            </td><td>
+            {{ summary.started_items }}
+            </td><td>
+            {{ summary.finished_items }}
+            </td><td>
+            {{ summary.total_dev_time|days }}
+            </td><td>
+            {{ summary.total_fix_time|days }}
+            </td><td>
+            {{ summary.total_fix_time_p|floatformat:1 }}%
+            </td><td>
+            {{ summary.total_fix_time_alt|days }}
+            </td><td>
+            {{ summary.total_fix_time_alt_p|floatformat:1 }}%
+            </td><td>
+            {{ summary.items_needed_fixing }}
+            </td><td>
+            {{ summary.qa_to_dev_move }}
+            </td></tr>
+        {% endfor %}
+        </table>
+    </div>
+</div> <!-- row -->
+
+<div class="page-header">
+    <h1>Bottlenecks</h1>
+</div>
+<h2>Total time spent in columns</h2>
+    <table class="table table-condensed">
+        <th>Status</th>
+        <th>Mean</th>
+        <th>Median</th>
+        <th>StdDev</th>
+        <th>Min</th>
+        <th>Max</th>
+        <th># of work items visiting this column</th>
+        {% for summary in times_in_columns_summary %}
+            <tr><td class="{% if summary.0 in context.devStatuses %}success{% elif summary.0 in context.qaStatuses %}warning{% endif %}">
+            {{ status_names|key:summary.0 }} ({{summary.0}})
+            </td><td>
+            {{ summary.1.mean|days }}
+            </td><td>
+            <strong>{{ summary.1.median|days }}</strong>
+            </td><td>
+            {{ summary.1.std|days }}
+            </td><td>
+            {{ summary.1.min|days }}
+            </td><td>
+            {{ summary.1.max|days }}
+            </td><td>
+            {{ summary.1.count }}
+            </td></tr>
+        {% endfor %}
+    </table>
+
+    <div id="times_in_columns_chart"></div>
+
+    <p data-toggle="collapse" data-target="#times_in_columns_summary">[<span class="caret"></span>all times in columns]</p>
+    <div id="times_in_columns_summary" class="collapse">
+        {% for times in times_in_columns %}
+            {{ times }}</br>
+        {% endfor %}
+    </div>
+
+<!--X days in column Y (Z days for bugs, Q days for other items)
+...
+[graph with median,min,max,stddev]
+-->
+</div> <!-- container -->
+{% endblock %}
