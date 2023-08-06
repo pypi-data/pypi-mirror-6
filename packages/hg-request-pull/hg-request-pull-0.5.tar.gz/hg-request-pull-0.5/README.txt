@@ -1,0 +1,128 @@
+.. vim: ft=rst sts=2 sw=2 tw=72
+.. default-role:: strong
+
+.. This file is marked up using reStructuredText.
+   Lines beginning with ".." are reST directives.
+   "foo_" or "`foo bar`_" is a link, defined at ".. _foo" or
+   ".. _foo bar".
+   "::" introduces a literal block (usually some form of code).
+   "`foo`" is some kind of identifier.
+   Suspicious backslashes in the text ("`std::string`\s") are required
+   for reST to recognize the preceding character as syntax.
+
+=======================================================================
+                            hg-request-pull
+=======================================================================
+-----------------------------------------------------------------------
+                Generates a summary of pending changes
+-----------------------------------------------------------------------
+
+:Author: Roman Neuhauser
+:Contact: neuhauser@sigpipe.cz
+:Copyright: This document is in the public domain.
+
+`hg-request-pull` is a Mercurial_ extension providing a single command,
+`request-pull`.  This command presents a summary of the commits in the
+(BASE, HEAD] range, including a suitable pull command line, and
+diffstat.
+
+It is inspired by, and similar to, `git-request-pull(1)`.
+
+.. _Mercurial: http://hg-scm.org/
+
+
+License
+=======
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+Details in `LICENSE.gpl`_.
+
+.. _LICENSE.gpl: LICENSE.gpl
+
+
+Installation
+============
+
+Install with `pip` from PyPI_, the Python Package Index: ::
+
+  pip install hg-request-pull
+
+Clone from Bitbucket: ::
+
+  hg clone https://bitbucket.org/roman.neuhauser/hg-request-pull
+
+Installation from sources: ::
+
+  python setup.py install
+
+In any case you will then need to edit your `~/.hgrc` to include ::
+
+  [extensions]
+  hgext.request-pull =
+
+You may need to provide the path to ``request-pull.py`` depending on
+how you installed `hg-request-pull`.
+
+.. _PyPI: http://pypi.python.org/pypi
+
+
+Usage
+=====
+
+.. parsed-literal::
+
+       hg-request-pull -h
+       hg-request-pull [-c `CHECKS`] [-p] `URL` `BASE` [`HEAD`]
+
+-h        Display a usage description.
+-c        `CHECKS` Verification level for the URL.
+
+          :2: Verify that the requested commits can be pulled
+              from URL, abort on error.
+          :1: Verify that the requested commits can be pulled
+              from URL, complain on error but go on.
+          :0: Skip verification.
+
+          `-c 1` is assumed unless requested otherwise.
+
+-p        Show patch text.
+
+:`URL`:     Repository to pull from.
+:`BASE`:    Commit the recipient is assumed to have in their repository.
+:[`HEAD`]:  Tip-most commit to include in the pull request.
+            Defaults to ".".
+
+
+Example
+=======
+
+::
+
+       % hg-request-pull -c2 http://stick.suse.cz:8000/ 0 tip
+       The following 2 commits are available to pull on top of
+
+         ba8f70322865 hg-request-pull, a git-request-pull copycat
+
+       with
+
+           hg pull -r 05e27d4e085a http://stick.suse.cz:8000/
+
+       Summary (newest on top):
+
+         05e27d4e085a option -p implemented
+         c1e66fbc2256 partial prototype as a shell script
+
+        hg-request-pull |  129 +++++++++++++++++++++++++++++++++++++++++
+        1 files changed, 129 insertions(+), 0 deletions(-)
+
+Bugs
+====
+
+No doubt plentiful.  Please report them at
+https://bitbucket.org/roman.neuhauser/hg-request-pull/issues.
+
+
