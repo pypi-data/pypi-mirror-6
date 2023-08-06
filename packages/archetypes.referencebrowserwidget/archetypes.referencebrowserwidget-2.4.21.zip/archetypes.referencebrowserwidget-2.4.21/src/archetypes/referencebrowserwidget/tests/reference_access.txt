@@ -1,0 +1,155 @@
+This test demonstrates, that the reference widget works also in cases where
+one of the targets is inaccessible to the editing user. This was previously
+*not* the case and this test failed.
+
+The setup consists of a source (context) and two documents (targets):
+
+  >>> from plone.app.testing import setRoles
+  >>> from plone.app.testing import TEST_USER_ID
+  >>> portal = layer['portal']
+  >>> setRoles(portal, TEST_USER_ID, ['Manager'])
+  >>> folder = portal.portal_membership.getHomeFolder()
+  >>> pw = portal.portal_workflow
+  >>> pw.getInfoFor(folder, 'review_state')
+  'private'
+  >>> from Products.Archetypes.tests.utils import makeContent
+  >>> context = makeContent(folder, portal_type='RefBrowserDemo', id='ref')
+  >>> pw.getInfoFor(context, 'review_state')
+  'private'
+  >>> doc1 = makeContent(folder, portal_type='Document', id='doc1')
+  >>> pw.getInfoFor(doc1, 'review_state')
+  'private'
+  >>> doc2 = makeContent(portal, portal_type='Document', id='doc2')
+  >>> pw.getInfoFor(doc1, 'review_state')
+  'private'
+
+Notice that doc2 is outside the user folder, directly under the portal root.
+
+We make the source reference the first target:
+
+  >>> context.setMultiRef(doc1.UID())
+  >>> context.reindexObject()
+
+We want to test for doc1 and doc2 in the browser output later, so we turn off
+both portlet columns, since they will contain references to both at all times
+(i.e. the navigation portlet, recent items etc.)
+
+  >>> from zope.component import getMultiAdapter, getUtility
+  >>> from plone.portlets.interfaces import IPortletManager
+  >>> from plone.portlets.interfaces import IPortletAssignmentMapping
+
+  >>> left_column = getUtility(IPortletManager, name=u"plone.leftcolumn")
+  >>> left_assignable = getMultiAdapter((portal, left_column), IPortletAssignmentMapping)
+  >>> for name in left_assignable.keys():
+  ...     del left_assignable[name]
+
+  >>> right_column = getUtility(IPortletManager, name=u"plone.rightcolumn")
+  >>> right_assignable = getMultiAdapter((portal, right_column), IPortletAssignmentMapping)
+  >>> for name in right_assignable.keys():
+  ...     del right_assignable[name]
+
+Next, we create a user who will be our editor:
+
+  >>> membership = portal.portal_membership
+  >>> membership.addMember('fred', 'secret', [], [])
+  >>> fred = membership.getMemberById('fred')
+  >>> import transaction
+  >>> transaction.commit()
+
+Fred logs in and visits the context and both targets. He has no access to either:
+
+  >>> app = layer['app']
+  >>> from plone.testing.z2 import Browser
+  >>> browser = Browser(app)
+  >>> import base64
+  >>> basic_auth = 'Basic {0}'.format(
+  ...     base64.encodestring('{0}:{1}'.format('fred', 'secret'))
+  ... )
+  >>> browser.addHeader('Authorization', basic_auth)
+  >>> browser.open(context.absolute_url())
+  >>> browser.url
+  'http://nohost/plone/acl_users/credentials_cookie_auth/require_login?...'
+
+  >>> browser.open(doc1.absolute_url())
+  >>> browser.url
+  'http://nohost/plone/acl_users/credentials_cookie_auth/require_login?...'
+
+  >>> browser.open(doc2.absolute_url())
+  >>> browser.url
+  'http://nohost/plone/acl_users/credentials_cookie_auth/require_login?...'
+
+We give him access to the source and doc1 but *not* doc2:
+
+  >>> folder.manage_setLocalRoles('fred', ('Authenticated', 'Reader', 'Member',))
+  >>> folder.reindexObjectSecurity()
+  >>> context.manage_setLocalRoles('fred', ('Authenticated', 'Reader', 'Member', 'Owner',))
+  >>> context.reindexObjectSecurity()
+  >>> doc1.manage_setLocalRoles('fred', ('Authenticated', 'Reader', 'Member', 'Owner',))
+  >>> doc1.reindexObjectSecurity()
+  >>> transaction.commit()
+
+We verify by revisiting:
+
+  >>> browser.open(folder.absolute_url())
+  >>> browser.url
+  'http://nohost/plone/Members/test_user_1_'
+  >>> browser.open(context.absolute_url())
+  >>> browser.url
+  'http://nohost/plone/Members/test_user_1_/ref'
+
+  >>> browser.open(doc1.absolute_url())
+  >>> browser.url
+  'http://nohost/plone/Members/test_user_1_/doc1'
+
+  >>> browser.open(doc2.absolute_url())
+  >>> browser.url
+  'http://nohost/plone/acl_users/credentials_cookie_auth/require_login?...'
+
+Now Fred edits the source. Since it only refs doc1, all is well:
+
+  >>> browser.open(context.absolute_url() + "/edit")
+  >>> browser.url
+  'http://nohost/plone/Members/test_user_1_/ref/edit'
+
+  >>> browser.getControl(name="multiRef:list").value == [doc1.UID()]
+  True
+
+doc1 is present in the output, doc2 not (since it's not referenced)
+
+  >>> 'doc1' in browser.contents
+  True
+
+  >>> 'doc2' in browser.contents
+  False
+
+We now let the source reference *both* targets:
+
+  >>> context.setMultiRef((doc1.UID(), doc2.UID()))
+  >>> context.reindexObject()
+  >>> transaction.commit()
+
+And re-edit:
+
+  >>> browser.open(context.absolute_url() + "/edit")
+
+Both targets are referenced by the widget:
+
+  >>> doc1.UID() in browser.getControl(name="multiRef:list").value
+  True
+
+  >>> doc2.UID() in browser.getControl(name="multiRef:list").value
+  True
+
+  >>> 'doc1' in browser.contents
+  True
+
+However, the title_or_id of doc2 is *not* displayed (it is considered sensitive)
+
+  >>> 'doc2' in browser.contents
+  False
+
+Instead we get the neutral string 'Undisclosed':
+
+  >>> 'Undisclosed' in browser.contents
+  True
+
