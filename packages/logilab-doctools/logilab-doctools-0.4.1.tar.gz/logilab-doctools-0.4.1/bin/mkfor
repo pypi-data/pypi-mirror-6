@@ -1,0 +1,59 @@
+#!/usr/bin/python
+import os, sys
+
+from logilab.common.textutils import text_to_dict
+from logilab.doctools.pdftex import PdfTex, TransformException
+
+class ExitException(Exception):
+    pass
+
+def read_config():
+    configfile = os.path.join(os.environ['HOME'],'.config','documentor')
+    content = file(configfile).read()
+    cfg = text_to_dict(content)
+    try:
+        formation_path = cfg['formation_path']
+        if not os.path.exists(formation_path):
+            raise ExitException('%s does not exist, check your config %s' %
+                                (formation_path, configfile))
+    except KeyError:
+        raise ExitException('formation_path not defined in your config %s' % configfile)
+    try:
+        basedoc_path = cfg['basedoc_path']
+        if not os.path.exists(basedoc_path):
+            raise ExitException('%s does not exist, check your config %s' %
+                                (basedoc_path, configfile))
+    except KeyError:
+        raise ExitException('basedoc_path not defined in your config %s' % configfile)
+    return formation_path, basedoc_path
+
+def mk_pdftex():
+    formation_path, basedoc_path = read_config()
+    dirs = set()
+    for root, subdirs, filenames in os.walk(formation_path):
+        for name in filenames:
+            if name.endswith('.tex'):
+                dirs.add(root)
+            # if name.endswith('.mp'): XXXFIXME use (mpost + mptopdf) to make sure the pdf is up to date
+            # Don't forget to include the `context` package in the dependencies
+    texinputs = ['.', os.path.abspath(os.path.join(basedoc_path, 'formations/style'))] + sorted(dirs) + ['']
+    flags = '-interaction nonstopmode -halt-on-error -file-line-error'
+
+    return PdfTex(texinputs, flags)
+
+if __name__ == '__main__':
+    import sys
+    try:
+        if set(sys.argv) & set(['-h', '--help']):
+            raise ExitException('usage: mkfor manuel.tex|slides.tex|page-de-garde.tex')
+        pdftex = mk_pdftex()
+        targets = ['page-de-garde', 'slides', 'manuel', 'exos']
+        if len(sys.argv) > 1:
+            targets = sys.argv[1:]
+        for target in targets:
+            pdftex(target, clean=True)
+            print
+    except (TransformException, ExitException), exc:
+        print "\n"
+        print exc
+        sys.exit(1)
