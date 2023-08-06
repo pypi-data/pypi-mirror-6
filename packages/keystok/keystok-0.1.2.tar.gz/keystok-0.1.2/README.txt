@@ -1,0 +1,47 @@
+=====================
+Keystok Python Client
+=====================
+
+This tool provides shell access to Keystok from Linux, OS X and other
+UNIX-like operating systems. It can be used e.g. inside Docker containers
+to access Keystok keys.
+
+Installation
+============
+
+To install the Python client, run this in your shell:
+
+    pip install keystok
+
+You can do it inside a virtualenv if needed.
+
+Usage
+=====
+
+Run "keystok -h" for help on the available commands and options.
+
+Specifying the access token
+---------------------------
+
+To configure the access token, first run this in the shell:
+
+    export KEYSTOK_ACCESS_TOKEN=<access token from keystok.com>
+
+Alternatively you can also specify the token in each command using:
+
+    keystok -a <token>
+
+In Dockerfiles you might want to use the convenient ENV directive:
+
+    ENV KEYSTOK_ACCESS_TOKEN <access token from keystok.com>
+
+Commands
+--------
+
+To list all keys associated with the application:
+
+    keystok ls
+
+The retrieve a key and output it into stdout:
+
+    keystok get <keyid>
