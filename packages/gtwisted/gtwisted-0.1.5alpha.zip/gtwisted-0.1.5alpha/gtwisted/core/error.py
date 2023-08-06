@@ -1,0 +1,11 @@
+#coding:utf8
+'''
+Created on 2014年2月21日
+这里定义了框架中所有可能出现的错误信息
+@author:  lan (www.9miao.com)
+'''
+
+class ReactorAlreadyInstalledError(AssertionError):
+    """
+    Could not install reactor because one is already installed.
+    """
