@@ -1,0 +1,56 @@
+#!/Users/mb312/.virtualenvs/test/bin/python
+""" Copy, relink library dependencies for wheel
+
+Overwrites the wheel in-place by default
+"""
+# vim: ft=python
+from __future__ import division, print_function, absolute_import
+
+import os
+from os.path import join as pjoin, basename, exists
+import sys
+
+from optparse import OptionParser, Option
+
+from delocate import delocate_wheel, __version__
+
+def main():
+    parser = OptionParser(
+        usage="%s WHEEL_FILENAME\n\n" % sys.argv[0] + __doc__,
+        version="%prog " + __version__)
+    parser.add_option(
+        Option("-L", "--lib-sdir",
+               action="store", type='string', default='.dylibs',
+               help="Subdirectory in packages to store copied libraries"))
+    parser.add_option(
+        Option("-w", "--wheel-dir",
+               action="store", type='string',
+               help="Directory to store delocated wheels (default is to "
+               "overwrite input)"))
+    parser.add_option(
+        Option("-v", "--verbose",
+               action="store_true",
+               help="Show libraries copied during fix"))
+    (opts, wheels) = parser.parse_args()
+    if len(wheels) < 1:
+        parser.print_help()
+        sys.exit(1)
+    multi = len(wheels) > 1
+    if opts.wheel_dir and not exists(opts.wheel_dir):
+        os.makedirs(opts.wheel_dir)
+    for wheel in wheels:
+        if multi or opts.verbose:
+            print('Fixing: ' + wheel)
+        if opts.wheel_dir:
+            out_wheel = pjoin(opts.wheel_dir, basename(wheel))
+        else:
+            out_wheel = wheel
+        copied = delocate_wheel(wheel, out_wheel, lib_sdir=opts.lib_sdir)
+        if opts.verbose and len(copied):
+            print("Copied to package {0} directory:".format(opts.lib_sdir))
+            copy_lines = ['  ' + name for name in sorted(copied)]
+            print('\n'.join(copy_lines))
+
+
+if __name__ == '__main__':
+    main()
