@@ -1,0 +1,13 @@
+__all__ = ["motd",
+           "register",
+           "init",
+           "daemon",
+           "run",
+           "publish",
+           "build",
+           "install",
+           "auth",
+           "deploy",
+           "manage",
+           "event",
+           "sync"]
