@@ -1,0 +1,250 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>WhiteNoise &mdash; WhiteNoise 0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="WhiteNoise 0.1 documentation" href="#" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li><a href="#">WhiteNoise 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="whitenoise">
+<h1>WhiteNoise<a class="headerlink" href="#whitenoise" title="Permalink to this headline">¶</a></h1>
+<a class="reference external image-reference" href="https://travis-ci.org/evansd/whitenoise"><img alt="Build Status" src="https://travis-ci.org/evansd/whitenoise.png" /></a>
+<a class="reference external image-reference" href="https://crate.io/packages/whitenoise/"><img alt="Latest PyPI version" src="https://pypip.in/v/whitenoise/badge.png" /></a>
+<p>WSGI middleware for easy serving of static files, with optional integration with Django.
+Secure and efficient enough to use in production.</p>
+<p>Just wrap your WSGI application in the WhiteNoise middleware, give it the path to your
+static files directory and any requests matching files in that directory will be served
+correctly. All other requests are passed on to your application.</p>
+<div class="section" id="features">
+<h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
+<blockquote>
+<div><ul class="simple">
+<li>Simple to configure</li>
+<li>Handles caching (sends cache headers and returns Not Modified responses when appropriate)</li>
+<li>Serves gzipped content (handling Accept-Encoding and Vary headers correctly)</li>
+<li>Provides hooks for easy customisation, e.g. sending custom headers for certain files</li>
+<li>Can serve static files from arbitrary URLs, not just from a fixed URL prefix, so
+you can use it to serve files like <tt class="docutils literal"><span class="pre">/favicon.ico</span></tt> or <tt class="docutils literal"><span class="pre">/robots.txt</span></tt></li>
+<li>Python 2/3 compatibile</li>
+</ul>
+</div></blockquote>
+<p>Shouldn&#8217;t I be using a real webserver, or a CDN, or Amazon S3?
+See <a class="reference internal" href="#infrequently-asked-questions">Infrequently Asked Questions</a></p>
+</div>
+<div class="section" id="quickstart-standard-wsgi-application">
+<h2>QuickStart: Standard WSGI application<a class="headerlink" href="#quickstart-standard-wsgi-application" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">whitenoise</span> <span class="kn">import</span> <span class="n">WhiteNoise</span>
+
+<span class="kn">from</span> <span class="nn">my_project</span> <span class="kn">import</span> <span class="n">MyWSGIApp</span>
+
+<span class="n">application</span> <span class="o">=</span> <span class="n">MyWSGIApp</span><span class="p">()</span>
+<span class="n">application</span> <span class="o">=</span> <span class="n">WhiteNoise</span><span class="p">(</span><span class="n">application</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="s">&#39;/path/to/static/files&#39;</span><span class="p">)</span>
+<span class="n">application</span><span class="o">.</span><span class="n">add_files</span><span class="p">(</span><span class="s">&#39;/path/to/more/static/files&#39;</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s">&#39;more-files/&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="quickstart-django-application">
+<h2>QuickStart: Django application<a class="headerlink" href="#quickstart-django-application" title="Permalink to this headline">¶</a></h2>
+<p>In <tt class="docutils literal"><span class="pre">wsgi.py</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.core.wsgi</span> <span class="kn">import</span> <span class="n">get_wsgi_application</span>
+<span class="kn">from</span> <span class="nn">whitenoise.django</span> <span class="kn">import</span> <span class="n">DjangoWhiteNoise</span>
+
+<span class="n">application</span> <span class="o">=</span> <span class="n">get_wsgi_application</span><span class="p">()</span>
+<span class="n">application</span> <span class="o">=</span> <span class="n">DjangoWhiteNoise</span><span class="p">(</span><span class="n">application</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This will automatically serve the files in <tt class="docutils literal"><span class="pre">STATIC_ROOT</span></tt> under the prefix derived from <tt class="docutils literal"><span class="pre">STATIC_URL</span></tt>.</p>
+<p>If it detects that you are using <a class="reference external" href="https://docs.djangoproject.com/en/1.5/ref/contrib/staticfiles/#cachedstaticfilesstorage">CachedStaticFilesStorage</a> it will automatically set far-future Expires headers on
+your static content.</p>
+</div>
+<div class="section" id="quickstart-pre-gzipping-content">
+<h2>QuickStart: Pre-gzipping content<a class="headerlink" href="#quickstart-pre-gzipping-content" title="Permalink to this headline">¶</a></h2>
+<p>WhiteNoise comes with a command line utility which will create gzip-compressed versions of
+files in a directory. WhiteNoise will then serve these compressed files instead, where the
+client indicates that it accepts them.</p>
+<div class="highlight-console"><div class="highlight"><pre><span class="gp">$</span> python -m whitenoise.gzip --help
+<span class="go">usage: gzip.py [-h] [-q] [-f] root [extensions [extensions ...]]</span>
+
+<span class="go">Search for all files inside &lt;root&gt; matching &lt;extensions&gt; and produce gzipped</span>
+<span class="go">versions with a &#39;.gz&#39; suffix (as long this results in a smaller file.</span>
+
+<span class="go">positional arguments:</span>
+<span class="go">  root         Path root from which to search for files</span>
+<span class="go">  extensions   File extensions to match (default: (u&#39;css&#39;, u&#39;js&#39;))</span>
+
+<span class="go">optional arguments:</span>
+<span class="go">  -h, --help   show this help message and exit</span>
+<span class="go">  -q, --quiet  Don&#39;t produce log output (default: False)</span>
+<span class="go">  -f, --force  Overwrite pre-existing .gz files (default: False)</span>
+</pre></div>
+</div>
+<p>There is also a Django management command which wraps this utility to gzip the contents of
+your <tt class="docutils literal"><span class="pre">STATIC_ROOT</span></tt> directory. (Note that you&#8217;ll need to add <tt class="docutils literal"><span class="pre">whitenoise</span></tt> to your list of
+<tt class="docutils literal"><span class="pre">INSTALLED_APPS</span></tt> if you want to use this command.)</p>
+<div class="highlight-console"><div class="highlight"><pre><span class="gp">$</span> python manage.py gzipstatic --help
+<span class="go">Usage: ./manage.py gzipstatic [options]</span>
+
+<span class="go">Search for all files in STATIC_ROOT matching the extensions specified in</span>
+<span class="go">WHITENOISE_GZIP_EXTENSIONS (by default: css, js) and produce gzipped versions</span>
+<span class="go">with a &#39;.gz&#39; suffix</span>
+
+<span class="go">Options:</span>
+<span class="go">  -v VERBOSITY, --verbosity=VERBOSITY</span>
+<span class="go">                        Verbosity level; 0=minimal output, 1=normal output,</span>
+<span class="go">                        2=verbose output, 3=very verbose output</span>
+<span class="go">  --settings=SETTINGS   The Python path to a settings module, e.g.</span>
+<span class="go">                        &quot;myproject.settings.main&quot;. If this isn&#39;t provided, the</span>
+<span class="go">                        DJANGO_SETTINGS_MODULE environment variable will be</span>
+<span class="go">                        used.</span>
+<span class="go">  --pythonpath=PYTHONPATH</span>
+<span class="go">                        A directory to add to the Python path, e.g.</span>
+<span class="go">                        &quot;/home/djangoprojects/myproject&quot;.</span>
+<span class="go">  --traceback           Print traceback on exception</span>
+<span class="go">  --quiet               Don&#39;t produce any log ouput</span>
+<span class="go">  --force               Overwrite pre-existing .gz files</span>
+<span class="go">  --version             show program&#39;s version number and exit</span>
+<span class="go">  -h, --help            show this help message and exit</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="infrequently-asked-questions">
+<h2>Infrequently Asked Questions<a class="headerlink" href="#infrequently-asked-questions" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="shouldn-t-i-be-using-a-real-webserver">
+<h3>Shouldn&#8217;t I be using a real webserver?<a class="headerlink" href="#shouldn-t-i-be-using-a-real-webserver" title="Permalink to this headline">¶</a></h3>
+<p>Well, perhaps. Certainly something like nginx will be more efficient at serving static
+files. But here are a few things to consider:</p>
+<ol class="arabic simple">
+<li>There are situations (e.g., when hosted on Heroku) where it&#8217;s much simpler to have
+everything handled by your Python application.</li>
+<li>WhiteNoise is pretty efficient. Because it only has to serve a fixed set of
+files it does as much work as it can upfront on initialization, meaning it can serve
+responses with very little work. Also, when used with gunicorn (and most other WSGI
+servers) the actual business of pushing the file down the network interface is handled
+by the kernel&#8217;s highly efficient <tt class="docutils literal"><span class="pre">sendfile</span></tt> syscall, not by Python.</li>
+<li>If you&#8217;re using WhiteNoise behind a CDN or caching proxy (on which more below) then it
+doesn&#8217;t really matter that it&#8217;s not as efficient as nginx as the vast majority of
+static requests will be cached by the CDN and never touch your application.</li>
+</ol>
+</div>
+<div class="section" id="shouldn-t-i-be-using-a-cdn">
+<h3>Shouldn&#8217;t I be using a CDN?<a class="headerlink" href="#shouldn-t-i-be-using-a-cdn" title="Permalink to this headline">¶</a></h3>
+<p>Yes, given how cheap and straightforward they are these days, you probably should.
+But you should be using WhiteNoise to act as the origin, or upstream, server to
+your CDN.</p>
+<p>Under this model, the CDN acts as a caching proxy which sits between your application
+and the browser (only for static files, you still use your normal domain for dynamic
+requests). WhiteNoise will send the appropriate cache headers so the CDN can serve
+requests for static files without hitting your application.</p>
+</div>
+<div class="section" id="shouldn-t-i-be-pushing-my-static-files-to-s3-using-something-like-django-storages">
+<h3>Shouldn&#8217;t I be pushing my static files to S3 using something like Django-Storages?<a class="headerlink" href="#shouldn-t-i-be-pushing-my-static-files-to-s3-using-something-like-django-storages" title="Permalink to this headline">¶</a></h3>
+<p>No, you shouldn&#8217;t. The problem with this is that Amazon S3 cannot currently selectively serve
+gzipped content to your users. Gzipping can make dramatic reductions in the bandwidth required
+for your CSS and JavaScript. But while all browsers in use today can decode gzipped content, your
+users may be behind crappy corporate proxies or anti-virus scanners which don&#8217;t handle gzipped
+content properly. Amazon S3 forces you to choose whether to serve gzipped content to no-one
+(wasting bandwidth) or everyone (running the risk of your site breaking for certain users).</p>
+<p>The correct behaviour is to examine the <tt class="docutils literal"><span class="pre">Accept-Encoding</span></tt> header of the request to see if gzip
+is supported, and to return an appropriate <tt class="docutils literal"><span class="pre">Vary</span></tt> header so that intermediate caches know to do
+the same thing. This is exactly what WhiteNoise does.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">WhiteNoise</a><ul>
+<li><a class="reference internal" href="#features">Features</a></li>
+<li><a class="reference internal" href="#quickstart-standard-wsgi-application">QuickStart: Standard WSGI application</a></li>
+<li><a class="reference internal" href="#quickstart-django-application">QuickStart: Django application</a></li>
+<li><a class="reference internal" href="#quickstart-pre-gzipping-content">QuickStart: Pre-gzipping content</a></li>
+<li><a class="reference internal" href="#infrequently-asked-questions">Infrequently Asked Questions</a><ul>
+<li><a class="reference internal" href="#shouldn-t-i-be-using-a-real-webserver">Shouldn&#8217;t I be using a real webserver?</a></li>
+<li><a class="reference internal" href="#shouldn-t-i-be-using-a-cdn">Shouldn&#8217;t I be using a CDN?</a></li>
+<li><a class="reference internal" href="#shouldn-t-i-be-pushing-my-static-files-to-s3-using-something-like-django-storages">Shouldn&#8217;t I be pushing my static files to S3 using something like Django-Storages?</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/index.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li><a href="#">WhiteNoise 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Evans.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
