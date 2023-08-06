@@ -1,0 +1,82 @@
+<html xmlns:tal="http://xml.zope.org/namespaces/tal"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      metal:use-macro="context/main_template/macros/master"
+      i18n:domain="bastionledger">
+
+  <metal:border fill-slot="top_slot">
+    <tal:border define="dummy python:request.set('enable_border',1)" />
+  </metal:border>
+
+<body>
+  <div metal:fill-slot="main"
+       tal:define="utool context/@@plone_portal_state/portal_url;
+                   b_size request/b_size | python: 50;
+                   b_start request/b_start | python: 0;
+                   entries python: context.bastionLedger().searchResults(meta_type=('BLPaySlip', 'BLReport'), 
+                                                                         accountId=context.getId(), 
+                                                                         sort_on='effective', 
+                                                                         sort_order='descending');
+                   Batch python:modules['Products.CMFPlone'].Batch;
+                   batch python:Batch(entries, int(b_size), int(b_start), orphan=2);">
+      <h1 class="documentFirstHeading"><img src="" alt="" tal:define="icon python:context.getIcon(1)" 
+               tal:attributes="src string:${utool}/${icon}">&nbsp;<span tal:replace="context/prettyTitle"/> Payslips</h1>
+
+       <div metal:use-macro="context/batch_macros/macros/navigation" />
+
+       <table summary="" border="0" cellpadding="2" cellspacing="0"
+              tal:condition="python: not request.form.has_key('id')">
+           <tr class="row">
+               <td width="25"  class="field"><b>Type</b></td>
+               <td class="field"><b>Date</b></td> 
+               <td class="field"><b>Title</b></td> 
+               <td class="field" align="right"><b>Gross</b></td>
+               <td class="field" align="right"><b>Tax</b></td>
+               <td class="field" align="right"><b>Net</b></td>
+               <td class="field" align="right"><b>Net To Date</b></td>
+     	       <td width="16" class="field">&nbsp;</td>
+           </tr>
+           <tal:block tal:repeat="item python: map(lambda x: x.getObject(), batch)">
+               <tr class="row-hilite"
+                   tal:attributes="class python: repeat['item'].odd() and 'odd' or 'even'">
+                   <td class="field">
+                      <a href="" tal:attributes="href item/absolute_url">
+                           <img border="0" src="" tal:define="icon python:item.getIcon(1)" 
+                                tal:attributes="src string:${utool}/${icon}"/>
+                      </a>
+                   </td>
+                   <td class="field">
+                       <a href="" tal:attributes="href item/absolute_url"
+                                  tal:content="item/effective"/>
+                   </td>
+                   <td class="field" tal:content="item/Title"/>
+                   <td class="field" nowrap align="right">
+                       <span tal:condition="python: item.meta_type=='BLPaySlip'" 
+                             tal:replace="item/gross" tal:on-error="string:"/>
+                   </td>
+                   <td class="field" nowrap align="right"> 
+                       <span tal:condition="python: item.meta_type=='BLPaySlip'" 
+                             tal:replace="item/tax"/>
+                   </td>
+                   <td class="field" nowrap align="right">
+                       <span tal:condition="python: item.meta_type=='BLPaySlip'" 
+                             tal:replace="item/net" tal:on-error="string:"/>
+                   </td>
+                   <td class="field" nowrap align="right">
+                       <span tal:condition="python: item.meta_type=='BLPaySlip'" 
+                             tal:replace="python: -item.net_to_date" tal:on-error="string:"/>
+                   </td>
+                   <td class="field">&nbsp;</td>
+               </tr>
+           </tal:block>
+       </table>
+
+       <div metal:use-macro="context/batch_macros/macros/navigation" />
+
+       <div tal:replace="structure provider:plone.belowcontentbody">
+           Document actions (print, sendto etc)
+       </div>
+
+  </div>
+ 
+</body>
+</html>

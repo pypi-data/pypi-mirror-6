@@ -1,0 +1,62 @@
+<html tal:replace="structure context/manage_page_header"/>
+
+    <span tal:replace="structure context/manage_tabs"/>
+
+    <table border="0" cellpadding="2" cellspacing="0" width="100%" tal:define="pids context/objectIds"
+           tal:condition="not: request/ledger | nothing">
+        <tr class="list-header">
+            <td class="list-item"></td>
+            <td class="list-item">Ledger</td>
+            <td class="list-item" tal:repeat="pid pids">
+               <a href="" tal:attributes="href string:${pid}/manage_workspace" tal:content="pid"/>
+            </td>
+        </tr>
+        <tr tal:repeat="linfo context/ledgerInfos" class=""
+            tal:attributes="class python: repeat['linfo'].index % 2 and 'row-hilite' or 'row-normal'">
+            <tal:ledgers tal:define="ledger nocall: linfo/ledger">
+                <td class="list-item">
+                    <img src="misc_/BastionLedger/blledger"/>
+                </td>
+                <td class="list-item">
+                    <a href="" 
+                       tal:attributes="href string:${context/absolute_url}/manage_ledgers?ledger=${ledger}"
+                       tal:content="ledger"/>
+                </td>
+                <td class="list-item" tal:repeat="pid pids">
+                   <a href="" tal:define="period python:linfo['periods'].get(pid,None)"
+                              tal:condition="nocall: period"
+                              tal:attributes="href string:${period/absolute_url}/${ledger}/manage_workspace"  
+                              tal:content="pid"/>
+                </td>
+            </tal:ledgers>
+        </tr>
+    </table>
+
+<tal:ledger tal:condition="request/ledger | nothing">
+    <form method="post" action="" tal:attributes="action string:${context/absolute_url}/manage_ledgers">
+       <input type="hidden" name="ledger" value="" tal:attributes="value request/ledger"/>
+       <input type="submit" name="attr" value="balance"/>
+       <input type="submit" name="attr" value="reporting_balance"/>
+    </form>
+    <table border="0" cellpadding="2" cellspacing="0" width="100%">
+      <tal:info tal:define="info python:context.infoForType(['Asset', 'Liability', 'Proprietorship', 'Income', 'Expense'], list(context.objectIds('BLPeriodInfos')), request['ledger'], attr=request.get('attr', 'balance'), all=True)">
+        <tr class="list-header">
+          <td/>
+          <td class="list-item" tal:repeat="date info/dates" nowrap>
+              <div align="right" class="label" tal:content="python: date.strftime('%B %Y')"/>
+          </td>
+        </tr>
+        <tr tal:repeat="account info/accounts"
+            tal:attributes="class python: repeat['account'].index % 2 and 'row-hilite' or 'row-normal'">
+           <td class="list-item" nowrap>
+              <a href="" tal:attributes="href python:account[0].absolute_url()"
+                         tal:content="python: account[0].Title()"/>
+           </td>
+           <tal:periods tal:repeat="balance python: account[1:]">
+               <td class="list-item" align="right" nowrap tal:content="balance"/>
+           </tal:periods>
+        </tr>
+      </tal:info>
+    </table>
+</tal:ledger>
+<html tal:replace="structure context/manage_page_footer"/>
