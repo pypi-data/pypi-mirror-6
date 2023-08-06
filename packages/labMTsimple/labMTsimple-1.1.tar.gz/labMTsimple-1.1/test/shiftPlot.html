@@ -1,0 +1,136 @@
+<html>
+<head>
+<title>Simple Shift Plot</title>
+<!-- <script src="d3/d3.js" charset="utf-8"></script> -->
+<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<script src="plotShift.js" charset="utf-8"></script>
+<script src="shift.js" charset="utf-8"></script>
+<script src="drawLens.js" charset="utf-8"></script>
+  <style>
+    body {
+      font-family: Verdana,Arial,sans-serif;
+    }
+
+    h4 {
+    font-size: .8em;
+    margin: 60px 0 5px 0;
+    }
+
+    h5 {
+    font-size: .8em;
+    margin: 10px 0 5px 0;
+    }
+
+    body {
+    min-width: 650px;
+    }
+
+    #caption01 {
+      width: 500px;
+    }
+
+    #lens01 {
+      width: 600px;
+    }
+
+    #figure01 {
+      width: 600px;
+    }
+
+    .domain {
+      fill: none;
+      stroke: black;
+      stroke-width: 2;
+     }
+
+  </style>
+</head>
+<body>
+
+<div id="header"></div>
+<!-- <h4>Select the reference: <select id="refSelect"><option value="none">none</option></select> Select the comparison: <select id="compSelect"><option value="none">none</option></select></h4> -->
+<center>
+
+<div id="caption01">
+Move the stop-window to remove words from the lense.
+Removing 4 though 6, the default, corresponds to the tuned hedonometer for large corpuses.</div>
+<br>
+
+<div id="lens01" class="figure"></div>
+
+<br>
+
+Click on the graph and drag up to reveal additional words.
+
+<div id="figure01" class="figure"></div>
+
+</center>
+
+<div id="footer"></div>
+
+<script>
+function initializeDrop() {
+    loadCsv();
+}
+
+function loadCsv() {
+var csvLoadsRemaining = 4;
+d3.text("tuesdayFvec.csv", function(text) {
+    var tmp = text.split("\n");
+    refF = tmp;
+
+    if (!--csvLoadsRemaining) shiftAndPlot(d3.select("#figure01"),refF,compF,lens,words);
+});
+d3.text("labMTvec.csv", function(text) {
+    var tmp = text.split("\n");
+    lens = tmp.map(parseFloat);
+    if (!--csvLoadsRemaining) shiftAndPlot(d3.select("#figure01"),refF,compF,lens,words);
+});
+d3.text("labMTwords.csv", function(text) {
+    var tmp = text.split("\n");
+    words = tmp;
+    if (!--csvLoadsRemaining) shiftAndPlot(d3.select("#figure01"),refF,compF,lens,words);
+});
+d3.text("saturdayFvec.csv", function(text) {
+    var tmp = text.split("\n");
+    compF = tmp;
+    if (!--csvLoadsRemaining) shiftAndPlot(d3.select("#figure01"),refF,compF,lens,words);
+});
+};
+
+initDraw = true;
+
+function shiftAndPlot(figure,refF,compF,lens,words) {
+    if (initDraw) {
+        lensFig = d3.select("#lens01");
+        drawLens(lensFig,lens);
+        initDraw = false;
+    }
+    // take out 4-6 for the initial load
+    for (var i=0; i<refF.length; i++) {
+	if (lens[i] > 4 && lens[i] < 6) {
+            refF[i]= 0;
+            compF[i]= 0;
+        }
+    }
+    shiftObj = shift(refF,compF,lens,words);
+    plotShift(figure,shiftObj.sortedMag.slice(0,200),
+              shiftObj.sortedType.slice(0,200),
+              shiftObj.sortedWords.slice(0,200));
+
+};
+
+initializeDrop();
+
+</script>
+  <!-- <style> -->
+  <!--   .domain { -->
+  <!--     stroke-width: 0.5; -->
+  <!--    } -->
+
+  <!-- </style> -->
+
+</body>
+</html>
+
+
