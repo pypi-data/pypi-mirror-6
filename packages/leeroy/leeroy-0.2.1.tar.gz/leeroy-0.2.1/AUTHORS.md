@@ -1,0 +1,6 @@
+Joe Shaw ([@joeshaw](https://github.com/joeshaw))
+Charles-Axel Dein ([@charlax](https://github.com/charlax))
+Lonnen ([@lonnen](https://github.com/lonnen))
+Steve Prentice ([@steveprentice)](https://github.com/steveprentice))
+Andy Freeland ([@rouge8](https://github.com/rouge8))
+Dave Dash ([@davedash](https://github.com/davedash))
