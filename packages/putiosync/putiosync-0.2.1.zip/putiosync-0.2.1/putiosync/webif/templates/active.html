@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block javascript %}
+    <style>
+    .progress {
+        height: 20px;
+    }
+
+    .download {
+        background: #f1f1f1;
+            -webkit-border-radius: 5px;
+            -moz-border-radius: 5px;
+            border-radius: 5px;
+        margin-top: 5px;
+        margin-bottom: 5px;
+        padding-left: 15px;
+        padding-right: 15px;
+        padding-top: 10px;
+    }
+    </style>
+
+    <script id="download-template" type="text/x-handlebars-template">
+        {% raw %}
+        {{#each downloads}}
+        <div class="row download">
+           <p>{{name}} ({{pretty_size}})</p>
+           {{#if is_active}}
+           <p>
+             <b>Downloaded:</b> {{pretty_downloaded}} ({{pretty_percent_complete}})<br />
+             <b>ETA:</b> {{pretty_eta}} <b>Avg Rate:</b> {{pretty_bps}}
+           </p>
+           <div class="progress progress-striped">
+             <div class="progress-bar progress-bar-info"
+                  role="progressbar"
+                  style="width: {{percent_complete}}%"></div>
+           </div>
+           {{/if}}
+        </div>
+        {{/each}}
+        {% endraw %}
+    </script>
+
+    <script id="recent-completed-template" type="text/x-handlebars-template">
+        {% raw %}
+        <table id="history_tbl" class="table table-striped table-bordered">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Size</th>
+                    <th>Name</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{#each downloads}}
+                <tr>
+                    <td>{{id}}</td>
+                    <td>{{pretty_size}}</td>
+                    <td>{{name}}</td>
+                </tr>
+            {{/each}}
+            </tbody>
+        </table>
+        {% endraw %}
+    </script>
+
+    <script type="text/javascript">
+    var downloadTemplate = Handlebars.compile($("#download-template").html());
+    var recentlyCompletedTemplate = Handlebars.compile($("#recent-completed-template").html());
+    var bpsData = [];
+    var bps_window_seconds = 60 * 2;
+    var bpsPlot = $.plot("#bps-plot-placeholder", [ [0] ], {
+        series: {
+            shodowSize: 0  // Drawing is faster without shadows
+        },
+        yaxis: {
+            min: 0,
+            max: 10
+        },
+        xaxis: {
+            min: 0,
+            max: bps_window_seconds,
+            show: true
+        }
+    });
+
+    function updateBPS(bps) {
+        if (bpsData.length == bps_window_seconds) {
+            bpsData = bpsData.slice(1);
+        }
+        bpsData.push(bps / 1024.0 / 1024.0);  // convert to MB/s
+    }
+
+    function getBPSData() {
+        data = [];
+        for (i = 0; i < bpsData.length; i++) {
+            data.push([i, bpsData[i]]);
+        }
+        return data;
+    }
+
+    function updateQueueProgress() {
+        $.ajax({
+            url: "/download_queue",
+            dataType: "json",
+            success: processQueueProgressUpdate
+        })
+    }
+
+    function prettify_bytes(bytes) {
+        var GB = 1024 * 1024 * 1024;
+        var MB = 1024 * 1024;
+        var KB = 1024;
+        if (bytes > GB) {
+            return (bytes / GB).toFixed(2) + " GB";
+        } else if (bytes > MB) {
+            return (bytes / MB).toFixed(2) + " MB";
+        } else if (bytes > KB) {
+            return (bytes / KB).toFixed(2) + " KB";
+        } else {
+            return bytes + " B";
+        }
+    }
+
+    function pad(num, size) {
+        var s = num+"";
+        while (s.length < size) s = "0" + s;
+        return s;
+    }
+
+    function pretty_eta_from_seconds(eta_seconds) {
+        eta_seconds = Math.floor(eta_seconds);
+        minutes = Math.floor(eta_seconds / 60);
+        seconds = eta_seconds % 60;
+        return pad(minutes, 2) + ":" + pad(seconds, 2);
+    }
+
+    function processQueueProgressUpdate(data) {
+        var js_current_datetime = Date.parse(data.current_datetime);
+        updateBPS(data.bps);
+        bpsPlot.setData([getBPSData()]);
+        bpsPlot.draw();
+        $("#download-rate").html("<b>Current Rate:</b> " + prettify_bytes(data.bps) + "/s");
+        $.each(data.downloads, function(idx, download) {
+            if (download.downloaded > 0) {
+                download.is_active = true;
+                download.js_start_datetime = Date.parse(download.start_datetime);
+                download.elapsed_milliseconds = js_current_datetime - download.js_start_datetime;
+                download.avg_bps = (download.downloaded / download.elapsed_milliseconds) * 1000.0;
+                download.pretty_bps = prettify_bytes(download.avg_bps) + "/s";
+                download.eta_secs = (download.size - download.downloaded) / download.avg_bps;
+                download.pretty_eta = pretty_eta_from_seconds(download.eta_secs);
+            }
+            download.percent_complete = (download.downloaded / download.size) * 100;
+            download.pretty_percent_complete = download.percent_complete.toFixed(2) + "%";
+            download.pretty_size = prettify_bytes(download.size);
+            download.pretty_downloaded = prettify_bytes(download.downloaded);
+        });
+        $.each(data.recent, function(idx, record) {
+            record.pretty_size = prettify_bytes(record.size);
+        });
+
+        if (data.downloads.length > 0) {
+            $("#progress").html(downloadTemplate({downloads: data.downloads}));
+        } else {
+            $("#progress").html("There are no downloads in the queue currently");
+        }
+        $("#recently-completed").html(recentlyCompletedTemplate({downloads: data.recent}));
+    }
+
+    $(document).ready(function() {
+        updateQueueProgress();
+        setInterval(updateQueueProgress, 1000);
+    })
+    </script>
+{% endblock %}
+{% block body %}
+    <h2>Download Queue</h2>
+    <div class="container" id="download-rate"></div>
+    <div id="bps-plot-placeholder" style="width:100%;height: 100px;"></div>
+    <div class="container" id="progress"></div>
+    <h2>Recently Completed</h2>
+    <div class="container" id="recently-completed"></div>
+{% endblock %}
