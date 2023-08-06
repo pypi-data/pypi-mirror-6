@@ -1,0 +1,302 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Composite Fields &mdash; django-pgfields 1.2.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/pyramid.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.2.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="django-pgfields 1.2.0 documentation" href="index.html" />
+    <link rel="next" title="Miscellaneous" href="misc.html" />
+    <link rel="prev" title="Simple Fields" href="fields.html" />
+    
+<link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Neuton&amp;subset=latin" type="text/css" media="screen" charset="utf-8" />
+<link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Nobile:regular,italic,bold,bolditalic&amp;subset=latin" type="text/css" media="screen" charset="utf-8" />
+<!--[if lte IE 6]>
+<link rel="stylesheet" href="_static/ie6.css" type="text/css" media="screen" charset="utf-8" />
+<![endif]-->
+
+    <link rel="stylesheet" href="_static/pgfields.css"
+                                                            type="text/css" />
+
+  </head>
+  <body>
+
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="misc.html" title="Miscellaneous"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="fields.html" title="Simple Fields"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">django-pgfields 1.2.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="composite-fields">
+<h1>Composite Fields<a class="headerlink" href="#composite-fields" title="Permalink to this headline">¶</a></h1>
+<p>In addition to a generous set of built-in field types, PostgreSQL allows
+for the definition of custom fields on a per-schema level. Composite fields
+are simply custom fields that are composites of an ordered list of key names
+and field types already provided by PostgreSQL.</p>
+<p>Composite fields come with a few limitations compared to standard tables.
+They can&#8217;t have constraints of any kind, making them a poor choice for
+anything requiring a foreign key. Similarly, if you&#8217;re doing lookups based
+on a composite field, you should know precisely what you&#8217;re doing.</p>
+<p>If you aren&#8217;t familiar with PostgreSQL composite fields and want to understand
+more about them, you should consult the PostgreSQL <a class="reference external" href="http://www.postgresql.org/docs/9.2/static/rowtypes.html">composite fields
+documentation</a> before continuing on.</p>
+<div class="section" id="defining-composite-fields-in-the-orm">
+<h2>Defining Composite Fields in the ORM<a class="headerlink" href="#defining-composite-fields-in-the-orm" title="Permalink to this headline">¶</a></h2>
+<p>The representation of composite fields in the ORM using django-pgfields
+should be remarkably similar to the representation of models themselves,
+since they&#8217;re conceptually quite similar.</p>
+<div class="section" id="differences-from-model-subclasses">
+<h3>Differences from Model subclasses<a class="headerlink" href="#differences-from-model-subclasses" title="Permalink to this headline">¶</a></h3>
+<p>A few things differ between models and composite fields:</p>
+<ul>
+<li><p class="first">Composite fields inherit from <tt class="docutils literal"><span class="pre">django_pg.models.CompositeField</span></tt> rather
+than <tt class="docutils literal"><span class="pre">django.db.models.Model</span></tt>.</p>
+</li>
+<li><p class="first">Composite fields do not get an <tt class="docutils literal"><span class="pre">id</span></tt> field by default, and do not need one.</p>
+</li>
+<li><p class="first">Composite fields may not contain any subclass of
+<tt class="docutils literal"><span class="pre">django.db.models.RelatedField</span></tt>. This includes <tt class="docutils literal"><span class="pre">ForeignKey</span></tt>,
+<tt class="docutils literal"><span class="pre">OneToOneField</span></tt>, or <tt class="docutils literal"><span class="pre">ManyToManyField</span></tt> fields.</p>
+</li>
+<li><p class="first">Any constraints provided to composite fields will be ignored at the
+database level.</p>
+<blockquote>
+<div><ul class="simple">
+<li>Exception: <tt class="docutils literal"><span class="pre">max_length</span></tt> sent to <tt class="docutils literal"><span class="pre">CharField</span></tt>. This is part of the
+type definition, and is still required.</li>
+</ul>
+</div></blockquote>
+</li>
+<li><p class="first">Most <tt class="docutils literal"><span class="pre">Meta</span></tt> options no longer have any meaning, and a new <tt class="docutils literal"><span class="pre">Meta</span></tt>
+option (<tt class="docutils literal"><span class="pre">db_type</span></tt>) is available to composite fields.</p>
+</li>
+<li><p class="first">Composite fields can&#8217;t do lookups based on a single key in the composite
+field. PostgreSQL has this ability, but it&#8217;s not yet implemented in
+django-pgfields.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="type-definition-example">
+<h3>Type Definition Example<a class="headerlink" href="#type-definition-example" title="Permalink to this headline">¶</a></h3>
+<p>With these differences in mind, creating a composite field is straightfoward
+and familiar:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django_pg</span> <span class="kn">import</span> <span class="n">models</span>
+
+<span class="k">class</span> <span class="nc">AuthorField</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">CompositeField</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">75</span><span class="p">)</span>
+    <span class="n">sex</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">(</span>
+        <span class="p">(</span><span class="s">&#39;male&#39;</span><span class="p">,</span> <span class="s">&#39;Male&#39;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;female&#39;</span><span class="p">,</span> <span class="s">&#39;Female&#39;</span><span class="p">),</span>
+    <span class="p">))</span>
+    <span class="n">birthdate</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">DateField</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Once the subclass is defined, it can be used within a model like any other
+field:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Book</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="n">title</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
+    <span class="n">author</span> <span class="o">=</span> <span class="n">AuthorField</span><span class="p">()</span>
+    <span class="n">date_published</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">DateField</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="meta-options">
+<h3>Meta Options<a class="headerlink" href="#meta-options" title="Permalink to this headline">¶</a></h3>
+<p><strong>db_type</strong></p>
+<p>All types in PostgreSQL have a name to identify them, such as <tt class="docutils literal"><span class="pre">text</span></tt> or
+<tt class="docutils literal"><span class="pre">int</span></tt>. Your custom type must also have a name.</p>
+<p>If you don&#8217;t provide one, django-pgfields will introspect it from the name
+of the class, by converting the class name to lower-case, and then stripping
+off <tt class="docutils literal"><span class="pre">&quot;field&quot;</span></tt> from the end if it&#8217;s present. So, in the example above,
+our <tt class="docutils literal"><span class="pre">AuthorField</span></tt> would create an <tt class="docutils literal"><span class="pre">author</span></tt> type in the schema.</p>
+<p>You may choose to provide one by specifying <tt class="docutils literal"><span class="pre">db_type</span></tt> in the field&#8217;s
+inner <tt class="docutils literal"><span class="pre">Meta</span></tt> class:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">AuthorField</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">CompositeField</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">75</span><span class="p">)</span>
+    <span class="n">sex</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CharField</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">(</span>
+        <span class="p">(</span><span class="s">&#39;male&#39;</span><span class="p">,</span> <span class="s">&#39;Male&#39;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;female&#39;</span><span class="p">,</span> <span class="s">&#39;Female&#39;</span><span class="p">),</span>
+    <span class="p">))</span>
+    <span class="n">birthdate</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">DateField</span><span class="p">()</span>
+
+    <span class="k">class</span> <span class="nc">Meta</span><span class="p">:</span>
+        <span class="n">db_type</span> <span class="o">=</span> <span class="s">&#39;ns_author&#39;</span>
+</pre></div>
+</div>
+<p>Manual specification of the composite type&#8217;s name is recommended, if only
+so that they&#8217;re namespaced (to a degree). You don&#8217;t want your type name to
+conflict with some new type that PostgreSQL may add in the future, after all.</p>
+</div>
+</div>
+<div class="section" id="assigning-values-to-composite-fields">
+<h2>Assigning Values to Composite Fields<a class="headerlink" href="#assigning-values-to-composite-fields" title="Permalink to this headline">¶</a></h2>
+<p>The presence of any composite field entails the need to write data to the
+model instance containing that field. There are two ways to go about this:
+by using a tuple, or by using a special &#8220;instance class&#8221; created when you
+instantiate the field subclass.</p>
+<div class="section" id="tuples">
+<h3>Tuples<a class="headerlink" href="#tuples" title="Permalink to this headline">¶</a></h3>
+<p>In many simple circumstances, the quickest way to assign values is to use
+a tuple. PostgreSQL accepts its write values to composite fields in a
+tuple-like structure, with values provided in a specified order
+(the order of the fields) and keys omitted.</p>
+<p>This is a legal way to assign an author to a book:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span> <span class="o">=</span> <span class="n">Book</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s">&#39;The Hobbit&#39;</span><span class="p">,</span> <span class="n">date_published</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">1937</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">21</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span><span class="o">.</span><span class="n">author</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;J.R.R. Tolkien&#39;</span><span class="p">,</span> <span class="s">&#39;male&#39;</span><span class="p">,</span> <span class="n">date</span><span class="p">(</span><span class="mi">1892</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="composite-instances">
+<h3>Composite Instances<a class="headerlink" href="#composite-instances" title="Permalink to this headline">¶</a></h3>
+<p>The above method works fine in simple cases, but isn&#8217;t great for more complex
+ones, especially since tuples are immutable. Fortunately, there&#8217;s a solution.
+Whenever a composite field is created, a &#8220;composite instance&#8221; class is
+created alongside of it, and is available under the <tt class="docutils literal"><span class="pre">instance_class</span></tt>
+property of the field.</p>
+<p>This example is identical in function to the tuple example shown above:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span> <span class="o">=</span> <span class="n">Book</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s">&#39;The Hobbit&#39;</span><span class="p">,</span> <span class="n">date_published</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">1937</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">21</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span><span class="o">.</span><span class="n">author</span> <span class="o">=</span> <span class="n">AuthorField</span><span class="o">.</span><span class="n">instance_class</span><span class="p">(</span>
+<span class="go">    birthdate=date(1892, 1, 3),</span>
+<span class="go">    name=&#39;J.R.R. Tolkien&#39;,</span>
+<span class="go">    sex=&#39;male&#39;,</span>
+<span class="go">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The actual name of the instance class is derived from the name of the field,
+by dropping the name <tt class="docutils literal"><span class="pre">Field</span></tt> (if present) from the field name&#8217;s subclass. If
+the instance name does not conflict with the field name, it is automatically
+assigned to the same module in which the instance was created.</p>
+<p>In the above example, assuming that <tt class="docutils literal"><span class="pre">AuthorField</span></tt> was defined in the
+<tt class="docutils literal"><span class="pre">library.models</span></tt> module, we&#8217;d be able to do this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">library.models</span> <span class="kn">import</span> <span class="n">Book</span><span class="p">,</span> <span class="n">Author</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span> <span class="o">=</span> <span class="n">Book</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s">&#39;The Hobbit&#39;</span><span class="p">,</span> <span class="n">date_published</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">1937</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">21</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span><span class="o">.</span><span class="n">author</span> <span class="o">=</span> <span class="n">Author</span><span class="p">(</span>
+<span class="go">    birthdate=date(1892, 1, 3),</span>
+<span class="go">    name=&#39;J.R.R. Tolkien&#39;,</span>
+<span class="go">    sex=&#39;male&#39;,</span>
+<span class="go">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="accessing-composite-values">
+<h2>Accessing Composite Values<a class="headerlink" href="#accessing-composite-values" title="Permalink to this headline">¶</a></h2>
+<p>When values are being <em>read</em>, a composite instance is always used,
+never a tuple. If a tuple is required, it can be explicitly typecast.</p>
+<p>Composite values access <em>their</em> individual fields as attributes, just
+like subclasses of Model:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span> <span class="o">=</span> <span class="n">Book</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s">&#39;The Hobbit&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span><span class="o">.</span><span class="n">author</span><span class="o">.</span><span class="n">name</span>
+<span class="go">&#39;J.R.R. Tolkien&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hobbit</span><span class="o">.</span><span class="n">author</span><span class="o">.</span><span class="n">birthdate</span>
+<span class="go">date(1892, 1, 3)</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Composite Fields</a><ul>
+<li><a class="reference internal" href="#defining-composite-fields-in-the-orm">Defining Composite Fields in the ORM</a><ul>
+<li><a class="reference internal" href="#differences-from-model-subclasses">Differences from Model subclasses</a></li>
+<li><a class="reference internal" href="#type-definition-example">Type Definition Example</a></li>
+<li><a class="reference internal" href="#meta-options">Meta Options</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#assigning-values-to-composite-fields">Assigning Values to Composite Fields</a><ul>
+<li><a class="reference internal" href="#tuples">Tuples</a></li>
+<li><a class="reference internal" href="#composite-instances">Composite Instances</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#accessing-composite-values">Accessing Composite Values</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="fields.html"
+                        title="previous chapter">Simple Fields</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="misc.html"
+                        title="next chapter">Miscellaneous</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="misc.html" title="Miscellaneous"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="fields.html" title="Simple Fields"
+             >previous</a> |</li>
+        <li><a href="index.html">django-pgfields 1.2.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Luke Sneeringer.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.1.
+    </div>
+  </body>
+</html>
