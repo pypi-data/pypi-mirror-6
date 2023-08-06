@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+
+import argparse
+import logging
+import sys
+import os
+
+import getotp
+
+
+def add_command(args, filename):
+    secrets = getotp.Secrets.from_file(filename)
+    secrets.add(args.name, args.secret)
+    secrets.save()
+
+def edit_command(args, filename):
+    secrets = getotp.Secrets.from_file(filename)
+    secrets.edit(args.name, args.secret)
+    secrets.save()
+
+def remove_command(args, filename):
+    secrets = getotp.Secrets.from_file(filename)
+    secrets.remove(args.name)
+    secrets.save()
+
+def show_command(args, filename):
+    secrets = getotp.Secrets.from_file(filename)
+    if not args.name:
+        out = secrets.show_all()
+        if not out:
+            print "No Secrets"
+        else:
+            print "\n".join(out)
+        return
+
+    print "%06d" % secrets.show(args.name)
+
+def main():
+
+    description_msg = "Store secrets and retrieve TOTP tokens."
+    parser = argparse.ArgumentParser(description=description_msg)
+
+    parser.add_argument("-v", "--version", action="version",
+                        version="%%(prog)s %s" % getotp.__version__,
+                        help="Display version information.")
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    add_parser = subparsers.add_parser("add", help="Add a new named secret.")
+    add_parser.set_defaults(func=add_command)
+    add_parser.add_argument("name")
+    add_parser.add_argument("secret")
+
+    edit_parser = subparsers.add_parser("edit", help="Edit an existing named secret.")
+    edit_parser.set_defaults(func=edit_command)
+    edit_parser.add_argument("name")
+    edit_parser.add_argument("secret")
+
+    remove_parser = subparsers.add_parser("remove", help="Remove an existing named secret.")
+    remove_parser.set_defaults(func=remove_command)
+    remove_parser.add_argument("name")
+
+    show_parser = subparsers.add_parser("show", help="Edit an existing named secret.")
+    show_parser.set_defaults(func=show_command)
+    show_parser.add_argument("name", nargs="?")
+
+    args = parser.parse_args()
+    filename = os.path.join("~", ".getotp")
+
+    try:
+        args.func(args, filename)
+    except getotp.Error, err:
+        print err
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    main()
