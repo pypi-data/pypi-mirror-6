@@ -1,0 +1,451 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Writing a Data Manager &mdash; transaction 1.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="transaction 1.2 documentation" href="index.html" />
+    <link rel="next" title="Writing a Resource Manager" href="resourcemanager.html" />
+    <link rel="prev" title="Hooking the Transaction Machinery" href="hooks.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="resourcemanager.html" title="Writing a Resource Manager"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="hooks.html" title="Hooking the Transaction Machinery"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">transaction 1.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="writing-a-data-manager">
+<h1>Writing a Data Manager<a class="headerlink" href="#writing-a-data-manager" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="simple-data-manager">
+<h2>Simple Data Manager<a class="headerlink" href="#simple-data-manager" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction.tests.examples</span> <span class="kn">import</span> <span class="n">DataManager</span>
+</pre></div>
+</div>
+<p>This <tt class="xref py py-class docutils literal"><span class="pre">transaction.tests.examples.DataManager</span></tt> class
+provides a trivial data-manager implementation and docstrings to illustrate
+the the protocol and to provide a tool for writing tests.</p>
+<p>Our sample data manager has state that is updated through an inc
+method and through transaction operations.</p>
+<p>When we create a sample data manager:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span> <span class="o">=</span> <span class="n">DataManager</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>It has two bits of state, state:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span>
+<span class="go">0</span>
+</pre></div>
+</div>
+<p>and delta:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">0</span>
+</pre></div>
+</div>
+<p>Both of which are initialized to 0.  state is meant to model
+committed state, while delta represents tentative changes within a
+transaction.  We change the state by calling inc:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>which updates delta:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+<p>but state isn&#8217;t changed until we commit the transaction:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span>
+<span class="go">0</span>
+</pre></div>
+</div>
+<p>To commit the changes, we use 2-phase commit. We execute the first
+stage by calling prepare.  We need to pass a transation. Our
+sample data managers don&#8217;t really use the transactions for much,
+so we&#8217;ll be lazy and use strings for transactions:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t1</span> <span class="o">=</span> <span class="s">&#39;1&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The sample data manager updates the state when we call prepare:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span>
+<span class="go">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+<p>This is mainly so we can detect some affect of calling the methods.</p>
+<p>Now if we call commit:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Our changes are&#8221;permanent&#8221;.  The state reflects the changes and the
+delta has been reset to 0.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span>
+<span class="go">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">0</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-prepare-method">
+<h2>The <tt class="xref py py-meth docutils literal"><span class="pre">prepare()</span></tt> Method<a class="headerlink" href="#the-prepare-method" title="Permalink to this headline">¶</a></h2>
+<p>Prepare to commit data</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span> <span class="o">=</span> <span class="n">DataManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t1</span> <span class="o">=</span> <span class="s">&#39;1&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span>
+<span class="go">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t2</span> <span class="o">=</span> <span class="s">&#39;2&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+<p>It is en error to call prepare more than once without an intervening
+commit or abort:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">Already prepared</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">Already prepared</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If there was a preceeding savepoint, the transaction must match:</p>
+<div class="highlight-python"><div class="highlight"><pre>&gt;&gt;&gt; rollback = dm.savepoint(t1)
+&gt;&gt;&gt; dm.prepare(t2)
+Traceback (most recent call last):
+,,,
+TypeError: (&#39;Transaction missmatch&#39;, &#39;2&#39;, &#39;1&#39;)
+
+&gt;&gt;&gt; dm.prepare(t1)
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-abort-method">
+<h2>The <tt class="xref py py-meth docutils literal"><span class="pre">abort()</span></tt> method<a class="headerlink" href="#the-abort-method" title="Permalink to this headline">¶</a></h2>
+<p>The abort method can be called before two-phase commit to
+throw away work done in the transaction:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span> <span class="o">=</span> <span class="n">DataManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(0, 1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t1</span> <span class="o">=</span> <span class="s">&#39;1&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(0, 0)</span>
+</pre></div>
+</div>
+<p>The abort method also throws away work done in savepoints:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(0, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(0, 0)</span>
+</pre></div>
+</div>
+<p>If savepoints are used, abort must be passed the same
+transaction:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t2</span> <span class="o">=</span> <span class="s">&#39;2&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">(&#39;Transaction missmatch&#39;, &#39;2&#39;, &#39;1&#39;)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The abort method is also used to abort a two-phase commit:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(0, 1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(1, 1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(0, 0)</span>
+</pre></div>
+</div>
+<p>Of course, the transactions passed to prepare and abort must
+match:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">(&#39;Transaction missmatch&#39;, &#39;2&#39;, &#39;1&#39;)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-commit-method">
+<h2>The <tt class="xref py py-meth docutils literal"><span class="pre">commit()</span></tt> method<a class="headerlink" href="#the-commit-method" title="Permalink to this headline">¶</a></h2>
+<p>Called to omplete two-phase commit</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span> <span class="o">=</span> <span class="n">DataManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span>
+<span class="go">0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>We start two-phase commit by calling prepare:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t1</span> <span class="o">=</span> <span class="s">&#39;1&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+
+<span class="go">We complete it by calling commit:</span>
+</pre></div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+<p>It is an error ro call commit without calling prepare first:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t2</span> <span class="o">=</span> <span class="s">&#39;2&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">Not prepared to commit</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If course, the transactions given to prepare and commit must
+be the same:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t3</span> <span class="o">=</span> <span class="s">&#39;3&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t3</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">(&#39;Transaction missmatch&#39;, &#39;2&#39;, &#39;3&#39;)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-savepoint-method">
+<h2>The <tt class="xref py py-meth docutils literal"><span class="pre">savepoint()</span></tt> method<a class="headerlink" href="#the-savepoint-method" title="Permalink to this headline">¶</a></h2>
+<p>Provide the ability to rollback transaction state</p>
+<p>Savepoints provide a way to:</p>
+<blockquote>
+<div><ul class="simple">
+<li>Save partial transaction work. For some data managers, this
+could allow resources to be used more efficiently.</li>
+<li>Provide the ability to revert state to a point in a
+transaction without aborting the entire transaction.  In
+other words, savepoints support partial aborts.</li>
+</ul>
+</div></blockquote>
+<p>Savepoints don&#8217;t use two-phase commit. If there are errors in
+setting or rolling back to savepoints, the application should
+abort the containing transaction.  This is <em>not</em> the
+responsibility of the data manager.</p>
+<p>Savepoints are always associated with a transaction. Any work
+done in a savepoint&#8217;s transaction is tentative until the
+transaction is committed using two-phase commit.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span> <span class="o">=</span> <span class="n">DataManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t1</span> <span class="o">=</span> <span class="s">&#39;1&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(0, 1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(0, 2)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(0, 1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(1, 0)</span>
+</pre></div>
+</div>
+<p>Savepoints must have the same transaction:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">r1</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(1, 0)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(1, 1)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t2</span> <span class="o">=</span> <span class="s">&#39;2&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r2</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="n">t2</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">(&#39;Transaction missmatch&#39;, &#39;2&#39;, &#39;1&#39;)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r2</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(1, 2)</span>
+</pre></div>
+</div>
+<p>If we rollback to an earlier savepoint, we discard all work
+done later:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">r1</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(1, 0)</span>
+</pre></div>
+</div>
+<p>and we can no longer rollback to the later savepoint:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">r2</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">(&#39;Attempt to roll back to invalid save point&#39;, 3, 2)</span>
+</pre></div>
+</div>
+<p>We can roll back to a savepoint as often as we like:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">r1</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r1</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r1</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(1, 0)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">inc</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(1, 3)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r1</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="n">dm</span><span class="o">.</span><span class="n">delta</span>
+<span class="go">(1, 0)</span>
+</pre></div>
+</div>
+<p>But we can&#8217;t rollback to a savepoint after it has been
+committed:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="n">t1</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r1</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">Attempt to rollback stale rollback</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Writing a Data Manager</a><ul>
+<li><a class="reference internal" href="#simple-data-manager">Simple Data Manager</a></li>
+<li><a class="reference internal" href="#the-prepare-method">The <tt class="docutils literal"><span class="pre">prepare()</span></tt> Method</a></li>
+<li><a class="reference internal" href="#the-abort-method">The <tt class="docutils literal"><span class="pre">abort()</span></tt> method</a></li>
+<li><a class="reference internal" href="#the-commit-method">The <tt class="docutils literal"><span class="pre">commit()</span></tt> method</a></li>
+<li><a class="reference internal" href="#the-savepoint-method">The <tt class="docutils literal"><span class="pre">savepoint()</span></tt> method</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="hooks.html"
+                        title="previous chapter">Hooking the Transaction Machinery</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="resourcemanager.html"
+                        title="next chapter">Writing a Resource Manager</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/datamanager.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="resourcemanager.html" title="Writing a Resource Manager"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="hooks.html" title="Hooking the Transaction Machinery"
+             >previous</a> |</li>
+        <li><a href="index.html">transaction 1.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

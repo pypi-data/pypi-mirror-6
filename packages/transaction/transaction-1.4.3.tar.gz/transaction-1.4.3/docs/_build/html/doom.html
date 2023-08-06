@@ -1,0 +1,245 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Dooming Transactions &mdash; transaction 1.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="transaction 1.2 documentation" href="index.html" />
+    <link rel="next" title="Savepoints" href="savepoint.html" />
+    <link rel="prev" title="Transaction convenience support" href="convenience.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="savepoint.html" title="Savepoints"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="convenience.html" title="Transaction convenience support"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">transaction 1.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="dooming-transactions">
+<h1>Dooming Transactions<a class="headerlink" href="#dooming-transactions" title="Permalink to this headline">¶</a></h1>
+<p>A doomed transaction behaves exactly the same way as an active transaction but
+raises an error on any attempt to commit it, thus forcing an abort.</p>
+<p>Doom is useful in places where abort is unsafe and an exception cannot be
+raised.  This occurs when the programmer wants the code following the doom to
+run but not commit. It is unsafe to abort in these circumstances as a following
+get() may implicitly open a new transaction.</p>
+<p>Any attempt to commit a doomed transaction will raise a DoomedTransaction
+exception.</p>
+<p>An example of such a use case can be found in
+zope/app/form/browser/editview.py.  Here a form validation failure must doom
+the transaction as committing the transaction may have side-effects. However,
+the form code must continue to calculate a form containing the error messages
+to return.</p>
+<p>For Zope in general, code running within a request should always doom
+transactions rather than aborting them. It is the responsibilty of the
+publication to either abort() or commit() the transaction. Application code can
+use savepoints and doom() safely.</p>
+<p>To see how it works we first need to create a stub data manager:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction.interfaces</span> <span class="kn">import</span> <span class="n">IDataManager</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implementer</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nd">@implementer</span><span class="p">(</span><span class="n">IDataManager</span><span class="p">)</span>
+<span class="gp">... </span><span class="k">class</span> <span class="nc">DataManager</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">attr_counter</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">def</span> <span class="nf">f</span><span class="p">(</span><span class="n">transaction</span><span class="p">):</span>
+<span class="gp">... </span>            <span class="bp">self</span><span class="o">.</span><span class="n">attr_counter</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">attr_counter</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+<span class="gp">... </span>        <span class="k">return</span> <span class="n">f</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">total</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="gp">... </span>        <span class="k">for</span> <span class="n">access_count</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">attr_counter</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+<span class="gp">... </span>            <span class="n">count</span> <span class="o">+=</span> <span class="n">access_count</span>
+<span class="gp">... </span>        <span class="k">return</span> <span class="n">count</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">sortKey</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">return</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>Start a new transaction:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">transaction</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span> <span class="o">=</span> <span class="n">DataManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dm</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We can ask a transaction if it is doomed to avoid expensive operations. An
+example of a use case is an object-relational mapper where a pre-commit hook
+sends all outstanding SQL to a relational database for objects changed during
+the transaction. This expensive operation is not necessary if the transaction
+has been doomed. A non-doomed transaction should return False:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">isDoomed</span><span class="p">()</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+<p>We can doom a transaction by calling .doom() on it:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">doom</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">isDoomed</span><span class="p">()</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>We can doom it again if we like:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">doom</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The data manager is unchanged at this point:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">total</span><span class="p">()</span>
+<span class="go">0</span>
+</pre></div>
+</div>
+<p>Attempting to commit a doomed transaction any number of times raises a
+DoomedTransaction:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span> 
+<span class="gt">Traceback (most recent call last):</span>
+<span class="gr">DoomedTransaction</span>: <span class="n">transaction doomed, cannot commit</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span> 
+<span class="gt">Traceback (most recent call last):</span>
+<span class="gr">DoomedTransaction</span>: <span class="n">transaction doomed, cannot commit</span>
+</pre></div>
+</div>
+<p>But still leaves the data manager unchanged:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">total</span><span class="p">()</span>
+<span class="go">0</span>
+</pre></div>
+</div>
+<p>But the doomed transaction can be aborted:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Which aborts the data manager:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">total</span><span class="p">()</span>
+<span class="go">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="o">.</span><span class="n">attr_counter</span><span class="p">[</span><span class="s">&#39;abort&#39;</span><span class="p">]</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+<p>Dooming the current transaction can also be done directly from the transaction
+module. We can also begin a new transaction directly after dooming the old one:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">isDoomed</span><span class="p">()</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">doom</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">isDoomed</span><span class="p">()</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>After committing a transaction we get an assertion error if we try to doom the
+transaction. This could be made more specific, but trying to doom a transaction
+after it&#8217;s been committed is probably a programming error:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">doom</span><span class="p">()</span>
+<span class="gt">Traceback (most recent call last):</span>
+    <span class="o">...</span>
+<span class="gr">ValueError</span>: <span class="n">non-doomable</span>
+</pre></div>
+</div>
+<p>A doomed transaction should act the same as an active transaction, so we should
+be able to join it:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">doom</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm2</span> <span class="o">=</span> <span class="n">DataManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dm2</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Clean up:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">txn</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="convenience.html"
+                        title="previous chapter">Transaction convenience support</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="savepoint.html"
+                        title="next chapter">Savepoints</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/doom.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="savepoint.html" title="Savepoints"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="convenience.html" title="Transaction convenience support"
+             >previous</a> |</li>
+        <li><a href="index.html">transaction 1.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

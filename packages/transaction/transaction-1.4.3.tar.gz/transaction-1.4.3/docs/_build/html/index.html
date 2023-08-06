@@ -1,0 +1,251 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>transaction Documentation &mdash; transaction 1.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="transaction 1.2 documentation" href="#" />
+    <link rel="next" title="Transaction convenience support" href="convenience.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="convenience.html" title="Transaction convenience support"
+             accesskey="N">next</a> |</li>
+        <li><a href="#">transaction 1.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="transaction-documentation">
+<h1><tt class="xref py py-mod docutils literal"><span class="pre">transaction</span></tt> Documentation<a class="headerlink" href="#transaction-documentation" title="Permalink to this headline">¶</a></h1>
+<p>Transaction objects manage resources for an individual activity.</p>
+<div class="section" id="compatibility-issues">
+<h2>Compatibility issues<a class="headerlink" href="#compatibility-issues" title="Permalink to this headline">¶</a></h2>
+<p>The implementation of Transaction objects involves two layers of
+backwards compatibility, because this version of transaction supports
+both ZODB 3 and ZODB 4.  Zope is evolving towards the ZODB4
+interfaces.</p>
+<p>Transaction has two methods for a resource manager to call to
+participate in a transaction &#8211; register() and join().  join() takes a
+resource manager and adds it to the list of resources.  register() is
+for backwards compatibility.  It takes a persistent object and
+registers its _p_jar attribute.  TODO: explain adapter</p>
+</div>
+<div class="section" id="two-phase-commit">
+<h2>Two-phase commit<a class="headerlink" href="#two-phase-commit" title="Permalink to this headline">¶</a></h2>
+<p>A transaction commit involves an interaction between the transaction
+object and one or more resource managers.  The transaction manager
+calls the following four methods on each resource manager; it calls
+tpc_begin() on each resource manager before calling commit() on any of
+them.</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li>tpc_begin(txn)</li>
+<li>commit(txn)</li>
+<li>tpc_vote(txn)</li>
+<li>tpc_finish(txn)</li>
+</ol>
+</div></blockquote>
+</div>
+<div class="section" id="before-commit-hook">
+<h2>Before-commit hook<a class="headerlink" href="#before-commit-hook" title="Permalink to this headline">¶</a></h2>
+<p>Sometimes, applications want to execute some code when a transaction is
+committed.  For example, one might want to delay object indexing until a
+transaction commits, rather than indexing every time an object is changed.
+Or someone might want to check invariants only after a set of operations.  A
+pre-commit hook is available for such use cases:  use addBeforeCommitHook(),
+passing it a callable and arguments.  The callable will be called with its
+arguments at the start of the commit (but not for substransaction commits).</p>
+</div>
+<div class="section" id="after-commit-hook">
+<h2>After-commit hook<a class="headerlink" href="#after-commit-hook" title="Permalink to this headline">¶</a></h2>
+<p>Sometimes, applications want to execute code after a transaction commit
+attempt succeeds or aborts. For example, one might want to launch non
+transactional code after a successful commit. Or still someone might
+want to launch asynchronous code after.  A post-commit hook is
+available for such use cases: use addAfterCommitHook(), passing it a
+callable and arguments.  The callable will be called with a Boolean
+value representing the status of the commit operation as first
+argument (true if successfull or false iff aborted) preceding its
+arguments at the start of the commit (but not for substransaction
+commits). Commit hooks are not called for transaction.abort().</p>
+</div>
+<div class="section" id="error-handling">
+<h2>Error handling<a class="headerlink" href="#error-handling" title="Permalink to this headline">¶</a></h2>
+<p>When errors occur during two-phase commit, the transaction manager
+aborts all the resource managers.  The specific methods it calls
+depend on whether the error occurs before or after the call to
+tpc_vote() on that transaction manager.</p>
+<p>If the resource manager has not voted, then the resource manager will
+have one or more uncommitted objects.  There are two cases that lead
+to this state; either the transaction manager has not called commit()
+for any objects on this resource manager or the call that failed was a
+commit() for one of the objects of this resource manager.  For each
+uncommitted object, including the object that failed in its commit(),
+call abort().</p>
+<p>Once uncommitted objects are aborted, tpc_abort() or abort_sub() is
+called on each resource manager.</p>
+</div>
+<div class="section" id="synchronization">
+<h2>Synchronization<a class="headerlink" href="#synchronization" title="Permalink to this headline">¶</a></h2>
+<p>You can register sychronization objects (synchronizers) with the
+tranasction manager.  The synchronizer must implement
+beforeCompletion() and afterCompletion() methods.  The transaction
+manager calls beforeCompletion() when it starts a top-level two-phase
+commit.  It calls afterCompletion() when a top-level transaction is
+committed or aborted.  The methods are passed the current Transaction
+as their only argument.</p>
+<p>Contents:</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="convenience.html">Transaction convenience support</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="convenience.html#with-support">with support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="convenience.html#retries">Retries</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="doom.html">Dooming Transactions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="savepoint.html">Savepoints</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="savepoint.html#applications">Applications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="savepoint.html#savepoint-invalidation">Savepoint invalidation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="savepoint.html#databases-without-savepoint-support">Databases without savepoint support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="savepoint.html#failures">Failures</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="hooks.html">Hooking the Transaction Machinery</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="hooks.html#the-addbeforecommithook-method">The <tt class="docutils literal"><span class="pre">addBeforeCommitHook()</span></tt> Method</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hooks.html#the-addaftercommithook-method">The <tt class="docutils literal"><span class="pre">addAfterCommitHook()</span></tt> Method</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="datamanager.html">Writing a Data Manager</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="datamanager.html#simple-data-manager">Simple Data Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="datamanager.html#the-prepare-method">The <tt class="docutils literal"><span class="pre">prepare()</span></tt> Method</a></li>
+<li class="toctree-l2"><a class="reference internal" href="datamanager.html#the-abort-method">The <tt class="docutils literal"><span class="pre">abort()</span></tt> method</a></li>
+<li class="toctree-l2"><a class="reference internal" href="datamanager.html#the-commit-method">The <tt class="docutils literal"><span class="pre">commit()</span></tt> method</a></li>
+<li class="toctree-l2"><a class="reference internal" href="datamanager.html#the-savepoint-method">The <tt class="docutils literal"><span class="pre">savepoint()</span></tt> method</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="resourcemanager.html">Writing a Resource Manager</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="resourcemanager.html#simple-resource-manager">Simple Resource Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resourcemanager.html#the-tpc-begin-method">The <tt class="docutils literal"><span class="pre">tpc_begin()</span></tt> Method</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resourcemanager.html#the-tpc-vote-method">The <tt class="docutils literal"><span class="pre">tpc_vote()</span></tt> Method</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resourcemanager.html#the-tpc-finish-method">The <tt class="docutils literal"><span class="pre">tpc_finish()</span></tt> Method</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resourcemanager.html#the-tpc-abort-method">The <tt class="docutils literal"><span class="pre">tpc_abort()</span></tt> Method</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resourcemanager.html#the-savepoint-method">The <tt class="docutils literal"><span class="pre">savepoint()</span></tt> Method</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html"><tt class="docutils literal"><span class="pre">transaction</span></tt> API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api.html#module-transaction.interfaces">Interfaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html#module-transaction._transaction">API Objects</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><em>Index</em></a></li>
+<li><a class="reference internal" href="py-modindex.html"><em>Module Index</em></a></li>
+<li><a class="reference internal" href="search.html"><em>Search Page</em></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#"><tt class="docutils literal"><span class="pre">transaction</span></tt> Documentation</a><ul>
+<li><a class="reference internal" href="#compatibility-issues">Compatibility issues</a></li>
+<li><a class="reference internal" href="#two-phase-commit">Two-phase commit</a></li>
+<li><a class="reference internal" href="#before-commit-hook">Before-commit hook</a></li>
+<li><a class="reference internal" href="#after-commit-hook">After-commit hook</a></li>
+<li><a class="reference internal" href="#error-handling">Error handling</a></li>
+<li><a class="reference internal" href="#synchronization">Synchronization</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+
+  <h4>Next topic</h4>
+  <p class="topless"><a href="convenience.html"
+                        title="next chapter">Transaction convenience support</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/index.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="convenience.html" title="Transaction convenience support"
+             >next</a> |</li>
+        <li><a href="#">transaction 1.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,270 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>transaction._manager &mdash; transaction 1.2 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="transaction 1.2 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">transaction 1.2 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for transaction._manager</h1><div class="highlight"><pre>
+<span class="c">############################################################################</span>
+<span class="c">#</span>
+<span class="c"># Copyright (c) 2004 Zope Foundation and Contributors.</span>
+<span class="c"># All Rights Reserved.</span>
+<span class="c">#</span>
+<span class="c"># This software is subject to the provisions of the Zope Public License,</span>
+<span class="c"># Version 2.1 (ZPL).  A copy of the ZPL should accompany this distribution.</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED &quot;AS IS&quot; AND ANY AND ALL EXPRESS OR IMPLIED</span>
+<span class="c"># WARRANTIES ARE DISCLAIMED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED</span>
+<span class="c"># WARRANTIES OF TITLE, MERCHANTABILITY, AGAINST INFRINGEMENT, AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE.</span>
+<span class="c">#</span>
+<span class="c">############################################################################</span>
+<span class="sd">&quot;&quot;&quot;A TransactionManager controls transaction boundaries.</span>
+
+<span class="sd">It coordinates application code and resource managers, so that they</span>
+<span class="sd">are associated with the right transaction.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implementer</span>
+
+<span class="kn">from</span> <span class="nn">transaction.interfaces</span> <span class="kn">import</span> <span class="n">ITransactionManager</span>
+<span class="kn">from</span> <span class="nn">transaction.interfaces</span> <span class="kn">import</span> <span class="n">TransientError</span>
+<span class="kn">from</span> <span class="nn">transaction.weakset</span> <span class="kn">import</span> <span class="n">WeakSet</span>
+<span class="kn">from</span> <span class="nn">transaction._compat</span> <span class="kn">import</span> <span class="n">reraise</span>
+<span class="kn">from</span> <span class="nn">transaction._transaction</span> <span class="kn">import</span> <span class="n">Transaction</span>
+
+
+<span class="c"># We have to remember sets of synch objects, especially Connections.</span>
+<span class="c"># But we don&#39;t want mere registration with a transaction manager to</span>
+<span class="c"># keep a synch object alive forever; in particular, it&#39;s common</span>
+<span class="c"># practice not to explicitly close Connection objects, and keeping</span>
+<span class="c"># a Connection alive keeps a potentially huge number of other objects</span>
+<span class="c"># alive (e.g., the cache, and everything reachable from it too).</span>
+<span class="c"># Therefore we use &quot;weak sets&quot; internally.</span>
+
+<span class="c"># Call the ISynchronizer newTransaction() method on every element of</span>
+<span class="c"># WeakSet synchs.</span>
+<span class="c"># A transaction manager needs to do this whenever begin() is called.</span>
+<span class="c"># Since it would be good if tm.get() returned the new transaction while</span>
+<span class="c"># newTransaction() is running, calling this has to be delayed until after</span>
+<span class="c"># the transaction manager has done whatever it needs to do to make its</span>
+<span class="c"># get() return the new txn.</span>
+<span class="k">def</span> <span class="nf">_new_transaction</span><span class="p">(</span><span class="n">txn</span><span class="p">,</span> <span class="n">synchs</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">synchs</span><span class="p">:</span>
+        <span class="n">synchs</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">newTransaction</span><span class="p">(</span><span class="n">txn</span><span class="p">))</span>
+
+<span class="c"># Important:  we must always pass a WeakSet (even if empty) to the Transaction</span>
+<span class="c"># constructor:  synchronizers are registered with the TM, but the</span>
+<span class="c"># ISynchronizer xyzCompletion() methods are called by Transactions without</span>
+<span class="c"># consulting the TM, so we need to pass a mutable collection of synchronizers</span>
+<span class="c"># so that Transactions &quot;see&quot; synchronizers that get registered after the</span>
+<span class="c"># Transaction object is constructed.</span>
+
+
+<span class="nd">@implementer</span><span class="p">(</span><span class="n">ITransactionManager</span><span class="p">)</span>
+<div class="viewcode-block" id="TransactionManager"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager">[docs]</a><span class="k">class</span> <span class="nc">TransactionManager</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_txn</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_synchs</span> <span class="o">=</span> <span class="n">WeakSet</span><span class="p">()</span>
+
+<div class="viewcode-block" id="TransactionManager.begin"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager.begin">[docs]</a>    <span class="k">def</span> <span class="nf">begin</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransactionManager.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_txn</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_txn</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+        <span class="n">txn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_txn</span> <span class="o">=</span> <span class="n">Transaction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_synchs</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+        <span class="n">_new_transaction</span><span class="p">(</span><span class="n">txn</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_synchs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">txn</span>
+</div>
+    <span class="n">__enter__</span> <span class="o">=</span> <span class="k">lambda</span> <span class="bp">self</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span>
+
+<div class="viewcode-block" id="TransactionManager.get"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransactionManager.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_txn</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_txn</span> <span class="o">=</span> <span class="n">Transaction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_synchs</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_txn</span>
+</div>
+    <span class="k">def</span> <span class="nf">free</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">txn</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_txn</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Foreign transaction&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_txn</span> <span class="o">=</span> <span class="bp">None</span>
+
+<div class="viewcode-block" id="TransactionManager.registerSynch"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager.registerSynch">[docs]</a>    <span class="k">def</span> <span class="nf">registerSynch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">synch</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransactionManager.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_synchs</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">synch</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TransactionManager.unregisterSynch"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager.unregisterSynch">[docs]</a>    <span class="k">def</span> <span class="nf">unregisterSynch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">synch</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransactionManager.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_synchs</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">synch</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TransactionManager.isDoomed"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager.isDoomed">[docs]</a>    <span class="k">def</span> <span class="nf">isDoomed</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransactionManager.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">()</span><span class="o">.</span><span class="n">isDoomed</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="TransactionManager.doom"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager.doom">[docs]</a>    <span class="k">def</span> <span class="nf">doom</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransactionManager.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">()</span><span class="o">.</span><span class="n">doom</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="TransactionManager.commit"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager.commit">[docs]</a>    <span class="k">def</span> <span class="nf">commit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransactionManager.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">()</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="TransactionManager.abort"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager.abort">[docs]</a>    <span class="k">def</span> <span class="nf">abort</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransactionManager.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">()</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="TransactionManager.__exit__"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager.__exit__">[docs]</a>    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="TransactionManager.savepoint"><a class="viewcode-back" href="../../api.html#transaction._manager.TransactionManager.savepoint">[docs]</a>    <span class="k">def</span> <span class="nf">savepoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optimistic</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransactionManager.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">()</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="n">optimistic</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">attempts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">number</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">number</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;number must be positive&quot;</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">number</span><span class="p">:</span>
+            <span class="n">number</span> <span class="o">-=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="n">number</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="n">Attempt</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="bp">self</span>
+
+    <span class="k">def</span> <span class="nf">_retryable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error_type</span><span class="p">,</span> <span class="n">error</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">error_type</span><span class="p">,</span> <span class="n">TransientError</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">True</span>
+
+        <span class="k">for</span> <span class="n">dm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">()</span><span class="o">.</span><span class="n">_resources</span><span class="p">:</span>
+            <span class="n">should_retry</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">dm</span><span class="p">,</span> <span class="s">&#39;should_retry&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">should_retry</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">and</span> <span class="n">should_retry</span><span class="p">(</span><span class="n">error</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">True</span>
+
+</div>
+<div class="viewcode-block" id="ThreadTransactionManager"><a class="viewcode-back" href="../../api.html#transaction._manager.ThreadTransactionManager">[docs]</a><span class="k">class</span> <span class="nc">ThreadTransactionManager</span><span class="p">(</span><span class="n">TransactionManager</span><span class="p">,</span> <span class="n">threading</span><span class="o">.</span><span class="n">local</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Thread-aware transaction manager.</span>
+
+<span class="sd">    Each thread is associated with a unique transaction.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+</div>
+<span class="k">class</span> <span class="nc">Attempt</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="o">=</span> <span class="n">manager</span>
+
+    <span class="k">def</span> <span class="nf">_retry_or_raise</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span><span class="p">):</span>
+        <span class="n">retry</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">_retryable</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">retry</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">retry</span> <span class="c"># suppress the exception if necessary</span>
+        <span class="n">reraise</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span><span class="p">)</span> <span class="c"># otherwise reraise the exception</span>
+
+    <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">__enter__</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_retry_or_raise</span><span class="p">(</span><span class="o">*</span><span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_retry_or_raise</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">transaction 1.2 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

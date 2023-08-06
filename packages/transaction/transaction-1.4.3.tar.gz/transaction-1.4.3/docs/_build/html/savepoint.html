@@ -1,0 +1,407 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Savepoints &mdash; transaction 1.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="transaction 1.2 documentation" href="index.html" />
+    <link rel="next" title="Hooking the Transaction Machinery" href="hooks.html" />
+    <link rel="prev" title="Dooming Transactions" href="doom.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="hooks.html" title="Hooking the Transaction Machinery"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="doom.html" title="Dooming Transactions"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">transaction 1.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="savepoints">
+<h1>Savepoints<a class="headerlink" href="#savepoints" title="Permalink to this headline">¶</a></h1>
+<p>Savepoints provide a way to save to disk intermediate work done during
+a transaction allowing:</p>
+<ul class="simple">
+<li>partial transaction (subtransaction) rollback (abort)</li>
+<li>state of saved objects to be freed, freeing on-line memory for other
+uses</li>
+</ul>
+<p>Savepoints make it possible to write atomic subroutines that don&#8217;t
+make top-level transaction commitments.</p>
+<div class="section" id="applications">
+<h2>Applications<a class="headerlink" href="#applications" title="Permalink to this headline">¶</a></h2>
+<p>To demonstrate how savepoints work with transactions, we&#8217;ve provided a sample
+data manager implementation that provides savepoint support.  The primary
+purpose of this data manager is to provide code that can be read to understand
+how savepoints work.  The secondary purpose is to provide support for
+demonstrating the correct operation of savepoint support within the
+transaction system.  This data manager is very simple.  It provides flat
+storage of named immutable values, like strings and numbers.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">transaction</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction.tests</span> <span class="kn">import</span> <span class="n">savepointsample</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span> <span class="o">=</span> <span class="n">savepointsample</span><span class="o">.</span><span class="n">SampleSavepointDataManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;bob&#39;</span>
+</pre></div>
+</div>
+<p>As with other data managers, we can commit changes:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span>
+<span class="go">&#39;bob&#39;</span>
+</pre></div>
+</div>
+<p>and abort changes:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;sally&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span>
+<span class="go">&#39;sally&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span>
+<span class="go">&#39;bob&#39;</span>
+</pre></div>
+</div>
+<p>Now, let&#8217;s look at an application that manages funds for people.  It allows
+deposits and debits to be entered for multiple people.  It accepts a sequence
+of entries and generates a sequence of status messages.  For each entry, it
+applies the change and then validates the user&#8217;s account.  If the user&#8217;s
+account is invalid, we roll back the change for that entry.  The success or
+failure of an entry is indicated in the output status.  First we&#8217;ll initialize
+some accounts:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-credit&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;sally-balance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;sally-credit&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">100.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Now, we&#8217;ll define a validation function to validate an account:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">validate_account</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">if</span> <span class="n">dm</span><span class="p">[</span><span class="n">name</span><span class="o">+</span><span class="s">&#39;-balance&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">dm</span><span class="p">[</span><span class="n">name</span><span class="o">+</span><span class="s">&#39;-credit&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Overdrawn&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>And a function to apply entries.  If the function fails in some unexpected
+way, it rolls back all of its changes and prints the error:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">apply_entries</span><span class="p">(</span><span class="n">entries</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">savepoint</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">()</span>
+<span class="gp">... </span>    <span class="k">try</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">amount</span> <span class="ow">in</span> <span class="n">entries</span><span class="p">:</span>
+<span class="gp">... </span>            <span class="n">entry_savepoint</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">()</span>
+<span class="gp">... </span>            <span class="k">try</span><span class="p">:</span>
+<span class="gp">... </span>                <span class="n">dm</span><span class="p">[</span><span class="n">name</span><span class="o">+</span><span class="s">&#39;-balance&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="n">amount</span>
+<span class="gp">... </span>                <span class="n">validate_account</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+<span class="gp">... </span>            <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+<span class="gp">... </span>                <span class="n">entry_savepoint</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">... </span>                <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="s">&#39;Error&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">)))</span>
+<span class="gp">... </span>            <span class="k">else</span><span class="p">:</span>
+<span class="gp">... </span>                <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="s">&#39;Updated&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="n">savepoint</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">... </span>        <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="s">&#39;Unexpected exception&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Now let&#8217;s try applying some entries:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">apply_entries</span><span class="p">([</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="s">&#39;bob&#39;</span><span class="p">,</span>   <span class="mf">10.0</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="s">&#39;sally&#39;</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="s">&#39;bob&#39;</span><span class="p">,</span>   <span class="mf">20.0</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="s">&#39;sally&#39;</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="s">&#39;bob&#39;</span><span class="p">,</span>   <span class="o">-</span><span class="mf">100.0</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="s">&#39;sally&#39;</span><span class="p">,</span> <span class="o">-</span><span class="mf">100.0</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">])</span>
+<span class="go">Updated bob</span>
+<span class="go">Updated sally</span>
+<span class="go">Updated bob</span>
+<span class="go">Updated sally</span>
+<span class="go">Error (&#39;Overdrawn&#39;, &#39;bob&#39;)</span>
+<span class="go">Updated sally</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">30.0</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;sally-balance&#39;</span><span class="p">]</span>
+<span class="go">-80.0</span>
+</pre></div>
+</div>
+<p>If we provide entries that cause an unexpected error:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">apply_entries</span><span class="p">([</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="s">&#39;bob&#39;</span><span class="p">,</span>   <span class="mf">10.0</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="s">&#39;sally&#39;</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="s">&#39;bob&#39;</span><span class="p">,</span>   <span class="s">&#39;20.0&#39;</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="s">&#39;sally&#39;</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">])</span>
+<span class="go">Updated bob</span>
+<span class="go">Updated sally</span>
+<span class="go">Unexpected exception</span>
+</pre></div>
+</div>
+<p>Because the apply_entries used a savepoint for the entire function, it was
+able to rollback the partial changes without rolling back changes made in the
+previous call to <tt class="docutils literal"><span class="pre">apply_entries</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">30.0</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;sally-balance&#39;</span><span class="p">]</span>
+<span class="go">-80.0</span>
+</pre></div>
+</div>
+<p>If we now abort the outer transactions, the earlier changes will go
+away:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">0.0</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;sally-balance&#39;</span><span class="p">]</span>
+<span class="go">0.0</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="savepoint-invalidation">
+<h2>Savepoint invalidation<a class="headerlink" href="#savepoint-invalidation" title="Permalink to this headline">¶</a></h2>
+<p>A savepoint can be used any number of times:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">100.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">100.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">200.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">200.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">100.0</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>  <span class="c"># redundant, but should be harmless</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">100.0</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">300.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">300.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">100.0</span>
+</pre></div>
+</div>
+<p>However, using a savepoint invalidates any savepoints that come after it:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">200.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">200.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint1</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">300.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">300.0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint2</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;bob-balance&#39;</span><span class="p">]</span>
+<span class="go">100.0</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint2</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span> 
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidSavepointRollbackError</span>: <span class="n">invalidated by a later savepoint</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint1</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span> 
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">InvalidSavepointRollbackError</span>: <span class="n">invalidated by a later savepoint</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="databases-without-savepoint-support">
+<h2>Databases without savepoint support<a class="headerlink" href="#databases-without-savepoint-support" title="Permalink to this headline">¶</a></h2>
+<p>Normally it&#8217;s an error to use savepoints with databases that don&#8217;t support
+savepoints:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm_no_sp</span> <span class="o">=</span> <span class="n">savepointsample</span><span class="o">.</span><span class="n">SampleDataManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm_no_sp</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;bob&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm_no_sp</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;sally&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">()</span> 
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">(&#39;Savepoints unsupported&#39;, {&#39;name&#39;: &#39;bob&#39;})</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>However, a flag can be passed to the transaction savepoint method to indicate
+that databases without savepoint support should be tolerated until a savepoint
+is rolled back.  This allows transactions to proceed if there are no reasons
+to roll back:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm_no_sp</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;sally&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm_no_sp</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;sue&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm_no_sp</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span>
+<span class="go">&#39;sue&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm_no_sp</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;sam&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span> 
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">(&#39;Savepoints unsupported&#39;, {&#39;name&#39;: &#39;sam&#39;})</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="failures">
+<h2>Failures<a class="headerlink" href="#failures" title="Permalink to this headline">¶</a></h2>
+<p>If a failure occurs when creating or rolling back a savepoint, the transaction
+state will be uncertain and the transaction will become uncommitable.  From
+that point on, most transaction operations, including commit, will fail until
+the transaction is aborted.</p>
+<p>In the previous example, we got an error when we tried to rollback the
+savepoint.  If we try to commit the transaction, the commit will fail:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span> 
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TransactionFailedError</span>: <span class="n">An operation previously failed, with traceback:</span>
+<span class="gp">...</span>
+<span class="go">TypeError: (&#39;Savepoints unsupported&#39;, {&#39;name&#39;: &#39;sam&#39;})</span>
+</pre></div>
+</div>
+<p>We have to abort it to make any progress:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Similarly, in our earlier example, where we tried to take a savepoint with a
+data manager that didn&#8217;t support savepoints:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm_no_sp</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;sally&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;sally&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">savepoint</span> <span class="o">=</span> <span class="n">transaction</span><span class="o">.</span><span class="n">savepoint</span><span class="p">()</span> 
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TypeError</span>: <span class="n">(&#39;Savepoints unsupported&#39;, {&#39;name&#39;: &#39;sue&#39;})</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span> 
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">TransactionFailedError</span>: <span class="n">An operation previously failed, with traceback:</span>
+<span class="gp">...</span>
+<span class="go">TypeError: (&#39;Savepoints unsupported&#39;, {&#39;name&#39;: &#39;sue&#39;})</span>
+
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">abort</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>After clearing the transaction with an abort, we can get on with new
+transactions:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dm_no_sp</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;sally&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;sally&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transaction</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm_no_sp</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span>
+<span class="go">&#39;sally&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dm</span><span class="p">[</span><span class="s">&#39;name&#39;</span><span class="p">]</span>
+<span class="go">&#39;sally&#39;</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Savepoints</a><ul>
+<li><a class="reference internal" href="#applications">Applications</a></li>
+<li><a class="reference internal" href="#savepoint-invalidation">Savepoint invalidation</a></li>
+<li><a class="reference internal" href="#databases-without-savepoint-support">Databases without savepoint support</a></li>
+<li><a class="reference internal" href="#failures">Failures</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="doom.html"
+                        title="previous chapter">Dooming Transactions</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="hooks.html"
+                        title="next chapter">Hooking the Transaction Machinery</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/savepoint.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="hooks.html" title="Hooking the Transaction Machinery"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="doom.html" title="Dooming Transactions"
+             >previous</a> |</li>
+        <li><a href="index.html">transaction 1.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

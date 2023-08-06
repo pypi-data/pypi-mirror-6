@@ -1,0 +1,454 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Hooking the Transaction Machinery &mdash; transaction 1.2 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="transaction 1.2 documentation" href="index.html" />
+    <link rel="next" title="Writing a Data Manager" href="datamanager.html" />
+    <link rel="prev" title="Savepoints" href="savepoint.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="datamanager.html" title="Writing a Data Manager"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="savepoint.html" title="Savepoints"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">transaction 1.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="hooking-the-transaction-machinery">
+<h1>Hooking the Transaction Machinery<a class="headerlink" href="#hooking-the-transaction-machinery" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="the-addbeforecommithook-method">
+<h2>The <tt class="xref py py-meth docutils literal"><span class="pre">addBeforeCommitHook()</span></tt> Method<a class="headerlink" href="#the-addbeforecommithook-method" title="Permalink to this headline">¶</a></h2>
+<p>Let&#8217;s define a hook to call, and a way to see that it was called.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">log</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">reset_log</span><span class="p">():</span>
+<span class="gp">... </span>    <span class="k">del</span> <span class="n">log</span><span class="p">[:]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">hook</span><span class="p">(</span><span class="n">arg</span><span class="o">=</span><span class="s">&#39;no_arg&#39;</span><span class="p">,</span> <span class="n">kw1</span><span class="o">=</span><span class="s">&#39;no_kw1&#39;</span><span class="p">,</span> <span class="n">kw2</span><span class="o">=</span><span class="s">&#39;no_kw2&#39;</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">log</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&quot;arg </span><span class="si">%r</span><span class="s"> kw1 </span><span class="si">%r</span><span class="s"> kw2 </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">kw1</span><span class="p">,</span> <span class="n">kw2</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Now register the hook with a transaction.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction</span> <span class="kn">import</span> <span class="n">begin</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction._compat</span> <span class="kn">import</span> <span class="n">func_name</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">transaction</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addBeforeCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;1&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We can see that the hook is indeed registered.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="p">[(</span><span class="n">func_name</span><span class="p">(</span><span class="n">hook</span><span class="p">),</span> <span class="n">args</span><span class="p">,</span> <span class="n">kws</span><span class="p">)</span>
+<span class="gp">... </span> <span class="k">for</span> <span class="n">hook</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kws</span> <span class="ow">in</span> <span class="n">t</span><span class="o">.</span><span class="n">getBeforeCommitHooks</span><span class="p">()]</span>
+<span class="go">[(&#39;hook&#39;, (&#39;1&#39;,), {})]</span>
+</pre></div>
+</div>
+<p>When transaction commit starts, the hook is called, with its
+arguments.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[&quot;arg &#39;1&#39; kw1 &#39;no_kw1&#39; kw2 &#39;no_kw2&#39;&quot;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>A hook&#8217;s registration is consumed whenever the hook is called.  Since
+the hook above was called, it&#8217;s no longer registered:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction</span> <span class="kn">import</span> <span class="n">commit</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">getBeforeCommitHooks</span><span class="p">()))</span>
+<span class="go">0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+<p>The hook is only called for a full commit, not for a savepoint.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addBeforeCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;A&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">kw1</span><span class="o">=</span><span class="s">&#39;B&#39;</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dummy</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">savepoint</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[&quot;arg &#39;A&#39; kw1 &#39;B&#39; kw2 &#39;no_kw2&#39;&quot;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>If a transaction is aborted, no hook is called.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction</span> <span class="kn">import</span> <span class="n">abort</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addBeforeCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;OOPS!&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">abort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+<p>The hook is called before the commit does anything, so even if the
+commit fails the hook will have been called.  To provoke failures in
+commit, we&#8217;ll add failing resource manager to the transaction.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">CommitFailure</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">FailingDataManager</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">tpc_begin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">,</span> <span class="n">sub</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">raise</span> <span class="n">CommitFailure</span><span class="p">(</span><span class="s">&#39;failed&#39;</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">abort</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">pass</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">FailingDataManager</span><span class="p">())</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addBeforeCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;2&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction.tests.common</span> <span class="kn">import</span> <span class="n">DummyFile</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction.tests.common</span> <span class="kn">import</span> <span class="n">Monkey</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction.tests.common</span> <span class="kn">import</span> <span class="n">assertRaisesEx</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction</span> <span class="kn">import</span> <span class="n">_transaction</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">buffer</span> <span class="o">=</span> <span class="n">DummyFile</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">Monkey</span><span class="p">(</span><span class="n">_transaction</span><span class="p">,</span> <span class="n">_TB_BUFFER</span><span class="o">=</span><span class="nb">buffer</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">err</span> <span class="o">=</span> <span class="n">assertRaisesEx</span><span class="p">(</span><span class="n">CommitFailure</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">commit</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[&quot;arg &#39;2&#39; kw1 &#39;no_kw1&#39; kw2 &#39;no_kw2&#39;&quot;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Let&#8217;s register several hooks.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addBeforeCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;4&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">kw1</span><span class="o">=</span><span class="s">&#39;4.1&#39;</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addBeforeCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;5&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">kw2</span><span class="o">=</span><span class="s">&#39;5.2&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>They are returned in the same order by getBeforeCommitHooks.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="p">[(</span><span class="n">func_name</span><span class="p">(</span><span class="n">hook</span><span class="p">),</span> <span class="n">args</span><span class="p">,</span> <span class="n">kws</span><span class="p">)</span>  
+<span class="gp">... </span> <span class="k">for</span> <span class="n">hook</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kws</span> <span class="ow">in</span> <span class="n">t</span><span class="o">.</span><span class="n">getBeforeCommitHooks</span><span class="p">()]</span>
+<span class="go">[(&#39;hook&#39;, (&#39;4&#39;,), {&#39;kw1&#39;: &#39;4.1&#39;}),</span>
+<span class="go">(&#39;hook&#39;, (&#39;5&#39;,), {&#39;kw2&#39;: &#39;5.2&#39;})]</span>
+</pre></div>
+</div>
+<p>And commit also calls them in this order.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">log</span><span class="p">)</span>
+<span class="go">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>  
+<span class="go">[&quot;arg &#39;4&#39; kw1 &#39;4.1&#39; kw2 &#39;no_kw2&#39;&quot;,</span>
+<span class="go">&quot;arg &#39;5&#39; kw1 &#39;no_kw1&#39; kw2 &#39;5.2&#39;&quot;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>While executing, a hook can itself add more hooks, and they will all
+be called before the real commit starts.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">recurse</span><span class="p">(</span><span class="n">txn</span><span class="p">,</span> <span class="n">arg</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">log</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;rec&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">arg</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="k">if</span> <span class="n">arg</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="n">txn</span><span class="o">.</span><span class="n">addBeforeCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;-&#39;</span><span class="p">)</span>
+<span class="gp">... </span>        <span class="n">txn</span><span class="o">.</span><span class="n">addBeforeCommitHook</span><span class="p">(</span><span class="n">recurse</span><span class="p">,</span> <span class="p">(</span><span class="n">txn</span><span class="p">,</span> <span class="n">arg</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addBeforeCommitHook</span><span class="p">(</span><span class="n">recurse</span><span class="p">,</span> <span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>  
+<span class="go">[&#39;rec3&#39;,</span>
+<span class="go">        &quot;arg &#39;-&#39; kw1 &#39;no_kw1&#39; kw2 &#39;no_kw2&#39;&quot;,</span>
+<span class="go">&#39;rec2&#39;,</span>
+<span class="go">        &quot;arg &#39;-&#39; kw1 &#39;no_kw1&#39; kw2 &#39;no_kw2&#39;&quot;,</span>
+<span class="go">&#39;rec1&#39;,</span>
+<span class="go">        &quot;arg &#39;-&#39; kw1 &#39;no_kw1&#39; kw2 &#39;no_kw2&#39;&quot;,</span>
+<span class="go">&#39;rec0&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-addaftercommithook-method">
+<h2>The <tt class="xref py py-meth docutils literal"><span class="pre">addAfterCommitHook()</span></tt> Method<a class="headerlink" href="#the-addaftercommithook-method" title="Permalink to this headline">¶</a></h2>
+<p>Let&#8217;s define a hook to call, and a way to see that it was called.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">log</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">reset_log</span><span class="p">():</span>
+<span class="gp">... </span>    <span class="k">del</span> <span class="n">log</span><span class="p">[:]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">hook</span><span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="n">arg</span><span class="o">=</span><span class="s">&#39;no_arg&#39;</span><span class="p">,</span> <span class="n">kw1</span><span class="o">=</span><span class="s">&#39;no_kw1&#39;</span><span class="p">,</span> <span class="n">kw2</span><span class="o">=</span><span class="s">&#39;no_kw2&#39;</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">log</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%r</span><span class="s"> arg </span><span class="si">%r</span><span class="s"> kw1 </span><span class="si">%r</span><span class="s"> kw2 </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="n">arg</span><span class="p">,</span> <span class="n">kw1</span><span class="p">,</span> <span class="n">kw2</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Now register the hook with a transaction.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction</span> <span class="kn">import</span> <span class="n">begin</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction._compat</span> <span class="kn">import</span> <span class="n">func_name</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;1&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We can see that the hook is indeed registered.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="p">[(</span><span class="n">func_name</span><span class="p">(</span><span class="n">hook</span><span class="p">),</span> <span class="n">args</span><span class="p">,</span> <span class="n">kws</span><span class="p">)</span>
+<span class="gp">... </span> <span class="k">for</span> <span class="n">hook</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kws</span> <span class="ow">in</span> <span class="n">t</span><span class="o">.</span><span class="n">getAfterCommitHooks</span><span class="p">()]</span>
+<span class="go">[(&#39;hook&#39;, (&#39;1&#39;,), {})]</span>
+</pre></div>
+</div>
+<p>When transaction commit is done, the hook is called, with its
+arguments.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[&quot;True arg &#39;1&#39; kw1 &#39;no_kw1&#39; kw2 &#39;no_kw2&#39;&quot;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>A hook&#8217;s registration is consumed whenever the hook is called.  Since
+the hook above was called, it&#8217;s no longer registered:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction</span> <span class="kn">import</span> <span class="n">commit</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">getAfterCommitHooks</span><span class="p">()))</span>
+<span class="go">0</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+<p>The hook is only called after a full commit, not for a savepoint.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;A&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">kw1</span><span class="o">=</span><span class="s">&#39;B&#39;</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dummy</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">savepoint</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[&quot;True arg &#39;A&#39; kw1 &#39;B&#39; kw2 &#39;no_kw2&#39;&quot;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>If a transaction is aborted, no hook is called.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction</span> <span class="kn">import</span> <span class="n">abort</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;OOPS!&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">abort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+<p>The hook is called after the commit is done, so even if the
+commit fails the hook will have been called.  To provoke failures in
+commit, we&#8217;ll add failing resource manager to the transaction.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">CommitFailure</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">FailingDataManager</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">tpc_begin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">raise</span> <span class="n">CommitFailure</span><span class="p">(</span><span class="s">&#39;failed&#39;</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">abort</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">pass</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">FailingDataManager</span><span class="p">())</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;2&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction.tests.common</span> <span class="kn">import</span> <span class="n">DummyFile</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction.tests.common</span> <span class="kn">import</span> <span class="n">Monkey</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction.tests.common</span> <span class="kn">import</span> <span class="n">assertRaisesEx</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction</span> <span class="kn">import</span> <span class="n">_transaction</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">buffer</span> <span class="o">=</span> <span class="n">DummyFile</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">Monkey</span><span class="p">(</span><span class="n">_transaction</span><span class="p">,</span> <span class="n">_TB_BUFFER</span><span class="o">=</span><span class="nb">buffer</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">err</span> <span class="o">=</span> <span class="n">assertRaisesEx</span><span class="p">(</span><span class="n">CommitFailure</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">commit</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[&quot;False arg &#39;2&#39; kw1 &#39;no_kw1&#39; kw2 &#39;no_kw2&#39;&quot;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Let&#8217;s register several hooks.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;4&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">kw1</span><span class="o">=</span><span class="s">&#39;4.1&#39;</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;5&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">kw2</span><span class="o">=</span><span class="s">&#39;5.2&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>They are returned in the same order by getAfterCommitHooks.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="p">[(</span><span class="n">func_name</span><span class="p">(</span><span class="n">hook</span><span class="p">),</span> <span class="n">args</span><span class="p">,</span> <span class="n">kws</span><span class="p">)</span>     
+<span class="gp">... </span> <span class="k">for</span> <span class="n">hook</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kws</span> <span class="ow">in</span> <span class="n">t</span><span class="o">.</span><span class="n">getAfterCommitHooks</span><span class="p">()]</span>
+<span class="go">[(&#39;hook&#39;, (&#39;4&#39;,), {&#39;kw1&#39;: &#39;4.1&#39;}),</span>
+<span class="go">(&#39;hook&#39;, (&#39;5&#39;,), {&#39;kw2&#39;: &#39;5.2&#39;})]</span>
+</pre></div>
+</div>
+<p>And commit also calls them in this order.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">log</span><span class="p">)</span>
+<span class="go">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>  
+<span class="go">[&quot;True arg &#39;4&#39; kw1 &#39;4.1&#39; kw2 &#39;no_kw2&#39;&quot;,</span>
+<span class="go">&quot;True arg &#39;5&#39; kw1 &#39;no_kw1&#39; kw2 &#39;5.2&#39;&quot;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>While executing, a hook can itself add more hooks, and they will all
+be called before the real commit starts.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">recurse</span><span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="n">txn</span><span class="p">,</span> <span class="n">arg</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">log</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;rec&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">arg</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="k">if</span> <span class="n">arg</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="n">txn</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="s">&#39;-&#39;</span><span class="p">)</span>
+<span class="gp">... </span>        <span class="n">txn</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">recurse</span><span class="p">,</span> <span class="p">(</span><span class="n">txn</span><span class="p">,</span> <span class="n">arg</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">recurse</span><span class="p">,</span> <span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">commit</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>  
+<span class="go">[&#39;rec3&#39;,</span>
+<span class="go">        &quot;True arg &#39;-&#39; kw1 &#39;no_kw1&#39; kw2 &#39;no_kw2&#39;&quot;,</span>
+<span class="go">&#39;rec2&#39;,</span>
+<span class="go">        &quot;True arg &#39;-&#39; kw1 &#39;no_kw1&#39; kw2 &#39;no_kw2&#39;&quot;,</span>
+<span class="go">&#39;rec1&#39;,</span>
+<span class="go">        &quot;True arg &#39;-&#39; kw1 &#39;no_kw1&#39; kw2 &#39;no_kw2&#39;&quot;,</span>
+<span class="go">&#39;rec0&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>If an after commit hook is raising an exception then it will log a
+message at error level so that if other hooks are registered they
+can be executed. We don&#8217;t support execution dependencies at this level.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction</span> <span class="kn">import</span> <span class="n">TransactionManager</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">transaction.tests.test__manager</span> <span class="kn">import</span> <span class="n">DataObject</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mgr</span> <span class="o">=</span> <span class="n">TransactionManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">do</span> <span class="o">=</span> <span class="n">DataObject</span><span class="p">(</span><span class="n">mgr</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">hookRaise</span><span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="n">arg</span><span class="o">=</span><span class="s">&#39;no_arg&#39;</span><span class="p">,</span> <span class="n">kw1</span><span class="o">=</span><span class="s">&#39;no_kw1&#39;</span><span class="p">,</span> <span class="n">kw2</span><span class="o">=</span><span class="s">&#39;no_kw2&#39;</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Fake raise&quot;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="p">(</span><span class="s">&#39;-&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hookRaise</span><span class="p">,</span> <span class="p">(</span><span class="s">&#39;-&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="p">(</span><span class="s">&#39;-&#39;</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">commit</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[&quot;True arg &#39;-&#39; kw1 1 kw2 &#39;no_kw2&#39;&quot;, &quot;True arg &#39;-&#39; kw1 3 kw2 &#39;no_kw2&#39;&quot;]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Test that the associated transaction manager has been cleanup when
+after commit hooks are registered</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">mgr</span> <span class="o">=</span> <span class="n">TransactionManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">do</span> <span class="o">=</span> <span class="n">DataObject</span><span class="p">(</span><span class="n">mgr</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">begin</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">_txn</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">addAfterCommitHook</span><span class="p">(</span><span class="n">hook</span><span class="p">,</span> <span class="p">(</span><span class="s">&#39;-&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">commit</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">log</span>
+<span class="go">[&quot;True arg &#39;-&#39; kw1 1 kw2 &#39;no_kw2&#39;&quot;]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">_txn</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span>
+<span class="go">False</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">reset_log</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Hooking the Transaction Machinery</a><ul>
+<li><a class="reference internal" href="#the-addbeforecommithook-method">The <tt class="docutils literal"><span class="pre">addBeforeCommitHook()</span></tt> Method</a></li>
+<li><a class="reference internal" href="#the-addaftercommithook-method">The <tt class="docutils literal"><span class="pre">addAfterCommitHook()</span></tt> Method</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="savepoint.html"
+                        title="previous chapter">Savepoints</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="datamanager.html"
+                        title="next chapter">Writing a Data Manager</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/hooks.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="datamanager.html" title="Writing a Data Manager"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="savepoint.html" title="Savepoints"
+             >previous</a> |</li>
+        <li><a href="index.html">transaction 1.2 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

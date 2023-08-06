@@ -1,0 +1,783 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>transaction._transaction &mdash; transaction 1.2 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '1.2',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="transaction 1.2 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">transaction 1.2 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for transaction._transaction</h1><div class="highlight"><pre>
+<span class="c">############################################################################</span>
+<span class="c">#</span>
+<span class="c"># Copyright (c) 2004 Zope Foundation and Contributors.</span>
+<span class="c"># All Rights Reserved.</span>
+<span class="c">#</span>
+<span class="c"># This software is subject to the provisions of the Zope Public License,</span>
+<span class="c"># Version 2.1 (ZPL).  A copy of the ZPL should accompany this distribution.</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED &quot;AS IS&quot; AND ANY AND ALL EXPRESS OR IMPLIED</span>
+<span class="c"># WARRANTIES ARE DISCLAIMED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED</span>
+<span class="c"># WARRANTIES OF TITLE, MERCHANTABILITY, AGAINST INFRINGEMENT, AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE.</span>
+<span class="c">#</span>
+<span class="c">############################################################################</span>
+<span class="kn">import</span> <span class="nn">binascii</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">weakref</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implementer</span>
+
+<span class="kn">from</span> <span class="nn">transaction.weakset</span> <span class="kn">import</span> <span class="n">WeakSet</span>
+<span class="kn">from</span> <span class="nn">transaction.interfaces</span> <span class="kn">import</span> <span class="n">TransactionFailedError</span>
+<span class="kn">from</span> <span class="nn">transaction</span> <span class="kn">import</span> <span class="n">interfaces</span>
+<span class="kn">from</span> <span class="nn">transaction._compat</span> <span class="kn">import</span> <span class="n">reraise</span>
+<span class="kn">from</span> <span class="nn">transaction._compat</span> <span class="kn">import</span> <span class="n">get_thread_ident</span>
+<span class="kn">from</span> <span class="nn">transaction._compat</span> <span class="kn">import</span> <span class="n">native_</span>
+<span class="kn">from</span> <span class="nn">transaction._compat</span> <span class="kn">import</span> <span class="n">bytes_</span>
+<span class="kn">from</span> <span class="nn">transaction._compat</span> <span class="kn">import</span> <span class="n">StringIO</span>
+
+<span class="n">_marker</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
+
+<span class="n">_TB_BUFFER</span> <span class="o">=</span> <span class="bp">None</span> <span class="c">#unittests may hook</span>
+<span class="k">def</span> <span class="nf">_makeTracebackBuffer</span><span class="p">():</span> <span class="c">#pragma NO COVER</span>
+    <span class="k">if</span> <span class="n">_TB_BUFFER</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_TB_BUFFER</span>
+    <span class="k">return</span> <span class="n">StringIO</span><span class="p">()</span>
+
+<span class="n">_LOGGER</span> <span class="o">=</span> <span class="bp">None</span> <span class="c">#unittests may hook</span>
+<span class="k">def</span> <span class="nf">_makeLogger</span><span class="p">():</span> <span class="c">#pragma NO COVER</span>
+    <span class="k">if</span> <span class="n">_LOGGER</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_LOGGER</span>
+    <span class="k">return</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&quot;txn.</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">get_thread_ident</span><span class="p">())</span>
+    
+
+<span class="c"># The point of this is to avoid hiding exceptions (which the builtin</span>
+<span class="c"># hasattr() does).</span>
+<span class="k">def</span> <span class="nf">myhasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="n">_marker</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">_marker</span>
+
+<span class="k">class</span> <span class="nc">Status</span><span class="p">:</span>
+    <span class="c"># ACTIVE is the initial state.</span>
+    <span class="n">ACTIVE</span>       <span class="o">=</span> <span class="s">&quot;Active&quot;</span>
+
+    <span class="n">COMMITTING</span>   <span class="o">=</span> <span class="s">&quot;Committing&quot;</span>
+    <span class="n">COMMITTED</span>    <span class="o">=</span> <span class="s">&quot;Committed&quot;</span>
+
+    <span class="n">DOOMED</span> <span class="o">=</span> <span class="s">&quot;Doomed&quot;</span>
+
+    <span class="c"># commit() or commit(True) raised an exception.  All further attempts</span>
+    <span class="c"># to commit or join this transaction will raise TransactionFailedError.</span>
+    <span class="n">COMMITFAILED</span> <span class="o">=</span> <span class="s">&quot;Commit failed&quot;</span>
+
+<span class="nd">@implementer</span><span class="p">(</span><span class="n">interfaces</span><span class="o">.</span><span class="n">ITransaction</span><span class="p">,</span>
+             <span class="n">interfaces</span><span class="o">.</span><span class="n">ITransactionDeprecated</span><span class="p">)</span>
+<div class="viewcode-block" id="Transaction"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction">[docs]</a><span class="k">class</span> <span class="nc">Transaction</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+
+
+    <span class="c"># Assign an index to each savepoint so we can invalidate later savepoints</span>
+    <span class="c"># on rollback.  The first index assigned is 1, and it goes up by 1 each</span>
+    <span class="c"># time.</span>
+    <span class="n">_savepoint_index</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="c"># If savepoints are used, keep a weak key dict of them.  This maps a</span>
+    <span class="c"># savepoint to its index (see above).</span>
+    <span class="n">_savepoint2index</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="c"># Meta data.  ._extension is also metadata, but is initialized to an</span>
+    <span class="c"># emtpy dict in __init__.</span>
+    <span class="n">user</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+    <span class="n">description</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">synchronizers</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">Status</span><span class="o">.</span><span class="n">ACTIVE</span>
+        <span class="c"># List of resource managers, e.g. MultiObjectResourceAdapters.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resources</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c"># Weak set of synchronizer objects to call.</span>
+        <span class="k">if</span> <span class="n">synchronizers</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">synchronizers</span> <span class="o">=</span> <span class="n">WeakSet</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_synchronizers</span> <span class="o">=</span> <span class="n">synchronizers</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span> <span class="o">=</span> <span class="n">manager</span>
+
+        <span class="c"># _adapters: Connection/_p_jar -&gt; MultiObjectResourceAdapter[Sub]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_adapters</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_voted</span> <span class="o">=</span> <span class="p">{}</span> <span class="c"># id(Connection) -&gt; boolean, True if voted</span>
+        <span class="c"># _voted and other dictionaries use the id() of the resource</span>
+        <span class="c"># manager as a key, because we can&#39;t guess whether the actual</span>
+        <span class="c"># resource managers will be safe to use as dict keys.</span>
+
+        <span class="c"># The user, description, and _extension attributes are accessed</span>
+        <span class="c"># directly by storages, leading underscore notwithstanding.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_extension</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">_makeLogger</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;new transaction&quot;</span><span class="p">)</span>
+
+        <span class="c"># If a commit fails, the traceback is saved in _failure_traceback.</span>
+        <span class="c"># If another attempt is made to commit, TransactionFailedError is</span>
+        <span class="c"># raised, incorporating this traceback.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_failure_traceback</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="c"># List of (hook, args, kws) tuples added by addBeforeCommitHook().</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_before_commit</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c"># List of (hook, args, kws) tuples added by addAfterCommitHook().</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_after_commit</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="Transaction.isDoomed"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.isDoomed">[docs]</a>    <span class="k">def</span> <span class="nf">isDoomed</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="n">Status</span><span class="o">.</span><span class="n">DOOMED</span>
+</div>
+<div class="viewcode-block" id="Transaction.doom"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.doom">[docs]</a>    <span class="k">def</span> <span class="nf">doom</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">Status</span><span class="o">.</span><span class="n">DOOMED</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">Status</span><span class="o">.</span><span class="n">ACTIVE</span><span class="p">:</span>
+                <span class="c"># should not doom transactions in the middle,</span>
+                <span class="c"># or after, a commit</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;non-doomable&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">Status</span><span class="o">.</span><span class="n">DOOMED</span>
+
+    <span class="c"># Raise TransactionFailedError, due to commit()/join()/register()</span>
+    <span class="c"># getting called when the current transaction has already suffered</span>
+    <span class="c"># a commit/savepoint failure.</span></div>
+    <span class="k">def</span> <span class="nf">_prior_operation_failed</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_failure_traceback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span>
+        <span class="k">raise</span> <span class="n">TransactionFailedError</span><span class="p">(</span><span class="s">&quot;An operation previously failed, &quot;</span>
+                <span class="s">&quot;with traceback:</span><span class="se">\n\n</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_failure_traceback</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
+
+<div class="viewcode-block" id="Transaction.join"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.join">[docs]</a>    <span class="k">def</span> <span class="nf">join</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="n">Status</span><span class="o">.</span><span class="n">COMMITFAILED</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_prior_operation_failed</span><span class="p">()</span> <span class="c"># doesn&#39;t return</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">Status</span><span class="o">.</span><span class="n">ACTIVE</span> <span class="ow">and</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">Status</span><span class="o">.</span><span class="n">DOOMED</span><span class="p">):</span>
+            <span class="c"># TODO: Should it be possible to join a committing transaction?</span>
+            <span class="c"># I think some users want it.</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;expected txn status </span><span class="si">%r</span><span class="s"> or </span><span class="si">%r</span><span class="s">, but it&#39;s </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                             <span class="n">Status</span><span class="o">.</span><span class="n">ACTIVE</span><span class="p">,</span> <span class="n">Status</span><span class="o">.</span><span class="n">DOOMED</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">))</span>
+        <span class="c"># TODO: the prepare check is a bit of a hack, perhaps it would</span>
+        <span class="c"># be better to use interfaces.  If this is a ZODB4-style</span>
+        <span class="c"># resource manager, it needs to be adapted, too.</span>
+        <span class="k">if</span> <span class="n">myhasattr</span><span class="p">(</span><span class="n">resource</span><span class="p">,</span> <span class="s">&quot;prepare&quot;</span><span class="p">):</span>
+            <span class="c"># TODO: deprecate 3.6</span>
+            <span class="n">resource</span> <span class="o">=</span> <span class="n">DataManagerAdapter</span><span class="p">(</span><span class="n">resource</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resources</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">resource</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint2index</span><span class="p">:</span>
+            <span class="c"># A data manager has joined a transaction *after* a savepoint</span>
+            <span class="c"># was created.  A couple of things are different in this case:</span>
+            <span class="c">#</span>
+            <span class="c"># 1. We need to add its savepoint to all previous savepoints.</span>
+            <span class="c"># so that if they are rolled back, we roll this one back too.</span>
+            <span class="c">#</span>
+            <span class="c"># 2. We don&#39;t actually need to ask the data manager for a</span>
+            <span class="c"># savepoint:  because it&#39;s just joining, we can just abort it to</span>
+            <span class="c"># roll back to the current state, so we simply use an</span>
+            <span class="c"># AbortSavepoint.</span>
+            <span class="n">datamanager_savepoint</span> <span class="o">=</span> <span class="n">AbortSavepoint</span><span class="p">(</span><span class="n">resource</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">transaction_savepoint</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint2index</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="n">transaction_savepoint</span><span class="o">.</span><span class="n">_savepoints</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">datamanager_savepoint</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_unjoin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="c"># Leave a transaction because a savepoint was rolled back on a resource</span>
+        <span class="c"># that joined later.</span>
+
+        <span class="c"># Don&#39;t use remove.  We don&#39;t want to assume anything about __eq__.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resources</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resources</span> <span class="k">if</span> <span class="n">r</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">resource</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Transaction.savepoint"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.savepoint">[docs]</a>    <span class="k">def</span> <span class="nf">savepoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optimistic</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="n">Status</span><span class="o">.</span><span class="n">COMMITFAILED</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_prior_operation_failed</span><span class="p">()</span> <span class="c"># doesn&#39;t return, it raises</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">savepoint</span> <span class="o">=</span> <span class="n">Savepoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">optimistic</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_resources</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_cleanup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_resources</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_saveAndRaiseCommitishError</span><span class="p">()</span> <span class="c"># reraises!</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint2index</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint2index</span> <span class="o">=</span> <span class="n">weakref</span><span class="o">.</span><span class="n">WeakKeyDictionary</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint_index</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint2index</span><span class="p">[</span><span class="n">savepoint</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint_index</span>
+
+        <span class="k">return</span> <span class="n">savepoint</span>
+
+    <span class="c"># Remove and invalidate all savepoints we know about with an index</span>
+    <span class="c"># larger than `savepoint`&#39;s.  This is what&#39;s needed when a rollback</span>
+    <span class="c"># _to_ `savepoint` is done.</span></div>
+    <span class="k">def</span> <span class="nf">_remove_and_invalidate_after</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">savepoint</span><span class="p">):</span>
+        <span class="n">savepoint2index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint2index</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="n">savepoint2index</span><span class="p">[</span><span class="n">savepoint</span><span class="p">]</span>
+        <span class="c"># use list(items()) to make copy to avoid mutating while iterating</span>
+        <span class="k">for</span> <span class="n">savepoint</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">savepoint2index</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="n">index</span><span class="p">:</span>
+                <span class="n">savepoint</span><span class="o">.</span><span class="n">transaction</span> <span class="o">=</span> <span class="bp">None</span> <span class="c"># invalidate</span>
+                <span class="k">del</span> <span class="n">savepoint2index</span><span class="p">[</span><span class="n">savepoint</span><span class="p">]</span>
+
+    <span class="c"># Invalidate and forget about all savepoints.</span>
+    <span class="k">def</span> <span class="nf">_invalidate_all_savepoints</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">savepoint</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint2index</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">savepoint</span><span class="o">.</span><span class="n">transaction</span> <span class="o">=</span> <span class="bp">None</span> <span class="c"># invalidate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint2index</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="Transaction.register"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.register">[docs]</a>    <span class="k">def</span> <span class="nf">register</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># The old way of registering transaction participants.</span>
+        <span class="c">#</span>
+        <span class="c"># register() is passed either a persisent object or a</span>
+        <span class="c"># resource manager like the ones defined in ZODB.DB.</span>
+        <span class="c"># If it is passed a persistent object, that object should</span>
+        <span class="c"># be stored when the transaction commits.  For other</span>
+        <span class="c"># objects, the object implements the standard two-phase</span>
+        <span class="c"># commit protocol.</span>
+        <span class="n">manager</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s">&quot;_p_jar&quot;</span><span class="p">,</span> <span class="n">obj</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">manager</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Register with no manager&quot;</span><span class="p">)</span>
+        <span class="n">adapter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adapters</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">manager</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">adapter</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">adapter</span> <span class="o">=</span> <span class="n">MultiObjectResourceAdapter</span><span class="p">(</span><span class="n">manager</span><span class="p">)</span>
+            <span class="n">adapter</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_adapters</span><span class="p">[</span><span class="n">manager</span><span class="p">]</span> <span class="o">=</span> <span class="n">adapter</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">adapter</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c"># TODO: comment out this expensive assert later</span>
+            <span class="c"># Use id() to guard against proxies.</span>
+            <span class="k">assert</span> <span class="nb">id</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">map</span><span class="p">(</span><span class="nb">id</span><span class="p">,</span> <span class="n">adapter</span><span class="o">.</span><span class="n">objects</span><span class="p">)</span>
+            <span class="n">adapter</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Transaction.commit"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.commit">[docs]</a>    <span class="k">def</span> <span class="nf">commit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="n">Status</span><span class="o">.</span><span class="n">DOOMED</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">interfaces</span><span class="o">.</span><span class="n">DoomedTransaction</span><span class="p">(</span>
+                <span class="s">&#39;transaction doomed, cannot commit&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint2index</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_invalidate_all_savepoints</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="ow">is</span> <span class="n">Status</span><span class="o">.</span><span class="n">COMMITFAILED</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_prior_operation_failed</span><span class="p">()</span> <span class="c"># doesn&#39;t return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_callBeforeCommitHooks</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_synchronizers</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">beforeCompletion</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">Status</span><span class="o">.</span><span class="n">COMMITTING</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_commitResources</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">Status</span><span class="o">.</span><span class="n">COMMITTED</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="n">tb</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_saveAndGetCommitishError</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_callAfterCommitHooks</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+                <span class="n">reraise</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span><span class="p">)</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="k">del</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">free</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_synchronizers</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">afterCompletion</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_callAfterCommitHooks</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;commit&quot;</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_saveAndGetCommitishError</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">Status</span><span class="o">.</span><span class="n">COMMITFAILED</span>
+        <span class="c"># Save the traceback for TransactionFailedError.</span>
+        <span class="n">ft</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_failure_traceback</span> <span class="o">=</span> <span class="n">_makeTracebackBuffer</span><span class="p">()</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">tb</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+            <span class="c"># Record how we got into commit().</span>
+            <span class="n">traceback</span><span class="o">.</span><span class="n">print_stack</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">_getframe</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="bp">None</span><span class="p">,</span> <span class="n">ft</span><span class="p">)</span>
+            <span class="c"># Append the stack entries from here down to the exception.</span>
+            <span class="n">traceback</span><span class="o">.</span><span class="n">print_tb</span><span class="p">(</span><span class="n">tb</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="n">ft</span><span class="p">)</span>
+            <span class="c"># Append the exception type and value.</span>
+            <span class="n">ft</span><span class="o">.</span><span class="n">writelines</span><span class="p">(</span><span class="n">traceback</span><span class="o">.</span><span class="n">format_exception_only</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span>
+
+    <span class="k">def</span> <span class="nf">_saveAndRaiseCommitishError</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">tb</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_saveAndGetCommitishError</span><span class="p">()</span>
+            <span class="n">reraise</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span>
+
+<div class="viewcode-block" id="Transaction.getBeforeCommitHooks"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.getBeforeCommitHooks">[docs]</a>    <span class="k">def</span> <span class="nf">getBeforeCommitHooks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_before_commit</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Transaction.addBeforeCommitHook"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.addBeforeCommitHook">[docs]</a>    <span class="k">def</span> <span class="nf">addBeforeCommitHook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(),</span> <span class="n">kws</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">kws</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">kws</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_before_commit</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">hook</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">args</span><span class="p">),</span> <span class="n">kws</span><span class="p">))</span>
+</div>
+    <span class="k">def</span> <span class="nf">_callBeforeCommitHooks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Call all hooks registered, allowing further registrations</span>
+        <span class="c"># during processing.  Note that calls to addBeforeCommitHook() may</span>
+        <span class="c"># add additional hooks while hooks are running, and iterating over a</span>
+        <span class="c"># growing list is well-defined in Python.</span>
+        <span class="k">for</span> <span class="n">hook</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kws</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_before_commit</span><span class="p">:</span>
+            <span class="n">hook</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kws</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_before_commit</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="Transaction.getAfterCommitHooks"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.getAfterCommitHooks">[docs]</a>    <span class="k">def</span> <span class="nf">getAfterCommitHooks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_after_commit</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Transaction.addAfterCommitHook"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.addAfterCommitHook">[docs]</a>    <span class="k">def</span> <span class="nf">addAfterCommitHook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hook</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(),</span> <span class="n">kws</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">kws</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">kws</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_after_commit</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">hook</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">args</span><span class="p">),</span> <span class="n">kws</span><span class="p">))</span>
+</div>
+    <span class="k">def</span> <span class="nf">_callAfterCommitHooks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">status</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="c"># Avoid to abort anything at the end if no hooks are registred.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_after_commit</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="c"># Call all hooks registered, allowing further registrations</span>
+        <span class="c"># during processing.  Note that calls to addAterCommitHook() may</span>
+        <span class="c"># add additional hooks while hooks are running, and iterating over a</span>
+        <span class="c"># growing list is well-defined in Python.</span>
+        <span class="k">for</span> <span class="n">hook</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kws</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_after_commit</span><span class="p">:</span>
+            <span class="c"># The first argument passed to the hook is a Boolean value,</span>
+            <span class="c"># true if the commit succeeded, or false if the commit aborted.</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">hook</span><span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kws</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="c"># We need to catch the exceptions if we want all hooks</span>
+                <span class="c"># to be called</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Error in after commit hook exec in </span><span class="si">%s</span><span class="s"> &quot;</span><span class="p">,</span>
+                               <span class="n">hook</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+        <span class="c"># The transaction is already committed. It must not have</span>
+        <span class="c"># further effects after the commit.</span>
+        <span class="k">for</span> <span class="n">rm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resources</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">rm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="c"># XXX should we take further actions here ?</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Error in abort() on manager </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span>
+                               <span class="n">rm</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_after_commit</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_before_commit</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span> <span class="nf">_commitResources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Execute the two-phase commit protocol.</span>
+
+        <span class="n">L</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_resources</span><span class="p">)</span>
+        <span class="n">L</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">rm_key</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">rm</span> <span class="ow">in</span> <span class="n">L</span><span class="p">:</span>
+                <span class="n">rm</span><span class="o">.</span><span class="n">tpc_begin</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">rm</span> <span class="ow">in</span> <span class="n">L</span><span class="p">:</span>
+                <span class="n">rm</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;commit </span><span class="si">%r</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">rm</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">rm</span> <span class="ow">in</span> <span class="n">L</span><span class="p">:</span>
+                <span class="n">rm</span><span class="o">.</span><span class="n">tpc_vote</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_voted</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">rm</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">True</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">rm</span> <span class="ow">in</span> <span class="n">L</span><span class="p">:</span>
+                    <span class="n">rm</span><span class="o">.</span><span class="n">tpc_finish</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="c"># TODO: do we need to make this warning stronger?</span>
+                <span class="c"># TODO: It would be nice if the system could be configured</span>
+                <span class="c"># to stop committing transactions at this point.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s">&quot;A storage error occurred during the second &quot;</span>
+                                  <span class="s">&quot;phase of the two-phase commit.  Resources &quot;</span>
+                                  <span class="s">&quot;may be in an inconsistent state.&quot;</span><span class="p">)</span>
+                <span class="k">raise</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="c"># If an error occurs committing a transaction, we try</span>
+            <span class="c"># to revert the changes in each of the resource managers.</span>
+            <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cleanup</span><span class="p">(</span><span class="n">L</span><span class="p">)</span>
+                <span class="k">finally</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_synchronizers</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">afterCompletion</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+                <span class="n">reraise</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span><span class="p">)</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="k">del</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span>
+
+    <span class="k">def</span> <span class="nf">_cleanup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">L</span><span class="p">):</span>
+        <span class="c"># Called when an exception occurs during tpc_vote or tpc_finish.</span>
+        <span class="k">for</span> <span class="n">rm</span> <span class="ow">in</span> <span class="n">L</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">id</span><span class="p">(</span><span class="n">rm</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_voted</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">rm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Error in abort() on manager </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span>
+                                   <span class="n">rm</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+        <span class="k">for</span> <span class="n">rm</span> <span class="ow">in</span> <span class="n">L</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">rm</span><span class="o">.</span><span class="n">tpc_abort</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Error in tpc_abort() on manager </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span>
+                               <span class="n">rm</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+
+<div class="viewcode-block" id="Transaction.abort"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.abort">[docs]</a>    <span class="k">def</span> <span class="nf">abort</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_savepoint2index</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_invalidate_all_savepoints</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_synchronizers</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">beforeCompletion</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+
+        <span class="k">try</span><span class="p">:</span>
+
+            <span class="n">t</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="n">tb</span> <span class="o">=</span> <span class="bp">None</span>
+            
+            <span class="k">for</span> <span class="n">rm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resources</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">rm</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+                <span class="k">except</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">tb</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                        <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Failed to abort resource manager: </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span>
+                                   <span class="n">rm</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_manager</span><span class="o">.</span><span class="n">free</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_synchronizers</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">afterCompletion</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&quot;abort&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">tb</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">reraise</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span>
+</div>
+<div class="viewcode-block" id="Transaction.note"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.note">[docs]</a>    <span class="k">def</span> <span class="nf">note</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">description</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">description</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">+</span> <span class="n">text</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">description</span> <span class="o">=</span> <span class="n">text</span>
+</div>
+<div class="viewcode-block" id="Transaction.setUser"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.setUser">[docs]</a>    <span class="k">def</span> <span class="nf">setUser</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_name</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s">&quot;/&quot;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">user</span> <span class="o">=</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">user_name</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Transaction.setExtendedInfo"><a class="viewcode-back" href="../../api.html#transaction._transaction.Transaction.setExtendedInfo">[docs]</a>    <span class="k">def</span> <span class="nf">setExtendedInfo</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ITransaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_extension</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+<span class="c"># TODO: We need a better name for the adapters.</span>
+
+</div></div>
+<span class="k">class</span> <span class="nc">MultiObjectResourceAdapter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Adapt the old-style register() call to the new-style join().</span>
+
+<span class="sd">    With join(), a resource mananger like a Connection registers with</span>
+<span class="sd">    the transaction manager.  With register(), an individual object</span>
+<span class="sd">    is passed to register().</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">jar</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="o">=</span> <span class="n">jar</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">objects</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ncommitted</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&quot;&lt;</span><span class="si">%s</span><span class="s"> for </span><span class="si">%s</span><span class="s"> at </span><span class="si">%s</span><span class="s">&gt;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span>
+                                      <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">,</span> <span class="nb">id</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">sortKey</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">sortKey</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">tpc_begin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">tpc_begin</span><span class="p">(</span><span class="n">txn</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">tpc_finish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">tpc_finish</span><span class="p">(</span><span class="n">txn</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">tpc_abort</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">tpc_abort</span><span class="p">(</span><span class="n">txn</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">commit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">objects</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="n">txn</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ncommitted</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">def</span> <span class="nf">tpc_vote</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">tpc_vote</span><span class="p">(</span><span class="n">txn</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">abort</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">txn</span><span class="p">):</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">tb</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">objects</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="n">txn</span><span class="p">)</span>
+                <span class="k">except</span><span class="p">:</span>
+                    <span class="c"># Capture the first exception and re-raise it after</span>
+                    <span class="c"># aborting all the other objects.</span>
+                    <span class="k">if</span> <span class="n">tb</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                        <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+                    <span class="n">txn</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Failed to abort object: </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span>
+                                  <span class="n">object_hint</span><span class="p">(</span><span class="n">o</span><span class="p">),</span> <span class="n">exc_info</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">())</span>
+
+            <span class="k">if</span> <span class="n">tb</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">reraise</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">del</span> <span class="n">t</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">tb</span>
+
+
+<span class="k">def</span> <span class="nf">rm_key</span><span class="p">(</span><span class="n">rm</span><span class="p">):</span>
+    <span class="n">func</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rm</span><span class="p">,</span> <span class="s">&#39;sortKey&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">func</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">func</span><span class="p">()</span>
+
+<span class="k">def</span> <span class="nf">object_hint</span><span class="p">(</span><span class="n">o</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return a string describing the object.</span>
+
+<span class="sd">    This function does not raise an exception.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># We should always be able to get __class__.</span>
+    <span class="n">klass</span> <span class="o">=</span> <span class="n">o</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+    <span class="c"># oid would be great, but maybe this isn&#39;t a persistent object.</span>
+    <span class="n">oid</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="s">&quot;_p_oid&quot;</span><span class="p">,</span> <span class="n">_marker</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">oid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">_marker</span><span class="p">:</span>
+        <span class="n">oid</span> <span class="o">=</span> <span class="n">oid_repr</span><span class="p">(</span><span class="n">oid</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">oid</span> <span class="o">=</span> <span class="s">&#39;None&#39;</span>
+    <span class="k">return</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s"> oid=</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">klass</span><span class="p">,</span> <span class="n">oid</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">oid_repr</span><span class="p">(</span><span class="n">oid</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">oid</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">oid</span><span class="p">)</span> <span class="o">==</span> <span class="mi">8</span><span class="p">:</span>
+        <span class="c"># Convert to hex and strip leading zeroes.</span>
+        <span class="n">as_hex</span> <span class="o">=</span> <span class="n">native_</span><span class="p">(</span>
+            <span class="n">binascii</span><span class="o">.</span><span class="n">hexlify</span><span class="p">(</span><span class="n">bytes_</span><span class="p">(</span><span class="n">oid</span><span class="p">,</span> <span class="s">&#39;ascii&#39;</span><span class="p">)),</span> <span class="s">&#39;ascii&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s">&#39;0&#39;</span><span class="p">)</span>
+        <span class="c"># Ensure two characters per input byte.</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">as_hex</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">as_hex</span> <span class="o">=</span> <span class="s">&#39;0&#39;</span> <span class="o">+</span> <span class="n">as_hex</span>
+        <span class="k">elif</span> <span class="n">as_hex</span> <span class="o">==</span> <span class="s">&#39;&#39;</span><span class="p">:</span>
+            <span class="n">as_hex</span> <span class="o">=</span> <span class="s">&#39;00&#39;</span>
+        <span class="k">return</span> <span class="s">&#39;0x&#39;</span> <span class="o">+</span> <span class="n">as_hex</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">repr</span><span class="p">(</span><span class="n">oid</span><span class="p">)</span>
+
+
+<span class="c"># TODO: deprecate for 3.6.</span>
+<span class="k">class</span> <span class="nc">DataManagerAdapter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Adapt zodb 4-style data managers to zodb3 style</span>
+
+<span class="sd">    Adapt transaction.interfaces.IDataManager to</span>
+<span class="sd">    ZODB.interfaces.IPureDatamanager</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c"># Note that it is pretty important that this does not have a _p_jar</span>
+    <span class="c"># attribute. This object will be registered with a zodb3 TM, which</span>
+    <span class="c"># will then try to get a _p_jar from it, using it as the default.</span>
+    <span class="c"># (Objects without a _p_jar are their own data managers.)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">datamanager</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_datamanager</span> <span class="o">=</span> <span class="n">datamanager</span>
+
+    <span class="c"># TODO: I&#39;m not sure why commit() doesn&#39;t do anything</span>
+
+    <span class="k">def</span> <span class="nf">commit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transaction</span><span class="p">):</span>
+        <span class="c"># We don&#39;t do anything here because ZODB4-style data managers</span>
+        <span class="c"># didn&#39;t have a separate commit step</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">abort</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transaction</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_datamanager</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">transaction</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">tpc_begin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transaction</span><span class="p">):</span>
+        <span class="c"># We don&#39;t do anything here because ZODB4-style data managers</span>
+        <span class="c"># didn&#39;t have a separate tpc_begin step</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">tpc_abort</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transaction</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_datamanager</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="n">transaction</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">tpc_finish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transaction</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_datamanager</span><span class="o">.</span><span class="n">commit</span><span class="p">(</span><span class="n">transaction</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">tpc_vote</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transaction</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_datamanager</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="n">transaction</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">sortKey</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_datamanager</span><span class="o">.</span><span class="n">sortKey</span><span class="p">()</span>
+
+
+<span class="nd">@implementer</span><span class="p">(</span><span class="n">interfaces</span><span class="o">.</span><span class="n">ISavepoint</span><span class="p">)</span>
+<div class="viewcode-block" id="Savepoint"><a class="viewcode-back" href="../../api.html#transaction._transaction.Savepoint">[docs]</a><span class="k">class</span> <span class="nc">Savepoint</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Transaction savepoint.</span>
+
+<span class="sd">    Transaction savepoints coordinate savepoints for data managers</span>
+<span class="sd">    participating in a transaction.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">valid</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="k">lambda</span> <span class="bp">self</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">transaction</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">transaction</span><span class="p">,</span> <span class="n">optimistic</span><span class="p">,</span> <span class="o">*</span><span class="n">resources</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transaction</span> <span class="o">=</span> <span class="n">transaction</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_savepoints</span> <span class="o">=</span> <span class="n">savepoints</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">datamanager</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">savepoint</span> <span class="o">=</span> <span class="n">datamanager</span><span class="o">.</span><span class="n">savepoint</span>
+            <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">optimistic</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Savepoints unsupported&quot;</span><span class="p">,</span> <span class="n">datamanager</span><span class="p">)</span>
+                <span class="n">savepoint</span> <span class="o">=</span> <span class="n">NoRollbackSavepoint</span><span class="p">(</span><span class="n">datamanager</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">savepoint</span> <span class="o">=</span> <span class="n">savepoint</span><span class="p">()</span>
+
+            <span class="n">savepoints</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">savepoint</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Savepoint.rollback"><a class="viewcode-back" href="../../api.html#transaction._transaction.Savepoint.rollback">[docs]</a>    <span class="k">def</span> <span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; See ISavepoint.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">transaction</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">transaction</span>
+        <span class="k">if</span> <span class="n">transaction</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">interfaces</span><span class="o">.</span><span class="n">InvalidSavepointRollbackError</span><span class="p">(</span>
+                <span class="s">&#39;invalidated by a later savepoint&#39;</span><span class="p">)</span>
+        <span class="n">transaction</span><span class="o">.</span><span class="n">_remove_and_invalidate_after</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">savepoint</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_savepoints</span><span class="p">:</span>
+                <span class="n">savepoint</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="c"># Mark the transaction as failed.</span>
+            <span class="n">transaction</span><span class="o">.</span><span class="n">_saveAndRaiseCommitishError</span><span class="p">()</span> <span class="c"># reraises!</span>
+
+</div></div>
+<span class="k">class</span> <span class="nc">AbortSavepoint</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">datamanager</span><span class="p">,</span> <span class="n">transaction</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">datamanager</span> <span class="o">=</span> <span class="n">datamanager</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transaction</span> <span class="o">=</span> <span class="n">transaction</span>
+
+    <span class="k">def</span> <span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">datamanager</span><span class="o">.</span><span class="n">abort</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">transaction</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transaction</span><span class="o">.</span><span class="n">_unjoin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">datamanager</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">NoRollbackSavepoint</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">datamanager</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">datamanager</span> <span class="o">=</span> <span class="n">datamanager</span>
+
+    <span class="k">def</span> <span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Savepoints unsupported&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">datamanager</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">transaction 1.2 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
