@@ -1,0 +1,106 @@
+{% extends "base_status.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "State History" %}{% endblock %}
+{% block smallheader %}{% endblock %}
+{% block largeheader %}{% trans "State History" %}
+{% endblock %}
+{% block nav1 %}{{ block.super }}{% endblock %}
+{% block nav2 %}<a href="{% url status.views.state_history %}">{% trans "State History" %}</a>{% endblock %}
+{% load adagiostags %}
+{% block toolbar %}{% endblock %}
+{% block content %}
+    <div id="log_datetime">
+    {% include "snippets/status_datepicker_snippet.html" %}
+    </div>
+
+    {{ log|length }}{% trans " lines in logfile" %}
+    <table class="table">
+    <tr>
+        <th title="{{  start_time}}">{% trans "Start Time: " %}{{ start_time|timestamp|date:'Y-m-d H:i' }}</th>
+        <th>{% trans "End Time: " %}{{ end_time|timestamp|date:'Y-m-d H:i' }}</th>
+        <th>{% trans "Total Duration: " %}{{ total_duration }}</th>
+    </tr>
+    </table>
+    <table class="table table-condensed well">
+    <tr style="white-space: nowrap">
+        <th>{% trans "Host" %}</th>
+        <th>{% trans "Service " %}</th>
+        <th>{% trans "SLA %" %}</th>
+        <th>{% trans "# alerts" %}</th>
+        <th>{% trans "Timeline" %}</th>
+    </tr>
+    {# Only show services that have any service alerts for the day. #}
+    {% for service in services.values %}{% if service.num_problems > 1 %}
+        <tr>
+        <td>
+            <a href="{% url adagios.status.views.detail %}?host_name={{ service.host_name }}">{{ service.host_name }}</a>
+        </td>
+        <td class="nowrap">
+            {% if service.service_description %}
+                <a href="{% url adagios.status.views.detail %}?host_name={{ service.host_name }}&service_description={{ service.service_description }}">{{ service.service_description }}</a>
+            {% else %}
+                <a href="{% url adagios.status.views.detail %}?host_name={{ service.host_name }}">{% trans "Host Status" %}</a>
+            {% endif %}
+        </td>
+        <td>{{ service.sla|floatformat }}%</td>
+            <td><a href="{% url status.views.log %}?host_name={{ service.host_name }}&service_description={{ service.service_description }}">{{ service.num_problems }}</a></td>
+            <td width=500px>
+
+            <div width="500px" class="progress">
+            {% for line in service.log %}
+                {%  if line.time != line.end_time or 1 == 1 %}
+                <div title="{{ line.time|timestamp|date:'Y-m-d H:i' }} - {{ line.status }} - {{ line.plugin_output }}"  class="bar bar-{{ line.bootstrap_status }}" style=" width: {{ line.duration_percent }}%;"></div>
+                {% endif %}{% endfor %}
+
+            </div>
+        <!--
+                <table border=1>
+            {% for line in service.log %}
+                <tr>
+                <td>{{ line.time|timestamp|date:'Y-m-d H:i' }}</td>
+                <td>{{ line.end_time|timestamp|date:'Y-m-d H:i' }}</td>
+                <td>{{ line.duration }}</td>
+                    <td>{{ line.duration_percent }}</td>
+                </tr>
+            {% endfor %}
+                </table>
+            -->
+
+
+
+
+        </td>
+        </tr>
+        {% endif %}
+    {% endfor %}
+    </table>
+{% endblock %}
+
+
+{% block footer %} {{ block.super }}
+    <script type="text/javascript">
+
+            $(document).ready(function() {
+                var start_time = new Date();
+                if ("{{ start_time }}" != "None") {
+                    start_time = {{ start_time }};
+                } else {
+                    start_time.setDate(start_time.getDate() - 1);
+                    start_time = start_time.valueOf() / 1000;
+                }
+
+                var end_time = new Date();
+                if ("{{ end_time }}" != "None") {
+                    end_time = {{ end_time }};
+                } else {
+                    end_time.setHours(23);
+                    end_time.setMinutes(59);
+                    end_time.setSeconds(59);
+                    end_time = end_time.valueOf() / 1000;
+                }
+                $("form[name='datetimepicker']").adagios_datetimepicker(start_time, end_time);
+            });
+    </script>
+
+{% endblock %}
