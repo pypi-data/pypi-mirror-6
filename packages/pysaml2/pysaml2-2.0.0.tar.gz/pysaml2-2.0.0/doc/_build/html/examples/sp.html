@@ -1,0 +1,290 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>An extremly simple example of a SAML2 service provider. &mdash; pysaml2 1.2.0beta documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '1.2.0beta',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="pysaml2 1.2.0beta documentation" href="../index.html" />
+    <link rel="up" title="These are examples of the usage of pySAML2!" href="index.html" />
+    <link rel="next" title="An extremly simple example of a SAML2 identity provider." href="idp.html" />
+    <link rel="prev" title="These are examples of the usage of pySAML2!" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="idp.html" title="An extremly simple example of a SAML2 identity provider."
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="These are examples of the usage of pySAML2!"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">pysaml2 1.2.0beta documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">These are examples of the usage of pySAML2!</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="an-extremly-simple-example-of-a-saml2-service-provider">
+<span id="example-sp"></span><h1>An extremly simple example of a SAML2 service provider.<a class="headerlink" href="#an-extremly-simple-example-of-a-saml2-service-provider" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="how-it-works">
+<h2>How it works<a class="headerlink" href="#how-it-works" title="Permalink to this headline">¶</a></h2>
+<p>A SP works with authentication and possibly attribute aggregation.
+Both of these functions can be seen as parts of the normal Repoze.who
+setup. Namely the Challenger, Identifier and MetadataProvider parts.</p>
+<p>Normal for Repoze.who Identifier and MetadataProvider plugins are that
+they place information in environment variables. The convention is to place
+identity information in environ[&#8220;repoze.who.identity&#8221;].
+This is a dictionary with keys like &#8216;login&#8217;, and &#8216;repoze.who.userid&#8217;.</p>
+<p>The SP follows this pattern and places the information gathered from
+the IdP that handled the authentication and possible extra information
+received from attribute authorities in the above mentioned dictionary under
+the key &#8216;user&#8217;.</p>
+<p>So in environ[&#8220;repoze.who.identity&#8221;] you will find a dictionary with
+attributes and values, the attribute names used depends on what&#8217;s returned
+from the IdP/AA. If there exists both a name and a friendly name, for
+instance, the friendly name is used as the key.</p>
+</div>
+<div class="section" id="setup">
+<h2>Setup<a class="headerlink" href="#setup" title="Permalink to this headline">¶</a></h2>
+<p>I you look in the example/sp directory of the distribution you will see
+the necessary files:</p>
+<dl class="docutils">
+<dt>application.py</dt>
+<dd>which is the web application. In this case it will just print the
+information provided by the IdP in a table.</dd>
+<dt>sp_conf.py</dt>
+<dd>The SPs configuration</dd>
+<dt>who.ini</dt>
+<dd>The repoze.who configuration file</dd>
+</dl>
+<p>And then there are two files with certificates, mykey.pem with the private
+certificate and mycert.pem with the public part.</p>
+<p>I&#8217;ll go through these step by step.</p>
+</div>
+<div class="section" id="the-application">
+<h2>The application<a class="headerlink" href="#the-application" title="Permalink to this headline">¶</a></h2>
+<p>Build to use the wsgiref&#8217;s simple_server, which is fine for testing but
+not for production.</p>
+</div>
+<div class="section" id="sp-configuration">
+<h2>SP configuration<a class="headerlink" href="#sp-configuration" title="Permalink to this headline">¶</a></h2>
+<p>The configuration is written as described in <a class="reference internal" href="../howto/config.html#howto-config"><em>Configuration of pySAML2 entities</em></a>. It means among other
+things that it&#8217;s easily testable as to the correct syntax.</p>
+<p>You can see the whole file in example/sp/sp_conf.py, here I will go through
+it line by line:</p>
+<div class="highlight-python"><pre>"service": ["sp"],</pre>
+</div>
+<p>Tells the software what type of services the software are suppost to
+supply. It is used to check for the
+completeness of the configuration and also when constructing metadata from
+the configuration. More about that later. Allowed values are: &#8220;sp&#8221;
+(service provider), &#8220;idp&#8221; (identity provider) and &#8220;aa&#8221; (attribute authority).</p>
+<div class="highlight-python"><pre>"entityid" : "urn:mace:example.com:saml:sp",
+"service_url" : "http://example.com:8087/",</pre>
+</div>
+<p>The ID of the entity and the URL on which it is listening.:</p>
+<div class="highlight-python"><pre>"idp_url" : "https://example.com/saml2/idp/SSOService.php",</pre>
+</div>
+<p>Since this is a very simple SP it only need to know about one IdP, therefor there
+is really no need for a metadata file or a WAYF-function or anything like that.
+It needs the URL of the IdP and that&#8217;s all.:</p>
+<div class="highlight-python"><pre>"my_name" : "My first SP",</pre>
+</div>
+<p>This is just for informal purposes, not really needed but nice to do:</p>
+<div class="highlight-python"><pre>"debug" : 1,</pre>
+</div>
+<p>Well, at this point in time you&#8217;d really like to have as much information
+as possible as to what&#8217;s going on, right ?</p>
+<div class="highlight-python"><pre>"key_file" : "./mykey.pem",
+"cert_file" : "./mycert.pem",</pre>
+</div>
+<p>The necessary certificates.:</p>
+<div class="highlight-python"><pre>"xmlsec_binary" : "/opt/local/bin/xmlsec1",</pre>
+</div>
+<p>Right now the software is built to use xmlsec binaries and not the python
+xmlsec package. There are reasons for this but I won&#8217;t go into them here.:</p>
+<div class="highlight-python"><pre>"organization": {
+    "name": "Example Co",
+    #display_name
+    "url":"http://www.example.com/",
+},</pre>
+</div>
+<p>Information about the organization that is behind this SP, only used when
+building metadata.</p>
+<div class="highlight-python"><pre>"contact": [{
+    "given_name":"John",
+    "sur_name": "Smith",
+    "email_address": "john.smith@example.com",
+    #contact_type
+    #company
+    #telephone_number
+}]</pre>
+</div>
+<p>Another piece of information that only is matters if you build and distribute
+metadata.</p>
+<p>So, now to that part. In order to allow the IdP to talk to you you may have
+to provide the one running the IdP with a metadata file.
+If you have a SP configuration file similar to the one I&#8217;ve walked you
+through here, but with your information. You can make the metadata file
+by running the make_metadata script you can find in the tools directory.</p>
+<p>Change directory to where you have the configuration file and do</p>
+<div class="highlight-python"><pre>make_metadata.py sp_conf.py &gt; metadata.xml</pre>
+</div>
+</div>
+<div class="section" id="repoze-configuration">
+<h2>Repoze configuration<a class="headerlink" href="#repoze-configuration" title="Permalink to this headline">¶</a></h2>
+<p>I&#8217;m not going through the INI file format here. You should read
+<a class="reference external" href="http://static.repoze.org/whodocs/narr.html">Middleware Responsibilities</a>
+to get a good introduction to the concept.</p>
+<p>The configuration of the pysaml2 part in the applications middleware are
+first the special module configuration, namely:</p>
+<div class="highlight-python"><pre>[plugin:saml2auth]
+use = s2repoze.plugins.sp:make_plugin
+saml_conf = sp_conf.py
+rememberer_name = auth_tkt
+debug = 1
+path_logout = .*/logout.*</pre>
+</div>
+<p>Which contains a specification (&#8220;use&#8221;) of which function in which module
+should be used to initialize the part. After that comes the name of the
+file (&#8220;saml_conf&#8221;) that contains the PySaml2 configuration. The third line
+(&#8220;rememberer_name&#8221;) points at the plugin that should be used to
+remember the user information.</p>
+<p>After this, the plugin is referenced in a couple of places:</p>
+<div class="highlight-python"><pre>[identifiers]
+plugins =
+      saml2auth
+      auth_tkt
+
+[authenticators]
+plugins = saml2auth
+
+[challengers]
+plugins = saml2auth
+
+[mdproviders]
+plugins = saml2auth</pre>
+</div>
+<p>Which means that the plugin is used in all phases.</p>
+</div>
+<div class="section" id="id1">
+<h2>The application<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<p>Is as said before extremly simple. The only thing that is connected to
+the PySaml2 configuration are at the bottom, namely where the server are.
+You have to ascertain that this coincides with what is specified in the
+PySaml2 configuration. Apart from that there really are no thing in
+application.py that demands that you use PySaml2 as middleware. If you
+switched to using the LDAP or CAS plugins nothing would change in the
+application. In the application configuration yes! But not in the application.
+And that is really how it should be done.</p>
+<p>There is one assumption and that is that the middleware plugin that gathers
+information about the user places the extra information in as value on the
+&#8220;user&#8221; property in the dictionary found under the key &#8220;repoze.who.identity&#8221;
+in the environment.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">An extremly simple example of a SAML2 service provider.</a><ul>
+<li><a class="reference internal" href="#how-it-works">How it works</a></li>
+<li><a class="reference internal" href="#setup">Setup</a></li>
+<li><a class="reference internal" href="#the-application">The application</a></li>
+<li><a class="reference internal" href="#sp-configuration">SP configuration</a></li>
+<li><a class="reference internal" href="#repoze-configuration">Repoze configuration</a></li>
+<li><a class="reference internal" href="#id1">The application</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter">These are examples of the usage of pySAML2!</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="idp.html"
+                        title="next chapter">An extremly simple example of a SAML2 identity provider.</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/examples/sp.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="idp.html" title="An extremly simple example of a SAML2 identity provider."
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="These are examples of the usage of pySAML2!"
+             >previous</a> |</li>
+        <li><a href="../index.html">pysaml2 1.2.0beta documentation</a> &raquo;</li>
+          <li><a href="index.html" >These are examples of the usage of pySAML2!</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2010-2011, Roland Hedberg.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
