@@ -1,0 +1,4 @@
+SQLALCHEMY_DATABASE_URI = 'sqlite:///chinook.sqlite3'
+SANDMAN_SHOW_PKS = False
+SANDMAN_GENERATE_PKS = False
+TESTING = True
