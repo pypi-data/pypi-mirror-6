@@ -1,0 +1,53 @@
+*** Settings ***
+Library     inspector.Inspector
+Library     OperatingSystem
+Variables   inspector.py
+
+
+
+*** Variables ***
+${ALEPH_DAEMON}           edeposit/amqp/alephdaemon.py
+${AMQP_TOOL}              edeposit/amqp/amqp_tool.py
+
+
+
+*** Keywords ***
+Spust prikaz vrat vystup
+    [Documentation]       Spusti zadany prikaz (uvedeny i s parametry), vrati a zaloguje vysledek.
+    [Arguments]           ${prikaz}
+    ${rc}   ${output} =   Run and Return RC and Output   ${prikaz}
+    Log                   ${output}
+    Log                   ${rc}
+    [Return]              ${output}
+
+Spust prikaz vrat hodnotu
+    [Documentation]       Spusti zadany prikaz (uvedeny i s parametry), vrati a zaloguje retval (int).
+    [Arguments]           ${prikaz}
+    ${rc} =               Run And Return Rc              ${prikaz}
+    Log                   ${rc}
+    [Return]              ${rc}
+
+*** Test Cases ***
+alephdaemon existuje
+    Should Exist          ${ALEPH_DAEMON}
+
+Spust aleph daemona
+    Spust prikaz vrat vystup   ${ALEPH_DAEMON} stop
+    Spust prikaz vrat vystup   ${ALEPH_DAEMON} start
+
+Posli testovaci zpravu do daemona
+    ${retval}                  Spust prikaz vrat hodnotu  ${AMQP_TOOL} --put
+    Should Be True             ${retval} == 0
+
+Prijmi testovaci zpravu z daemona
+    ${vystup} =                Spust prikaz vrat vystup  ${AMQP_TOOL} --get --timeout 2
+    ${delka} =                 Length                    ${vystup}
+
+    Should Be True             ${delka} > 100
+    Should contain             ${vystup}                 zpracovatelZaznamu
+    Should contain             ${vystup}                 UNIXu
+
+# Hraj ruskou hymnu
+#     [Documentation]  (09:58:28) Jan Stavel: Ahoj, divam se na testy co jsi napsal - v edeposit.amqp. Diky. Usetri to hodne prace.
+#     [Documentation]  Da se to cist, da se to pustit, jeste by to mohlo hrat. Treba ruskou hymnu.
+#     Spust prikaz vrat hodnotu  xdg-open http://www.youtube.com/watch?v=Ct3pMWmok-Y

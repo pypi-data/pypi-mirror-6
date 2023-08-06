@@ -1,0 +1,217 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>edeposit.amqp.alephdaemon &mdash; edeposit.amqp 1.1.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '1.1.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="edeposit.amqp 1.1.0 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">edeposit.amqp 1.1.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for edeposit.amqp.alephdaemon</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c">#</span>
+<span class="c"># Interpreter version: python 2.7</span>
+<span class="c"># This work is licensed under a Creative Commons 3.0 Unported License</span>
+<span class="c"># (http://creativecommons.org/licenses/by/3.0/).</span>
+<span class="c">#</span>
+<span class="c">#= Imports ====================================================================</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Standalone daemon providing AMQP communication with</span>
+<span class="sd">`Aleph module &lt;https://github.com/jstavel/edeposit.amqp.aleph&gt;`_.</span>
+
+<span class="sd">This script can be used as aplication, not just as module::</span>
+
+<span class="sd">    ./alephdaemon start/stop/restart [--foreground]</span>
+
+<span class="sd">If ``--foreground`` parameter is used, script will not run as daemon, but as</span>
+<span class="sd">normal script at foreground. Without that, only one (true unix) daemon instance</span>
+<span class="sd">will be running at the time.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+
+<span class="kn">import</span> <span class="nn">pika</span>
+<span class="kn">import</span> <span class="nn">pikadaemon</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">edeposit.amqp.aleph</span> <span class="kn">import</span> <span class="o">*</span>
+    <span class="kn">from</span> <span class="nn">edeposit.amqp.aleph.datastructures</span> <span class="kn">import</span> <span class="o">*</span>  <span class="c"># for serializers</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">aleph</span> <span class="kn">import</span> <span class="o">*</span>
+    <span class="kn">from</span> <span class="nn">aleph.datastructures</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">edeposit.amqp.serializers</span> <span class="kn">as</span> <span class="nn">serializers</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">serializers</span>
+
+<span class="kn">import</span> <span class="nn">settings</span>
+
+
+<span class="c">#= Functions &amp; objects ========================================================</span>
+<div class="viewcode-block" id="AlephDaemon"><a class="viewcode-back" href="../../../api/edeposit.amqp.alephdaemon.html#edeposit.amqp.alephdaemon.AlephDaemon">[docs]</a><span class="k">class</span> <span class="nc">AlephDaemon</span><span class="p">(</span><span class="n">pikadaemon</span><span class="o">.</span><span class="n">PikaDaemon</span><span class="p">):</span>
+<div class="viewcode-block" id="AlephDaemon.onMessageReceived"><a class="viewcode-back" href="../../../api/edeposit.amqp.alephdaemon.html#edeposit.amqp.alephdaemon.AlephDaemon.onMessageReceived">[docs]</a>    <span class="k">def</span> <span class="nf">onMessageReceived</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method_frame</span><span class="p">,</span> <span class="n">properties</span><span class="p">,</span> <span class="n">body</span><span class="p">):</span>
+        <span class="c"># if UUID is not in headers, just ack the message and ignore it</span>
+        <span class="k">if</span> <span class="s">&quot;UUID&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">properties</span><span class="o">.</span><span class="n">headers</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>  <span class="c"># ack message</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">reactToAMQPMessage</span><span class="p">(</span>
+                <span class="n">serializers</span><span class="o">.</span><span class="n">deserialize</span><span class="p">(</span><span class="n">body</span><span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sendResponse</span><span class="p">,</span>
+                <span class="n">properties</span><span class="o">.</span><span class="n">headers</span><span class="p">[</span><span class="s">&quot;UUID&quot;</span><span class="p">]</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+            <span class="c"># get informations about message</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">message</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="s">&quot;message&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="n">exception_type</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">__class__</span><span class="p">)</span>
+            <span class="n">exception_name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">sendMessage</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">output_exchange</span><span class="p">,</span>
+                <span class="n">settings</span><span class="o">.</span><span class="n">RABBITMQ_ALEPH_EXCEPTION_KEY</span><span class="p">,</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
+                <span class="n">properties</span><span class="o">=</span><span class="n">pika</span><span class="o">.</span><span class="n">BasicProperties</span><span class="p">(</span>
+                    <span class="n">content_type</span><span class="o">=</span><span class="s">&quot;application/text&quot;</span><span class="p">,</span>
+                    <span class="n">delivery_mode</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                    <span class="n">headers</span><span class="o">=</span><span class="p">{</span>
+                        <span class="s">&quot;exception&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span>
+                        <span class="s">&quot;exception_type&quot;</span><span class="p">:</span> <span class="n">exception_type</span><span class="p">,</span>
+                        <span class="s">&quot;exception_name&quot;</span><span class="p">:</span> <span class="n">exception_name</span>
+                    <span class="p">}</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">True</span>  <span class="c"># ack message</span>
+</div>
+<div class="viewcode-block" id="AlephDaemon.sendResponse"><a class="viewcode-back" href="../../../api/edeposit.amqp.alephdaemon.html#edeposit.amqp.alephdaemon.AlephDaemon.sendResponse">[docs]</a>    <span class="k">def</span> <span class="nf">sendResponse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">UUID</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">AlephDaemon</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">sendResponse</span><span class="p">(</span>
+            <span class="n">serializers</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="n">message</span><span class="p">),</span>
+            <span class="n">UUID</span>
+        <span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="getConnectionParameters"><a class="viewcode-back" href="../../../api/edeposit.amqp.alephdaemon.html#edeposit.amqp.alephdaemon.getConnectionParameters">[docs]</a><span class="k">def</span> <span class="nf">getConnectionParameters</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        pika.ConnectionParameters: object set by variables from</span>
+<span class="sd">        :class:`edeposit.amqp.settings`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">pika</span><span class="o">.</span><span class="n">ConnectionParameters</span><span class="p">(</span>
+        <span class="n">host</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">RABBITMQ_HOST</span><span class="p">,</span>
+        <span class="n">port</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">RABBITMQ_PORT</span><span class="p">),</span>
+        <span class="n">virtual_host</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">RABBITMQ_ALEPH_VIRTUALHOST</span><span class="p">,</span>
+        <span class="n">credentials</span><span class="o">=</span><span class="n">pika</span><span class="o">.</span><span class="n">PlainCredentials</span><span class="p">(</span>
+            <span class="n">settings</span><span class="o">.</span><span class="n">RABBITMQ_USER_NAME</span><span class="p">,</span>
+            <span class="n">settings</span><span class="o">.</span><span class="n">RABBITMQ_USER_PASSWORD</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../api/edeposit.amqp.alephdaemon.html#edeposit.amqp.alephdaemon.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Arguments parsing, etc..</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># initialize globals in `serializers` module (this is very important,</span>
+    <span class="c"># it won&#39;t have access to datastructures authomatically)</span>
+    <span class="n">serializers</span><span class="o">.</span><span class="n">init_globals</span><span class="p">(</span><span class="nb">globals</span><span class="p">())</span>
+
+    <span class="n">daemon</span> <span class="o">=</span> <span class="n">AlephDaemon</span><span class="p">(</span>
+        <span class="n">connection_param</span><span class="o">=</span><span class="n">getConnectionParameters</span><span class="p">(),</span>
+        <span class="n">queue</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">RABBITMQ_ALEPH_DAEMON_QUEUE</span><span class="p">,</span>
+        <span class="n">output_exchange</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">RABBITMQ_ALEPH_EXCHANGE</span><span class="p">,</span>
+        <span class="n">output_key</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">RABBITMQ_ALEPH_PLONE_KEY</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="s">&quot;--foreground&quot;</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">:</span>  <span class="c"># run at foreground</span>
+        <span class="n">daemon</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">daemon</span><span class="o">.</span><span class="n">run_daemon</span><span class="p">()</span>         <span class="c"># run as daemon</span>
+
+
+<span class="c">#= Main program ===============================================================</span></div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">edeposit.amqp 1.1.0 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
