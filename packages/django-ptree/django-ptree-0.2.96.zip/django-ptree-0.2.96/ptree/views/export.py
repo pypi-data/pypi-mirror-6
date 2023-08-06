@@ -1,0 +1,271 @@
+import csv
+import datetime
+from textwrap import TextWrapper
+import inspect
+
+from django.http import HttpResponse
+from django.utils.importlib import import_module
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import user_passes_test
+from django.contrib.admin import sites
+from django.shortcuts import render_to_response
+from inspect_model import InspectModel
+
+import ptree.common
+import ptree.adminlib
+from ptree.common import app_name_format
+import ptree.settings
+import ptree.models
+import ptree.adminlib
+import ptree.sessionlib.models
+from ptree.adminlib import SessionAdmin, SessionParticipantAdmin
+from collections import OrderedDict
+
+LINE_BREAK = '\r\n'
+MODEL_NAMES = ["Participant", "Match", "Treatment", "Subsession", "SessionParticipant", "Session"]
+
+
+def get_data_export_fields(app_label):
+    admin_module = import_module('{}.utilities.admin'.format(app_label))
+    app_models_module = import_module('{}.models'.format(app_label))
+    export_info = {}
+    for model_name in MODEL_NAMES:
+        if model_name == 'Session':
+            Model = ptree.sessionlib.models.Session
+            export_member_names = SessionAdmin.list_display
+        elif model_name == 'SessionParticipant':
+            Model = ptree.sessionlib.models.SessionParticipant
+            export_member_names = SessionParticipantAdmin.list_display
+        else:
+            export_member_names = getattr(admin_module, '{}Admin'.format(model_name)).list_display
+            Model = getattr(app_models_module, model_name)
+
+        # remove anything that isn't a field or method on the model.
+
+        im = InspectModel(Model)
+        exportable_members = set(im.fields + im.methods)
+        methods = set(im.methods)
+
+        export_member_names = [m for m in export_member_names if (m in exportable_members
+                                                                  and not m in {'match', 'treatment', 'subsession', 'session'})]
+        callable_flags = [member_name in methods for member_name in export_member_names]
+
+        # remove since these are redundant
+        export_info[model_name] = {
+            'member_names': export_member_names,
+            'callable_flags': callable_flags
+        }
+    return export_info
+
+def build_doc_file(app_label):
+    doc_dict = get_doc_dict(app_label)
+    return get_docs_as_string(app_label, doc_dict)
+
+def choices_readable(choices):
+    lines = []
+    for value, name in choices:
+        # unicode() call is for lazy translation strings
+        lines.append(u'{}: {}'.format(value, unicode(name)))
+
+    return lines
+
+def get_doc_dict(app_label):
+    export_fields = get_data_export_fields(app_label)
+    app_models_module = import_module('{}.models'.format(app_label))
+
+    doc_dict = OrderedDict()
+
+
+    for model_name in MODEL_NAMES:
+        members = export_fields[model_name]['member_names']
+        callable_flags = export_fields[model_name]['callable_flags']
+        if model_name == 'SessionParticipant':
+            Model = ptree.sessionlib.models.SessionParticipant
+        elif model_name == 'Session':
+            Model = ptree.sessionlib.models.Session
+        else:
+            Model = getattr(app_models_module, model_name)
+
+        doc_dict[model_name] = OrderedDict()
+
+        for i in range(len(members)):
+            member_name = members[i]
+            doc_dict[model_name][member_name] = OrderedDict()
+            is_callable = callable_flags[i]
+            if is_callable:
+                member = getattr(Model, member_name)
+                doc_dict[model_name][member_name]['doc'] = [inspect.getdoc(member)]
+            else:
+                member = Model._meta.get_field_by_name(member_name)[0]
+
+                doc_dict[model_name][member_name]['type'] = [member.get_internal_type()]
+
+                # flag error if the model doesn't have a doc attribute, which it should
+                # unless the field is a 3rd party field
+                doc = getattr(member, 'doc', '[error]') or ''
+                doc_dict[model_name][member_name]['doc'] = [line.strip() for line in doc.splitlines() if line.strip()]
+
+                choices = getattr(member, 'choices', None)
+                if choices:
+                    doc_dict[model_name][member_name]['choices'] = choices_readable(choices)
+
+    return doc_dict
+
+def get_docs_as_string(app_label, doc_dict):
+
+    first_line = '{}: Documentation'.format(app_name_format(app_label))
+    second_line = '*' * len(first_line)
+
+    lines = [
+        first_line,
+        second_line,
+        '',
+        'Accessed: {}'.format(datetime.date.today().isoformat()),
+        '',
+    ]
+
+    for model_name in doc_dict:
+        lines.append(model_name)
+
+        for member in doc_dict[model_name]:
+            lines.append('\t{}'.format(member))
+            for info_type in doc_dict[model_name][member]:
+                #if info_type == 'doc':
+                #    info_line_indentation_level = 2
+                #else:
+                lines.append('\t\t{}'.format(info_type))
+                info_line_indentation_level = 3
+                for info_line in doc_dict[model_name][member][info_type]:
+                    lines.append(u'{}{}'.format('\t'*info_line_indentation_level, info_line))
+
+    output = u'\n'.join(lines)
+    return output.replace('\n', LINE_BREAK).replace('\t', '    ')
+
+
+def data_file_name(app_label):
+    return '{} ({}).csv'.format(
+        ptree.common.app_name_format(app_label),
+        datetime.date.today().isoformat(),
+    )
+
+def doc_file_name(app_label):
+    return '{} - documentation ({}).txt'.format(
+        ptree.common.app_name_format(app_label),
+        datetime.date.today().isoformat()
+    )
+
+
+def get_member_values(object, member_names, callable_flags):
+    member_values = []
+    for i in range(len(member_names)):
+        member_name = member_names[i]
+        is_callable = callable_flags[i]
+        attr = getattr(object, member_name)
+        if is_callable:
+            member_values.append(attr())
+        else:
+            member_values.append(attr)
+    return member_values
+
+
+@user_passes_test(lambda u: u.is_staff)
+@login_required
+def export_list(request):
+    # Get unique app_labels
+    app_labels = [model._meta.app_label for model, model_admin in sites.site._registry.items()]
+    app_labels = list(set(app_labels))
+    # Sort the apps alphabetically.
+    app_labels.sort()
+    # Filter out non subsession apps
+    app_labels = [app_label for app_label in app_labels if ptree.common.is_subsession_app(app_label)]
+    apps = [{"name": app_name_format(app_label), "app_label": app_label} for app_label in app_labels]
+    return render_to_response("admin/ptree_data_export_list.html", {"apps": apps})
+
+
+@user_passes_test(lambda u: u.is_staff)
+@login_required
+def export_docs(request, app_label):
+    #export = self.model.objects.get(pk=pk)
+    #app_label = export.model.app_label
+    response = HttpResponse(build_doc_file(app_label))
+    response['Content-Disposition'] = 'attachment; filename="{}"'.format(doc_file_name(app_label))
+    response['Content-Type'] = 'text/plain'
+    return response
+
+
+@user_passes_test(lambda u: u.is_staff)
+@login_required
+def export(request, app_label):
+
+    model_names_as_fk = {
+        'match': 'Match',
+        'treatment': 'Treatment',
+        'subsession': 'Subsession',
+        'session_participant': 'SessionParticipant',
+        'session': 'Session',
+    }
+
+    app_models = import_module('{}.models'.format(app_label))
+
+    Participant = app_models.Participant
+
+    fk_names = [
+        'match',
+        'treatment',
+        'subsession',
+        'session_participant',
+        'session',
+    ]
+
+    export_data = get_data_export_fields(app_label)
+
+    parent_object_data = {fk_name:{} for fk_name in fk_names}
+
+    column_headers = export_data['Participant']['member_names'][:]
+
+    for fk_name in fk_names:
+        model_name = model_names_as_fk[fk_name]
+        member_names = export_data[model_name]['member_names']
+        callable_flags = export_data[model_name]['callable_flags']
+        column_headers += ['{}.{}'.format(fk_name, member_name) for member_name in member_names]
+
+        # http://stackoverflow.com/questions/2466496/select-distinct-values-from-a-table-field#comment2458913_2468620
+        ids = set(Participant.objects.order_by().values_list(fk_name, flat=True).distinct())
+        if fk_name in {'session', 'session_participant'}:
+            models_module = ptree.sessionlib.models
+        else:
+            models_module = app_models
+        objects = getattr(models_module, model_name).objects.filter(pk__in=ids)
+
+        for object in objects:
+
+            parent_object_data[fk_name][object.id] = get_member_values(object, member_names, callable_flags)
+
+    rows = [column_headers[:]]
+    for participant in Participant.objects.all():
+        member_names = export_data['Participant']['member_names'][:]
+        callable_flags = export_data['Participant']['callable_flags'][:]
+        member_values = get_member_values(participant, member_names, callable_flags)
+        for fk_name in fk_names:
+            parent_object_id = getattr(participant, "%s_id" % fk_name)
+            if parent_object_id is None:
+                model_name = model_names_as_fk[fk_name]
+                member_names = export_data[model_name]['member_names']
+                member_values += [''] * len(member_names)
+            else:
+                member_values += parent_object_data[fk_name][parent_object_id]
+
+        for i in range(len(member_values)):
+            if member_values[i] is None:
+                member_values[i] = ''
+        member_values = [unicode(v).encode('UTF-8') for v in member_values]
+
+        rows.append(member_values)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="{}"'.format(data_file_name(app_label))
+    writer = csv.writer(response)
+
+    writer.writerows(rows)
+
+    return response
