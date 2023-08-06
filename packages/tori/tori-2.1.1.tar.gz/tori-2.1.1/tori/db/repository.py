@@ -1,0 +1,298 @@
+# -*- coding: utf-8 -*-
+"""
+:Author: Juti Noppornpitak <jnopporn@shiroyuki.com>
+:Status: Stable
+"""
+import inspect
+from tori.db.common    import PseudoObjectId, ProxyObject
+from tori.db.entity    import Index
+from tori.db.criteria  import Criteria, Order
+from tori.db.exception import MissingObjectIdException, EntityAlreadyRecognized, EntityNotRecognized
+from tori.db.mapper    import AssociationType, CascadingType
+from tori.db.uow       import Record
+
+class Repository(object):
+    """
+    Repository (Entity AbstractRepository) for Mongo DB
+
+    :param session: the entity manager
+    :type  session: tori.db.session.Session
+    :param representing_class: the representing class
+    :type  representing_class: type
+
+    A repository may automatically attempt to create an index if :meth:`auto_index`
+    define the auto-index flag. Please note that the auto-index feature is only
+    invoked when it tries to use a criteria with sorting or filtering with a
+    certain type of conditions.
+    """
+
+    def __init__(self, session, representing_class):
+        self._class   = representing_class
+        self._session = session
+
+        self._has_cascading = None
+        self._auto_index    = False
+
+        # Retrieve the collection
+        self._api = session.db[representing_class.__collection_name__]
+        self._session.register_class(representing_class)
+
+    @property
+    def api(self):
+        """ Database API
+
+            :rtype: pymongo.collection.Collection
+        """
+        return self._api
+
+    @property
+    def name(self):
+        """ Collection name
+
+            :rtype: str
+        """
+        return self._class.__collection_name__
+
+    def auto_index(self, auto_index):
+        """ Enable the auto-index feature
+
+            :param auto_index: the index flag
+            :type  auto_index: bool
+        """
+        self._auto_index = auto_index
+
+    def new(self, **attributes):
+        """ Create a new document/entity
+
+            :param attributes: attribute map
+            :return: object
+
+            .. note::
+
+                This method deal with data mapping.
+
+        """
+        spec = inspect.getargspec(self._class.__init__) # constructor contract
+        rmap = self._class.__relational_map__ # relational map
+
+        # Default missing argument to NULL or LIST
+        # todo: respect the default value of the argument
+        for argument_name in spec.args:
+            if argument_name == 'self' or argument_name in attributes:
+                continue
+
+            default_to_list = argument_name in rmap\
+                and rmap[argument_name].association in [
+                    AssociationType.ONE_TO_MANY,
+                    AssociationType.MANY_TO_MANY
+                ]
+
+            attributes[argument_name] = [] if default_to_list else None
+
+        attribute_name_list = list(attributes.keys())
+
+        # Remove unwanted arguments/attributes/properties
+        for attribute_name in attribute_name_list:
+            if argument_name == 'self' or attribute_name in spec.args:
+                continue
+
+            del attributes[attribute_name]
+
+        return self._class(**attributes)
+
+    def get(self, id):
+        data = self._api.find_one({'_id': id})
+
+        if not data:
+            return None
+
+        return self._dehydrate_object(data)
+
+    def find(self, criteria, force_loading=False):
+        """ Find entity with criteria
+
+            :param criteria: the search criteria
+            :type  criteria: tori.db.criteria.Criteria
+            :param force_loading: the flag to force loading all references behind the proxy
+            :type  force_loading: bool
+
+            :returns: the result based on the given criteria
+            :rtype: object or list of objects
+        """
+        cursor = criteria.build_cursor(
+            self,
+            force_loading=force_loading,
+            auto_index=self._auto_index
+        )
+
+        entity_list = []
+
+        for data in cursor:
+            entity = self._dehydrate_object(data) \
+                if len(data.keys()) > 1 \
+                else ProxyObject(
+                    self._session,
+                    self._class,
+                    data['_id'],
+                    False,
+                    None,
+                    False
+                )
+            record = self._session.find_record(id, self._class)
+
+            if record and record.status in [Record.STATUS_DELETED, Record.STATUS_IGNORED]:
+                continue
+
+            entity_list.append(entity)
+
+        if criteria._limit == 1 and entity_list:
+            return entity_list[0]
+
+        return entity_list
+
+    def count(self, criteria):
+        """ Count the number of entities satisfied the given criteria
+
+            :param criteria: the search criteria
+            :type  criteria: tori.db.criteria.Criteria
+
+            :rtype: int
+        """
+        return criteria.build_cursor(self).count()
+
+    def filter(self, condition={}, force_loading=False):
+        criteria = Criteria()
+
+        criteria.where(condition)
+
+        return self.find(criteria, force_loading)
+
+    def filter_one(self, condition={}, force_loading=False):
+        criteria = Criteria()
+
+        criteria.where(condition)
+        criteria.limit(1)
+
+        return self.find(criteria, force_loading)
+
+    def post(self, entity):
+        if entity.__session__:
+            raise EntityAlreadyRecognized('The entity has already been recognized by this session.')
+
+        self._session.persist(entity)
+
+        entity.__session__ = self._session
+
+        self.commit()
+
+        return entity.id
+
+    def put(self, entity):
+        self._recognize_entity(entity)
+        self._session.persist(entity)
+        self.commit()
+
+    def delete(self, entity):
+        self._recognize_entity(entity)
+        self._session.delete(entity)
+        self.commit()
+
+    def persist(self, entity):
+        self._session.persist(entity)
+
+    def commit(self):
+        self._session.flush()
+
+    def _recognize_entity(self, entity):
+        if not entity.id or not entity.__session__ or isinstance(entity.id, PseudoObjectId):
+            raise EntityNotRecognized('The entity is not recognized by this session.')
+
+    def _dehydrate_object(self, raw_data):
+        if '_id' not in raw_data:
+            raise MissingObjectIdException('The key _id in the raw data is not found.')
+
+        id     = raw_data['_id']
+        record = self._session.find_record(id, self._class)
+
+        # Returned the known document from the record.
+        if record:
+            return record.entity
+
+        data = dict(raw_data)
+
+        del data['_id']
+
+        document    = self.new(**data)
+        document.id = id
+        document.__session__ = self._session
+
+        self._session.apply_relational_map(document)
+        self._session.recognize(document)
+
+        return document
+
+    def has_cascading(self):
+        if self._has_cascading is not None:
+            return self._has_cascading
+
+        self._has_cascading = False
+
+        for property_name in self._class.__relational_map__:
+            cascading_options = self._class.__relational_map__[property_name].cascading_options
+
+            if cascading_options \
+              and (
+                  CascadingType.DELETE in cascading_options \
+                  or CascadingType.PERSIST in cascading_options
+              ):
+                self._has_cascading = True
+
+                break
+
+        return self._has_cascading
+
+    def new_criteria(self):
+        """ Create a criteria
+
+            :rtype: :class:`tori.db.criteria.Criteria`
+        """
+        return Criteria()
+
+    def index(self, index, force_index=False):
+        """ Index data
+
+            :param index: the index
+            :type  index: list, tori.db.entity.Index or str
+            :param force_index: force indexing if necessary
+            :type  force_index: bool
+        """
+        options = {
+            'background': (not force_index)
+        }
+        order_list = index.to_list() if isinstance(index, Index) else index
+        
+        if isinstance(order_list, list):
+            indexed_field_list = ['{}_{}'.format(field, order) for field, order in order_list]
+            indexed_field_list.sort()
+            options['index_identifier'] = '-'.join(indexed_field_list)
+
+        self.api.ensure_index(order_list, **options)
+
+    def setup_index(self):
+        """ Set up index for the entity based on the ``entity`` and ``link`` decorators
+        """
+        # Apply the relational indexes.
+        for field in self._class.__relational_map__:
+            guide = self._class.__relational_map__[field]
+            
+            if guide.inverted_by or guide.association != AssociationType.ONE_TO_ONE:
+                continue
+            
+            self.index(field)
+        
+        # Apply the manual indexes.
+        for index in self._class.__indexes__:
+            self.index(index)
+
+    def __len__(self):
+        return self._api.count()
