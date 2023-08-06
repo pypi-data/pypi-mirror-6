@@ -1,0 +1,74 @@
+_okconfig() 
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    case "${COMP_WORDS[0]}" in
+	okconfig)
+		opts="--help addhost addgroup addtemplate addcontact addservice upgrade verify install init"
+		;;
+	findhost)
+		opts=$(grep host_name /var/log/nagios/objects.cache | awk '{ print $2 }' | sort | uniq)
+		;;
+	vimcfg)
+		cfgfiles=$(find -L /etc/nagios -iname \*cfg -exec basename {} \; | sort | uniq)
+		okconfig=$(cd /etc/nagios/okconfig/templates ; find * -iname \*cfg )
+		opts="$cfgfiles $okconfig"
+		;;
+	*)
+		opts="${COMP_WORDS[0]}"
+		;;
+    esac
+
+    case "${prev}" in
+	--template)
+		local templates=$(cd /usr/share/okconfig/examples; /bin/ls *.cfg-example|sed 's/.cfg-example//')
+		completion=$templates
+   	;;
+	--template)
+		local templates=$(cd /usr/share/okconfig/examples; /bin/ls *.cfg-example|sed 's/.cfg-example//')
+		completion=$templates
+   	;;
+	addtemplate)
+                local hosts=$(grep host_name /var/log/nagios/objects.cache | awk '{ print $2 }' | sort | uniq)
+    		opts="--host --help --template --force $hosts"
+		;;
+	--group)
+                local groups=$(grep hostgroup_name /var/log/nagios/objects.cache | awk '{ print $2 }' | sort | uniq)
+		completion=$groups
+   	;;
+        --host)
+                local hosts=$(grep host_name /var/log/nagios/objects.cache | awk '{ print $2 }' | sort | uniq)
+		completion=$hosts
+        ;;
+	addhost)
+                local hosts=$(grep host_name /var/log/nagios/objects.cache | awk '{ print $2 }' | sort | uniq)
+    		completion="--alias --host  --host_template --help --group --template --address --use --force $hosts"
+		;;
+	addgroup)
+		completion="--group --help --alias --force"
+		;;
+	addservice)
+		completion="--help"
+		;;
+	upgrade)
+		completion="--help"
+		;;
+	verify)
+		completion="--help"
+		;;
+   	*)
+	completion=$opts
+   	;;
+   esac
+   
+   COMPREPLY=($(compgen -W "${completion}" -- ${cur}))  
+   return 0
+}
+
+
+
+complete -F _addhost findhost
+complete -F _addhost vimcfg
+complete -F _okconfig okconfig
