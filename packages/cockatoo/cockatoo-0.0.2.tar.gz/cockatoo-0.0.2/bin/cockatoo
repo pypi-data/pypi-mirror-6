@@ -1,0 +1,70 @@
+#!/usr/bin/env python 
+
+"""
+cockatoo
+"""
+import sys,logging
+import cockatoo.cli as cli
+
+logging.basicConfig(
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    level=logging.CRITICAL
+)
+
+def main():
+    if len(sys.argv) <= 1:
+        return die()
+
+    cmd = sys.argv[1]
+    if cmd == 'help':
+        return help(sys.argv[1:])
+    elif cmd not in cli.commands:
+        return die('No such command: %s' % cmd)
+
+    try:
+        return cli.commands[cmd].run(sys.argv[1:])
+    except cli.exceptions.Usage, err:
+        print >>sys.stderr, "Error: %s" % err.msg
+        print >>sys.stderr, ""
+        print >>sys.stderr, "Usage: cockatoo %s [OPTIONS]" % cmd,
+        print >>sys.stderr, cli.commands[cmd].options()
+    except Exception, ex:
+        print >>sys.stderr, "Fatal error running command %s" % cmd
+        print >>sys.stderr, ex
+
+    return 2
+
+def help(argv):
+    if len(argv) <= 1:
+        print "help\t- display usage information for command"
+        for name,command in cli.commands.iteritems():
+            print "%s\t- %s" % (name, command.synopsis())
+
+        return 0
+            
+    cmd = argv[1]
+    if cmd == 'help':
+        print 'Usage cockatoo help [COMMAND]'
+        return 0
+    elif cmd not in cli.commands:
+        print 'No such command: %s' % cmd
+        return 1
+
+    print cli.commands[cmd].synopsis()
+    print "Usage: cockatoo %s [OPTIONS]" % cmd,
+    print cli.commands[cmd].options()
+        
+    return 0
+
+def die(msg=None):
+    if msg:
+        print >>sys.stderr, msg
+        print >>sys.stderr, ""
+    print >>sys.stderr, "Usage: cockatoo [command] [options]"
+    print >>sys.stderr, "Try 'cockatoo help' for a list of commands"
+        
+    return 1
+
+if __name__ == "__main__":
+    sys.exit(main())
