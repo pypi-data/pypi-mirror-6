@@ -1,0 +1,99 @@
+#!/usr/bin/env python
+# Internet-In-A-Box by Braddock Gaskill, Feb 2013
+
+import sys
+import os
+from optparse import OptionParser
+import logging
+
+# We look first to the iiab module in our own directory
+package_dir = os.path.dirname(__file__)
+sys.path.insert(1, package_dir)
+
+from iiab.webapp import create_app
+from iiab.config import load_config, config
+import iiab.video_views
+import iiab.timepro as timepro
+
+
+def main(argv):
+    parser = OptionParser()
+    parser.add_option("--nodebug", dest="debug",
+                      action="store_false", default=True,
+                      help="Use to configure the app to not run in debug mode")
+    parser.add_option("--port", dest="port", action="store", type="int",
+                      default=None, help="The network port the app will use")
+    parser.add_option("--interface", dest="interface", action="store", type="str",
+                      default=None, help="The network interface the app will use (defaults to all interfaces with 0.0.0.0)")
+    parser.add_option("--config", dest="config", default=None,
+                      help="Optional additional config file to read")
+    parser.add_option("--knowledge", dest="knowledge", default=None,
+                      help="Path to knowledge directory")
+    parser.add_option("--profile", action="store_true", default=False,
+                      help="Enable profiler")
+    parser.add_option("--version", action="store_true", default=False,
+                      help="Print version and quit")
+    parser.add_option("--profiler_quiet", action="store_true", default=False,
+                      help="Disable profiler echo to stdout")
+    parser.add_option("--timepro", action="store_true", default=False,
+                      help="Enable timepro performance profiler")
+    (options, args) = parser.parse_args()
+
+    if options.version:
+        print "Internet-in-a-Box Version " + iiab.__version__
+        return 0
+    # Set up logging
+    FORMAT = "%(name)s -- %(message)s"
+    logging.basicConfig(format=FORMAT, level=logging.DEBUG, stream=sys.stdout)
+
+    if options.timepro:
+        timepro.global_active = True
+
+    config_files = ['/etc/iiab.conf',
+                    os.path.join(os.path.expanduser('~'), '.iiab.conf')]
+    if options.config is not None:
+        config_files.append(options.config)
+    load_config(config_files)
+
+    # Set command line parameters in our config global
+    if options.knowledge is not None:
+        config().set('DEFAULT', 'knowledge_dir', options.knowledge)
+    if options.port is not None:
+        config().set('WEBAPP', 'port', str(options.port))
+    if options.interface is not None:
+        config().set('WEBAPP', 'interface', str(options.interface))
+    config().set('DEFAULT', 'debug', str(options.debug))
+
+    #print "CONFIGURATION"
+    #print config().all_items_to_str()
+
+    debug = config().getboolean('DEFAULT', 'debug')
+    webapp = create_app(debug, enable_timepro=options.timepro, enable_profiler=options.profile, profiler_quiet=options.profiler_quiet)
+
+    # Warm up the Khan Video cache
+    try:
+        iiab.video_views.get_tree()
+    except:
+        print "ERROR loading Khan Videos: " + str(sys.exc_info())
+
+    host = config().get('WEBAPP', 'interface')
+    port = config().getint('WEBAPP', 'port')
+    if not options.profile and not options.timepro:
+        webapp.run(debug=debug, port=port, host=host, processes=6)
+    else:
+        # adapted from flask.Flask.run for use with middleware
+        from werkzeug.serving import run_simple
+        options = {}
+        options.setdefault('use_reloader', debug)
+        options.setdefault('use_debugger', debug)
+        try:
+            run_simple(host, port, webapp, **options)
+        finally:
+            # reset the first request information if the development server
+            # resetted normally.  This makes it possible to restart the server
+            # without reloader and that stuff from an interactive shell.
+            webapp._app._got_first_request = False
+
+
+if __name__ == "__main__":
+    main(sys.argv)
