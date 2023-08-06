@@ -1,0 +1,204 @@
+Metadata-Version: 2.0
+Name: service-identity
+Version: 0.2
+Summary: Service identity verification for pyOpenSSL.
+Home-page: https://github.com/hynek/service_identity
+Author: Hynek Schlawack
+Author-email: hs@ox.cx
+License: MIT
+Keywords: cryptography openssl pyopenssl
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Natural Language :: English
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: POSIX
+Classifier: Operating System :: POSIX :: BSD
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.2
+Classifier: Programming Language :: Python :: 3.3
+Classifier: Programming Language :: Python :: 3.4
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Classifier: Topic :: Security :: Cryptography
+Requires-Dist: pyasn1
+Requires-Dist: pyasn1-modules
+Requires-Dist: pyopenssl (>=0.12)
+
+===========================================
+Service Identity Verification for pyOpenSSL
+===========================================
+
+.. image:: https://travis-ci.org/hynek/service_identity.png?branch=master
+  :target: https://travis-ci.org/hynek/service_identity
+
+.. image:: https://coveralls.io/repos/hynek/service_identity/badge.png
+  :target: https://coveralls.io/r/hynek/service_identity
+
+
+WARNING
+=======
+
+**This software is currently alpha and under review.
+Use it at your own peril.**
+
+Any part is subject to change, but feedback is very welcome!
+
+
+Pitch
+=====
+
+service_identity aspires to give you all the tools you need for verifying whether a certificate is valid for the intended purposes.
+
+In the simplest case, this means *host name verification*.
+However, service_identity implements `RFC 6125`_ fully and plans to add other relevant RFCs too.
+
+
+Features
+========
+
+
+Present
+-------
+
+- ``dNSName`` with fallback to ``CN`` (DNS-ID, aka host names, `RFC 6125`_).
+- ``uniformResourceIdentifier`` (URI-ID, `RFC 6125`_).
+- SRV-ID (`RFC 6125`_)
+
+
+Future
+------
+
+- ``xmppAddr`` (`RFC 3920`_).
+- ``iPAddress`` (`RFC 2818`_).
+- ``nameConstraints`` extensions (`RFC 3280`_).
+
+
+Usage
+=====
+
+
+Verify a Hostname
+-----------------
+
+The simplest, most common, and most important usage:
+
+.. code-block:: python
+
+   from __future__ import absolute_import, division, print_function
+
+   import socket
+
+   from OpenSSL import SSL
+   from service_identity import VerificationError
+   from service_identity.pyopenssl import verify_hostname
+
+
+   ctx = SSL.Context(SSL.SSLv23_METHOD)
+   ctx.set_verify(SSL.VERIFY_PEER, lambda conn, cert, errno, depth, ok: ok)
+   ctx.set_default_verify_paths()
+
+   hostname = u"twistedmatrix.com"
+   conn = SSL.Connection(ctx, socket.socket(socket.AF_INET, socket.SOCK_STREAM))
+   conn.connect((hostname, 443))
+
+   try:
+       conn.do_handshake()
+       verify_hostname(conn, hostname)
+       # Do your super-secure stuff here.
+   except SSL.Error as e:
+       print("TLS Handshake failed: {0!r}.".format(e.args[0]))
+   except VerificationError:
+       print("Presented certificate is not valid for {0}.".format(hostname))
+   finally:
+       conn.shutdown()
+       conn.close()
+
+
+Requirements
+============
+
+Python 2.6, 2.7, 3.2, 3.3, and 3.4 as well as PyPy are supported.
+
+Additionally, the following PyPI modules are required:
+
+- pyOpenSSL_ ``>= 0.12`` (``0.14`` strongly suggested)
+- pyasn1_
+- pyasn1-modules_
+
+Optionally, idna_ can be used for `internationalized domain names`_ (IDN), aka non-ASCII domains.
+Please note, that idna is not available for Python 3.2 and is required because Python's stdlib support is outdated_.
+
+
+.. _Twisted: https://twistedmatrix.com/
+.. _`RFC 2818`: http://www.rfc-editor.org/rfc/rfc2818.txt
+.. _`RFC 3280`: http://tools.ietf.org/search/rfc3280#section-4.2.1.11
+.. _`RFC 3920`: http://www.rfc-editor.org/rfc/rfc3920.txt
+.. _`RFC 6125`: http://www.rfc-editor.org/info/rfc6125
+.. _`internationalized domain names`: http://en.wikipedia.org/wiki/Internationalized_domain_name
+.. _idna: https://pypi.python.org/pypi/idna/
+.. _outdated: http://bugs.python.org/issue17305
+.. _pyOpenSSL: https://pypi.python.org/pypi/pyOpenSSL/
+.. _pyasn1-modules: https://pypi.python.org/pypi/pyasn1-modules/
+.. _pyasn1: https://pypi.python.org/pypi/pyasn1/
+.. _pydoctor: https://pypi.python.org/pypi/pydoctor/
+.. _trial: http://twistedmatrix.com/documents/current/core/howto/testing.html
+
+
+.. :changelog:
+
+History
+=======
+
+
+0.2.0 (2014-04-06)
+------------------
+
+This release contains multiple backward-incompatible changes.
+
+- Refactor into a multi-module package.
+  Most notably, ``verify_hostname`` and ``extract_ids`` live in the ``service_identity.pyopenssl`` module now.
+- ``verify_hostname`` now takes an ``OpenSSL.SSL.Connection`` for the first argument.
+- Less false positives in IP address detection.
+- Officially support Python 3.4 too.
+- More strict checks for URI_IDs.
+
+
+0.1.0 (2014-03-03)
+------------------
+
+- Initial release.
+
+
+Authors
+=======
+
+service_identity is currently maintained by Hynek Schlawack.
+
+If you think you've found a security-relevant bug, please contact me privately and ideally encrypt your message using PGP_.
+I will then work with you on a responsible resolution.
+You can find my contact information and PGP data on my homepage_.
+
+Contributors
+------------
+
+The following wonderful people contributed directly or indirectly to this project:
+
+- `Alex Stapleton <https://github.com/public>`_
+- `Glyph <https://twitter.com/glyph>`_
+- `Paul Kehrer <https://github.com/reaperhulk>`_
+
+Please add yourself here alphabetically when you submit your first pull request.
+
+
+.. _PGP: http://www.gnupg.org/
+.. _homepage: https://hynek.me/about/
+
+
