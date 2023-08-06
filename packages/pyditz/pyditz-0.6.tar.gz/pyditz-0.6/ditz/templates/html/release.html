@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ project.name }} release {{ release.name }}
+{% endblock %}
+
+{% block head %}
+{{ super() }}
+{% endblock %}
+
+{% block content %}
+<div class="main">
+
+<h1>{{ self.title() }}</h1>
+
+{% from 'macros.html' import linkindex %}
+{{ linkindex(project) }}
+
+{% set total = issues|count %}
+{% set done = issues|selectattr("closed")|list|count %}
+{% set open = total - done %}
+{% set frac = (total - open) / total|float if total > 0 else 1 %}
+{% set percent = frac * 100.0 %}
+
+<table>
+  <tbody>
+    <tr>
+      <td class="attrname">Status:</td>
+      <td class="attrval">{{ release.status|replace(":", "") }}</td>
+    </tr>
+    {% if release.released %}
+      <tr>
+        <td class="attrname">Release time:</td>
+        <td class="attrval">{{ release.release_time|timeformat }}</td>
+      </tr>
+    {% endif %}
+    <tr>
+      <td class="attrname">Completion:</td>
+      <td>
+	{{ frac|progressmeter }}
+	{{ "%.0f%%"|format(percent) }} complete
+      </td>
+    </tr>
+    <tr>
+      <td></td>
+      <td class="attrval">
+	{{ done }} / {{ total }} issues
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Issues</h2>
+{% from 'macros.html' import issue_table %}
+
+{% if issues %}
+{{ issue_table(issues, show_component=show_components) }}
+{% else %}
+<p>No issues assigned to this release.</p>
+{% endif %}
+
+<h2>Recent activity for this release</h2>
+
+{% from 'macros.html' import recent_activity %}
+{{ recent_activity(activity) }}
+
+<h2>Release log</h2>
+
+{% from 'macros.html' import event_log %}
+{{ event_log(release.log_events) }}
+
+</div>
+{% endblock %}
