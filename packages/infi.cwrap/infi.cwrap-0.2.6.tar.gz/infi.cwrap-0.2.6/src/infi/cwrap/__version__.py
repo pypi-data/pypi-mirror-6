@@ -1,0 +1,10 @@
+__version__ = "0.2.6"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.2.6)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '68146bd0d9dac569134bf18e4fe6e0e29f276afe'
+__git_head_subject__ = 'buildout.cfg: remove bunch from requirements'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
