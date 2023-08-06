@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+
+import argparse, pdb, simpledaemon, time, logging
+import pscripts.external_ip_address as eia
+
+eia.yaml_file='/etc/external_ip_updater/urls.yaml'
+eia.ip_cache_file=eia.get_yaml_setting("ip_cache_file")
+logfile = eia.get_yaml_setting("logfile")
+root_logger = logging.getLogger()
+annoying_info_logging_handler = logging.getLogger("requests.packages.urllib3.connectionpool")
+# logging.info(str(root_logger.handlers))
+# process_attach.listen()
+root_logger.handlers = []
+# Add the log message handler to the logger
+handler = logging.FileHandler('external_ip.logger')
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(message)s')
+handler.setFormatter(formatter)
+root_logger.addHandler(handler)
+
+class ExtIpUpdaterDaemon(simpledaemon.Daemon):
+    default_conf = '/etc/external_ip_updater/config.conf'
+    section = 'external_ip_updater'
+
+    def run(self):
+        annoying_info_logging_handler.setLevel(logging.WARN)
+        refresh_period_seconds = int(eia.get_yaml_setting("refresh_period_seconds"))
+        eia.flush_ip_cache_file()
+        while True:
+            eia.update_ddns_server()
+            logging.debug("Sleeping for {} seconds".format(refresh_period_seconds))
+            time.sleep(refresh_period_seconds)
+
+if __name__ == '__main__':
+    ExtIpUpdaterDaemon().main()
