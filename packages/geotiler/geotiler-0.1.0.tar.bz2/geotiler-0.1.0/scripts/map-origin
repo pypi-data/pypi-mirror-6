@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+#
+# GeoTiler - library to create maps using tiles from a map provider
+#
+# Copyright (C) 2014 by Artur Wroblewski <wrobell@pld-linux.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+# This file incorporates work covered by the following copyright and
+# permission notice (restored, based on setup.py file from
+# https://github.com/stamen/modestmaps-py):
+#
+#   Copyright (C) 2007-2013 by Michal Migurski and other contributors
+#   License: BSD
+#
+
+import matplotlib.pyplot as plt
+import redis
+
+import geotiler
+from geotiler.map import _find_tiles, _find_top_left_tile
+from geotiler.cache.redis import RedisCache
+from geotiler.tilenet import DEFAULT_TILE_DOWNLOADER
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+downloader = DEFAULT_TILE_DOWNLOADER
+client = redis.Redis('localhost')
+cache = RedisCache(client, downloader)
+downloader.set_cache(cache)
+
+howth = -6.066, 53.386
+map = geotiler.Map(center=howth, zoom=15, size=(1000, 1000))
+bbox = map.extent
+img = geotiler.render_map(map)
+
+fig = plt.figure(figsize=(16, 16), dpi=100)
+ax = plt.subplot(111)
+ax.set_xlim((-300, 1300))
+ax.set_ylim((1300, -300))
+ax.set_clip_on(False)
+ax.imshow(img)
+
+# show map center
+x, y = map.rev_geocode(howth)
+ax.scatter(x, y, c='blue', edgecolor='none', s=20, alpha=0.9)
+ax.text(
+    x, y, 'map center ({:.1f}, {:.1f})'.format(x, y),
+    fontsize='16', color='blue',
+    horizontalalignment='center', verticalalignment='bottom'
+)
+
+# draw tiles and show their offset
+coord, corner = _find_top_left_tile(map)
+tiles = _find_tiles(map, coord, corner)
+for (tile_coord, offset) in tiles:
+    p = map.provider.projection.geocode(tile_coord, map.zoom)
+    x, y = map.rev_geocode(p)
+    ax.axhline(y=y, xmin=x, xmax=x + 256, c='red')
+    ax.axvline(x=x, ymin=y, ymax=y + 256, c='red')
+    ax.scatter(x, y, c='red', edgecolor='none', s=10)
+    ax.text(
+        x, y, str(offset), horizontalalignment='center',
+        verticalalignment='bottom'
+    )
+
+
+# draw base tile coordinate and its offset
+p = map.provider.projection.geocode(map.origin, map.zoom)
+x, y = map.rev_geocode(p)
+ax.scatter(x, y, c='blue', edgecolor='none', s=20)
+ax.text(
+    x, y, 'origin\noffset={}'.format(map.offset),
+    horizontalalignment='center', verticalalignment='top'
+)
+
+plt.savefig('map-origin.png')
+plt.close()
+
+# vim:et sts=4 sw=4:

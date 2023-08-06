@@ -1,0 +1,136 @@
+#!/usr/bin/env python
+#
+# GeoTiler - library to create maps using tiles from a map provider
+#
+# Copyright (C) 2014 by Artur Wroblewski <wrobell@pld-linux.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+#
+# This file incorporates work covered by the following copyright and
+# permission notice (restored, based on setup.py file from
+# https://github.com/stamen/modestmaps-py):
+#
+#   Copyright (C) 2007-2013 by Michal Migurski and other contributors
+#   License: BSD
+#
+
+import sys
+import argparse
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+
+import geotiler
+
+desc = """
+Request map of specified coverage and save it as an image.
+
+There are three ways to set a map coverage area
+
+1) Center, zoom, and size: create a map of the specified size,
+   centered on a given geographical point at a given zoom level.
+
+2) Extent and size: create a map of the specified size that
+   adequately covers the given geographical extent.
+
+3) Extent and zoom: create a map at the given zoom level that covers
+   the precise geographical extent, at whatever pixel size is necessary.
+"""
+
+parser = argparse.ArgumentParser(description=desc)
+
+parser.add_argument(
+    '-v', '--verbose', dest='verbose', help='Make a bunch of noise',
+    action='store_true'
+)
+
+parser.add_argument(
+    '-c', '--center', dest='center', nargs=2, type=float,
+    help='Center of the map (lon, lat), e.g.: -122.263 37.804'
+)
+
+parser.add_argument(
+    '-e', '--extent', dest='extent', nargs=4, type=float,
+    help='Geographical map extent. Two lat, lon pairs'
+)
+
+parser.add_argument('-z', '--zoom', dest='zoom', type=int, help='Zoom level')
+
+parser.add_argument(
+    '-s', '--size', dest='size', nargs=2, type=int,
+    help='Size of map image'
+)
+
+providers = list(sorted(geotiler.provider.conf.PROVIDERS.keys()))
+parser.add_argument(
+    'provider', choices=providers,
+    help='Map provider or URL template like "http://example.com/{z}/{x}/{y}.png".'
+)
+
+parser.add_argument('-k', '--apikey', dest='apikey')
+parser.add_argument(
+    '--cache', dest='cache', choices=['lru', 'redis'], default='lru',
+    help='specify caching strategy'
+)
+parser.add_argument('output', help='Output file')
+
+args = parser.parse_args()
+
+if args.verbose:
+    logging.basicConfig(level=logging.DEBUG)
+
+outfile = args.output
+
+if args.provider.startswith('cloudmade-'):
+    if not args.apikey:
+        print(
+            'Cloudmade provider requires an API key. Register at' \
+            ' http://developers.cloudmade.com/',
+            file=sys.stderr
+        )
+        sys.exit(1)
+    provider = ModestMaps.builtinProviders[args.provider](args.apikey)
+elif args.provider.startswith('http://'):
+    provider = ModestMaps.Providers.TemplatedMercatorProvider(args.provider)
+elif args.provider.startswith('https://'):
+    provider = ModestMaps.Providers.TemplatedMercatorProvider(args.provider)
+elif args.provider.startswith('file://'):
+    args = ModestMaps.Providers.TemplatedMercatorProvider(args.provider)
+else:
+    provider = geotiler.find_provider(args.provider)
+
+if args.cache == 'redis':
+    import redis
+    from geotiler.tilenet import DEFAULT_TILE_DOWNLOADER
+    from geotiler.cache.redis import RedisCache
+
+    downloader = DEFAULT_TILE_DOWNLOADER
+
+    client = redis.Redis('localhost')
+    cache = RedisCache(client, downloader)
+    downloader.set_cache(cache)
+
+map = geotiler.Map(
+    extent=args.extent,
+    center=args.center,
+    zoom=args.zoom,
+    size=args.size,
+    provider=provider
+)
+
+img = geotiler.render_map(map)
+img.save(outfile)
+
+# vim:et sts=4 sw=4:
