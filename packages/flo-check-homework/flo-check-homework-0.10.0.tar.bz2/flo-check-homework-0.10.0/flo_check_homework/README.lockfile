@@ -1,0 +1,35 @@
+-*- coding: utf-8; mode: text; fill-column: 65 -*-
+
+Genuine file locking APIs are a real mess:
+  1) The fcntl module isn't available on all platforms, in
+     particular it is not available on Windows.
+  2) fcntl.flock has a number of issues, one of which being that
+     one cannot use it to obtain the PID of the process holding
+     an exclusive lock on the file we are trying to lock (if
+     any).
+  3) fcntl.fcntl could be nice (the C interface is manageable)
+     but the Python interface requires one to pass a byte string
+     that is a valid struct flock, and this seems to be
+     impossible to do in any portable way, even with Ctypes (I
+     think), since for instance the type of some fields (e.g.,
+     off_t vs. off64_t) is determined at compile time at least on
+     Linux, via a #ifdef test. Moreover, the order of the fields
+     is unspecified and only known to the C compiler (and there
+     may be holes, etc.).
+  4) fcntl.lockf, in spite of its silly name (since its interface
+     uses the constants of flock and not of the POSIX lockf
+     function and it actually is nothing else than an interface
+     to fcntl(2) locking), could be useful but it doesn't allow
+     access to the PID of the locking process in case one can't
+     set a lock on a portion of a file, although the underlying
+     fcntl(2) system call does provide this information. What a
+     pity...
+  5) The lockfile.py module by Skip Montanaro could be
+     interesting but isn't part of the Python standard library
+     and seems to have outstanding issues for quite some time
+     already (as of Dec 2012).
+
+For all these reasons, we'll use a simple lock file and write the
+PID to this lock file, followed by \n to let readers know when
+they have read the whole PID and not only part of its decimal
+representation.

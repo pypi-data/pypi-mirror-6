@@ -1,0 +1,73 @@
+-*- coding: utf-8 -*-
+
+Briefly, here is the workflow for translating flo-check-homework into various
+languages:
+
+                    pylupdate4           lrelease-qt4
+Python source files ---------> .ts files -----------> .qm files
+                                   ^
+                                   |
+                                   v
+                       Qt Linguist (linguist-qt4)
+
+
+1. Translatable strings are extracted by pylupdate4 from the Python source
+   files (pylupdate4 can read flo-check-homework.pro in order to know the list
+   of Python source files to parse and the names of the .ts files to create or
+   update). 'make refreshts' and 'make refreshts_noobs' may be used to save
+   some typing in this task.
+
+   Particular care is required in the Python source code concerning the
+   translation contexts, because this area is not very satisfactory in PyQt
+   (cf. its documentation). One has to make sure that the context extracted by
+   pylupdate4 and written to the .ts files is the same (for a given string) as
+   the context determined at runtime, otherwise the string is left
+   untranslated. This works reasonably well with self.tr() in a class
+   definition, but not so well with app.tr() where app is the application
+   instance (tested with PyQt 4.10.3 and Qt 4.8). To avoid this last problem
+   when writing code that is not under a class definition, I use:
+
+     QtCore.QCoreApplication.translate("app", "string to translate")
+
+   as suggested in the PyQt documentation.
+
+   pylupdate4 creates the .ts files when they don't already exist; otherwise,
+   it updates them with the new translatable strings extracted from
+   recently-added code. The -noobsolete option can be used to remove any
+   reference in the .ts files to translatable strings that are not in the code
+   anymore. However, this may delete translations that might be useful to
+   translators in the future if similar strings are (re-)added to the code.
+
+   Note: because of a bug in pylupdate4 as shipped in PyQt 4.10.3, you need
+         either a recent enough PyQt or a patched pylupdate4 in order to
+         generate or update the .ts files for flo-check-homework. See:
+
+           http://www.riverbankcomputing.com/pipermail/pyqt/2013-August/033174.html
+
+         and
+
+           http://www.riverbankcomputing.com/pipermail/pyqt/2013-September/033175.html
+
+         for more information.
+
+2. Translators work on the .ts files with Qt Linguist (the .ts file to work on
+   may be passed to linguist-qt4 on the command line). When they are satisfied
+   with a .ts file, they save it and send it to the release manager.
+
+3. Before making a release, when the .ts files are in a satisfactory state,
+   the release manager converts them into .qm format with lrelease-qt4. This
+   is done by the default Make target in the top-level directory of the
+   flo-check-homework distribution, for .qm files that are older than their
+   corresponding .ts source (or inexistent).
+
+The .qm files are loaded at runtime by flo-check-homework according to the
+locale settings it is run under, and used to provide the translated strings.
+
+For more details about this translation process and the tools, please refer to
+the Qt documentation at <http://qt-project.org/>.
+
+Some parts of flo-check-homework have a strong dependency on a given language
+(for instance because the code depends on the language grammar). These parts
+cannot be translated with the above methods. The only way to provide similar
+features for other languages is to write the corresponding Python code (look
+for "fr_FR" in exercise_generator.py for an example).
