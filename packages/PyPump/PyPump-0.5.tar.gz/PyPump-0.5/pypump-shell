@@ -1,0 +1,307 @@
+#!/usr/bin/env python
+##
+# Copyright (C) 2013 Jessica T. (Tsyesika) <xray7224@googlemail.com>
+#  
+# This program is free software: you can redistribute it and/or modify 
+# it under the terms of the GNU General Public License as published by 
+# the Free Software Foundation, either version 3 of the License, or 
+# (at your option) any later version. 
+# 
+# This program is distributed in the hope that it will be useful, 
+# but WITHOUT ANY WARRANTY; without even the implied warranty of 
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the 
+# GNU General Public License for more details. 
+#
+# You should have received a copy of the GNU General Public License 
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+##
+
+import json
+import sys
+import os
+import logging
+import optparse
+import six
+
+from pypump import PyPump, Client
+
+try:
+    from IPython import embed
+    from IPython.config.loader import Config
+except ImportError:
+    six.print_("You need to have ipython installed to run this")
+    sys.exit(1)
+
+# Get configuration file
+config_home = os.environ.get("XDG_CONFIG_HOME", "~/.config")
+store_path = os.path.join(os.path.expanduser(config_home), "pypump")
+if not os.path.isdir(store_path):
+    os.mkdir(store_path)
+
+store_path = os.path.join(store_path, "shell.json")
+
+welcome_banner = """Welcome to the PyPump Shell,
+We have setup some useful objects for you:
+
+{table}
+
+If you need help please visit our docs:
+https://pypump.readthedocs.org/en/latest
+"""
+
+def ascii_table(headings, data):
+    """ Draws an ascii table """
+    # first we need to work out how long each column should be
+    columns = {}
+    for heading in headings:
+        columns[heading] = len(heading)+1 # plus one for the extra padding
+
+    # data could also overspill
+    for record in data:
+        for heading, d in record.items():
+            dlen = len(d)+1
+            if dlen > columns[heading]:
+                columns[heading] = dlen
+
+
+    table = {}
+    # okay now we need to pad the headers readying for drawing
+    for column, width in columns.items():
+        table[column] = "{name}{padding}".format(
+                name=column, padding=" "*(width-len(column))
+                )
+
+    heading = "| "
+    for column in table.values():
+        heading += column
+        heading += "| "
+
+    # now for the data
+    table = {}
+    for i, record in enumerate(data):
+        table[i] = "| "
+        for column, cdata in record.items():
+            table[i] += "{data}{padding} | ".format(
+                    data=cdata, padding=" "*(columns[column]-len(cdata)-1)
+                    )
+
+    # make the helper function which will draw the seporators
+    def draw_sep(columns):
+        """ Draws +----+--- etc... """
+        sep = "+"
+        for width in columns:
+            sep += "-"*(width+1)
+            sep += "+"
+
+        return sep + "\r\n"
+
+    sepper = lambda :draw_sep(columns.values())
+    stable = sepper()
+    stable += heading + "\r\n"
+    stable += sepper()
+    for value in table.values():
+        stable += value + "\r\n"
+    
+    stable += sepper()
+    return stable # few, glad that's over
+
+def open_database(path):
+    if os.path.exists(path):
+        try:
+            fin = open(path, "r")
+            db = json.loads(fin.read())
+        except IOError:
+            six.print_("Cannot open file {0}".format(path))
+            sys.exit(1)
+        except ValueError:
+            six.print_("Unalbe to parse database {0}".format(path))
+            sys.exit(1)
+
+        return db
+    else:
+        return {}
+
+def save_database(db, path):
+    """ Saves db as JSON to path """
+    tmp_path = "{0}.tmp".format(path)
+
+    if os.path.exists(tmp_path):
+        try:
+            os.remove(tmp_path)
+        except IOerror:
+            pass #whatever
+    try:
+        fout = open(tmp_path, "w")
+        db = json.dumps(db, sort_keys=True, indent=4, separators=(",", ": "))
+        fout.write(db)
+        fout.close()
+    except ValueError:
+        six.print_("Unable to encode data for saving")
+        sys.exit(1)
+    except IOError:
+        six.print_("Cannot save temporary database ".format(tmp_path))
+        sys.exit(1)
+
+    try:
+        os.rename(tmp_path, path)
+    except IOError:
+        six.print_("Cannot save database ".format(tmp_path))
+        sys.exit(1)
+
+def verifier(url):
+    """ Asks for verification code for OAuth OOB """
+    six.print_("Please open and follow the instructions:")
+    six.print_(url)
+    return six.moves.input("Verifier: ").lstrip(" ").rstrip(" ")
+
+if __name__ == "__main__":
+    parser = optparse.OptionParser()
+
+    parser.add_option("-c", "--clean",
+                      dest="clean",
+                      action="store_true",
+                      default=False,
+                      help="Removes all stored OAuth credentials")
+
+    parser.add_option("-l", "--list",
+                      dest="list",
+                      action="store_true",
+                      default=False,
+                      help="Lists all stored OAuth credentials")
+
+    parser.add_option("-r", "--remove",
+                      dest="remove",
+                      help="Remove stored OAuth credentials for selected webfinger")
+    
+    parser.add_option("--log", "--loglevel",
+                      dest="loglevel",
+                      default="warning",
+                      help="Set level of logging")
+
+    parser.add_option("--logfile",
+                      dest="logfile",
+                      action="store_true",
+                      default=False,
+                      help="Write logging to pypump-shell.log")
+
+    parser.add_option("--no-check-certificate",
+                      dest="verify",
+                      help="Accepts invalid SSL certificates")
+
+    (options, args) = parser.parse_args()
+
+    log_level = getattr(logging, options.loglevel.upper(), None)
+    if not isinstance(log_level, int):
+        raise ValueError('Invalid log level: %s' % options.loglevel)
+
+    logfile = "pypump-shell.log" if options.logfile else None
+    logging.basicConfig(level=log_level, filename=logfile)
+
+    if options.clean:
+        if os.path.isfile(store_path):
+            os.remove(store_path)
+            six.print_("Successfully removed all OAuth credentials")
+        else:
+            six.print_("No OAuth crendetials found.")
+            sys.exit(1)
+
+        sys.exit()
+    
+    # go find the client info if it exists
+    db = open_database(store_path)
+
+    if options.list:
+        for finger in db.keys():
+            six.print_(finger)
+
+        sys.exit()
+    elif options.remove:
+        try:
+            del db[options.remove]
+        except KeyError:
+            six.print_("No such webfinger")
+            sys.exit(1)
+
+        save_database(db, store_path)
+        sys.exit()
+
+    webfinger = "" if len(args) <= 0 else args[0]
+
+    for wf in db.keys():
+        if webfinger in wf:
+            webfinger = wf
+
+    if (db == dict() and webfinger == "") or webfinger.find("@") == -1:
+        six.print_("You must specify a webfinger")
+        sys.exit(1)
+
+    client = Client(
+            webfinger=webfinger,
+            name="PyPump Shell",
+            type="native"
+            )
+
+    if webfinger in db:
+        client.key = db[webfinger]["key"]
+        client.secret = db[webfinger]["secret"]
+        client.expirey = db[webfinger]["expirey"]
+    else:
+        db[webfinger] = {}
+    
+    sys.stdout.write("-> Setting up PyPump  ")
+    sys.stdout.flush() # actually get it on the screen - most terms wait for \n
+
+
+    pump = PyPump(
+            client=client,
+            token=db[webfinger].get("token", None),
+            secret=db[webfinger].get("token_secret", None),
+            verifier_callback=verifier
+            )
+    
+
+    client = pump.get_registration()
+    db[webfinger]["key"] = client[0]
+    db[webfinger]["secret"] = client[1]
+    db[webfinger]["expirey"] = client[2]
+
+    tokens = pump.get_token()
+    db[webfinger]["token"] = tokens[0]
+    db[webfinger]["token_secret"] = tokens[1]
+    
+    save_database(db, store_path)
+
+    # setup other variables for user. 
+    me = pump.me
+
+    # bring curser back so banner walks over the setup message
+    sys.stdout.write("\r")
+
+    # drop them into a shell
+    cfg = Config()
+    cfg.InteractiveShell.confirm_exit = False
+    
+    # prep the welcome banner
+    welcome_banner = welcome_banner.format(
+            table=ascii_table(
+                    ["Variable", "Representation", "Type"],
+                    [
+                        {
+                            "Variable": "pump",
+                            "Representation": str(repr(pump)),
+                            "Type": type(pump).__name__,
+                        },
+                        {
+                            "Variable": "me",
+                            "Representation": str(repr(me)),
+                            "Type": type(me).__name__,
+                        }
+                    ]
+            )
+    )
+                    
+
+    embed(
+        config=cfg,
+        banner1=welcome_banner,
+        exit_msg="Remeber! Report any bugs to https://github.com/xray7224/PyPump/issues")
