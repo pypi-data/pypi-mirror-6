@@ -1,0 +1,10 @@
+__version__ = "0.1.3"
+__git_commiter_name__ = "Arnon Yaari"
+__git_commiter_email__ = "arnony@infinidat.com"
+__git_branch__ = '(detached from v0.1.3)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'add2a751f717ead577d9de96b06ad794c381d3d0'
+__git_head_subject__ = 'update dependencies'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
