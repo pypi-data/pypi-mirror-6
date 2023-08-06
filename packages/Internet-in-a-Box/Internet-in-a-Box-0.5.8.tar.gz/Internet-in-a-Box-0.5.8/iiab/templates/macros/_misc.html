@@ -1,0 +1,227 @@
+{% macro list_to_html_multiline(possible_list) %}
+{% autoescape false %}
+  {%- if possible_list is string -%}
+    {{ possible_list }}
+  {%- else -%}
+    {%- for el in possible_list -%}
+    {%- if el is string -%}
+    {{el}}<br/>
+    {% else %}
+    {{el[1]}}<br/>
+    {%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
+{% endautoescape %}
+{% endmacro %}
+
+{#
+    render_book_search_table - Format Gutenberg Book Search results into a table for display
+    results - whoosh search results (format differ from typical sqlite results)
+    offset - the index into the total result sets of the first result on this page.
+    fn_author_to_query - function that accepts an author string an returns a query value that searches for the author
+    class - css class for the table
+#}
+{% macro render_book_search_table(results, offset, fn_author_to_query, class='', files_exist=None) %}
+<table class='{{ class }}'>
+    <thead>
+        <tr>
+            <td>#</td>
+            <td>{% trans %}Title{% endtrans %}</td>
+            <td>{% trans %}Author{% endtrans %}</td>
+            <td>{% trans %}Language{% endtrans %}</td>
+        </tr>
+    </thead>
+    <tbody>
+        {% for result in results %}
+        <tr>
+            <td>{{ loop.index + offset }}</td>
+            <td>
+                <a href="{{ url_for('.text', textId=result['textId']) }}">{{ list_to_html_multiline(result['title']) }}</a>
+                {% if files_exist != None and not files_exist(result['textId']) -%}
+                <em>({% trans %}Not Available{% endtrans %})</em>
+                {% endif -%}
+            </td>
+            <td>
+                {%- for k,v in result['creator'] -%}
+                <a href="{{ url_for('.search', q=fn_author_to_query(v)) }}">{{ v }}</a><br/>
+                {%- endfor -%}
+                {%- for k,v in result['contributor'] -%}
+                <a href="{{ url_for('.search', q=fn_author_to_query(v)) }}">{{ v }}</a><br/>
+                {%- endfor -%}
+            </td>
+            <td>
+                {{ list_to_html_multiline(result['language']) }}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endmacro %}
+
+{% macro render_book_table(books, offset, fn_author_to_query, class='') %}
+<table class='{{ class }}'>
+    <thead>
+        <tr>
+            <td>#</td>
+            <td>{% trans %}Title{% endtrans %}</td>
+            <td>{% trans %}Author{% endtrans %}</td>
+            <td>{% trans %}Language{% endtrans %}</td>
+        </tr>
+    </thead>
+    <tbody>
+        {% for book in books %}
+        <tr>
+            <td>{{ loop.index + offset }}</td>
+            <td><a href="{{ url_for('.text', textId=book.textId) }}">{{ book.title }}</a></td>
+            <td>
+                {% for c in book.gutenberg_creators -%}
+                <a href="{{ url_for('.search', q=fn_author_to_query(c.creator)) }}">{{ c.creator }}</a><br/>
+                {%- endfor %}
+                {% for c in book.gutenberg_contributors -%}
+                <a href="{{ url_for('.search', q=fn_author_to_query(c.contributor)) }}">{{ c.contributor }}</a><br/>
+                {%- endfor %}
+            </td>
+            <td>
+                {% for c in book.gutenberg_languages -%}
+                {{ c.language }}
+                {%- endfor %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endmacro %}
+
+{% macro render_author_table(authors, offset, class='') %}
+<table class='{{ class }}'>
+    <thead>
+        <tr>
+            <td>#</td>
+            <td>{% trans %}Author{% endtrans %}</td>
+        </tr>
+    </thead>
+    <tbody>
+        {% for author in authors -%}
+        <tr>
+            <td>{{ loop.index + offset }}</td>
+            <td><a href="{{ url_for('.author', authorId=author.id) }}">{{ author.creator }}</a></td>
+        </tr>
+        {%- endfor %}
+    </tbody>
+</table>
+{% endmacro %}
+
+{#
+    record - record for book
+    field - list of tuples of (Table Header, record_key, aux_key)
+    class - css class name
+#}
+{% macro render_book_details(record, fields, class='') %}
+<table class='{{ class }}'>
+    {% for label, key, aux_key in fields -%}
+        {% if record[key] is string -%}
+            <tr><th>{{ label }}</th><td>{{ record[key] }}</td></tr>
+        {% else -%}
+            {% for val in record[key] -%}
+            <tr><th>{{ label }}</th> <td>{{ val[aux_key] }}</td></tr>
+            {%- endfor -%}
+        {%- endif -%}
+    {%- endfor %}
+</table>
+{% endmacro %}
+
+{#
+    record - record for book
+    field - list of tuples of (Table Header, record_key, aux_key)
+    class - css class name
+#}
+{% macro render_book_files(record, fields, class='') %}
+<table class='{{ class }}'>
+    <thead>
+        {% if record['gutenberg_files']|length > 0 %}
+        <th>{% trans %}Name{% endtrans %}</th>
+        <th>{% trans %}Format{% endtrans %}</th>
+        {% endif %}
+    </thead>
+    <tbody>
+    {% set index = 0 %}
+    {% for f in record['gutenberg_files'] %}
+    <tr>
+        <td><a href="{{ url_for('.gutenberg_mirror', filename=f.file) }}">{{ f['file'] }}</a></td>
+        <td>{{ f['format'] }}</td>
+    </tr>
+    {% set index = index + 1 %}
+    {%- endfor %}
+    </tbody>
+</table>
+{% endmacro %}
+
+{% macro render_book_htmlz_or_epub(htmlz_url, epub_url) %}
+    {% if htmlz_url != None %}
+    <div>
+        <a href="{{ htmlz_url }}" class="btn btn-primary">{% trans %}Read{% endtrans %}</a>
+    </div>
+    {% endif %}
+    {% if epub_url != None %}
+    <div>
+        <a href="{{ epub_url }}" class="btn btn-primary">{% trans %}Download (EPub){% endtrans %}</a>
+    </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro render_pagination(pagination, endpoint_desc, query='') %}
+    {% if pagination.pages > 1 %}
+        <div class='pagination'>
+            <ul>
+                <li class="prev {% if not pagination.has_prev %}disabled{% endif %}">
+                {%- if query -%}
+                <a href="{{ url_for(endpoint_desc.endpoint, page=pagination.page-1, q=query, **endpoint_desc.values) }}">&larr; {% trans %}Previous{% endtrans %}</a>
+                {%- else -%}
+                <a href="{{ url_for(endpoint_desc.endpoint, page=pagination.page-1, **endpoint_desc.values) }}">&larr; {% trans %}Previous{% endtrans %}</a>
+                {%- endif -%}
+                </li>
+                {% for page in pagination.iter_pages() %}
+                    {% if page %}
+                        <li class='{% if page == pagination.page %}active{% endif %}'>
+                            {%- if query -%}
+                            <a href='{{ url_for(endpoint_desc.endpoint, page=page, q=query, **endpoint_desc.values) }}'>{{ page }}</a>
+                            {%- else -%}
+                            <a href='{{ url_for(endpoint_desc.endpoint, page=page, **endpoint_desc.values) }}'>{{ page }}</a>
+                            {%- endif -%}
+                        </li>
+                    {% else %}
+                        <li>
+                            <a href='#'>...</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+                <li class="next {% if not pagination.has_next %}disabled{% endif %}">
+                {%- if query -%}
+                <a href="{{ url_for(endpoint_desc.endpoint, page=pagination.page+1,q=query, **endpoint_desc.values) }}">{% trans %}Next{% endtrans %} &rarr;</a>
+                {%- else -%}
+                <a href="{{ url_for(endpoint_desc.endpoint, page=pagination.page+1, **endpoint_desc.values) }}">{% trans %}Next{% endtrans %} &rarr;</a>
+                {%- endif -%}
+                </li>
+            </ul>
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro render_flash_message() %}
+    {% block flash_message %}
+        {% with messages = get_flashed_messages(with_categories=True) %}
+            {% if messages %}
+            <div class="container">
+                <div id='flash_message_container'>
+                    {% for category, msg in messages %}
+                        <div class="alert alert-{{ category }}">
+                            <button type="button" class="close" data-dismiss="alert">×</button>
+                            {{ msg }}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        {% endwith %}
+    {% endblock %}
+{% endmacro %}
