@@ -1,0 +1,115 @@
+#!/usr/bin/env python
+#
+# This file is part of the cpthook library.
+#
+# cpthook is free software released under the BSD License.
+# Please see the LICENSE file included in this distribution for
+# terms of use. This LICENSE is also available at
+# https://github.com/aelse/cpthook/blob/master/LICENSE
+
+
+import logging
+import os.path
+import sys
+
+import cpthook
+
+
+def parse_options():
+    import optparse
+    parser = optparse.OptionParser()
+    parser.add_option("-c", "--config", dest="config_file", metavar="FILE",
+                      default="hook.cfg", help="cpthook config file")
+    parser.add_option("-v", "--verbose", dest="verbose", default=False,
+                      action="store_true",
+                      help="log verbose status information")
+    parser.add_option("-d", "--debug", dest="debug", default=False,
+                      action="store_true",
+                      help="log debug information")
+    parser.add_option("--dry-run", dest="dry_run", default=False,
+                      action="store_true",
+                      help="perform a dry run, making no changes")
+    parser.add_option("--validate", dest="validate", default=False,
+                      action="store_true",
+                      help="validate a config file, then exit")
+    parser.add_option("--init", dest="init", default=False,
+                      action="store_true",
+                      help="install configured hooks and repositories")
+    parser.add_option("--hook", dest="hook", default=None,
+                      help="the hook to run against the current repository")
+    options, args = parser.parse_args()
+    return options, args
+
+
+def validate_options(opts):
+    if not os.path.isfile(opts.config_file):
+        print 'No config file "{0}"'.format(opts.config_file)
+        sys.exit(-1)
+
+    if opts.init and opts.hook:
+        print 'Cannot install to repos and be invoked as a hook'
+        sys.exit(-1)
+
+    if opts.hook is not None and opts.hook not in cpthook.supported_hooks:
+        print 'Unsupported hook "{0}"'.format(opts.hook)
+        sys.exit(-1)
+
+
+def handle_options():
+    opts, args = parse_options()
+    validate_options(opts)
+
+    if opts.debug:
+        log_level = logging.DEBUG
+    elif opts.verbose:
+        log_level = logging.INFO
+    else:
+        log_level = logging.WARN
+    logging.getLogger().setLevel(log_level)
+
+    return opts, args
+
+
+if __name__ == '__main__':
+    # Any positional args returned by optparse are intended for
+    # the hook script to be invoked.
+    opts, hook_args = handle_options()
+
+    try:
+        config = cpthook.CptHookConfig(opts.config_file)
+
+        if opts.validate:
+            # Config was valid, exit code 0
+            sys.exit(0)
+    except Exception, e:
+        if opts.validate:
+            # Silently exit with code 1
+            sys.exit(1)
+        print 'Invalid cpthook config file {0}: {1}'.format(
+            opts.config_file, str(e))
+        # Exiting with a non-zero code has the potential to disrupt
+        # legitimate activity to a repository if we are called as
+        # a hook and the configuration file is broken. However, we
+        # may also do damage by not running hook scripts that need
+        # to run for repositories. It is therefore safest to exit
+        # with a non-zero code as while inconvenient this has least
+        # potential for damage.
+        sys.exit(-1)
+
+    cpt = cpthook.CptHook(opts.config_file)
+    if opts.dry_run:
+        cpt.dry_run = True
+
+    if opts.init:
+        # Install cpthook wrapper to configured repositories
+        logging.info('Installing cpthook wrapper to repositories')
+        cpt.install_hooks()
+        cpt.remove_unmanaged_hooks()
+    elif opts.hook:
+        # Run requested hook on repository
+        logging.info('Running {0} hooks'.format(opts.hook))
+        ret = cpt.run_hook(opts.hook, hook_args)
+        sys.exit(ret)
+    else:
+        logging.debug('No command given.')
+        print 'Use --help for assistance'
