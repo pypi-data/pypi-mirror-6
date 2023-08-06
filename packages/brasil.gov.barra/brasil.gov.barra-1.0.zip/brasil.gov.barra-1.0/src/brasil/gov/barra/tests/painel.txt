@@ -1,0 +1,120 @@
+**************************************
+Brasil.gov.br: Barra de Identidade
+**************************************
+
+Teste funcional do painel de controle
+========================================
+
+Configurando o teste
+---------------------
+
+Inicialmente definimos variaveis a serem utilizadas durante todo o teste::
+
+    >>> app = layer['app']
+    >>> portal = layer['portal']
+    >>> request = layer['request']
+
+    >>> from plone.testing.z2 import Browser
+    >>> from plone.app.testing import SITE_OWNER_NAME
+    >>> from plone.app.testing import SITE_OWNER_PASSWORD
+
+    >>> browser = Browser(app)
+    >>> portalURL = portal.absolute_url()
+    >>> painel_url = portalURL + '/@@brasil.gov.barra-config'
+
+Autenticando no site
+---------------------
+
+Faremos o login como administrador do site, para isto devemos preencher o
+formulário *login_form*::
+
+    >>> browser.open(portalURL + '/login_form')
+    >>> browser.getControl(name='__ac_name').value = SITE_OWNER_NAME
+    >>> browser.getControl(name='__ac_password').value = SITE_OWNER_PASSWORD
+    >>> browser.getControl(name='submit').click()
+
+Caso usuario e senha estejam corretos, devemos receber as boas vindas ao site::
+
+    >>> 'You are now logged in' in browser.contents
+    True
+
+Acessando o painel de controle
+-------------------------------
+
+Agora, autenticados como administrador do site, podemos testar o funcionamento
+do painel de controle da barra de identidade.
+
+Para tanto acessaremos diretamente a url de acesso ao painel de controle::
+
+    >>> browser.open(painel_url)
+
+E validaremos que a pagina foi carregada corretamente::
+
+    >>> 'Brasil.gov.br: Barra de identidade' in browser.contents
+    True
+
+Caso cliquemos no botao cancelar, devemos ser redirecionados para a raiz do
+painel de controle do site Plone::
+
+    >>> browser.getControl(name="form.actions.cancel").click()
+    >>> browser.url.endswith('plone_control_panel')
+    True
+
+E seremos informados que nenhuma alteração foi realizada::
+
+    >>> 'Changes canceled.' in browser.contents
+    True
+
+
+Configurando a barra
+-------------------------------
+
+Novamente acessamos a configuração da barra::
+
+    >>> browser.open(painel_url)
+    >>> browser.url.endswith('brasil.gov.barra-config')
+    True
+
+Porém, agora, faremos alterações nas configurações.
+
+Utilizaremos a barra localmente:
+
+    >>> browser.getControl(name='form.local').value = True
+
+Esta alteracao so sera persistida se salvarmos este formulario::
+
+    >>> browser.getControl(name="form.actions.save").click()
+
+Continuamos no mesmo endereco::
+
+    >>> browser.url.endswith('brasil.gov.barra-config')
+    True
+
+E somos informados que as alterações foram salvas::
+
+    >>> 'Changes saved.' in browser.contents
+    True
+
+.. note:: Nao buscamos exatamente pelo nome do css pois o Plone
+          esta configurado para agrupar os arquivos. Com isto, a
+          url final do arquivo de estilos e gerada a cada alteracao.
+
+Até o momento utilizamos apenas a versão local da barra -- ou seja, 
+hospedada em nosso próprio portal. Agora usaremos a versão disponível 
+em http://barra.brasil.gov.br.
+
+    >>> browser.getControl(name='form.local').value
+    True
+
+Ao deselecionar esta opção, a barra servida será a remota:
+
+    >>> browser.getControl(name='form.local').value = False    
+
+Esta alteracao so sera persistida se salvarmos este formulario::
+
+    >>> browser.getControl(name="form.actions.save").click()
+
+E o arquivo css nao deverá mais estar acessível:
+
+    >>> 'resourcebrasil.gov.barrapreto' in browser.contents
+    False
