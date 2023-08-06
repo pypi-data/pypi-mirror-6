@@ -1,0 +1,109 @@
+{% extends 'yplaces/base.html' %}
+
+{% load i18n %}
+
+{% load staticfiles %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block description %}{{ description }}{% endblock %}
+
+{% block head %}
+  <link href="{% static 'yplaces/css/index.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+
+<div class="map-container">
+  <div id="map">
+    <i class="fa fa-map-marker fa-5x"></i>
+    <br>
+    {% trans 'Loading Map' %}
+    <br>
+    <img src="{% static 'yplaces/images/ajax-loader-16x16.gif' %}">
+  </div>
+  <div class="overlay">
+    <div class="background"></div>
+    <div class="content">
+      <h1 style="margin: 0; padding: 0;">{% trans 'Nearby Places' %}</h1>
+      <p style="font-size: 10pt;">{% trans 'Drag the marker to find places near its location!' %}</p>
+      <div class="results">
+        <table class="table table-hover"><tbody></tbody></table>
+      </div>
+      <div class="no-results">
+        {% trans 'No results found near that location' %}
+        <p>:(</p>
+      </div>
+      <div class="loading">
+        <img src="http://brilliancerealtygroup.com/wp-content/themes/BRG/images/common/ajax-loader.gif">
+      </div>
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="stuff round-border-shadow">
+  <div class="top-places">
+    <h1>{% trans 'Top Places' %}</h1>
+    <ol>
+      {% for rating in top_rating %}
+      <li>
+        <a href="{% url 'yplaces:slug' pk=rating.place.pk slug=rating.place.name|slugify %}">{{ rating.place.name }}</a>
+        <div class="star-rating"><div style="width:{{ rating.get_average_percentage|stringformat:'f' }}%"></div></div>
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+  <div class="recent-activity">
+    <h2>{% trans 'Latest Reviews' %}</h2>
+    <ul>
+      {% for review in reviews %}
+      <li>
+        <div class="avatar">
+          <img src="{{ review.user.get_photo_url }}" class="img-rounded">
+        </div>
+        <div class="comment">
+          <div class="star-rating-sm"><div style="width:{{ review.get_rating_percentage|stringformat:'f' }}%"></div></div>
+          <a href="{% url 'yplaces:slug' pk=review.place.pk slug=review.place.name|slugify %}">{{ review.place.name }}</a>
+          <div class="message" style="margin-top: 10px;">
+            {{ review.comment }}
+            <br>
+            <span>{{ review.user.name }} // {{ review.date }}</span>
+          </div>
+        </div>
+        <div class="clear"></div>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block javascript %}
+  <script src="http://maps.google.com/maps/api/js?libraries=geometry&sensor=false"></script>
+  <script src="{% static 'yplaces/js/index.js' %}"></script>
+  <script>
+      /*
+       * Assorted variables.
+       */
+      var map;
+      var marker;
+      var places = [];
+      var infowindow;
+      var places_api_url = '{{ places_api_url }}';
+      var static_url = '{{ STATIC_URL }}';
+      var place_href = "{% url 'yplaces:slug' pk=1 slug="place-slug" %}";
+
+      /*
+       * What to do after page finishes loading.
+       */
+      $(document).ready(function() {
+
+  	      // Fetch user's location based on the IP address and initialize map.
+  	      $.getJSON('http://www.openlinkmap.org/api/ippos.php?format=json&callback=?', function(data, status, xhr) {
+              initializeMap(data.lat, data.lon, true);
+          });
+      });
+  </script>
+{% endblock %}
