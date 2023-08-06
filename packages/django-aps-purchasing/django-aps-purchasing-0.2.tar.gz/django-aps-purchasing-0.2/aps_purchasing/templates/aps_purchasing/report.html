@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block headline %}
+    <h1>Report</h1>
+{% endblock %}
+{% block main %}
+    <h2>BOMs</h2>
+    {% for bom in boms %}
+        {% cycle "col1" "col2" "col3" "col4" as col silent %}
+        {% if col == "col1" %}
+            <div class="row">
+        {% endif %}
+        <div class="col-md-3">
+            <a href="{% url "aps_purchasing_report" pk=bom.pk%}">{{ bom }}</a>
+        </div>
+        {% if col == "col4" or forloop.last %}
+            </div>
+        {% endif %}
+    {% endfor %}
+    {% if object %}
+        <h2>Detailed report of {{ object }}</h2>
+        <table id="bomtable">
+            <thead>
+                <tr>
+                    <th>{% trans "IPNs" %}</th>
+                    <th>{% trans "MPN" %}</th>
+                    <th>{% trans "Manufacturer" %}</th>
+                    <th>{% trans "Distributor" %}</th>
+                    <th>{% trans "Ref number" %}</th>
+                    <th>{% trans "Issuance date" %}</th>
+                    <th>{% trans "Expiry date" %}</th>
+                    <th>{% trans "Min lead time" %}</th>
+                    <th>{% trans "Max lead time" %}</th>
+                    <th>{% trans "MOQ" %}</th>
+                    <th>{% trans "Price" %}</th>
+                    <th>{% trans "Currency" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for price in prices %}
+                    <tr>
+                        <td>{% for ipn in price.quotation_item.mpn.manufacturer.aml_set.all %}{{ ipn.ipn.code }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+                        <td>{{ price.quotation_item.mpn.code }}</td>
+                        <td>{{ price.quotation_item.mpn.manufacturer }}</td>
+                        <td>{{ price.quotation_item.quotation.distributor }}</td>
+                        <td>{{ price.quotation_item.quotation.ref_number }}</td>
+                        <td>{{ price.quotation_item.quotation.issuance_date|date }}</td>
+                        <td>{{ price.quotation_item.quotation.expiry_date|date }}</td>
+                        <td>{{ price.quotation_item.min_lead_time }}</td>
+                        <td>{{ price.quotation_item.max_lead_time }}</td>
+                        <td>{{ price.moq }}</td>
+                        <td>{{ price.price }}</td>
+                        <td>{{ price.currency.iso_code }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th><input type="text" id="i-0" class="search_init col-md-12" placeholder="IPNs"></th>
+                    <th><input type="text" id="i-1" class="search_init col-md-12" placeholder="MPN"></th>
+                    <th><input type="text" id="i-2" class="search_init col-md-12" placeholder="Manufacturer"></th>
+                    <th><input type="text" id="i-3" class="search_init col-md-12" placeholder="Distributor"></th>
+                    <th><input type="text" id="i-4" class="search_init col-md-12" placeholder="Ref number"></th>
+                    <th><input type="text" id="i-5" class="search_init col-md-12" placeholder="Issuance date"></th>
+                    <th><input type="text" id="i-6" class="search_init col-md-12" placeholder="Expiry date"></th>
+                    <th><input type="text" id="i-7" class="search_init col-md-12" placeholder="Min lead time"></th>
+                    <th><input type="text" id="i-8" class="search_init col-md-12" placeholder="Max lead time"></th>
+                    <th><input type="text" id="i-9" class="search_init col-md-12" placeholder="MOQ"></th>
+                    <th><input type="text" id="i-10" class="search_init col-md-12" placeholder="Price"></th>
+                    <th><input type="text" id="i-11" class="search_init col-md-12" placeholder="Currency"></th>
+                </tr>
+            </tfoot>
+        </table>
+    {% endif %}
+{% endblock %}
+{% block extrajs %}
+    <script>
+        var oTable = $('#bomtable').dataTable( {
+            "oLanguage": {
+                "sSearch": "Search all columns:"
+            }
+        } );
+        $("tfoot input").keyup( function () {
+            /* Filter on the column (the index) of this element */
+            oTable.fnFilter( this.value, $("tfoot input").index(this) );
+        } );
+
+        $("tfoot input").focus( function () {
+            if ( this.className == "search_init" )
+            {
+                this.className = "";
+                this.value = "";
+            }
+        } );
+
+        $("tfoot input").blur( function (i) {
+            if ( this.value == "" )
+            {
+                this.className = "search_init";
+                this.value = asInitVals[$("tfoot input").index(this)];
+            }
+        } );
+        </script>
+{% endblock %}
