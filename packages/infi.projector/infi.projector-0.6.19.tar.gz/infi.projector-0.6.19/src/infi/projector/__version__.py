@@ -1,0 +1,10 @@
+__version__ = "0.6.19"
+__git_commiter_name__ = "Arnon Yaari"
+__git_commiter_email__ = "arnony@infinidat.com"
+__git_branch__ = '(detached from v0.6.19)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '9e0d2503c01b91c4dc542d72d5e6c8befe911b6b'
+__git_head_subject__ = 'HOSTDEV-1518 no-uplod if no servers'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
