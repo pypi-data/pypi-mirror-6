@@ -1,0 +1,344 @@
+{% extends 'yplaces/base.html' %}
+
+{% load i18n %}
+
+{% load staticfiles %}
+
+{% block title %}{% include 'yplaces/place_title.html' %}{% endblock %}
+
+{% block description %}{{ place.address }}, {{ place.postal_code }} {{ place.city }}. {{ place.country }}.{% endblock %}
+
+{% block head %}
+  <link href="{% static 'yplaces/css/place.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+
+<!--
+  Schema.org Microdata
+-->
+<div class="microdata" itemscope itemtype="http://schema.org/LocalBusiness">
+  <span itemprop="name">{{ place.name }}</span>
+  <span itemprop="url">{{ host_url }}{% url 'yplaces:slug' pk=place.pk slug=place.name|slugify %}</span>
+  {% if place.description %}
+    <span itemprop="description">{{ place.description }}</span>
+  {% endif %}
+  <div itemprop="address" itemscope itemtype="http://schema.org/PostalAddress">
+    <span itemprop="streetAddress">{{ place.address }}</span>
+    <span itemprop="postalCode">{{ place.postal_code }}</span>
+    <span itemprop="addressLocality">{{ place.city }}</span>,
+    <span itemprop="addressRegion">{{ place.state }}</span>
+  </div>
+  <div itemprop="geo" itemscope itemtype="http://schema.org/GeoCoordinates">
+    <meta itemprop="latitude" content="{{ place.latitude|stringformat:'f' }}" />
+    <meta itemprop="longitude" content="{{ place.longitude|stringformat:'f' }}" />
+  </div>
+  <span itemprop="map">http://maps.google.com/?q={{ place.name|slugify }}@{{ place.latitude|stringformat:'f' }},{{ place.longitude|stringformat:'f' }}&z=17</span>
+  {% if place.phone_number %}
+    <span itemprop="telephone">{{ place.phone_number }}</span>
+  {% endif %}
+  {% if place.email %}
+    <span itemprop="email">{{ place.email }}</span>
+  {% endif %}
+  <div itemprop="aggregateRating" itemscope itemtype="http://schema.org/AggregateRating">
+    <span itemprop="bestRating">5</span>
+    <span itemprop="ratingValue">{% if rating %}{{ rating.average }}{% else %}0{% endif %}</span>
+    <span itemprop="worstRating">1</span>
+    <span itemprop="reviewCount">{% if rating %}{{ rating.reviews }}{% else %}0{% endif %}</span>
+  </div>
+  {% for review in place.review_set.all %}
+    <div itemprop="review" itemscope itemtype="http://schema.org/Review">
+      <span itemprop="author">{{ review.user.name }}</span>
+      <span itemprop="datePublished">{{ review.date.isoformat }}</span>
+      <div itemprop="reviewRating" itemscope itemtype="http://schema.org/Rating">
+        <span itemprop="bestRating">5</span>
+        <span itemprop="ratingValue">{{ review.rating }}</span>
+        <span itemprop="worstRating">1</span>
+      </div>
+      <span itemprop="description">{{ review.comment }}</span>
+    </div>
+  {% endfor %}
+  {% if not no_photos %}
+    <div itemprop="photo" itemscope itemtype="http://schema.org/Photograph">
+      <span itemprop="url">{{ photos.0.file.url }}</span>
+    </div>
+  {% endif %}
+</div>
+
+<div class="place">
+
+  <!--
+    Left Container
+  -->
+	<div class="left-container">
+    
+    <!-- Details -->
+    <div class="details round-border-shadow">
+
+      <!-- Name & Address -->
+      <div class="name">
+  			<div class="picture">
+  				<img src="{% static 'yplaces/images/default_place_picture.png' %}">
+  			</div>
+        <div class="address">
+          <h1>
+            {{ place.name }}
+            {% if request.user.is_staff %}
+              <span style="font-size: 14px; font-weight: normal;">
+                <a href="{% url 'yplaces:edit' pk=place.pk slug=place.name|slugify %}">
+                  <i class="fa fa-pencil-square-o"></i>
+                  Edit
+                </a>
+              </span>
+            {% endif %}
+          </h1>
+          <p>
+            {{ place.address }}, {{ place.postal_code }} {{ place.city }}
+            <br>
+            {{ place.country }}
+          </p>
+          {% if not place.active %}
+            <div style="font-size: 15pt;">
+              <span class="label label-warning">
+                <i class="fa fa-exclamation-triangle"></i>
+                {% trans 'Inactive' %}
+              </span>
+            </div>
+          {% endif %}
+        </div>
+        <div class="clear"></div>
+      </div>
+
+      <!-- Contacts -->
+      <div class="contacts">
+        <ul>
+          <li>
+            <i class="fa fa-arrows"></i>
+            <a href="http://maps.google.com/?q={{ place.name|slugify }}@{{ place.latitude|stringformat:'f' }},{{ place.longitude|stringformat:'f' }}&z=17" target="_blank">{% trans 'Directions' %}</a>
+          </li>
+          {% if place.phone_number %}
+            <li>
+              <i class="fa fa-phone"></i>
+              <span class="value">{{ place.phone_number }}</span>
+            </li>
+          {% endif %}
+          {% if place.email %}
+            <li>
+              <i class="fa fa-envelope"></i>
+              <span class="value"><a href="mailto:{{ place.email }}" target="_blank">{{ place.email }}</a></span>
+            </li>
+          {% endif %}
+          {% if place.website %}
+            <li>
+              <i class="fa fa-link"></i>
+              <span class="value"><a href="{{ place.website }}" target="_blank">{% trans 'Website' %}</a></span>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+
+      <!-- Average Rating -->
+      <div class="rating">
+        <div class="star-rating" style="margin: auto;">
+          {% if rating %}
+            <div style="width:{{ rating.get_average_percentage|stringformat:'f' }}%"></div>
+          {% else %}
+            <div style="width:0%"></div>
+          {% endif %}
+        </div>
+      </div>
+		</div>
+
+    <!-- Photos -->
+    <div class="photos" {% if no_photos %}style="display: none;{% endif %}">
+      <div>
+        {% if photos.0 %}
+          <a class="fancybox" href="{{ photos.0.file.url }}">
+            <img src="{{ photos.0.file.url }}" class="img-thumbnail">
+          </a>
+        {% else %}
+          <img src="{% static 'yplaces/images/photo_placeholder.png' %}" class="img-thumbnail">
+        {% endif %}
+      </div>
+      <div>
+        {% if photos.1 %}
+          <a class="fancybox" href="{{ photos.1.file.url }}">
+            <img src="{{ photos.1.file.url }}" class="img-thumbnail">
+          </a>
+        {% else %}
+          <img src="{% static 'yplaces/images/photo_placeholder.png' %}" class="img-thumbnail">
+        {% endif %}
+      </div>
+      <div>
+        {% if photos.2 %}
+          <a class="fancybox" href="{{ photos.2.file.url }}">
+            <img src="{{ photos.2.file.url }}" class="img-thumbnail">
+          </a>
+        {% else %}
+          <img src="{% static 'yplaces/images/photo_placeholder.png' %}" class="img-thumbnail">
+        {% endif %}
+      </div>
+      <div>
+        <a href="{% url 'yplaces:photos' pk=place.pk slug=place.name|slugify %}" style="color: #000;">
+          <i class="fa fa-picture-o fa-5x"></i>
+          <p><strong>{% trans 'View All' %}</strong></p>
+        </a>
+      </div>
+    </div>
+
+    <!-- Reviews -->
+    <div class="reviews round-border-shadow">
+      <div class="actions">
+        <button class="btn btn-primary btn-sm" onclick="review()">
+          <i class="fa fa-star"></i>
+          <strong>{% trans 'Write a Review' %}</strong>
+        </button>
+        <a class="btn btn-default btn-sm"  href="{% url 'yplaces:photos' pk=place.pk slug=place.name|slugify %}?action=upload">
+          <i class="fa fa-camera"></i>
+          {% trans 'Add Photo' %}
+        </a>
+      </div>
+      <ul {% if not place.review_set.all %}style="display: none;"{% endif %}>
+        {% for review in place.review_set.all %}
+        <li>
+          <div class="avatar">
+            <img src="{{ review.user.get_photo_url }}" class="img-rounded">
+          </div>
+          <div class="comment">
+            <div class="star-rating-sm"><div style="width:{{ review.get_rating_percentage|stringformat:'f' }}%"></div></div>
+            <div class="message">
+              {{ review.comment }}
+              <br>
+              {% if review.photo %}
+                <a class="fancybox" href="{{ review.photo.file.url }}"><img src="{{ review.photo.file.url }}" style="width: 50%; margin: 10px 0 10px 0;" class="img-thumbnail"></a>
+                <br>
+              {% endif %}
+              <span>{{ review.user.name }} // {{ review.date }}</span>
+            </div>
+          </div>
+          <div class="clear"></div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+	</div>
+	
+  <!--
+    Right Container
+  -->
+  <div class="right-container">
+		
+    <!-- Map -->
+    <div id="map" class="round-border-shadow">
+      <i class="fa fa-map-marker fa-5x"></i>
+      <br>
+      {% trans 'Loading Map' %}
+      <br>
+      <img src="{% static 'yplaces/images/ajax-loader-16x16.gif' %}">
+    </div>
+	</div>
+</div>
+
+<!--
+  New Review Modal
+-->
+<div class="modal fade" id="addReview" tabindex="-1" role="dialog" aria-labelledby="addReviewLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h4 class="modal-title" id="addReviewLabel">{% trans 'Write Review' %}</h4>
+      </div>
+      <div class="modal-body">
+        <form role="form" data-validate="salsa">
+          <div id="messages"></div>
+          <div class="form-group">
+            <label for="rating">{% trans 'Rating' %}</label>
+            <br>
+            <div class="star-rating-dynamic">
+              <span value="5">☆</span><span value="4">☆</span><span value="3">☆</span><span value="2">☆</span><span value="1">☆</span>
+            </div>
+            <select id="rating" style="display: none;" data-required="true">
+              <option></option>
+              <option value="1">☆</option>
+              <option value="2">☆☆</option>
+              <option value="3">☆☆☆</option>
+              <option value="4">☆☆☆☆</option>
+              <option value="5">☆☆☆☆☆</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="comment">{% trans 'Comment' %}</label>
+            <textarea id="comment" class="form-control" rows="3" data-required="true"></textarea>
+          </div>
+          <div class="form-group">
+            <label>{% trans 'Photo' %}</label>
+            <input type="file" accept="image/*" name="photo">
+            <div class="form-group" style="display: none; margin-top: 15px;">
+              <label>{% trans 'Preview' %}</label>
+              <div id="preview"></div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">{% trans 'Cancel' %}</button>
+        <button id="submit" type="button" class="btn btn-primary" data-loading-text="{% trans 'Submitting...' %}">{% trans 'Submit' %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block javascript %}
+  <script src="http://maps.google.com/maps/api/js?sensor=false"></script>
+  <script src="{% static 'yplaces/js/place.js' %}"></script>
+  <script>
+      /*
+       * Assorted variables.
+       */
+      var place = {
+          name: '{{ place.name }}',
+          latitude: {{ place.latitude|stringformat:'f' }},
+          longitude: {{ place.longitude|stringformat:'f' }}
+      }
+      var reviews_api_url = '{{ reviews_api_url }}';
+
+      /*
+       * If user is authenticated, open review modal. If not, redirect to login page with respective 'next' URL
+       * pointing back to this (i.e. opening this same page and issuing the review modal to be opened).
+       */
+      function review() {
+          if('{{ request.user.is_authenticated }}' == 'True') {
+              $('#addReview').modal();
+          } else {
+              window.location = "{% url 'yaccounts:login' %}?next={{ request.path }}?action=review";
+          }
+      }
+
+      /*
+       * What to do after page finishes loading.
+       */
+      $(document).ready(function() {
+
+          // Initialize photo gallery.
+          $('.fancybox').fancybox({ openEffect: 'none', closeEffect: 'none', nextEffect : 'none', prevEffect: 'none' });
+
+          // Initialize stuff.
+          initializeMap();
+          initializeReviewModal();
+
+          // If user is authenticated and 'review' action is requested.
+          if('{{ request.GET.action }}' == 'review') {
+
+            // Clear action from URL (to avoid refresh always opening modal)
+            history.pushState('data', '', '{{ request.path }}');
+
+            // Request review modal.
+            review();
+          }
+      });
+  </script>
+{% endblock %}
