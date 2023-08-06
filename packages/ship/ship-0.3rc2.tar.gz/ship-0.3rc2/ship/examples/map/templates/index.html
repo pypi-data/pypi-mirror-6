@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+  	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+
+    <title>Swiss Healthcare Insurance Premiums Map</title>
+  	<meta name="description" content="Submission for the Make.OpenData.ch Camp 2012">
+  	<meta name="author" content="">
+  	<link href="http://polymaps.org/style.css" rel="stylesheet" type="text/css" />
+    <link href="{{ url_for('static', filename='css/normalize.css') }}" rel="stylesheet" type="text/css" />
+    <link href="{{ url_for('static', filename='css/custom-theme/jquery-ui-1.8.18.custom.css') }}" rel="stylesheet" type="text/css"/>
+    <link href="{{ url_for('static', filename='css/tipsy.css') }}" rel="stylesheet" type="text/css" />
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet" type="text/css" />
+    <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='css/colorbrewer.css') }}"/>
+
+  </head>
+  <body>
+    <div id="tooltip" class="tipsy tipsy-inner" style="display: none;">I'm a tool</div>
+    <div id="overlay"></div>
+    <div id="map"></div>
+    <div id="panel" class="unfolded">
+      <div class="section" id="title">
+        <a href="http://make.opendata.ch/"><img src="{{ url_for('static', filename='img/make.opendata.ch_logo_s.png') }}"></a>
+        <h1>Swiss Healthcare Insurance Premiums Map</h1>
+        <p><a href="http://make.opendata.ch/">Make.OpenData.ch Sep 2012</a></p>
+        <a href="#" title="Toggle Panel" id="panel_toggle">hide</a>
+      </div>
+      <div class="section radios" id="ageGroups">
+        <h2>Age Group</h2>
+        <ul>
+          <li>
+            <input name="ageRadio" type="radio" id="ageGroup1" checked="checked" value="19">
+            <label for="ageGroup1">19-25</label>
+          </li>
+          <li>
+            <input name="ageRadio" type="radio" id="ageGroup2" value="26">
+            <label for="ageGroup2">26+</label>
+          </li>
+        </ul>
+      </div>
+      <div class="section" id="deductible">
+        <h2><span>Deductible</span><span class="unit">CHF</span><div id="deductibleLabel">500</div></h2>
+        <div class="ui">
+          <div id="deductible_slider"></div>
+        </div>
+      </div>
+      <div class="section radios" id="with_accident">
+        <h2>Accident Insurance</h2>
+        <ul>
+          <li>
+            <input name="accidentRadio" type="radio" id="accidentRadio2" value="false" checked="checked">
+            <label for="accidentRadio2"><b>Not</b> Included</label>
+          </li>
+          <li>
+            <input name="accidentRadio" type="radio" id="accidentRadio1" value="true">
+            <label for="accidentRadio1">Included</label>
+          </li>
+        </ul>
+      </div>
+      <div class="section radios" id="year">
+        <h2>Year</h2>
+        <ul>
+        {% for year in years %}
+          <li>
+            <input name="yearRadio" type="radio" id="yearRadio{{ year }}" value="{{ year }}" {% if loop.first %}checked="checked"{% endif %}>
+            <label for="yearRadio{{ year }}">{{ year }}</label>
+          </li>
+        {% endfor %}
+        </ul>
+      </div>
+      <div class="section checks" id="type">
+        <h2>Model</h2>
+        <ul>
+          {% for type, desc in types.items() %}
+          <li>
+            <input name="typeRadio" type="radio" id="typeRadio{{ type }}" value="{{ type }}" {% if loop.first %}checked="checked"{% endif %}>
+            <label for="typeRadio{{ type }}">{{ desc }}</label>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="section" id="insurer">
+        <h2>Insurer</h2>
+        <select name="insurerSelect">
+        {% for key, desc in insurers %}
+          <option value="{{ key }}">{{ desc }}</option>
+        {% endfor %}
+        </select>
+      </div>
+
+      <div class="section">
+        <h2>Prices</h2>
+
+          <div class="color-watch Blues q0-9"></div>
+          <div class="color-watch Blues q1-9"></div>
+          <div class="color-watch Blues q2-9"></div>
+          <div class="color-watch Blues q3-9"></div>
+          <div class="color-watch Blues q4-9"></div>
+          <div class="color-watch Blues q5-9"></div>
+          <div class="color-watch Blues q6-9"></div>
+          <div class="color-watch Blues q7-9"></div>
+          <div class="color-watch Blues q8-9"></div>
+          <div class="color-watch Reds q0-9"></div>
+          <div class="color-watch Reds q1-9"></div>
+          <div class="color-watch Reds q2-9"></div>
+          <div class="color-watch Reds q3-9"></div>
+          <div class="color-watch Reds q4-9"></div>
+          <div class="color-watch Reds q5-9"></div>
+          <div class="color-watch Reds q6-9"></div>
+          <div class="color-watch Reds q7-9"></div>
+          <div class="color-watch Reds q8-9"></div>
+          <div class="clear-all"></div>
+          <div id="range">
+            <div>CHF 120</div>
+            <div style="text-align: right">CHF 480</div>
+          </div>
+          <div class="clear-all"></div>
+
+      </div>
+
+      <div class="section last" id="credits">
+        <p>Map data &copy; <a href="http://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="http://www.openstreetmap.org/copyright">License</a>.<br/>
+        Insurance premiums by <a href="http://www.bag.admin.ch">BAG</a>.<br/>
+        Source <a href="http://github.com/seantis/ship">on Github</a><br/>
+        Icons from <a href="http://www.thenounproject.com">thenounproject.com</a> collection
+      </div>
+
+
+    </div>
+
+    <script type="text/javascript" src="{{ url_for('static', filename='lib/jquery-1.6.2.min.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='lib/jquery.tipsy.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='lib/jquery-ui.min.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='lib/jquery.wrap-svg.js') }}"></script>
+    
+
+  	<script type="text/javascript" src="{{ url_for('static', filename='lib/d3.v2.min.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='lib/polymaps.min.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='js/query-data.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='js/init-map.js') }}"></script>
+
+    <script type="text/javascript" src="{{ url_for('static', filename='js/fit-projection.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='js/load-data.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='js/prices.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='js/ui.js') }}"></script>
+
+    <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-31432074-1']);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+
+    </script>
+
+  </body>
+</html>
