@@ -1,0 +1,298 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>zope.configuration.zopeconfigure &mdash; zope.configuration 4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="zope.configuration 4.0 documentation" href="../index.html" />
+    <link rel="up" title="zope.configuration API Reference" href="../api.html" />
+    <link rel="next" title="Hacking on zope.configuration" href="../hacking.html" />
+    <link rel="prev" title="zope.configuration.xmlconfig" href="xmlconfig.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../hacking.html" title="Hacking on zope.configuration"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="xmlconfig.html" title="zope.configuration.xmlconfig"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">zope.configuration 4.0 documentation</a> &raquo;</li>
+          <li><a href="../api.html" accesskey="U"><tt class="docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal"><span class="pre">zope.configuration</span></tt> API Reference</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-zope.configuration.zopeconfigure">
+<span id="zope-configuration-zopeconfigure"></span><h1><a class="reference internal" href="#module-zope.configuration.zopeconfigure" title="zope.configuration.zopeconfigure"><tt class="xref py py-mod docutils literal"><span class="pre">zope.configuration.zopeconfigure</span></tt></a><a class="headerlink" href="#module-zope.configuration.zopeconfigure" title="Permalink to this headline">¶</a></h1>
+<p>Zope configure directive</p>
+<p>This file contains the implementation of the Zope configure directive.
+It is broken out in a separate file to provide an example of a grouping
+directive.</p>
+<p>The zope configuration directive is a pure grouping directive.  It
+doesn&#8217;t compute any actions on it&#8217;s own. Instead, it allows a package
+to be specified, affecting the interpretation of relative dotted names
+and file paths. It also allows an i18n domain to be specified.  The
+information collected is used by subdirectives.</p>
+<p>To define a grouping directive, we need to do three things:</p>
+<ul class="simple">
+<li>Define a schema for the parameters passed to the directive</li>
+<li>Define a handler class.</li>
+<li>Register the class</li>
+</ul>
+<p>The parameter schema is given by IZopeConfigure. It specifies a
+package parameter and an i18n_domain parameter.  The package parameter
+is specified as a <tt class="docutils literal"><span class="pre">GlobalObject</span></tt>. This means it must be given as a
+dotted name that can be resolved through import.  The i18n domain is
+just a plain (not unicode) string.</p>
+<p>The handler class has a constructor that takes a context to be adapted
+and zero or more arguments (depending on the paramter schema).  The
+handler class must implement
+<tt class="docutils literal"><span class="pre">zope.configuration.interfaces.IGroupingContext</span></tt>, which defines
+hooks <tt class="docutils literal"><span class="pre">before</span></tt> and <tt class="docutils literal"><span class="pre">after</span></tt>, that are called with no arguments
+before and after nested directives are processed.  If a grouping
+directive handler creates any actions, or does any computation, this
+is normally done in either the <tt class="docutils literal"><span class="pre">before</span></tt> or <tt class="docutils literal"><span class="pre">after</span></tt> hooks.
+Grouping handlers are normally decorators.</p>
+<p>The base class,
+<tt class="docutils literal"><span class="pre">zope.configuration.config.GroupingContextDecorator</span></tt>, is normally
+used to define grouping directive handlers. It provides:</p>
+<ul class="simple">
+<li>An implementation of IConfigurationContext, which grouping directive
+handlers should normally implement,</li>
+<li>A default implementation of <tt class="docutils literal"><span class="pre">IGroupingContext</span></tt> that provides empty
+hooks.</li>
+<li>Decorator support that uses a <tt class="docutils literal"><span class="pre">__getattr__</span></tt> method to delegate
+attribute accesses to adapted contexts, and</li>
+<li>A constructor that sets the <tt class="docutils literal"><span class="pre">context</span></tt> attribute to the adapted
+context and assigns keyword arguments to attributes.</li>
+</ul>
+<p>The <tt class="docutils literal"><span class="pre">ZopeConfigure</span></tt> provides handling for the <tt class="docutils literal"><span class="pre">configure</span></tt>
+directive. It subclasses GroupingContextDecorator, and overrides the
+constructor to set the <tt class="docutils literal"><span class="pre">basepath</span></tt> attribute if a <tt class="docutils literal"><span class="pre">package</span></tt> argument
+is provided. Note that it delegates the job of assigning paramters to
+attribute to the <tt class="docutils literal"><span class="pre">GroupingContextDecorator</span></tt> constructor.</p>
+<p>The last step is to register the directive using the meta
+configuration directive.  If we wanted to register the Zope
+<tt class="docutils literal"><span class="pre">configure</span></tt> directive for the <tt class="docutils literal"><span class="pre">zope</span></tt> namespace, we&#8217;d use a
+meta-configuration directive like:</p>
+<div class="highlight-python"><pre>&lt;meta:groupingDirective
+   namespace="http://namespaces.zope.org/zope"
+   name="configure"
+   schema="zope.configuration.zopeconfigure.IZopeConfigure"
+   handler="zope.configuration.zopeconfigure.ZopeConfigure"
+   &gt;
+   Zope configure
+
+   The ``configure`` node is normally used as the root node for a
+   configuration file.  It can also be used to specify a package or
+   internationalization domain for a group of directives within a
+   file by grouping those directives.
+&lt;/meta:groupingDirective&gt;</pre>
+</div>
+<p>We use the groupingDirective meta-directive to register a grouping
+directive. The parameters are self explanatory.  The textual contents
+of the directive provide documentation text, excluding parameter
+documentation, which is provided by the schema.</p>
+<p>(The Zope <tt class="docutils literal"><span class="pre">configuration</span></tt> directive is actually registered using a
+lower-level Python API because it is registered for all namespaces,
+which isn&#8217;t supported using the meta-configuration directives.)</p>
+<dl class="interface">
+<dt id="zope.configuration.zopeconfigure.IZopeConfigure">
+<em class="property">interface </em><tt class="descclassname">zope.configuration.zopeconfigure.</tt><tt class="descname">IZopeConfigure</tt><a class="reference internal" href="../_modules/zope/configuration/zopeconfigure.html#IZopeConfigure"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#zope.configuration.zopeconfigure.IZopeConfigure" title="Permalink to this definition">¶</a></dt>
+<dd><p>The <tt class="docutils literal"><span class="pre">zope:configure</span></tt> Directive</p>
+<p>The zope configuration directive is a pure grouping directive.  It
+doesn&#8217;t compute any actions on it&#8217;s own. Instead, it allows a package to
+be specified, affecting the interpretation of relative dotted names and
+file paths. It also allows an i18n domain to be specified.  The
+information collected is used by subdirectives.</p>
+<p>It may seem that this directive can only be used once per file, but it can
+be applied whereever it is convenient.</p>
+<dl class="attribute">
+<dt id="zope.configuration.zopeconfigure.IZopeConfigure.package">
+<tt class="descname">package</tt><a class="headerlink" href="#zope.configuration.zopeconfigure.IZopeConfigure.package" title="Permalink to this definition">¶</a></dt>
+<dd><p>Package</p>
+<p>The package to be used for evaluating relative imports and file names.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="zope.configuration.zopeconfigure.IZopeConfigure.i18n_domain">
+<tt class="descname">i18n_domain</tt><a class="headerlink" href="#zope.configuration.zopeconfigure.IZopeConfigure.i18n_domain" title="Permalink to this definition">¶</a></dt>
+<dd><p>Internationalization domain</p>
+<p>This is a name for the software project. It must be a legal file-system name as it will be used to contruct names for directories containing translation data. 
+The domain defines a namespace for the message ids used by a project.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="zope.configuration.zopeconfigure.ZopeConfigure">
+<em class="property">class </em><tt class="descclassname">zope.configuration.zopeconfigure.</tt><tt class="descname">ZopeConfigure</tt><big>(</big><em>context</em>, <em>**kw</em><big>)</big><a class="reference internal" href="../_modules/zope/configuration/zopeconfigure.html#ZopeConfigure"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#zope.configuration.zopeconfigure.ZopeConfigure" title="Permalink to this definition">¶</a></dt>
+<dd><p>Zope configure directive</p>
+<p>This file contains the implementation of the Zope configure directive.
+It is broken out in a separate file to provide an example of a grouping
+directive.</p>
+<p>The zope configuration directive is a pure grouping directive.  It
+doesn&#8217;t compute any actions on it&#8217;s own. Instead, it allows a package
+to be specified, affecting the interpretation of relative dotted names
+and file paths. It also allows an i18n domain to be specified.  The
+information collected is used by subdirectives.</p>
+<p>To define a grouping directive, we need to do three things:</p>
+<ul class="simple">
+<li>Define a schema for the parameters passed to the directive</li>
+<li>Define a handler class.</li>
+<li>Register the class</li>
+</ul>
+<p>The parameter schema is given by IZopeConfigure. It specifies a
+package parameter and an i18n_domain parameter.  The package parameter
+is specified as a <tt class="docutils literal"><span class="pre">GlobalObject</span></tt>. This means it must be given as a
+dotted name that can be resolved through import.  The i18n domain is
+just a plain (not unicode) string.</p>
+<p>The handler class has a constructor that takes a context to be adapted
+and zero or more arguments (depending on the paramter schema).  The
+handler class must implement
+<tt class="docutils literal"><span class="pre">zope.configuration.interfaces.IGroupingContext</span></tt>, which defines
+hooks <tt class="docutils literal"><span class="pre">before</span></tt> and <tt class="docutils literal"><span class="pre">after</span></tt>, that are called with no arguments
+before and after nested directives are processed.  If a grouping
+directive handler creates any actions, or does any computation, this
+is normally done in either the <tt class="docutils literal"><span class="pre">before</span></tt> or <tt class="docutils literal"><span class="pre">after</span></tt> hooks.
+Grouping handlers are normally decorators.</p>
+<p>The base class,
+<tt class="docutils literal"><span class="pre">zope.configuration.config.GroupingContextDecorator</span></tt>, is normally
+used to define grouping directive handlers. It provides:</p>
+<ul class="simple">
+<li>An implementation of IConfigurationContext, which grouping directive
+handlers should normally implement,</li>
+<li>A default implementation of <tt class="docutils literal"><span class="pre">IGroupingContext</span></tt> that provides empty
+hooks.</li>
+<li>Decorator support that uses a <tt class="docutils literal"><span class="pre">__getattr__</span></tt> method to delegate
+attribute accesses to adapted contexts, and</li>
+<li>A constructor that sets the <tt class="docutils literal"><span class="pre">context</span></tt> attribute to the adapted
+context and assigns keyword arguments to attributes.</li>
+</ul>
+<p>The <tt class="docutils literal"><span class="pre">ZopeConfigure</span></tt> provides handling for the <tt class="docutils literal"><span class="pre">configure</span></tt>
+directive. It subclasses GroupingContextDecorator, and overrides the
+constructor to set the <tt class="docutils literal"><span class="pre">basepath</span></tt> attribute if a <tt class="docutils literal"><span class="pre">package</span></tt> argument
+is provided. Note that it delegates the job of assigning paramters to
+attribute to the <tt class="docutils literal"><span class="pre">GroupingContextDecorator</span></tt> constructor.</p>
+<p>The last step is to register the directive using the meta
+configuration directive.  If we wanted to register the Zope
+<tt class="docutils literal"><span class="pre">configure</span></tt> directive for the <tt class="docutils literal"><span class="pre">zope</span></tt> namespace, we&#8217;d use a
+meta-configuration directive like:</p>
+<div class="highlight-python"><pre>&lt;meta:groupingDirective
+   namespace="http://namespaces.zope.org/zope"
+   name="configure"
+   schema="zope.configuration.zopeconfigure.IZopeConfigure"
+   handler="zope.configuration.zopeconfigure.ZopeConfigure"
+   &gt;
+   Zope configure
+
+   The ``configure`` node is normally used as the root node for a
+   configuration file.  It can also be used to specify a package or
+   internationalization domain for a group of directives within a
+   file by grouping those directives.
+&lt;/meta:groupingDirective&gt;</pre>
+</div>
+<p>We use the groupingDirective meta-directive to register a grouping
+directive. The parameters are self explanatory.  The textual contents
+of the directive provide documentation text, excluding parameter
+documentation, which is provided by the schema.</p>
+<p>(The Zope <tt class="docutils literal"><span class="pre">configuration</span></tt> directive is actually registered using a
+lower-level Python API because it is registered for all namespaces,
+which isn&#8217;t supported using the meta-configuration directives.)</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="xmlconfig.html"
+                        title="previous chapter"><tt class="docutils literal docutils literal docutils literal"><span class="pre">zope.configuration.xmlconfig</span></tt></a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../hacking.html"
+                        title="next chapter">Hacking on <tt class="docutils literal"><span class="pre">zope.configuration</span></tt></a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/api/zopeconfigure.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../hacking.html" title="Hacking on zope.configuration"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="xmlconfig.html" title="zope.configuration.xmlconfig"
+             >previous</a> |</li>
+        <li><a href="../index.html">zope.configuration 4.0 documentation</a> &raquo;</li>
+          <li><a href="../api.html" ><tt class="docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal"><span class="pre">zope.configuration</span></tt> API Reference</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,1089 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Zope configuration system &mdash; zope.configuration 4.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="zope.configuration 4.0 documentation" href="index.html" />
+    <link rel="next" title="zope.configuration API Reference" href="api.html" />
+    <link rel="prev" title="zope.configuration Documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="api.html" title="zope.configuration API Reference"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="zope.configuration Documentation"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">zope.configuration 4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="zope-configuration-system">
+<h1>Zope configuration system<a class="headerlink" href="#zope-configuration-system" title="Permalink to this headline">¶</a></h1>
+<p>The zope configuration system provides an extensible system for
+supporting variouse kinds of configurations.</p>
+<p>It is based on the idea of configuration directives. Users of the
+configuration system provide configuration directives in some
+language that express configuration choices. The intent is that the
+language be pluggable.  An XML language is provided by default.</p>
+<p>Configuration is performed in three stages. In the first stage,
+directives are processed to compute configuration actions.
+Configuration actions consist of:</p>
+<ul class="simple">
+<li>A discriminator</li>
+<li>A callable</li>
+<li>Positional arguments</li>
+<li>Keyword arguments</li>
+</ul>
+<p>The actions are essentially delayed function calls.  Two or more
+actions conflict if they have the same discriminator.  The
+configuration system has rules for resolving conflicts. If conflicts
+cannot be resolved, an error will result.  Conflict resolution
+typically discards all but one of the conflicting actions, so that
+the remaining action of the originally-conflicting actions no longer
+conflicts.  Non-conflicting actions are executed in the order that
+they were created by passing the positional and non-positional
+arguments to the action callable.</p>
+<p>The system is extensible. There is a meta-configuration language for
+defining configuration directives. A directive is defined by
+providing meta data about the directive and handler code to process
+the directive.  There are four kinds of directives:</p>
+<ul>
+<li><p class="first">Simple directives compute configuration actions.  Their handlers
+are typically functions that take a context and zero or more
+keyword arguments and return a sequence of configuration actions.</p>
+<p>To learn how to create simple directives, see <cite>tests/simple.py</cite>.</p>
+</li>
+<li><p class="first">Grouping directives collect information to be used by nested
+directives. They are called with a context object which they adapt
+to some interface that extends IConfigurationContext.</p>
+<p>To learn how to create grouping directives, look at the
+documentation in zopeconfigure.py, which provides the implementation
+of the zope <cite>configure</cite> directive.</p>
+<p>Other directives can be nested in grouping directives.</p>
+<p>To learn how to implement nested directives, look at the
+documentation in the &#8220;Creating Nested Directives&#8221; section below.</p>
+</li>
+<li><p class="first">Complex directives are directives that have subdirectives.
+Subdirectives have handlers that are simply methods of complex
+directives. Complex diretives are handled by factories, typically
+classes, that create objects that have methods for handling
+subdirectives. These objects also have __call__ methods that are
+called when processing of subdirectives is finished.</p>
+<p>Complex directives only exist to support old directive
+handlers. They will probably be deprecated in the future.</p>
+</li>
+<li><p class="first">Subdirectives are nested in complex directives. They are like
+simple directives except that they hane handlers that are complex
+directive methods.</p>
+<p>Subdirectives, like complex directives only exist to support old
+directive handlers. They will probably be deprecated in the future.</p>
+</li>
+</ul>
+<div class="section" id="using-the-configuration-machinery-programatically">
+<h2>Using the configuration machinery programatically<a class="headerlink" href="#using-the-configuration-machinery-programatically" title="Permalink to this headline">¶</a></h2>
+<p>An extended example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.config</span> <span class="kn">import</span> <span class="n">ConfigurationMachine</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.config</span> <span class="kn">import</span> <span class="n">metans</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span> <span class="o">=</span> <span class="n">ConfigurationMachine</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ns</span> <span class="o">=</span> <span class="s">&quot;http://www.zope.org/testing&quot;</span>
+</pre></div>
+</div>
+<p>Register some test directives:</p>
+<p>Start with a grouping directive that sets a package:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">metans</span><span class="p">,</span> <span class="s">&quot;groupingDirective&quot;</span><span class="p">),</span>
+<span class="gp">... </span>        <span class="n">name</span><span class="o">=</span><span class="s">&quot;package&quot;</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="n">ns</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="n">schema</span><span class="o">=</span><span class="s">&quot;zope.configuration.tests.directives.IPackaged&quot;</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="n">handler</span><span class="o">=</span><span class="s">&quot;zope.configuration.tests.directives.Packaged&quot;</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="p">)</span>
+</pre></div>
+</div>
+<p>Now we can set the package:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="o">.</span><span class="n">begin</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="s">&quot;package&quot;</span><span class="p">),</span>
+<span class="gp">... </span>              <span class="n">package</span><span class="o">=</span><span class="s">&quot;zope.configuration.tests.directives&quot;</span><span class="p">,</span>
+<span class="gp">... </span>              <span class="p">)</span>
+</pre></div>
+</div>
+<p>Which makes it easier to define the other directives:</p>
+<p>First, define some simple directives:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">metans</span><span class="p">,</span> <span class="s">&quot;directive&quot;</span><span class="p">),</span>
+<span class="gp">... </span>        <span class="n">namespace</span><span class="o">=</span><span class="n">ns</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&quot;simple&quot;</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="n">schema</span><span class="o">=</span><span class="s">&quot;.ISimple&quot;</span><span class="p">,</span> <span class="n">handler</span><span class="o">=</span><span class="s">&quot;.simple&quot;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">metans</span><span class="p">,</span> <span class="s">&quot;directive&quot;</span><span class="p">),</span>
+<span class="gp">... </span>        <span class="n">namespace</span><span class="o">=</span><span class="n">ns</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&quot;newsimple&quot;</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="n">schema</span><span class="o">=</span><span class="s">&quot;.ISimple&quot;</span><span class="p">,</span> <span class="n">handler</span><span class="o">=</span><span class="s">&quot;.newsimple&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>and try them out:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="s">&quot;simple&quot;</span><span class="p">),</span> <span class="s">&quot;first&quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="s">u&quot;aa&quot;</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="s">u&quot;cc&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="s">&quot;newsimple&quot;</span><span class="p">),</span> <span class="s">&quot;second&quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="s">u&quot;naa&quot;</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="s">u&quot;ncc&quot;</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="s">u&quot;nbb&quot;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">pprint</span> <span class="kn">import</span> <span class="n">PrettyPrinter</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pprint</span> <span class="o">=</span> <span class="n">PrettyPrinter</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span><span class="o">.</span><span class="n">pprint</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pprint</span><span class="p">(</span><span class="n">machine</span><span class="o">.</span><span class="n">actions</span><span class="p">)</span>
+<span class="go">[{&#39;args&#39;: (u&#39;aa&#39;, u&#39;xxx&#39;, &#39;cc&#39;),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;simple&#39;,</span>
+<span class="go">                    u&#39;aa&#39;,</span>
+<span class="go">                    u&#39;xxx&#39;,</span>
+<span class="go">                    &#39;cc&#39;),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;first&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (u&#39;naa&#39;, u&#39;nbb&#39;, &#39;ncc&#39;),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;newsimple&#39;,</span>
+<span class="go">                    u&#39;naa&#39;,</span>
+<span class="go">                    u&#39;nbb&#39;,</span>
+<span class="go">                    &#39;ncc&#39;),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;second&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0}]</span>
+</pre></div>
+</div>
+<p>Define and try a simple directive that uses a component:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">metans</span><span class="p">,</span> <span class="s">&quot;directive&quot;</span><span class="p">),</span>
+<span class="gp">... </span>        <span class="n">namespace</span><span class="o">=</span><span class="n">ns</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&quot;factory&quot;</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="n">schema</span><span class="o">=</span><span class="s">&quot;.IFactory&quot;</span><span class="p">,</span> <span class="n">handler</span><span class="o">=</span><span class="s">&quot;.factory&quot;</span><span class="p">)</span>
+
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="s">&quot;factory&quot;</span><span class="p">),</span> <span class="n">factory</span><span class="o">=</span><span class="s">u&quot;.f&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pprint</span><span class="p">(</span><span class="n">machine</span><span class="o">.</span><span class="n">actions</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">:])</span>
+<span class="go">[{&#39;args&#39;: (),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;factory&#39;, 1, 2),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: None,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0}]</span>
+</pre></div>
+</div>
+<p>Define and try a complex directive:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="o">.</span><span class="n">begin</span><span class="p">((</span><span class="n">metans</span><span class="p">,</span> <span class="s">&quot;complexDirective&quot;</span><span class="p">),</span>
+<span class="gp">... </span>              <span class="n">namespace</span><span class="o">=</span><span class="n">ns</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&quot;testc&quot;</span><span class="p">,</span>
+<span class="gp">... </span>              <span class="n">schema</span><span class="o">=</span><span class="s">&quot;.ISimple&quot;</span><span class="p">,</span> <span class="n">handler</span><span class="o">=</span><span class="s">&quot;.Complex&quot;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">metans</span><span class="p">,</span> <span class="s">&quot;subdirective&quot;</span><span class="p">),</span>
+<span class="gp">... </span>        <span class="n">name</span><span class="o">=</span><span class="s">&quot;factory&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="s">&quot;.IFactory&quot;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="o">.</span><span class="n">begin</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="s">&quot;testc&quot;</span><span class="p">),</span> <span class="bp">None</span><span class="p">,</span> <span class="s">&quot;third&quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="s">u&#39;ca&#39;</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="s">&#39;cc&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="s">&quot;factory&quot;</span><span class="p">),</span> <span class="s">&quot;fourth&quot;</span><span class="p">,</span> <span class="n">factory</span><span class="o">=</span><span class="s">&quot;.f&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that we can&#8217;t call a complex method unless there is a directive for
+it:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="s">&quot;factory2&quot;</span><span class="p">),</span> <span class="n">factory</span><span class="o">=</span><span class="s">&quot;.f&quot;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ConfigurationError</span>: <span class="n">(&#39;Invalid directive&#39;, &#39;factory2&#39;)</span>
+
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pprint</span><span class="p">(</span><span class="n">machine</span><span class="o">.</span><span class="n">actions</span><span class="p">)</span>
+<span class="go">[{&#39;args&#39;: (u&#39;aa&#39;, u&#39;xxx&#39;, &#39;cc&#39;),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;simple&#39;,</span>
+<span class="go">                    u&#39;aa&#39;,</span>
+<span class="go">                    u&#39;xxx&#39;,</span>
+<span class="go">                    &#39;cc&#39;),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;first&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (u&#39;naa&#39;, u&#39;nbb&#39;, &#39;ncc&#39;),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;newsimple&#39;,</span>
+<span class="go">                    u&#39;naa&#39;,</span>
+<span class="go">                    u&#39;nbb&#39;,</span>
+<span class="go">                    &#39;ncc&#39;),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;second&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;factory&#39;, 1, 2),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: None,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (),</span>
+<span class="go">  &#39;callable&#39;: None,</span>
+<span class="go">  &#39;discriminator&#39;: &#39;Complex.__init__&#39;,</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;third&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (u&#39;ca&#39;,),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;Complex.factory&#39;, 1, 2),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;fourth&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (u&#39;xxx&#39;, &#39;cc&#39;),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;Complex&#39;, 1, 2),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;third&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0}]</span>
+</pre></div>
+</div>
+<p>Done with the package</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Verify that we can use a simple directive outside of the package:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="s">&quot;simple&quot;</span><span class="p">),</span> <span class="n">a</span><span class="o">=</span><span class="s">u&quot;oaa&quot;</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="s">u&quot;occ&quot;</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="s">u&quot;obb&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>But we can&#8217;t use the factory directive, because it&#8217;s only valid
+inside a package directive:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">machine</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="s">&quot;factory&quot;</span><span class="p">),</span> <span class="n">factory</span><span class="o">=</span><span class="s">u&quot;.F&quot;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ConfigurationError</span>: <span class="n">(&#39;Invalid value for&#39;, &#39;factory&#39;,&quot;&quot;&quot; \</span>
+<span class="go">   &quot;&quot;&quot; &quot;Can&#39;t use leading dots in dotted names, no package has been set.&quot;)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pprint</span><span class="p">(</span><span class="n">machine</span><span class="o">.</span><span class="n">actions</span><span class="p">)</span>
+<span class="go">[{&#39;args&#39;: (u&#39;aa&#39;, u&#39;xxx&#39;, &#39;cc&#39;),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;simple&#39;,</span>
+<span class="go">                    u&#39;aa&#39;,</span>
+<span class="go">                    u&#39;xxx&#39;,</span>
+<span class="go">                    &#39;cc&#39;),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;first&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (u&#39;naa&#39;, u&#39;nbb&#39;, &#39;ncc&#39;),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;newsimple&#39;,</span>
+<span class="go">                    u&#39;naa&#39;,</span>
+<span class="go">                    u&#39;nbb&#39;,</span>
+<span class="go">                    &#39;ncc&#39;),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;second&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;factory&#39;, 1, 2),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: None,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (),</span>
+<span class="go">  &#39;callable&#39;: None,</span>
+<span class="go">  &#39;discriminator&#39;: &#39;Complex.__init__&#39;,</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;third&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (u&#39;ca&#39;,),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;Complex.factory&#39;, 1, 2),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;fourth&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (u&#39;xxx&#39;, &#39;cc&#39;),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;Complex&#39;, 1, 2),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: &#39;third&#39;,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0},</span>
+<span class="go"> {&#39;args&#39;: (u&#39;oaa&#39;, u&#39;obb&#39;, &#39;occ&#39;),</span>
+<span class="go">  &#39;callable&#39;: f,</span>
+<span class="go">  &#39;discriminator&#39;: (&#39;simple&#39;,</span>
+<span class="go">                    u&#39;oaa&#39;,</span>
+<span class="go">                    u&#39;obb&#39;,</span>
+<span class="go">                    &#39;occ&#39;),</span>
+<span class="go">  &#39;includepath&#39;: (),</span>
+<span class="go">  &#39;info&#39;: None,</span>
+<span class="go">  &#39;kw&#39;: {},</span>
+<span class="go">  &#39;order&#39;: 0}]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="overriding-included-configuration">
+<h2>Overriding Included Configuration<a class="headerlink" href="#overriding-included-configuration" title="Permalink to this headline">¶</a></h2>
+<p>When we have conflicting directives, we can resolve them if one of
+the conflicting directives was from a file that included all of
+the others.  The problem with this is that this requires that all
+of the overriding directives be in one file, typically the
+top-most including file. This isn&#8217;t very convenient.  Fortunately,
+we can overcome this with the includeOverrides directive. Let&#8217;s
+look at an example to see how this works.</p>
+<p>Look at the file <tt class="docutils literal"><span class="pre">bar.zcml</span></tt> (in <tt class="docutils literal"><span class="pre">zope/configuration/tests/samplepackage</span></tt>):</p>
+<ul class="simple">
+<li>It includes <tt class="docutils literal"><span class="pre">bar1.zcml</span></tt> and <tt class="docutils literal"><span class="pre">bar2.zcml</span></tt>.</li>
+<li><tt class="docutils literal"><span class="pre">bar1.zcml</span></tt> includes <tt class="docutils literal"><span class="pre">configure.zcml</span></tt> and has a <tt class="docutils literal"><span class="pre">foo</span></tt>
+directive.</li>
+<li><tt class="docutils literal"><span class="pre">bar2.zcml</span></tt> includes <tt class="docutils literal"><span class="pre">bar21.zcml</span></tt>, and has a <tt class="docutils literal"><span class="pre">foo</span></tt>
+directive that conflicts with one in <tt class="docutils literal"><span class="pre">bar1.zcml</span></tt>.</li>
+<li><tt class="docutils literal"><span class="pre">bar2.zcml</span></tt> also overrides a foo directive in <tt class="docutils literal"><span class="pre">bar21.zcml</span></tt>.</li>
+<li><tt class="docutils literal"><span class="pre">bar21.zcml</span></tt> has a <tt class="docutils literal"><span class="pre">foo</span></tt> directive that conflicts with one in in
+<tt class="docutils literal"><span class="pre">configure.zcml</span></tt>. Whew!</li>
+</ul>
+<p>Let&#8217;s see what happens when we try to process <tt class="docutils literal"><span class="pre">bar.zcml</span></tt>.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">os</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.config</span> <span class="kn">import</span> <span class="n">ConfigurationMachine</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.xmlconfig</span> <span class="kn">import</span> <span class="n">include</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.xmlconfig</span> <span class="kn">import</span> <span class="n">registerCommonDirectives</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">context</span> <span class="o">=</span> <span class="n">ConfigurationMachine</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registerCommonDirectives</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests</span> <span class="kn">import</span> <span class="n">__file__</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">here</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">here</span><span class="p">,</span> <span class="s">&quot;samplepackage&quot;</span><span class="p">,</span> <span class="s">&quot;bar.zcml&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">include</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>So far so good, let&#8217;s look at the configuration actions:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.test_xmlconfig</span> <span class="kn">import</span> <span class="n">clean_actions</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pprint</span> <span class="o">=</span> <span class="n">PrettyPrinter</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="mi">70</span><span class="p">)</span><span class="o">.</span><span class="n">pprint</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pprint</span><span class="p">(</span><span class="n">clean_actions</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">actions</span><span class="p">))</span>
+<span class="go">[{&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 0)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/bar.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar1.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/configure.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/configure.zcml&quot;, line 12.2-12.29&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 1)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/bar.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar1.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar1.zcml&quot;, line 5.2-5.24&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 0)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/bar.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar2.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar21.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar21.zcml&quot;, line 3.2-3.24&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 2)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/bar.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar2.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar21.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar21.zcml&quot;, line 4.2-4.24&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 2)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/bar.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar2.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar2.zcml&quot;, line 5.2-5.24&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 1)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/bar.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar2.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar2.zcml&quot;, line 6.2-6.24&#39;}]</span>
+</pre></div>
+</div>
+<p>As you can see, there are a number of conflicts (actions with the same
+discriminator).  Some of these can be resolved, but many can&#8217;t, as
+we&#8217;ll find if we try to execuse the actions:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.config</span> <span class="kn">import</span> <span class="n">ConfigurationConflictError</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.test_xmlconfig</span> <span class="kn">import</span> <span class="n">clean_text_w_paths</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">try</span><span class="p">:</span>
+<span class="gp">... </span>   <span class="n">v</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">execute_actions</span><span class="p">()</span>
+<span class="gp">... </span><span class="k">except</span> <span class="n">ConfigurationConflictError</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span>
+<span class="gp">... </span>   <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">clean_text_w_paths</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">))</span>
+<span class="go">Conflicting configuration actions</span>
+<span class="go">  For: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 0))</span>
+<span class="go">    File &quot;tests/samplepackage/configure.zcml&quot;, line 12.2-12.29</span>
+<span class="go">        &lt;test:foo x=&quot;blah&quot; y=&quot;0&quot; /&gt;</span>
+<span class="go">    File &quot;tests/samplepackage/bar21.zcml&quot;, line 3.2-3.24</span>
+<span class="go">        &lt;foo x=&quot;blah&quot; y=&quot;0&quot; /&gt;</span>
+<span class="go">  For: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 1))</span>
+<span class="go">    File &quot;tests/samplepackage/bar1.zcml&quot;, line 5.2-5.24</span>
+<span class="go">        &lt;foo x=&quot;blah&quot; y=&quot;1&quot; /&gt;</span>
+<span class="go">    File &quot;tests/samplepackage/bar2.zcml&quot;, line 6.2-6.24</span>
+<span class="go">        &lt;foo x=&quot;blah&quot; y=&quot;1&quot; /&gt;</span>
+</pre></div>
+</div>
+<p>Note that the conflicts for ((&#8216;x&#8217;, &#8216;blah&#8217;), (&#8216;y&#8217;, 2)) aren&#8217;t
+included in the error because they could be resolved.</p>
+<p>Let&#8217;s try this again using includeOverrides.  We&#8217;ll include
+baro.zcml which includes bar2.zcml as overrides.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">context</span> <span class="o">=</span> <span class="n">ConfigurationMachine</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registerCommonDirectives</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">here</span><span class="p">,</span> <span class="s">&quot;samplepackage&quot;</span><span class="p">,</span> <span class="s">&quot;baro.zcml&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">include</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now, if we look at the actions:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">pprint</span><span class="p">(</span><span class="n">clean_actions</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">actions</span><span class="p">))</span>
+<span class="go">[{&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 0)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/baro.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar1.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/configure.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/configure.zcml&quot;, line 12.2-12.29&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 1)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/baro.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar1.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar1.zcml&quot;, line 5.2-5.24&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 0)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/baro.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar21.zcml&quot;, line 3.2-3.24&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 2)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/baro.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar2.zcml&quot;, line 5.2-5.24&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 1)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/baro.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar2.zcml&quot;, line 6.2-6.24&#39;}]</span>
+</pre></div>
+</div>
+<p>We see that:</p>
+<ul class="simple">
+<li>The conflicting actions between bar2.zcml and bar21.zcml have
+been resolved, and</li>
+<li>The remaining (after conflict resolution) actions from bar2.zcml
+and bar21.zcml have the includepath that they would have if they
+were defined in baro.zcml and this override the actions from
+bar1.zcml and configure.zcml.</li>
+</ul>
+<p>We can now execute the actions without problem, since the
+remaining conflicts are resolvable:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">context</span><span class="o">.</span><span class="n">execute_actions</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>We should now have three entries in foo.data:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.samplepackage</span> <span class="kn">import</span> <span class="n">foo</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.test_xmlconfig</span> <span class="kn">import</span> <span class="n">clean_info_path</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">foo</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+<span class="go">3</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span> <span class="o">=</span> <span class="n">foo</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">args</span>
+<span class="go">((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 0))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">clean_info_path</span><span class="p">(</span><span class="sb">`data.info`</span><span class="p">)</span>
+<span class="go">File &quot;tests/samplepackage/bar21.zcml&quot;, line 3.2-3.24</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span> <span class="o">=</span> <span class="n">foo</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">args</span>
+<span class="go">((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 2))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">clean_info_path</span><span class="p">(</span><span class="sb">`data.info`</span><span class="p">)</span>
+<span class="go">File &quot;tests/samplepackage/bar2.zcml&quot;, line 5.2-5.24</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span> <span class="o">=</span> <span class="n">foo</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">args</span>
+<span class="go">((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 1))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">clean_info_path</span><span class="p">(</span><span class="sb">`data.info`</span><span class="p">)</span>
+<span class="go">File &quot;tests/samplepackage/bar2.zcml&quot;, line 6.2-6.24</span>
+</pre></div>
+</div>
+<p>We expect the exact same results when using includeOverrides with
+the <tt class="docutils literal"><span class="pre">files</span></tt> argument instead of the <tt class="docutils literal"><span class="pre">file</span></tt> argument.  The
+baro2.zcml file uses the former:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">context</span> <span class="o">=</span> <span class="n">ConfigurationMachine</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registerCommonDirectives</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">here</span><span class="p">,</span> <span class="s">&quot;samplepackage&quot;</span><span class="p">,</span> <span class="s">&quot;baro2.zcml&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">include</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Actions look like above:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">pprint</span><span class="p">(</span><span class="n">clean_actions</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">actions</span><span class="p">))</span>
+<span class="go">[{&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 0)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/baro2.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar1.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/configure.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/configure.zcml&quot;, line 12.2-12.29&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 1)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/baro2.zcml&#39;,</span>
+<span class="go">                  &#39;tests/samplepackage/bar1.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar1.zcml&quot;, line 5.2-5.24&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 0)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/baro2.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar21.zcml&quot;, line 3.2-3.24&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 2)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/baro2.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar2.zcml&quot;, line 5.2-5.24&#39;},</span>
+<span class="go"> {&#39;discriminator&#39;: ((&#39;x&#39;, &#39;blah&#39;), (&#39;y&#39;, 1)),</span>
+<span class="go">  &#39;includepath&#39;: [&#39;tests/samplepackage/baro2.zcml&#39;],</span>
+<span class="go">  &#39;info&#39;: &#39;File &quot;tests/samplepackage/bar2.zcml&quot;, line 6.2-6.24&#39;}]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">context</span><span class="o">.</span><span class="n">execute_actions</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">foo</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+<span class="go">3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">del</span> <span class="n">foo</span><span class="o">.</span><span class="n">data</span><span class="p">[:]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="making-specific-directives-conditional">
+<h2>Making specific directives conditional<a class="headerlink" href="#making-specific-directives-conditional" title="Permalink to this headline">¶</a></h2>
+<p>There is a <tt class="docutils literal"><span class="pre">condition</span></tt> attribute in the
+&#8220;<a class="reference external" href="http://namespaces.zope.org/zcml">http://namespaces.zope.org/zcml</a>&#8221; namespace which is honored on all
+elements in ZCML.  The value of the attribute is an expression
+which is used to determine if that element and its descendents are
+used.  If the condition is true, processing continues normally,
+otherwise that element and its descendents are ignored.</p>
+<p>Currently the expression is always of the form &#8220;have featurename&#8221;, and it
+checks for the presence of a <tt class="docutils literal"><span class="pre">&lt;meta:provides</span> <span class="pre">feature=&quot;featurename&quot;</span> <span class="pre">/&gt;</span></tt>.</p>
+<p>Our demonstration uses a trivial registry; each registration consists
+of a simple id inserted in the global <cite>registry</cite> in this module.  We
+can checked that a registration was made by checking whether the id is
+present in <cite>registry</cite>.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.conditions</span> <span class="kn">import</span> <span class="n">registry</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+<p>We start by loading the example ZCML file, <em>conditions.zcml</em>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">zope.configuration.tests</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.xmlconfig</span> <span class="kn">import</span> <span class="nb">file</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">context</span> <span class="o">=</span> <span class="nb">file</span><span class="p">(</span><span class="s">&quot;conditions.zcml&quot;</span><span class="p">,</span> <span class="n">zope</span><span class="o">.</span><span class="n">configuration</span><span class="o">.</span><span class="n">tests</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To show that our sample directive works, we see that the unqualified
+registration was successful:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="s">&quot;unqualified.registration&quot;</span> <span class="ow">in</span> <span class="n">registry</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>When the expression specified with <tt class="docutils literal"><span class="pre">zcml:condition</span></tt> evaluates to
+true, the element it is attached to and all contained elements (not
+otherwise conditioned) should be processed normally:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="s">&quot;direct.true.condition&quot;</span> <span class="ow">in</span> <span class="n">registry</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="s">&quot;nested.true.condition&quot;</span> <span class="ow">in</span> <span class="n">registry</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>However, when the expression evaluates to false, the conditioned
+element and all contained elements should be ignored:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="s">&quot;direct.false.condition&quot;</span> <span class="ow">in</span> <span class="n">registry</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="s">&quot;nested.false.condition&quot;</span> <span class="ow">in</span> <span class="n">registry</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+<p>Conditions on container elements affect the conditions in nested
+elements in a reasonable way.  If an &#8220;outer&#8221; condition is true, nested
+conditions are processed normally:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="s">&quot;true.condition.nested.in.true&quot;</span> <span class="ow">in</span> <span class="n">registry</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="s">&quot;false.condition.nested.in.true&quot;</span> <span class="ow">in</span> <span class="n">registry</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+<p>If the outer condition is false, inner conditions are not even
+evaluated, and the nested elements are ignored:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="s">&quot;true.condition.nested.in.false&quot;</span> <span class="ow">in</span> <span class="n">registry</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="s">&quot;false.condition.nested.in.false&quot;</span> <span class="ow">in</span> <span class="n">registry</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="filtering-and-inhibiting-configuration">
+<h2>Filtering and Inhibiting Configuration<a class="headerlink" href="#filtering-and-inhibiting-configuration" title="Permalink to this headline">¶</a></h2>
+<p>The <tt class="docutils literal"><span class="pre">exclude</span></tt> standard directive is provided for inhibiting unwanted
+configuration. It is used to exclude processing of configuration files.
+It is useful when including a configuration that includes some other
+configuration that you don&#8217;t want.</p>
+<p>It must be used BEFORE including the files to be excluded.</p>
+<p>First, let&#8217;s look at an example.  The zope.configuration.tests.excludedemo
+package has a ZCML configuration that includes some other configuration files.</p>
+<p>We&#8217;ll set a log handler so we can see what&#8217;s going on:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">logging</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">logging.handlers</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">sys</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;config&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">oldlevel</span> <span class="o">=</span> <span class="n">logger</span><span class="o">.</span><span class="n">level</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">handler</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">handlers</span><span class="o">.</span><span class="n">MemoryHandler</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logger</span><span class="o">.</span><span class="n">addHandler</span><span class="p">(</span><span class="n">handler</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now, we&#8217;ll include the zope.configuration.tests.excludedemo config:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.xmlconfig</span> <span class="kn">import</span> <span class="n">string</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">string</span><span class="p">(</span><span class="s">&#39;&lt;include package=&quot;zope.configuration.tests.excludedemo&quot; /&gt;&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">handler</span><span class="o">.</span><span class="n">buffer</span><span class="p">)</span>
+<span class="go">3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">msg</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">handler</span><span class="o">.</span><span class="n">buffer</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;include &#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;zope/configuration/tests/excludedemo/configure.zcml&#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;include &#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;zope/configuration/tests/excludedemo/sub/configure.zcml&#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;include &#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;zope/configuration/tests/excludedemo/spam.zcml&#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">del</span> <span class="n">handler</span><span class="o">.</span><span class="n">buffer</span><span class="p">[:]</span>
+</pre></div>
+</div>
+<p>Each run of the configuration machinery runs with fresh state, so
+rerunning gives the same thing:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">string</span><span class="p">(</span><span class="s">&#39;&lt;include package=&quot;zope.configuration.tests.excludedemo&quot; /&gt;&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">handler</span><span class="o">.</span><span class="n">buffer</span><span class="p">)</span>
+<span class="go">3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">msg</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">handler</span><span class="o">.</span><span class="n">buffer</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;include &#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;zope/configuration/tests/excludedemo/configure.zcml&#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;include &#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;zope/configuration/tests/excludedemo/sub/configure.zcml&#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;include &#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;zope/configuration/tests/excludedemo/spam.zcml&#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">del</span> <span class="n">handler</span><span class="o">.</span><span class="n">buffer</span><span class="p">[:]</span>
+</pre></div>
+</div>
+<p>Now, we&#8217;ll use the exclude directive to exclude the two files included
+by the configuration file in zope.configuration.tests.excludedemo:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">_</span> <span class="o">=</span> <span class="n">string</span><span class="p">(</span>
+<span class="gp">... </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="sd">&lt;configure  xmlns=&quot;http://namespaces.zope.org/zope&quot;&gt;</span>
+<span class="gp">... </span><span class="sd">  &lt;exclude package=&quot;zope.configuration.tests.excludedemo.sub&quot; /&gt;</span>
+<span class="gp">... </span><span class="sd">  &lt;exclude package=&quot;zope.configuration.tests.excludedemo&quot; file=&quot;spam.zcml&quot; /&gt;</span>
+<span class="gp">... </span><span class="sd">  &lt;include package=&quot;zope.configuration.tests.excludedemo&quot; /&gt;</span>
+<span class="gp">... </span><span class="sd">&lt;/configure&gt;</span>
+<span class="gp">... </span><span class="sd">&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">handler</span><span class="o">.</span><span class="n">buffer</span><span class="p">)</span>
+<span class="go">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">msg</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">handler</span><span class="o">.</span><span class="n">buffer</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;include &#39;</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">logged</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&#39;zope/configuration/tests/excludedemo/configure.zcml&#39;</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="creating-simple-directives">
+<h2>Creating simple directives<a class="headerlink" href="#creating-simple-directives" title="Permalink to this headline">¶</a></h2>
+<p>A simple directive is a directive that doesn&#8217;t contain other
+directives. It can be implemented via a fairly simple function.
+To implement a simple directive, you need to do 3 things:</p>
+<ul class="simple">
+<li>You need to create a schema to describe the directive parameters,</li>
+<li>You need to write a directive handler, and</li>
+<li>You need to register the directive.</li>
+</ul>
+<p>In this example, we&#8217;ll implement a contrived example that records
+information about files in a file registry. The file registry is just
+the list, <tt class="docutils literal"><span class="pre">file_registry</span></tt>.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.simple</span> <span class="kn">import</span> <span class="n">file_registry</span>
+</pre></div>
+</div>
+<p>Our registry will contain tuples with:</p>
+<blockquote>
+<div><ul class="simple">
+<li>file path</li>
+<li>file title</li>
+<li>description</li>
+<li>Information about where the file was defined</li>
+</ul>
+</div></blockquote>
+<p>Our schema is defined in <tt class="docutils literal"><span class="pre">zope.configuration.tests.simple.IRegisterFile</span></tt>
+(q.v).</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.simple</span> <span class="kn">import</span> <span class="n">IRegisterFile</span>
+</pre></div>
+</div>
+<p>Our schema lists the <tt class="docutils literal"><span class="pre">path</span></tt> and <tt class="docutils literal"><span class="pre">title</span></tt> attributes.  We&#8217;ll get the
+description and other information for free, as we&#8217;ll see later.  The
+title is not required, and may be omitted.</p>
+<p>The job of a configuration handler is to compute one or more
+configuration actions.  Configuration actions are defered function
+calls. The handler doesn&#8217;t perform the actions. It just computes
+actions, which may be performed later if they are not overridden by
+other directives.</p>
+<p>Our handler is given in the function,
+<tt class="docutils literal"><span class="pre">zope.configuration.tests.simple.registerFile</span></tt>.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.simple</span> <span class="kn">import</span> <span class="n">registerFile</span>
+</pre></div>
+</div>
+<p>It takes a context, a path and a title. All directive handlers take the
+directive context as the first argument.  A directive context, at a minimim,
+implements, <tt class="docutils literal"><span class="pre">zope.configuration.IConfigurationContext</span></tt>.
+(Specialized contexts can implement more specific interfaces. We&#8217;ll say more
+about that when we talk about grouping directives.)  The title argument
+must have a default value, because we indicated that the title was not
+required in the schema. (Alternatively, we could have made the title
+required, but provided a default value in the schema.</p>
+<p>In the first line of function <tt class="docutils literal"><span class="pre">registerFile</span></tt>, we get the context information
+object. This object contains information about the configuration
+directive, such as the file and location within the file of the
+directive.</p>
+<p>The context information object also has a text attribute that contains
+the textual data contained by the configuration directive. (This is
+the concatenation of all of the xml text nodes directly contained by
+the directive.)  We use this for our description in the second line
+of the handler.</p>
+<p>The last thing the handler does is to compute an action by calling the
+action method of the context.  It passes the action method 3 keyword
+arguments:</p>
+<ul>
+<li><p class="first">discriminator</p>
+<p>The discriminator is used to identify the action to be performed so
+that duplicate actions can be detected.  Two actions are duplicated,
+and this conflict, if they have the same discriminator values and
+the values are not <tt class="docutils literal"><span class="pre">None</span></tt>.  Conflicting actions can be resolved if
+one of the conflicting actions is from a configuration file that
+directly or indirectly includes the files containing the other
+conflicting actions.</p>
+<p>In function <tt class="docutils literal"><span class="pre">registerFile</span></tt>, we a tuple with the string
+<tt class="docutils literal"><span class="pre">'RegisterFile'</span></tt> and the path to be registered.</p>
+</li>
+<li><p class="first">callable</p>
+<p>The callable is the object to be called to perform the action.</p>
+</li>
+<li><p class="first">args</p>
+<p>The args argument contains positinal arguments to be passed to the
+callable. In function <tt class="docutils literal"><span class="pre">registerFile</span></tt>, we pass a tuple containing a
+<tt class="docutils literal"><span class="pre">FileInfo</span></tt> object.</p>
+<dl class="docutils">
+<dt>(Note that there&#8217;s nothing special about the FileInfo class. It has</dt>
+<dd><p class="first last">nothing to do with creating simple directives. It&#8217;s just used in
+this example to organize the application data.)</p>
+</dd>
+</dl>
+</li>
+</ul>
+<p>The final step in implementing the simple directive is to register
+it. We do that with the zcml <tt class="docutils literal"><span class="pre">meta:directive</span></tt> directive.  This is
+given in the file simple.zcml.  Here we specify the name, namespace,
+schema, and handler for the directive.  We also provide a
+documentation for the directive as text between the start and end
+tags.</p>
+<p>The file simple.zcml also includes some directives that use the new
+directive to register some files.</p>
+<p>Now let&#8217;s try it all out:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration</span> <span class="kn">import</span> <span class="n">tests</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.xmlconfig</span> <span class="kn">import</span> <span class="nb">file</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">context</span> <span class="o">=</span> <span class="nb">file</span><span class="p">(</span><span class="s">&quot;simple.zcml&quot;</span><span class="p">,</span> <span class="n">tests</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now we should see some file information in the registry:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.test_xmlconfig</span> <span class="kn">import</span> <span class="n">clean_text_w_paths</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.test_xmlconfig</span> <span class="kn">import</span> <span class="n">clean_path</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">clean_path</span><span class="p">(</span><span class="n">file_registry</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+<span class="go">tests/simple.py</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">file_registry</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">title</span>
+<span class="go">How to create a simple directive</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">file_registry</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">description</span>
+<span class="go">Describes how to implement a simple directive</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">clean_text_w_paths</span><span class="p">(</span><span class="n">file_registry</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">info</span><span class="p">)</span>
+<span class="go">File &quot;tests/simple.zcml&quot;, line 19.2-24.2</span>
+<span class="go">    &lt;files:register</span>
+<span class="go">        path=&quot;simple.py&quot;</span>
+<span class="go">        title=&quot;How to create a simple directive&quot;</span>
+<span class="go">        &gt;</span>
+<span class="go">      Describes how to implement a simple directive</span>
+<span class="go">    &lt;/files:register&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">clean_path</span><span class="p">(</span><span class="n">file_registry</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+<span class="go">tests/simple.zcml</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">file_registry</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">title</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">desc</span> <span class="o">=</span> <span class="n">file_registry</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">description</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">l</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span>
+<span class="gp">... </span>                 <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">desc</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+<span class="gp">... </span>                   <span class="k">if</span> <span class="n">l</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()])</span>
+<span class="go">Shows the ZCML directives needed to register a simple directive.</span>
+<span class="go">    Also show some usage examples,</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">clean_text_w_paths</span><span class="p">(</span><span class="n">file_registry</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">info</span><span class="p">)</span>
+<span class="go">File &quot;tests/simple.zcml&quot;, line 26.2-30.2</span>
+<span class="go">    &lt;files:register path=&quot;simple.zcml&quot;&gt;</span>
+<span class="go">      Shows the ZCML directives needed to register a simple directive.</span>
+<span class="go">      Also show some usage examples,</span>
+<span class="go">    &lt;/files:register&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">clean_path</span><span class="p">(</span><span class="n">file_registry</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+<span class="go">tests/__init__.py</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">file_registry</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">title</span>
+<span class="go">Make this a package</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">file_registry</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">description</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">clean_text_w_paths</span><span class="p">(</span><span class="n">file_registry</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">info</span><span class="p">)</span>
+<span class="go">File &quot;tests/simple.zcml&quot;, line 32.2-32.67</span>
+<span class="go">    &lt;files:register path=&quot;__init__.py&quot; title=&quot;Make this a package&quot; /&gt;</span>
+</pre></div>
+</div>
+<p>Clean up after ourselves:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">del</span> <span class="n">file_registry</span><span class="p">[:]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="creating-nested-directives">
+<h2>Creating nested directives<a class="headerlink" href="#creating-nested-directives" title="Permalink to this headline">¶</a></h2>
+<p>When using ZCML, you sometimes nest ZCML directives. This is typically
+done either to:</p>
+<ul class="simple">
+<li>Avoid repetative input.  Information shared among multiple
+directives is provided in a surrounding directive.</li>
+<li>Put together information that is too complex or structured to express
+with a single set of directive parameters.</li>
+</ul>
+<p>Grouping directives are used to handle both of these cases.  See the
+documentation in <tt class="xref py py-mod docutils literal"><span class="pre">zope.configure.zopeconfigure</span></tt>. This file describes the
+implementation of the zope <tt class="docutils literal"><span class="pre">configure</span></tt> directive, which groups
+directives that use a common package or internationalization domain.
+You should also have read the section on &#8220;Creating simple directives.&#8221;</p>
+<p>This file shows you how to handle the second case above. In this case,
+we have grouping directives that are meant to collaborate with
+specific contained directives.  To do this, you have the grouping
+directives declare a more specific (or alternate) interface to
+<tt class="docutils literal"><span class="pre">IConfigurationContext</span></tt>. Directives designed to work with those
+grouping directives are registered for the new interface.</p>
+<p>Let&#8217;s look at example. Suppose we wanted to be able to define schema
+using ZCML.  We&#8217;d use a grouping directive to specify schemas and
+contained directives to specify fields within the schema.  We&#8217;ll use a
+schema registry to hold the defined schemas:</p>
+<div class="highlight-python"><pre>.. doctest::</pre>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.nested</span> <span class="kn">import</span> <span class="n">schema_registry</span>
+</pre></div>
+</div>
+<p>A schema has a name, an id, some documentation, and some fields.
+We&#8217;ll provide the name and the id as parameters. We&#8217;ll define fields
+as subdirectives and documentation as text contained in the schema
+directive.  The schema directive uses the schema, <tt class="docutils literal"><span class="pre">ISchemaInfo</span></tt> for
+it&#8217;s parameters.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.nested</span> <span class="kn">import</span> <span class="n">ISchemaInfo</span>
+</pre></div>
+</div>
+<p>We also define the schema, ISchema, that specifies an attribute that
+nested field directives will use to store the fields they define.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.nested</span> <span class="kn">import</span> <span class="n">ISchema</span>
+</pre></div>
+</div>
+<p>The class, <tt class="docutils literal"><span class="pre">Schema</span></tt>, provides the handler for the schema directive. (If
+you haven&#8217;t read the documentation in <tt class="docutils literal"><span class="pre">zopeconfigure.py</span></tt>, you need
+to do so now.)  The constructor saves its arguments as attributes
+and initializes its <tt class="docutils literal"><span class="pre">fields</span></tt> attribute:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.tests.nested</span> <span class="kn">import</span> <span class="n">Schema</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">after</span></tt> method of the <tt class="docutils literal"><span class="pre">Schema</span></tt> class creates a schema and
+computes an action to register the schema in the schema registry.  The
+discriminator prevents two schema directives from registering the same
+schema.</p>
+<p>It&#8217;s important to note that when we call the <tt class="docutils literal"><span class="pre">action</span></tt> method on
+<tt class="docutils literal"><span class="pre">self</span></tt>, rather than on <tt class="docutils literal"><span class="pre">self.context</span></tt>.  This is because, in a
+grouping directive handler, the handler instance is itself a context.
+When we call the <tt class="docutils literal"><span class="pre">action</span></tt> method, the method stores additional meta
+data associated with the context it was called on. This meta data
+includes an include path, used when resolving conflicting actions,
+and an object that contains information about the XML source used
+to invole the directive. If we called the action method on
+<tt class="docutils literal"><span class="pre">self.context</span></tt>, the wrong meta data would be associated with the
+configuration action.</p>
+<p>The file <tt class="docutils literal"><span class="pre">schema.zcml</span></tt> contains the meta-configuration directive
+that defines the schema directive.</p>
+<p>To define fields, we&#8217;ll create directives to define the fields.
+Let&#8217;s start with a <tt class="docutils literal"><span class="pre">text</span></tt> field.  <tt class="docutils literal"><span class="pre">ITextField</span></tt> defines the schema for
+text field parameters. It extends <tt class="docutils literal"><span class="pre">IFieldInfo</span></tt>, which defines data
+common to all fields.  We also define a simple handler method,
+textField, that takes a context and keyword arguments. (For
+information on writing simple directives, see <tt class="docutils literal"><span class="pre">test_simple.py</span></tt>.)
+We&#8217;ve abstracted most of the logic into the function <tt class="docutils literal"><span class="pre">field</span></tt>.</p>
+<p>The <tt class="docutils literal"><span class="pre">field</span></tt> function computes a field instance using the
+constructor, and the keyword arguments passed to it.  It also uses the
+context information object to get the text content of the directive,
+which it uses for the field description.</p>
+<p>After computing the field instance, it gets the <tt class="docutils literal"><span class="pre">Schema</span></tt> instance,
+which is the context of the context passed to the function. The
+function checks to see if there is already a field with that name. If
+there is, it raises an error. Otherwise, it saves the field.</p>
+<p>We also define an <tt class="docutils literal"><span class="pre">IIntInfo</span></tt> schema and <tt class="docutils literal"><span class="pre">intField</span></tt> handler
+function to support defining integer fields.</p>
+<p>We register the <tt class="docutils literal"><span class="pre">text</span></tt> and <tt class="docutils literal"><span class="pre">int</span></tt> directives in <tt class="docutils literal"><span class="pre">schema.zcml</span></tt>.
+These are like the simple directive definition we saw in
+<tt class="docutils literal"><span class="pre">test_simple.py</span></tt> with an important exception.  We provide a
+<tt class="docutils literal"><span class="pre">usedIn</span></tt> parameter to say that these directives can <em>only</em> ne used
+in a <tt class="docutils literal"><span class="pre">ISchema</span></tt> context. In other words, these can only be used
+inside of <tt class="docutils literal"><span class="pre">schema</span></tt> directives.</p>
+<p>The <tt class="docutils literal"><span class="pre">schema.zcml</span></tt> file also contains some sample <tt class="docutils literal"><span class="pre">schema</span></tt>
+directives.  We can execute the file:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration</span> <span class="kn">import</span> <span class="n">tests</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.xmlconfig</span> <span class="kn">import</span> <span class="nb">file</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">context</span> <span class="o">=</span> <span class="nb">file</span><span class="p">(</span><span class="s">&quot;schema.zcml&quot;</span><span class="p">,</span> <span class="n">tests</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>And verify that the schema registery has the schemas we expect:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">pprint</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">schema_registry</span><span class="p">))</span>
+<span class="go">[&#39;zope.configuration.tests.nested.I1&#39;,</span>
+<span class="go"> &#39;zope.configuration.tests.nested.I2&#39;]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">sorted</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">r</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">r</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="n">r</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i1</span> <span class="o">=</span> <span class="n">schema_registry</span><span class="p">[</span><span class="s">&#39;zope.configuration.tests.nested.I1&#39;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">i1</span><span class="p">)</span>
+<span class="go">[&#39;a&#39;, &#39;b&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i1</span><span class="p">[</span><span class="s">&#39;a&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;Text&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i1</span><span class="p">[</span><span class="s">&#39;a&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">description</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+<span class="go">u&#39;A\n\n          Blah blah&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i1</span><span class="p">[</span><span class="s">&#39;a&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min_length</span>
+<span class="go">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i1</span><span class="p">[</span><span class="s">&#39;b&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;Int&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i1</span><span class="p">[</span><span class="s">&#39;b&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">description</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+<span class="go">u&#39;B\n\n          Not feeling very creative&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i1</span><span class="p">[</span><span class="s">&#39;b&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span>
+<span class="go">1</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i1</span><span class="p">[</span><span class="s">&#39;b&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span>
+<span class="go">10</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i2</span> <span class="o">=</span> <span class="n">schema_registry</span><span class="p">[</span><span class="s">&#39;zope.configuration.tests.nested.I2&#39;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">i2</span><span class="p">)</span>
+<span class="go">[&#39;x&#39;, &#39;y&#39;]</span>
+</pre></div>
+</div>
+<p>Now let&#8217;s look at some error situations. For example, let&#8217;s see what
+happens if we use a field directive outside of a schema dorective.
+(Note that we used the context we created above, so we don&#8217;t have to
+redefine our directives:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.xmlconfig</span> <span class="kn">import</span> <span class="n">string</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.xmlconfig</span> <span class="kn">import</span> <span class="n">ZopeXMLConfigurationError</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">try</span><span class="p">:</span>
+<span class="gp">... </span>   <span class="n">v</span> <span class="o">=</span> <span class="n">string</span><span class="p">(</span>
+<span class="gp">... </span>     <span class="s">&#39;&lt;text xmlns=&quot;http://sample.namespaces.zope.org/schema&quot; name=&quot;x&quot; /&gt;&#39;</span><span class="p">,</span>
+<span class="gp">... </span>     <span class="n">context</span><span class="p">)</span>
+<span class="gp">... </span><span class="k">except</span> <span class="n">ZopeXMLConfigurationError</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span>
+<span class="gp">... </span>  <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">v</span>
+<span class="go">File &quot;&lt;string&gt;&quot;, line 1.0</span>
+<span class="go">    ConfigurationError: The directive (u&#39;http://sample.namespaces.zope.org/schema&#39;, u&#39;text&#39;) cannot be used in this context</span>
+</pre></div>
+</div>
+<p>Let&#8217;s see what happens if we declare duplicate fields:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">try</span><span class="p">:</span>
+<span class="gp">... </span>   <span class="n">v</span> <span class="o">=</span> <span class="n">string</span><span class="p">(</span>
+<span class="gp">... </span>     <span class="sd">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="sd">     &lt;schema name=&quot;I3&quot; id=&quot;zope.configuration.tests.nested.I3&quot;</span>
+<span class="gp">... </span><span class="sd">             xmlns=&quot;http://sample.namespaces.zope.org/schema&quot;&gt;</span>
+<span class="gp">... </span><span class="sd">       &lt;text name=&quot;x&quot; /&gt;</span>
+<span class="gp">... </span><span class="sd">       &lt;text name=&quot;x&quot; /&gt;</span>
+<span class="gp">... </span><span class="sd">     &lt;/schema&gt;</span>
+<span class="gp">... </span><span class="sd">     &#39;&#39;&#39;</span><span class="p">,</span>
+<span class="gp">... </span>     <span class="n">context</span><span class="p">)</span>
+<span class="gp">... </span><span class="k">except</span> <span class="n">ZopeXMLConfigurationError</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span>
+<span class="gp">... </span>  <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">v</span>
+<span class="go">File &quot;&lt;string&gt;&quot;, line 5.7-5.24</span>
+<span class="go">    ValueError: (&#39;Duplicate field&#39;, &#39;x&#39;)</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Zope configuration system</a><ul>
+<li><a class="reference internal" href="#using-the-configuration-machinery-programatically">Using the configuration machinery programatically</a></li>
+<li><a class="reference internal" href="#overriding-included-configuration">Overriding Included Configuration</a></li>
+<li><a class="reference internal" href="#making-specific-directives-conditional">Making specific directives conditional</a></li>
+<li><a class="reference internal" href="#filtering-and-inhibiting-configuration">Filtering and Inhibiting Configuration</a></li>
+<li><a class="reference internal" href="#creating-simple-directives">Creating simple directives</a></li>
+<li><a class="reference internal" href="#creating-nested-directives">Creating nested directives</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter"><tt class="docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal"><span class="pre">zope.configuration</span></tt> Documentation</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="api.html"
+                        title="next chapter"><tt class="docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal docutils literal"><span class="pre">zope.configuration</span></tt> API Reference</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/narr.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="api.html" title="zope.configuration API Reference"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="zope.configuration Documentation"
+             >previous</a> |</li>
+        <li><a href="index.html">zope.configuration 4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
