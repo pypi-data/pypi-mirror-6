@@ -1,0 +1,10 @@
+__version__ = "0.6.21"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.6.21)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '18cf88bb8879f1c1bb2c16ba340657fbcf0eb5fe'
+__git_head_subject__ = 'adding zc.buildout to development scripts'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
