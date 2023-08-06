@@ -1,0 +1,53 @@
+{% extends "admin/firmware/base_build.html" %}
+{% load code staticfiles %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" type="text/css" media="screen" href="{% static "controller/css/default.css" %}"/>
+{% endblock %}
+
+{% block content %}
+    {{ block.super }}
+    <ul>
+        <li><b>Download:</b> <a href={{ build.image.url }}>{{ build.image_name }}</a> </li>
+        <ul>
+            <li>Build Date: {{ build.date }}</li>
+            <li>Version: {{ build.version }}</li>
+            <li>SHA256: {{ build.image_sha256 }}</li>
+            <li>Base Image: {{ base_image }}</li>
+        </ul>
+    </ul>
+    <div style="margin-bottom:20px; margin-top:30px;">
+    <fieldset class="module aligned">
+        <h2>Instructions</h2>
+        <h4>Upload the firmware image</h4>
+        <p>The firmware can be dowloaded from this page into your computer. Then upload the firmware to the node, for instance by using <code>scp</code> to copy the image into the node's temporary directory:</p>
+        {% code 'bash' %}scp {{ build.image_name }} root@[{{ node.mgmt_net.addr }}]:/tmp{% endcode %}
+        
+        <h4>Install the firmware image</h4>
+        <p style="margin-top:1em">You can use <code>ssh</code> to access the node and enter its temporary directory:</p>
+        {% code 'bash' %}ssh root@{{ node.mgmt_net.addr }}
+cd /tmp{% endcode %}
+
+        <p style="margin-top:1em">The following command can be used for flashing
+        this image (remember to change the <strong>destination device</strong>). <br/>
+        <strong>WARNING!</strong> Be sure you execute these commands 
+        <strong>INSIDE</strong> the node, not in your own computer!</p>
+        
+        <ol type="A">
+            <li>If the current operating system of the node is not CONFINE execute:
+            {% code 'bash' %}gunzip {{ build.image_name }} -c | dd of=/dev/sdX bs=1M; sync{% endcode %}<br/></li>
+            <li>If the current operating system running in the node is CONFINE execute:
+            {% code 'bash' %}# This command will upgrade your node:
+confine.sysupgrade -n {{ build.image_name }}{% endcode %}</li>
+        </ol>
+
+        <p>The CONFINE wiki contains more information on <a href="https://wiki.confine-project.eu/soft:node-upgrade">node upgrade</a>.</p>
+    </fieldset>
+    </div>
+    </ul>
+    <p class="deletelink-box">
+        <a href="{% url 'admin:nodes_node_firmware_delete' node.pk %}"
+           class="deletelink">Delete build</a>
+    </p>
+{% endblock %}
