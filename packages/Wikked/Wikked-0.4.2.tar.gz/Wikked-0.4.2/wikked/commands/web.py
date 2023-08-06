@@ -1,0 +1,108 @@
+import os
+import os.path
+import imp
+import logging
+from wikked.commands.base import WikkedCommand, register_command
+
+
+logger = logging.getLogger(__name__)
+
+
+@register_command
+class RunServerCommand(WikkedCommand):
+    def __init__(self):
+        super(RunServerCommand, self).__init__()
+        self.name = 'runserver'
+        self.description = ("Runs the wiki in a local web server.")
+
+    def setupParser(self, parser):
+        parser.add_argument('--host',
+                help="The host to use",
+                default='127.0.0.1')
+        parser.add_argument('--port',
+                help="The port to use",
+                default=5000)
+        parser.add_argument('--usetasks',
+                help="Use background tasks for updating the wiki after a "
+                     "page has been edited. You will have to run "
+                     "`wk runtasks` at the same time as `wk runserver`.",
+                action='store_true')
+        parser.add_argument('-d', '--dev',
+                help="Use development mode. "
+                     "This makes Wikked use development assets (separate and "
+                     "uncompressed scripts and stylesheets), along with using "
+                     "code reloading and debugging.",
+                action='store_true')
+
+    def run(self, ctx):
+        # Change working directory because the Flask app can currently
+        # only initialize itself relative to that...
+        # TODO: make the Flask initialization more clever.
+        os.chdir(ctx.params.root)
+
+        # Setup some settings that need to be set before the app is created.
+        if ctx.args.usetasks:
+            import wikked.settings
+            wikked.settings.WIKI_ASYNC_UPDATE = True
+
+        # Create/import the app.
+        from wikked.web import app
+
+        # Setup other simpler settings.
+        if ctx.args.dev:
+            app.config['DEV_ASSETS'] = True
+        app.config['WIKI_AUTO_RELOAD'] = True
+
+        app.set_wiki_params(ctx.params)
+        if bool(app.config.get('UPDATE_WIKI_ON_START')):
+            ctx.wiki.updateAll()
+
+        # Run!
+        debug_mode = ctx.args.dev or app.config.get('DEBUG', False)
+        app.run(
+                host=ctx.args.host,
+                port=ctx.args.port,
+                debug=debug_mode,
+                use_debugger=debug_mode,
+                use_reloader=debug_mode)
+
+
+@register_command
+class RunTasksCommand(WikkedCommand):
+    def __init__(self):
+        super(RunTasksCommand, self).__init__()
+        self.name = 'runtasks'
+        self.description = "Runs the tasks to update the wiki in the background."
+
+    def setupParser(self, parser):
+        pass
+
+    def run(self, ctx):
+        # Import the Celery app and update its configuration with the same
+        # stuff as what the Flask app got.
+        from wikked.tasks import celery_app
+
+        celery_app.conf.update(BROKER_URL='sqla+sqlite:///%(root)s/.wiki/broker.db')
+        config_path = os.path.join(ctx.params.root, '.wiki', 'app.cfg')
+        if os.path.isfile(config_path):
+            obj = self._loadConfig(config_path)
+            celery_app.conf.update(obj.__dict__)
+        celery_app.conf.BROKER_URL = celery_app.conf.BROKER_URL % (
+                { 'root': ctx.params.root })
+
+        os.chdir(os.path.join(os.path.dirname(__file__), '..', '..'))
+        argv = ['celery', 'worker', '-A', 'wikked.tasks']
+        if ctx.args.debug:
+            argv += ['-l', 'DEBUG']
+        celery_app.start(argv)
+
+    def _loadConfig(self, path):
+        d = imp.new_module('config')
+        d.__file__ = path
+        try:
+            with open(path) as config_file:
+                exec(compile(config_file.read(), path, 'exec'), d.__dict__)
+        except IOError as e:
+            e.strerror = 'Unable to load Flask/Celery configuration file (%s)' % e.strerror
+            raise
+        return d
