@@ -1,0 +1,128 @@
+#! /usr/bin/env python
+# encoding: utf-8
+
+import sys
+import os
+import waflib
+
+def configure(conf):
+    conf.load(['compiler_cxx', 'compiler_c', 'python', 'cython'])
+
+    conf.env._CORE_SOURCE = ['./_core.pyx']
+    conf.env._CORE_INCLUDES = conf.env.INCLUDES_PYEXT[:]
+    conf.env._CORE_INCLUDES += [
+        '../openfl_lime/include',
+        '../openfl_lime/include/renderer/common',
+        '../openfl_lime/include/renderer/opengl',
+    ]
+    conf.env._CORE_INCLUDES += conf.env.LIME_INCLUDES
+
+    plat = conf.options.platform
+
+    if conf.options.use_prebuilt_libs:
+        root_path = conf.path.find_node('..').abspath()
+        deps_dir = os.path.join(root_path, '../flappy_prebuilt_dependencies')
+
+        conf.env._CORE_STLIB = ['SDL2', 'freetype', 'png', 'jpeg']
+            
+        deps_lib_dirs = [    
+            'sdl2/lib/%s' % plat,
+            'freetype/lib/%s' % plat,
+            'png/lib/%s' % plat,
+            'jpeg/lib/%s' % plat,
+        ]
+        deps_lib_dirs = map(lambda p: os.path.join(deps_dir, p), 
+                                                            deps_lib_dirs)
+        conf.env._CORE_STLIBPATH = deps_lib_dirs
+
+    else:
+        conf.env._CORE_LIB = ['SDL2', 'freetype', 'png', 'jpeg']
+
+    conf.env._CORE_CXXFLAGS = conf.env.LIME_CXXFLAGS[:]
+    conf.env._CORE_LINKFLAGS = conf.env.LIME_LINKFLAGS[:]
+    conf.env._CORE_USE = ['openfl_lime']
+
+    conf.env.append_unique('CYTHONFLAGS', '--cplus')
+    conf.env.append_unique('CYTHONFLAGS', '--fast-fail')
+
+
+#linux
+    if plat in ('linux', 'linux64'):   
+        conf.env._CORE_LIB += ['GL']
+
+        conf.env.CYTHON_DEFINES.update({
+            'PLATFORM' : 'LINUX',
+            'GLES' : False
+        })
+
+#mac
+    if plat in ('mac', 'mac64'):
+        conf.env._CORE_FRAMEWORK = [
+            'AppKit',
+            'OpenGL',
+            'ForceFeedback',
+        ]
+        conf.env.CYTHON_DEFINES.update({
+            'PLATFORM' : 'MAC',
+            'GLES' : False
+        })
+
+#win32
+    if plat == 'win32':
+        conf.env._CORE_STLIB += ['zlib']
+        conf.env._CORE_LIB += [
+            'kernel32', 
+            'OpenGL32',
+            'WinMM',
+            'User32',
+            'gdi32',
+            'advapi32',
+            'WS2_32',
+            'wldap32', 
+            'shell32',
+            'python27',
+            'psapi',
+            'select',
+            'Shlwapi',
+            'Comdlg32',
+        ]
+        conf.env.CYTHON_DEFINES.update({
+            'PLATFORM' : 'WINDOWS',
+            'GLES' : False,
+        })
+
+def build(bld):
+    def gen_config_pxi(task):
+        config_pxi = open(task.outputs[0].abspath(), 'w')
+        defs = task.env.CYTHON_DEFINES
+        for key in defs:
+            val = defs[key]
+            if isinstance(val, str):
+                config_pxi.write('DEF %s = "%s"\n' % (key, defs[key]))
+            else:
+                config_pxi.write('DEF %s = %s\n' % (key, str(defs[key])))
+
+    bld.add_group()
+    bld(rule=gen_config_pxi, source='', target='../config.pxi')
+    bld.env.append_unique('CYTHONFLAGS', '-I%s' % bld.bldnode.abspath())
+        
+    bld.add_group()
+    bld.shlib(
+        target='_core',
+        use=bld.env._CORE_USE,
+        features='cxx cxxshlib cython pyext',
+        cxxflags=bld.env._CORE_CXXFLAGS,
+        linkflags=bld.env._CORE_LINKFLAGS,
+        source=bld.env._CORE_SOURCE,
+        includes=bld.env._CORE_INCLUDES,
+        stlib=bld.env._CORE_STLIB,
+        stlibpath=bld.env._CORE_STLIBPATH,
+        lib=bld.env._CORE_LIB,
+        libpath=bld.env._CORE_LIBPATH,
+        framework=bld.env._CORE_FRAMEWORK,
+        install_path=bld.env.INSTALL_PATH )
+    
+    if bld.options.platform == 'win32':
+        if bld.env.opt_use_prebuilt_libs:
+            sdl2_dll = '../libs/sdl2/lib/win32/SDL2.dll'
+            bld.install_files(bld.env.INSTALL_PATH, sdl2_dll)
