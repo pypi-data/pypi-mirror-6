@@ -1,0 +1,2 @@
+__version__ = '0.06a'
+__url__ = 'http://libmunin.rtfd.org/'
