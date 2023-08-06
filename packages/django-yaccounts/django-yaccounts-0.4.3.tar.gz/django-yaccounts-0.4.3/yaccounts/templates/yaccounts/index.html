@@ -1,0 +1,347 @@
+{% extends 'yaccounts/base.html' %}
+
+{% load i18n %}
+
+{% load staticfiles %}
+
+{% block title %}{% trans 'My Account' %}{% endblock %}
+
+{% block head %}
+
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.10/angular.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.10/angular-resource.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.10/angular-cookies.min.js"></script>
+<script src="{% static 'yaccounts/js/api_keys.js' %}"></script>
+
+{% endblock %}
+
+{% block body %}
+
+<!-- Django Messages -->
+{% include 'yaccounts/django_messages.html' %}
+
+<div class="container">
+  <div class="row">
+    <div class="col-sm-6 col-md-5 col-md-offset-3">
+      
+      <h1 class="text-center login-title">{% trans 'My Account' %}</h1>
+      
+      <!-- BEGIN Frame -->
+      <div class="account-wall">
+
+        <!-- BEGIN Nav tabs -->
+        <ul class="nav nav-tabs" style="padding: 0 25px 0 25px; margin-bottom: 25px;">
+          <li class="active"><a href="#settings" data-toggle="tab">{% trans 'Settings' %}</a></li>
+          <li><a href="#social" data-toggle="tab">{% trans 'Connected Accounts' %}</a></li>
+          <li><a href="#api" data-toggle="tab">{% trans 'API Keys' %}</a></li>
+        </ul>
+        <!-- END Nav tabs -->
+
+        <!-- BEGIN Tab panes -->
+        <div class="tab-content">
+          
+          <!-- 
+            **********************
+            BEGIN Account Settings
+            **********************
+          -->
+          <div class="tab-pane active" id="settings">
+            
+            <div class="form-settings">
+              
+              <!-- BEGIN Account Photo -->
+              <div class="text-center">
+                
+                <!-- Current Photo -->
+                <div id="photo">
+                  <img src="{{ photo_url }}" class="img-thumbnail" style="margin-bottom: 5px; width: 140px; height: 140px;">
+                  <br>
+                  <a class="btn btn-default btn-xs crop-image" href="#crop-image-window">{% trans 'Change Photo' %}</a>
+                </div>
+
+                <!-- Upload Image Modal Window -->
+                <div id="crop-image-window" class="mfp-hide white-popup" style="text-align: center;">
+                  <h3>{% trans 'Upload Photo' %}</h3>
+                  <form>
+                    <input type="file" style="width: 80px;" accept="image/*" name="photo">
+                  </form>
+                  <br>
+                  <img src="{% static 'yaccounts/images/gray-140x140.png' %}" class="img-thumbnail" style="width: 140px; height: 140px;">
+                  <br>
+                  <br>
+                  <button class="btn btn-primary" DISABLED>
+                    <span class="glyphicon glyphicon-upload"></span>
+                    {% trans 'Upload' %}
+                  </button>
+                </div>
+
+              </div>
+              <!-- END Account Photo -->
+
+              <br>
+
+              <!-- BEGIN Account Details -->
+              <div id="account-details">
+                
+                <!-- Name -->
+                <div class="form-group">
+                  <label for="name">{% trans 'Full name' %}</label>
+                  <input type="text" class="form-control" placeholder="{% trans 'Full name' %}" id="name" value="{{ name }}" data-validate="salsa" data-required="true" required>
+                </div>
+                  
+                <!-- Email -->
+                <div class="form-group">
+                  <label for="email">{% trans 'E-mail' %}</label>
+                  <input type="text" class="form-control" placeholder="{% trans 'Email address' %}" id="email" value="{{ email }}" data-validate="salsa" data-required="true" required>
+                </div>
+
+                <!-- Change Password -->
+                <a style="cursor: pointer;" onclick="$('#update-password').toggle();">{% trans 'Change Password' %}</a>
+                <br>
+                <br>
+
+                <!-- Update Password -->
+                <div id="update-password" style="display: none;">
+                  <div class="form-group">
+                    <input type="password" class="form-control" placeholder="{% trans 'Current password' %}" id="password_old" data-validate="salsa">
+                  </div>
+                  <div class="form-group">
+                    <input type="password" class="form-control" placeholder="{% trans 'New password' %}" id="password_new" data-validate="salsa">
+                  </div>
+                  <div class="form-group">
+                    <input type="password" class="form-control" placeholder="{% trans 'Confirm password' %}" id="password_confirm" data-validate="salsa">
+                  </div>
+                  <p>
+                    <a href="{% url 'yaccounts:reset' %}">{% trans 'Forgot password?' %}</a>
+                  </p>
+                  <br>
+                </div>
+
+                <!-- Shave -->
+                <div id="messages"></div>
+                <button id="save" class="btn btn-lg btn-default btn-primary btn-block" type="submit">{% trans 'Save' %}</button>
+
+              </div>
+              <!-- END Account Details -->
+
+            </div>
+          </div>
+          <!-- 
+            **********************
+            END Account Settings
+            **********************
+          -->
+          
+          <!--
+            ************************
+            BEGIN Connected Accounts
+            ************************
+          -->
+          <div class="tab-pane" id="social" style="padding: 0 25px 0 25px;">
+            <div style="margin: 40px 0 20px 0;">
+              
+              <!-- Begin Facebook -->
+              <h3>
+                <i class="fa fa-facebook-square"></i>
+                Facebook
+              </h3>
+              <div class="row">
+                <div class="col-md-6">
+                  <p style="margin-left: 30px;">
+                    {% if facebook_profile %}
+                      <a href="http://facebook.com/profile.php?id={{ facebook_profile.facebook_user_id }}" target="_blank">
+                        {{ facebook_profile.name }}
+                      </a>
+                    {% else %}
+                      <span class="label label-danger">{% trans 'Not Connected' %}</span>
+                    {% endif %}
+                  </p>
+                </div>
+                <div class="col-md-6" style="text-align: right;">
+                  {% if facebook_profile %}
+                    <a href="{% url 'yaccounts:facebook_disconnect' %}" class="btn btn-default btn-xs">{% trans 'Disconnect' %}</a>
+                  {% else %}
+                    <a href="{% url 'yaccounts:facebook_login' %}" class="btn btn-default btn-primary btn-sm">{% trans 'Connect' %}</a>
+                  {% endif %}
+                </div>
+              </div>
+              <!-- End Facebook -->
+
+              <!-- Begin Twitter -->
+              <h3>
+                <i class="fa fa-twitter-square"></i>
+                Twitter
+              </h3>
+              <div class="row">
+                <div class="col-md-6">
+                  <p style="margin-left: 30px;">
+                    {% if twitter_profile %}
+                      <a href="http://twitter.com/{{ twitter_profile.screen_name }}" target="_blank">
+                        @{{ twitter_profile.screen_name }}
+                      </a>
+                    {% else %}
+                      <span class="label label-danger">{% trans 'Not Connected' %}</span>
+                    {% endif %}
+                  </p>
+                </div>
+                <div class="col-md-6" style="text-align: right;">
+                  {% if twitter_profile %}
+                    <a href="{% url 'yaccounts:twitter_disconnect' %}" class="btn btn-default btn-xs">{% trans 'Disconnect' %}</a>
+                  {% else %}
+                    <a href="{% url 'yaccounts:twitter_login' %}" class="btn btn-default btn-primary btn-sm">{% trans 'Connect' %}</a>
+                  {% endif %}
+                </div>
+              </div>
+              <!-- End Twitter -->
+
+            </div>
+          </div>
+          <!--
+            ************************
+            END Connected Accounts
+            ************************
+          -->
+
+          <!--
+            **************
+            BEGIN API Keys
+            **************
+          -->
+          <div class="tab-pane" id="api" style="padding: 0 25px 0 25px;" ng-app="project" ng-controller="ApiKeysCtrl">
+            <div ng-include src="'{% static 'yaccounts/partials/api_keys.html' %}'"></div>
+          </div>
+          <!--
+            **************
+            END API Keys
+            **************
+          -->
+        
+        </div>
+        <!-- END Tab panes -->
+      
+      </div>
+      <!-- END Frame -->
+
+      <a href="{% url 'yaccounts:logout' %}" class="text-center new-account">
+        <span class="glyphicon glyphicon-off"></span> {% trans 'Logout' %}
+      </a>
+
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block javascript %}
+
+  <script>
+
+    // Assorted variables.
+    var photo_update_api_url = '{{ photo_update_api_url }}';
+    var account_update_api_url = '{{ account_update_api_url }}';
+    var api_keys_api_url = '{{ api_keys_api_url }}';
+    var static_url = '{{ STATIC_URL }}';
+
+    var upload;
+
+    $(document).ready(function() {
+
+      $('#account-details').salsa();
+
+      /*
+       * Initialize modal window for image select/crop.
+       */
+      $('.crop-image').magnificPopup({ type: 'inline' });
+
+      /*
+       * Show file selected for upload.
+       */
+      $('#crop-image-window input').on('change', function(){
+        var input = this;
+        if (input.files && input.files[0]) {
+          var reader = new FileReader();
+          reader.onload = function (e) { $('#crop-image-window img').attr('src', e.target.result); }
+          reader.readAsDataURL(input.files[0]);
+          $('#crop-image-window button').attr('disabled', false);
+        }  
+      });
+
+      /*
+       * Listen to click on upload button.
+       */
+      $('#crop-image-window button').on('click', function() {
+
+        var that = this;
+        $(this).attr('disabled', true);
+        
+        // Build formdata.
+        var formData = new FormData($('#crop-image-window form').get(0));
+        var file = $('#crop-image-window input').get(0).files[0];
+        formData.append('file', file);
+
+        // Upload picture.
+        $.ajax({
+          url: photo_update_api_url,
+          type: 'POST',
+          data: formData,
+          // Options to tell JQuery not to process data or worry about content-type.
+          cache: false,
+          contentType: false,
+          processData: false,
+          success: function(data) {
+            $('#photo img').attr('src', data.image_url);
+            $('#crop-image-window').magnificPopup('close');
+            $(that).attr('disabled', false);
+          },
+          error: function(err) {
+            console.log(err);
+            alert('Unable to upload picture!');
+            $(that).attr('disabled', false);
+          }
+        });
+
+      });
+
+      /*
+       * Listen to click on save button.
+       */
+      $('#save').on('click', function() {
+
+        $('#saveMessage').html('');
+
+        // Validate form.
+        if(!$('#account-details').salsa('validate')) {
+          return; 
+        }
+
+        // Stuff.
+        var that = this;
+        $(this).attr('disabled', true);
+
+        // Make API call to update account settings.
+        $.ajax({
+          url: account_update_api_url,
+          type: 'PUT',
+          data: JSON.stringify({
+            name: $('#name').val(),
+            email: $('#email').val(),
+            password_old: $('#password_old').val(),
+            password_new: $('#password_new').val(),
+            password_confirm: $('#password_confirm').val()
+          }),
+          dataType: 'JSON',
+          success: function(data) {
+            $('#messages').html('<div class="alert alert-success"><button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button> Saved</div>');
+            $(that).attr('disabled', false);
+          },
+          error: function(xhr) {
+            $('#account-details').salsa('processResponse', xhr.status, xhr.responseText);
+            $(that).attr('disabled', false);
+          }
+        });
+
+      });
+
+    });
+  </script>
+{% endblock %}
