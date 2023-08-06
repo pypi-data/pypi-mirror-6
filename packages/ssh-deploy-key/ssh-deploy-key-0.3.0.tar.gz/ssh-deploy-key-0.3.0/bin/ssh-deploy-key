@@ -1,0 +1,248 @@
+#!/usr/bin/env python
+
+######################################################################
+# ssh-deploy-key is a tool to rapidly push out ssh key files
+# to one or more remote hosts.
+#######################################################################
+
+# Copyright (C) 2014, Travis Bear
+# All rights reserved.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
+
+import colorama
+from colorama import Fore
+from getpass import getpass
+import os
+import socket
+from ssdk.configuration import config
+from ssdk import status
+import stat
+import sys
+from threading import Thread
+
+# conditional imports
+try:
+    from queue import Queue
+except ImportError:
+    from Queue import Queue
+try:
+    import paramiko
+except ImportError:
+    print ("FATAL: paramiko libraries not present.")
+    print ("run 'pip install paramiko' to fix")
+    sys.exit(1)
+
+
+EXIT_COMMAND = "exit"
+OVERWRITE_SCRIPT = "ssh-deploy-key.overwrite.sh"
+SMART_APPEND_SCRIPT = "ssh-delpoy-key.smart-append.sh"
+
+
+######################################################################
+# Deployer thread
+######################################################################
+class DeployKeyThread(Thread):
+    """
+    Consumer thread.  Reads hosts from the queue and deploys the
+    key to them.
+    """
+
+    def __init__(self):
+        Thread.__init__(self)
+
+    def _print_status(self, server, username, statuz):
+        prefix = "  copy key to %s@%s:%s/%s..." % (
+            username,
+            server,
+            config.ssh_dir,
+            config.authorized_keys)
+        print ("%s %s%s%s" % (
+            prefix,
+            status.colors[statuz],
+            statuz,
+            Fore.RESET))
+
+    def _deploy_key(self, server, username):
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            ssh_client.connect(
+                server,
+                username=username,
+                password=config.password,
+                port=config.port,
+                timeout=config.timeout_seconds)
+            sftp_client = paramiko.SFTPClient.from_transport(ssh_client.get_transport())
+        except socket.error:
+            return status.CONNECTION_FAILURE
+        except paramiko.AuthenticationException:
+            return status.AUTH_FAILURE
+        except paramiko.SSHException: # TODO: retry this type of failure?
+            return status.SSH_FAILURE
+        script = OVERWRITE_SCRIPT
+        if config.append:
+            script = SMART_APPEND_SCRIPT
+        try:
+            sftp_client.put(script, script)
+        except IOError:
+            return status.IO_FAILURE
+        stdin, stdout, stderr = ssh_client.exec_command('/bin/sh %s' % script)
+        if not stdout.channel.recv_exit_status() == 0:
+            print not stdout.channel.recv_exit_status()
+            print "out: %s\n err: %s\n" %(stdout.read().strip(), stderr.read().strip())
+            return status.UNKNOWN_ERROR
+        sftp_client.remove(script)
+        return stdout.read().strip()
+
+    def run(self):
+        while True:
+            line = queue.get()
+            # support either "host" or "user@host" formats
+            words = line.split("@")
+            username = config.username
+            server = words[0]
+            if len(words) > 1:
+                username = words[0]
+                server = words[1]
+            try:
+                statuz = self._deploy_key(server, username)
+            except:
+                statuz = status.GENERAL_FAILURE
+                # TODO: log a stack trace
+            self._print_status(server, username, statuz)
+            queue.task_done()
+
+
+######################################################################
+# is_stdin_terminal
+######################################################################
+def is_stdin_terminal():
+    mode = os.fstat(0).st_mode
+    if stat.S_ISFIFO(mode):
+        # stdin is piped (e.g. 'cat host_list | ssh-deploy-key')
+        return False
+    elif stat.S_ISREG(mode):
+        # stdin is redirected (e.g. 'ssh-deploy-key < host_list')
+        return False
+    else:
+        # stdin is from an interactive terminal!
+        return True
+
+
+######################################################################
+# Setup
+######################################################################
+def setup():
+    """
+    Creates the installer scripts that will run on the
+    remote host(s)
+    """
+    try:
+        key = open(config.key_file).read().strip()
+    except:
+        print ("FATAL: key file '%s' could not be opened." % config.key_file)
+        sys.exit(1)
+    smart_append_logic = """
+    # smart append
+    mkdir -p %s
+    chmod 700 %s
+    if grep "%s" %s/%s > /dev/null 2>&1
+    then
+      echo "%s"
+    else
+      echo "%s" >> %s/%s
+      echo "%s"
+      chmod 600 %s/%s
+    fi
+    """ % (
+        config.ssh_dir,
+        config.ssh_dir,
+        key, config.ssh_dir, config.authorized_keys,
+        status.NO_ACTION,
+        key, config.ssh_dir, config.authorized_keys,
+        status.APPENDED,
+        config.ssh_dir, config.authorized_keys)
+    stream = open(SMART_APPEND_SCRIPT, 'w')
+    stream.write(smart_append_logic)
+    stream.close()
+
+    overwrite_logic = """
+    # overwrite mode
+    mkdir -p %s
+    chmod 700 %s
+    echo "%s" > %s/%s
+    chmod 600 %s/%s
+    echo %s
+    """ % (
+        config.ssh_dir,
+        config.ssh_dir,
+        key, config.ssh_dir, config.authorized_keys,
+        config.ssh_dir, config.authorized_keys,
+        status.SUCCESS)
+    stream = open(OVERWRITE_SCRIPT, 'w')
+    stream.write(overwrite_logic)
+    stream.close()
+
+
+######################################################################
+# Teardown
+######################################################################
+def cleanup():
+    os.remove(OVERWRITE_SCRIPT)
+    os.remove(SMART_APPEND_SCRIPT)
+
+
+######################################################################
+# Main flow begins here
+######################################################################
+setup()
+colorama.init()
+queue = Queue(maxsize=10*config.threads)
+if not config.password:
+    config.password = getpass("Enter common password for remote hosts: ")
+deployer_threads = []
+for i in range(config.threads):
+    #print "Starting thread %d" % i
+    deployer_thread = DeployKeyThread()
+    deployer_thread.daemon = True
+    deployer_thread.start()
+    deployer_threads.append(deployer_thread)
+
+if config.append:
+    print ("Distributing key '%s' to remote hosts in smart-append mode." %config.key_file)
+else:
+    print ("Distributing key '%s' to remote hosts in overwrite mode." %config.key_file)
+
+# Either use the hosts supplied on the command line (the preference) or use hosts read from
+# standard in.
+if config.hosts:
+    for host in config.hosts:
+        queue.put(host)
+else:
+    if is_stdin_terminal():
+        print ("Enter one hostname per line.  Terminate with 'exit' or ^D.")
+    line = sys.stdin.readline()
+    while line and not line.strip() == EXIT_COMMAND:
+        line = line.strip()
+        if line:
+            host = line.split()[0]
+            queue.put(host)
+        line = sys.stdin.readline()
+
+queue.join()
+cleanup()
+
