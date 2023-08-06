@@ -1,0 +1,127 @@
+#!/usr/bin/python
+#
+# Copyright (c) 2010, 2011, 2012, 2013, 2014
+#  Adam Tauno Williams <awilliam@whitemice.org>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+#
+import sys
+
+
+def main(argv):
+
+    errors = 0
+    warnings = 0
+    database = 0
+
+    modules = {
+        'lxml':       ['required', 'SAX & DOM XML Processing', ],
+        'yaml':       ['required', 'Encode and decode YAML data forms.', ],
+        'base64':     ['required', 'Encode and decode Base64 data', ],
+        'xlwt':       ['optional', 'XLS<2007 write support', ],
+        'xlrd':       ['optional', 'XLS<2007 read support', ],
+        'PIL':        ['optional', 'Python Imaging Library', 'Pillow', ],
+        'paramiko':   ['optional', 'SSH suppport.', ],
+        'vobject':    ['required', 'vCard and vEvent parsing', ],
+        'coils.foundation.api.elementflow':
+            ['required', 'Streaming XML Creation', ],
+        'dateutil':   ['required', 'Date & Time Arithmatic', ],
+        'coils.foundation.api.pypdf':
+            ['optional', 'Simple PDF Operations', ],
+        'pytz':       ['required', 'Python Time Zone tables', ],
+        'informixdb': ['database', 'Informix RDBMS connectivity', ],
+        'sqlalchemy': ['required', 'Object Relational Modeling', ],
+        'yaml':       ['required', 'YAML parser & serializer', ],
+        'psycopg2':   ['database', 'PostgreSQL RDBMS connectivity', ],
+        'markdown':
+            ['optional', 'Markdown rendering, required for /wiki protocol', ],
+        'argparse':
+            ['optional',
+             'Enhanced argument parsing, required for /wiki protocol', ],
+        'cups':
+            ['optional', 'IPP printing support', 'pycups', ],
+    }
+
+    for module in modules:
+
+        if len(modules[module]) == 3:
+            module_name = modules[module][2]
+        else:
+            module_name = module
+        try:
+            __import__(module)
+        except:
+            if (modules[module][0] == 'required'):
+                errors = errors + 1
+                print(
+                    'ERR: Module {0} ({1}) not available.'.
+                    format(module_name, modules[module][1], )
+                )
+            elif (modules[module][0] in ('optional', 'database')):
+                warnings = warnings + 1
+                print(
+                    'WARN: Module {0} ({1}) not available.'.
+                    format(module_name, modules[module][1], )
+                )
+        else:
+            print(
+                'OK: Module {0} ({1}) available.'.
+                format(module_name, modules[module][1], )
+            )
+            if (modules[module][0] == 'database'):
+                database = database + 1
+
+    if (database == 0):
+        print
+        print(' * FATAL ERROR: No RDBMS connectivity available.             *')
+        print(' *  You have no module which provides RDBMS connectivity;    *')
+        print(' *  the SQLalchecmy ORM will not be able to function.        *')
+        sys.exit(1)
+    else:
+        print
+        print('{0} database connectivity modules found.'.format(database))
+        print(' * Make sure the RDBMS you intend to use for the SQLalchemy  *')
+        print(' * ORM is installed and operational.                         *')
+
+    if (errors > 0):
+        print
+        print('{0} package errors found.'.format(errors))
+        print(' * You are missing modules critical to the basic operation   *')
+        print(' * of the OpenGroupware Coils service.  Address these errors *')
+        print(' * prior to deploying the service.                           *')
+        print
+        sys.exit(1)
+
+    if (warnings > 0):
+        print
+        print('{0} package warnings found.'.format(warnings))
+        print(' * You are missing packages that extend the operation and    *')
+        print(' * capacity of the OpenGroupware Coils service.  The service *')
+        print(' * will provide core functionality but some features,        *')
+        print(' * particularly in regard to OIE, may not be available. It   *')
+        print(' * is recommended you install the appropriate packages.      *')
+
+    if (warnings == 0 and errors == 0):
+        print
+        print(' * Your host has all the required modules to provide the     *')
+        print(' * full capability of the OpenGroupware Coils servce.        *')
+
+    print
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

@@ -1,0 +1,217 @@
+#!/usr/bin/python
+import os
+import re
+import sys
+import uuid
+import time
+import shutil
+import httplib, urlparse, base64, urllib
+import ConfigParser
+import syslog
+from tempfile import TemporaryFile
+from subprocess import Popen, PIPE
+from iniparse import INIConfig
+
+syslog.openlog('cups-to-ogo', syslog.LOG_LPR)
+
+def convert_stream(converter_path, rfile, wfile):
+    error_file = open('/tmp/converter_errors.ts', 'wb')
+    converter = Popen([converter_path, '-','-', ], stdin=PIPE, stdout=wfile, stderr=error_file, )
+    (converter_in, converter_out, ) = (converter.stdin, converter.stdout, )
+    shutil.copyfileobj(rfile, converter_in) 
+    syslog.syslog(syslog.LOG_INFO,
+                  'Conversion read {0}b from input stream'.
+                  format(rfile.tell()))
+    converter_in.close()
+    converter.communicate()
+    wfile.flush()
+    
+
+def scan_and_replace_labels(device_uri,
+                            job_id,
+                            job_user,
+                            job_title, ):
+    labels = set( re.findall( '\${[A-z0-9]*}', device_uri ) )
+    for label in labels:
+        if label == '${title}':
+            job_title = urllib.quote(job_title)
+            device_uri = device_uri.replace('${title}', job_title)
+        elif label == '${user}':
+            job_user = urllib.quote(job_user)
+            device_uri = device_uri.replace('${user}', job_user)
+        elif label == '${id}':
+            device_uri = device_uri.replace('${id}', job_id)
+        elif label == '${guid}':
+            guid = '{0}-{1}'.format(uuid.uuid4().hex, time.time())
+            device_uri = device_uri.replace('${guid}', guid)
+    return device_uri
+
+
+def send_stream(server_uri,
+                auth_meth,
+                auth_pack,
+                stream, ):
+       
+        
+        pu = urlparse.urlparse(server_uri)
+        
+        connection = httplib.HTTPConnection(pu.netloc)
+        
+        full_path = server_uri[len('{0}://{1}'.format(pu.scheme, pu.netloc)):]
+
+        connection.putrequest('PUT', full_path)
+        
+        if auth_mech == 'plain':
+            coin = '{0}:{1}'.format(auth_pack[0], auth_pack[1], )
+            coin = 'Basic {0}'.format(base64.encodestring(coin)[:-1])
+            connection.putheader('Authorization', coin)
+            
+        stream.seek(0, os.SEEK_END)
+        content_length = stream.tell()
+        stream.seek(0, os.SEEK_SET)
+
+        syslog.syslog(syslog.LOG_INFO,
+                      'Content-Length: {0}b'.
+                      format(content_length, ))
+            
+        connection.putheader('User-Agent', 'OpenGroupwareCUPSBackend/1')
+        connection.putheader('Content-Length', str(content_length))
+        connection.putheader('Content-Type', 'application/pdf')
+        connection.endheaders()
+        while True:
+            block = stream.read(8192)
+            if block:
+                connection.send(block)
+                syslog.syslog(syslog.LOG_INFO, 'Sent {0}b to server'.format(len(block)))
+            else:
+                break
+        syslog.syslog(syslog.LOG_INFO, 'Completed send, {0}b sent to server.'.format(stream.tell()))
+        
+        response = connection.getresponse()
+        syslog.syslog(syslog.LOG_INFO,
+                      'HTTP Result: {0}'.
+                      format(response.status))
+        result = 1 # Backend failed, generic
+        if response.status in (200, 201, 202, 204, 301, ): 
+            result = 0  # Backend success
+        elif response.status in (401, 419, 511, 496, 496, ): 
+            result = 2  # Authentication Failed
+        elif response.status in (423, 409, 408, 429, ):
+            result = 6  # Retry
+        elif response.status in (418, 451, ): 
+            result = 5  # Cancel Job, Teapot or illegal response
+        connection.close()
+        return result
+
+
+def main(server_uri,
+         auth_mech,
+         auth_pack,
+         rfile,
+         job_id,
+         job_user,
+         job_title,
+         converter_path,
+         device_uri, ):
+         
+    wfile = TemporaryFile()
+
+    syslog.syslog(syslog.LOG_INFO, 
+                  'jobId#{0} User:"{1}" Title:"{2}"'.
+                  format(job_id, job_user, job_title))
+
+    convert_stream(converter_path=converter_path, rfile=rfile, wfile=wfile)
+    
+    syslog.syslog(syslog.LOG_INFO, 
+                  'Input conversion complete')
+    
+    device_uri = scan_and_replace_labels(device_uri=device_uri,
+                                         job_id=job_id,
+                                         job_user=job_user,
+                                         job_title=job_title,)
+    full_uri = '{0}{1}'.format(server_uri, device_uri[len('cups-to-ogo://'):], )
+    syslog.syslog(syslog.LOG_INFO, 
+                  'Target URI: "{0}"'.
+                  format(full_uri))
+    
+    return send_stream(server_uri=full_uri,
+                       auth_meth=auth_mech,
+                       auth_pack=auth_pack,
+                       stream=wfile, )
+
+if __name__ == '__main__':
+
+    argv = sys.argv
+
+    import pprint
+
+    syslog.syslog(syslog.LOG_INFO, 
+                  pprint.pformat(argv))
+
+
+    if len(argv) > 5:
+        job_id = argv[1]
+        user_id = argv[2]
+        title = argv[3]
+        copies = argv[4]
+        options = argv[5]
+        if len(argv) == 7:
+            filename = argv[6]
+        else:
+            filename = None
+    else:
+        print('network cups-to-ogo '
+              '\"Generic Postscript Printer Foomatic/Postscript (en)\" '
+              '\"OpenGroupware\"')
+        sys.exit(0)
+
+    syslog.syslog(syslog.LOG_ALERT, 'Start')
+
+    config_path = os.getenv('OGOCUPSCONFIGINI', '/etc/cups/cups-to-ogo.ini')
+    device_uri = os.getenv('DEVICE_URI')
+    syslog.syslog(syslog.LOG_ALERT, 'Device URI: "{0}"'.format(device_uri))
+    
+    rfile = TemporaryFile()
+    if filename:
+        syslog.syslog(syslog.LOG_ALERT, 'Input File: "{0}"'.format(filename))
+        shutil.copyfileobj(open(filename, 'rb'), rfile)
+        
+    else:    
+        syslog.syslog(syslog.LOG_ALERT, 'No input file, using STDIN')
+        shutil.copyfileobj(sys.stdin, rfile)
+    syslog.syslog(syslog.LOG_INFO, 
+                  'Read {0}b from input stream.'.
+                  format(rfile.tell(), ))
+    rfile.seek(0)
+
+    cfg = ConfigParser.ConfigParser()
+    cfg.read(config_path)
+    server_uri = cfg.get('global', 'uri')
+    auth_mech = cfg.get('global', 'auth_mech')
+    converter_path = cfg.get('global', 'ps2pdf')
+    
+    if auth_mech == 'plain':
+        auth_pack = (cfg.get('global', 'username'), 
+                     cfg.get('global', 'password'), )
+
+
+    syslog.syslog(syslog.LOG_INFO, 
+                  'Configured, URI: "{0}" Converter: "{1}"'.
+                  format(server_uri, converter_path, ))
+
+    try:
+        result = main(server_uri=server_uri,
+                      auth_mech=auth_mech,
+                      auth_pack=auth_pack,
+                      rfile=rfile,
+                      job_id=job_id,
+                      job_user=user_id,
+                      job_title=title,
+                      converter_path=converter_path,
+                      device_uri=device_uri)
+    except Exception as exc:
+        syslog.syslog(syslog.LOG_INFO, exc)
+        sys.exit(1)
+    else:
+        sys.exit(result)
+

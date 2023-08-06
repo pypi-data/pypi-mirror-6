@@ -1,0 +1,235 @@
+#!/usr/bin/python
+# Copyright (c) 2011, 2012
+#  Adam Tauno Williams <awilliam@whitemice.org>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+from pprint import pprint
+from sqlalchemy import and_, or_
+import getopt
+import sys
+import os
+import time
+
+from coils.core import \
+    AnonymousContext, \
+    Broker, \
+    initialize_COILS, \
+    Task, \
+    Document, \
+    Contact, \
+    Enterprise, \
+    Note, \
+    Project
+from coils.logic.vista import SearchVector, COILS_VISTA_INDEXER_EDITION
+
+
+def usage():
+    print """
+    --help        Print this message.
+    --objectid=   Regenerate search vector for specified entities.
+    --tasks       Regenerate search vector on unindexed or stale tasks.
+    --enterprises Regenerate search vector on unindexed or stale enterprises.
+    --contacts    Regenerate search vector on unindexed or stale contacts.
+    --documents   Regenerate search vector on unindexed or stale documents.
+    --projects    Regenerate search vector on unindexed or stale projects.
+    --log-scan    Regenerate search vector on recently changes entities.
+    --vacuum      Request the vacuuming of vectors for deleted entities.
+    --limit=#     Limit the number of entities requested [default: 512]
+    """
+    return
+
+
+def main(argv):
+
+    def callback(uuid, source, target, data):
+        return True
+
+    object_id = None
+    timeout = 100
+    entity_types = []
+    log_scan = False
+    vacuum = False
+    query_limit = 512
+
+    # Process command line arguements
+    if (len(argv) == 0):
+        usage()
+        sys.exit(2)
+    try:
+        opts, args = getopt.getopt(
+            argv,
+            "h:i:tecdlpm",
+            ['help',
+             'objectid=',
+             'tasks',
+             'enterprises',
+             'contacts',
+             'documents',
+             'projects',
+             'log-scan',
+             'vacuum',
+             'limit=', ], )
+    except getopt.GetoptError, e:
+        print e
+        usage()
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):
+            usage()
+            sys.exit(0)
+        elif (opt in ('-i', '--objectid')):
+            object_id = arg
+        elif (opt in ('-t', '--tasks')):
+            entity_types.append('tasks')
+        elif (opt in ('-e', '--enterprises')):
+            entity_types.append('enterprises')
+        elif (opt in ('-c', '--contacts')):
+            entity_types.append('contacts')
+        elif (opt in ('--projects')):
+            entity_types.append('projects')
+        elif (opt in ('-d', '--documents')):
+            entity_types.append('documents')
+        elif (opt in ('-l', '--log-scan')):
+            log_scan = True
+        elif (opt in ('-z', '--vacuum')):
+            vacuum = True
+        elif (opt in ('-m', '--limit')):
+            query_limit = int(arg)
+
+
+    # Initialize COILs
+    initialize_COILS(
+        {'log_file': '{0}/coils.log'.format(os.getenv('HOME'), ), }
+    )
+    broker = Broker()
+    broker.subscribe('ping.{0}'.format(os.getpid()), None)
+    ctx = AnonymousContext(broker=broker)
+
+    if log_scan:
+        print('Requesting index/re-index based on audit log')
+        ctx.send(
+            None,
+            'coils.vista.index/log_scan',
+            {},
+            callback=callback,
+        )
+        sys.exit(0)
+
+    if object_id:
+        object_ids = [object_id, ]
+    else:
+        object_ids = []
+        if 'tasks' in entity_types:
+            query = ctx.db_session().query(Task.object_id).\
+                outerjoin(
+                    SearchVector,
+                    and_(SearchVector.object_id == Task.object_id,
+                         SearchVector.version == Task.version)
+                ).filter(
+                    or_(SearchVector.edition < COILS_VISTA_INDEXER_EDITION,
+                        SearchVector.edition == None, )
+                ).limit(query_limit)
+            for record in query.all():
+                object_ids.append(record[0])
+        if 'contacts' in entity_types:
+            query = ctx.db_session().query(Contact.object_id).\
+                outerjoin(
+                    SearchVector,
+                    and_(SearchVector.object_id == Contact.object_id,
+                         SearchVector.version == Contact.version)
+                ).filter(
+                    or_(SearchVector.edition < COILS_VISTA_INDEXER_EDITION,
+                        SearchVector.edition == None, )
+                ).limit(query_limit)
+            for record in query.all():
+                object_ids.append(record[0])
+        if 'enterprises' in entity_types:
+            query = ctx.db_session().query(Enterprise.object_id).\
+                outerjoin(
+                    SearchVector,
+                    and_(SearchVector.object_id == Enterprise.object_id,
+                         SearchVector.version == Enterprise.version)
+                ).filter(
+                    or_(SearchVector.edition < COILS_VISTA_INDEXER_EDITION,
+                        SearchVector.edition == None, )
+                ).limit(query_limit)
+            for record in query.all():
+                object_ids.append(record[0])
+        if 'documents' in entity_types:
+            query = ctx.db_session().query(Document.object_id).\
+                outerjoin(
+                    SearchVector,
+                    and_(SearchVector.object_id == Document.object_id,
+                         SearchVector.version == Document.version)
+                ).filter(
+                    or_(SearchVector.edition < COILS_VISTA_INDEXER_EDITION,
+                        SearchVector.edition == None, )
+                ).limit(query_limit)
+            for record in query.all():
+                object_ids.append(record[0])
+        if 'notes' in entity_types:
+            query = ctx.db_session().query(Note.object_id).\
+                outerjoin(
+                    SearchVector,
+                    and_(SearchVector.object_id == Note.object_id,
+                         SearchVector.version == Note.version)
+                ).filter(
+                    or_(SearchVector.edition < COILS_VISTA_INDEXER_EDITION,
+                        SearchVector.edition == None, )
+                ).limit(query_limit)
+            for record in query.all():
+                object_ids.append(record[0])
+        if 'projects' in entity_types:
+            query = ctx.db_session().query(Project.object_id).\
+                outerjoin(
+                    SearchVector,
+                    and_(SearchVector.object_id == Project.object_id,
+                         SearchVector.version == Project.version)
+                ).filter(
+                    or_(SearchVector.edition < COILS_VISTA_INDEXER_EDITION,
+                        SearchVector.edition == None, )
+                ).limit(query_limit)
+            for record in query.all():
+                object_ids.append(record[0])
+
+    for object_id in object_ids:
+        print('Requesting index/re-index of objectId#{0}'.format(object_id))
+        ctx.send(
+            None,
+            'coils.vista.index/index:{0}'.format(object_id),
+            {},
+            callback=callback,
+        )
+
+    if vacuum:
+        print('Requesting vacuum of search vectors.')
+        ctx.send(
+            None,
+            'coils.vista.index/vacuum',
+            {},
+            callback=callback,
+        )
+
+    ctx.close()
+    broker.close()
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
