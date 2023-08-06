@@ -1,0 +1,58 @@
+# ======
+# STATES
+# ======
+
+
+# Project settings
+# ================
+PROJECT_INFO = 0
+NEW_BOARD = 1
+SET_ACTIVE_BOARD = 2
+SET_PROJECT_NAME = 3
+REMOVE_BOARD = 4
+
+
+# Board settings
+# ==============
+BOARD_INFO = 5
+SET_BOARD_NAME = 6
+SET_BOARD_DESCRIPTION = 7
+ADD_COLUMN = 8
+REMOVE_COLUMN = 9
+
+
+# Column settings
+# ===============
+COLUMN_INFO = 10
+SET_COLUMN_NAME = 11
+SET_COLUMN_DESCRIPTION = 12
+SET_COLUMN_TASK_LIMIT = 13
+
+
+# Task settings
+# =============
+TASK_INFO = 14
+SET_TASK_NAME = 15
+SET_TASK_DESCRIPTION = 16
+
+
+# Board view
+# ==========
+BOARD = 17
+MOVE_COLUMN = 18
+ADD_TASK = 19
+REMOVE_TASK = 20
+MOVE_TASK = 21
+
+BOARD_SELECT_BOARD = 22
+BOARD_SELECT_COLUMN = 23
+BOARD_SELECT_TASK = 24
+
+
+# Help screens
+# ============
+HELP_PROJECT_SETTINGS = 25
+HELP_BOARD_SETTINGS = 25
+HELP_COLUMN_SETTINGS = 27
+HELP_TASK_SETTINGS = 28
+HELP_BOARD = 29
