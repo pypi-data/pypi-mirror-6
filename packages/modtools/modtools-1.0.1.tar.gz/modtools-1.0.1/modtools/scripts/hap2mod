@@ -1,0 +1,174 @@
+#! /bin/env python
+'''
+Given a hap file and several mod files, create a mixed mod file.
+Coordinates in the hap file can be 0-based or 1-based.
+
+Created on Sep 28, 2013
+
+@author: shunping
+'''
+
+import sys
+import csv
+import logging
+import os.path
+from time import localtime, strftime
+
+
+import argparse as ap
+
+from modtools import version
+from modtools.mod import Mod
+from modtools.utils import *
+
+
+DESC = 'Build a mixed MOD from Hap and other MODs.'
+
+logger = None
+args = None
+
+
+def init_logger():
+    global logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    #ch.setLevel(logging.INFO)
+    formatter = logging.Formatter("[%(asctime)s] %(name)-10s: "
+                                  "%(levelname)s: %(message)s",
+                                  "%Y-%m-%d %H:%M:%S")
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+
+def parse_arguments():
+    global args
+    # Usage:
+    # hap2mod [-q][-v][-f][-z][-o sample.mod]
+    #         hap_fn sample_name mod_fn [mod_fn ...]
+    p = ap.ArgumentParser(description=DESC,
+                          formatter_class=ap.RawTextHelpFormatter)
+
+    # Optional arguments
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("-q", dest='quiet', action='store_true',
+                       help='quiet mode')
+    group.add_argument('-v', dest='verbosity', action="store_const", const=2,
+                       default=1, help='verbose mode')
+
+    p.add_argument("-f", dest='force', action='store_true',
+                   help='overwrite existing output (mod)')
+
+    p.add_argument("-z", dest='zero', action='store_true',
+                   help='zero-based coordinates in hap file')
+
+    p.add_argument('-o', metavar='output', dest='output_fn', default=None,
+                   help='the output mod file (default: <sample>.mod)')
+
+    # Required arguments
+    p.add_argument('hap_fn', help='hap file name')
+    p.add_argument('sample_name', help='new sample name in MOD')
+    p.add_argument('mod_fns', metavar='mod_fn', nargs='+',
+                   help='input MOD file(s)')
+
+    args = p.parse_args()
+
+    if args.quiet:
+        logger.setLevel(logging.CRITICAL)
+    elif args.verbosity == 2:
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
+
+    is_file_readable(args.hap_fn)
+    for mod_fn in args.mod_fns:
+        is_file_readable(mod_fn)
+
+    if args.output_fn is None:
+        args.output_fn = "%s.mod" % args.sample_name
+    is_file_writable(args.output_fn, args.force)
+
+    logger.debug(args)
+
+
+def run():
+    # TODO: check every MOD has the same reference meta.
+    in_mods = [Mod(mod_fn) for mod_fn in args.mod_fns]
+    hap = csv.reader(open(args.hap_fn, 'r'))
+
+    sample2mod = {}
+    for mod in in_mods:
+        # Use 'sample' in the mod header to be the sample key in last column of
+        # the .hap file.
+        # If there is no such field, use the file name instead.
+        sample = mod.meta.get('sample', os.path.basename(mod.fileName)[:-4])
+        if sample in sample2mod:
+            raise ValueError("Duplicated sample key '%s' found." % sample)
+        sample2mod[sample] = mod
+
+    logger.debug(sample2mod)
+
+    out_mod = open(args.output_fn, 'w')
+    out_mod.write("#version=%s\n" % version.__mod_version__)
+    out_mod.write("#date=%s\n" % strftime("%Y%m%d", localtime()))
+
+    # Use the reference meta in the first mod file.
+    mod0 = in_mods[0]
+
+    # Write MOD Header
+    out_mod.write("#reference=%s\n" % mod0.meta['reference'])
+    assert 'refmeta' in mod0.meta, "Required 'refmeta' field not found "\
+        "in '%s'." % mod0.fileName
+
+    for chrom in sorted(list(mod0.refmeta.keys())):
+        out_mod.write("#refmeta.%s=" % chrom)
+        out_mod.write("[%s]\n" % ','.join([mod0.refmeta[chrom].chrom,
+                                           str(mod0.refmeta[chrom].length),
+                                           mod0.refmeta[chrom].md5sum]))
+    out_mod.write("#sample=%s\n" % args.sample_name)
+
+    # Write MOD Body
+    prev = 0
+    prev_chrom = None
+    nline = 0
+    for cols in hap:
+        nline += 1
+        #idx = name2idx[cols[-1]]
+        mod = sample2mod[cols[-1]]
+        #chrom = in_mods[idx].meta.getChromAliases().getBasicName(cols[0])
+        chrom = cols[0]
+        if args.zero:             # Hap file is 0-base
+            start = int(cols[1])
+            end = int(cols[2])
+        else:
+            start = int(cols[1]) - 1
+            end = int(cols[2]) - 1
+
+        assert end > start, "Start should be smaller than end."
+        assert prev_chrom != chrom or (prev_chrom == chrom and prev == start), \
+            "Gap exists at Line %d: %d != %d" %(nline, prev, start)
+        prev = end + 1
+        prev_chrom = chrom
+        #print('%s:%d-%d' % (chrom, start, end))
+
+        count = 0
+        if chrom in mod.tabix_chroms:
+            # tabix fetch not includes the end base
+            iter = mod.tabix.fetch(reference=chrom, start=start, end=(end + 1))
+
+            for line in iter:
+                out_mod.write(line)
+                out_mod.write('\n')
+                count += 1
+
+        logger.info('%s:%d-%d from %s' % (chrom, start, end, cols[-1]))
+        logger.info('%d lines written' % count)
+
+    out_mod.close()
+    logger.info("All Done!")
+
+
+if __name__ == '__main__':
+    init_logger()
+    parse_arguments()
+    run()

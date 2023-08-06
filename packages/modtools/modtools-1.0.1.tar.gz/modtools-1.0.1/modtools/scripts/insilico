@@ -1,0 +1,176 @@
+#! /bin/env python
+'''
+Create a pseudogenome give a MOD file and a reference fasta file.
+
+
+Created on Oct 3, 2013
+
+@author: Shunping Huang
+'''
+
+from __future__ import print_function
+
+import os
+import pysam
+import argparse as ap
+import logging
+
+from modtools.alias import Alias
+from modtools.fareader import FaReader
+from modtools.mod import Mod
+from modtools.utils import *
+
+from time import localtime, strftime
+
+__version__ = '2.0'
+
+DESC = 'A FASTA generator for pseudogenomes (in silico genomes)'
+
+logger = None
+args = None
+
+
+def seq2fasta(fp, sample, seq, chrom, width):
+    fp.write('>%s chromosome:%s:%s:1:%d:1 %s\n' %
+             (chrom, sample, chrom, len(seq),
+              strftime("date:%Y%m%d", localtime())))
+    length = len(seq)
+    for i in range(0, length, width):
+        if (i + width) <= length:
+            fp.write(seq[i:i + width])
+        else:
+            fp.write(seq[i:])
+        fp.write('\n')
+    fp.flush()
+
+
+def init_logger():
+    global logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    #ch.setLevel(logging.INFO)
+    formatter = logging.Formatter("[%(asctime)s] %(name)-10s: "
+                                  "%(levelname)s: %(message)s",
+                                  "%Y-%m-%d %H:%M:%S")
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+
+def parse_arguments():
+    global args
+    # Usage:
+    # insilico [-q][-v][-f][-a][-c list][-w][-o out.fa]
+    #          mod_fn fain_fn
+    p = ap.ArgumentParser(description=DESC,
+                          formatter_class=ap.RawTextHelpFormatter)
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("-q", dest='quiet', action='store_true',
+                       help='quiet mode')
+    group.add_argument('-v', dest='verbosity', action="store_const", const=2,
+                       default=1, help='verbose mode')
+    p.add_argument("-f", dest='force', action='store_true',
+                   help='overwrite existing output (mod)')
+
+    p.add_argument('-a', metavar='alias.csv', dest='alias_fn',
+                   default=None,
+                   help='the csv file for alias classes of sequence name'
+                   ' (default: None)')
+
+    p.add_argument('-c', metavar='chromList', dest='chroms', default=None,
+                   help='a comma-separated list of chromosomes in output'
+                   ', e.g. 1,2,3 (default: all)')
+
+    p.add_argument('-w', metavar='width', dest='width', type=int, default=72,
+                   help='the width in output FASTA (default: 72)')
+
+    p.add_argument('-o', metavar='out.fa', dest='faout_fn', default=None,
+                   help='the output FASTA file (default: out.fa)')
+
+    p.add_argument('mod_fn', metavar='in.mod',
+                   help='an input MOD file')
+
+    p.add_argument('fain_fn', metavar='in.fa',
+                   help='an input (reference) FASTA file')
+
+    args = p.parse_args()
+
+    if args.quiet:
+        logger.setLevel(logging.CRITICAL)
+    elif args.verbosity == 2:
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
+
+    is_file_readable(args.mod_fn)
+    is_file_readable(args.fain_fn)
+
+    if args.faout_fn is None:
+        args.faout_fn = "out.fa"
+    is_file_writable(args.faout_fn, args.force)
+
+    logger.debug(args)
+
+    mod = Mod(args.mod_fn)
+    if args.chroms is None:
+        args.chroms = mod.all_chroms
+    else:
+        args.chroms = args.chroms.split(',')
+
+    if args.alias_fn is not None:
+        is_file_readable(args.alias_fn)
+
+
+def run():
+    alias = Alias()
+    try:
+        alias.load(args.alias_fn)
+    except:
+        pass
+
+    mod = Mod(args.mod_fn)
+
+    sample = mod.meta.get('sample', os.path.basename(mod.fileName)[:-4])
+
+    faout = open(args.faout_fn, 'w')
+    fain = FaReader(args.fain_fn)
+
+    logger.info("input MOD file: %s", args.mod_fn)
+    logger.info("input FASTA file: %s", args.fain_fn)
+    logger.info("output FASTA file: %s", args.faout_fn)
+
+    for chrom in args.chroms:
+        logger.info("processing chromosome '%s'", chrom)
+
+        mod_chrom = alias.getName(chrom)
+        if mod_chrom is None:
+            mod_chrom = chrom
+        aliases = alias.getAliases(mod_chrom)
+
+        if mod_chrom not in mod.all_chroms:
+            logger.warning("Chromosome '%s' not found in MOD. Skipped." %
+                           mod_chrom)
+            continue
+
+        mod.load(mod_chrom)
+        logger.info("%d line(s) found in MOD", len(mod.data))
+
+        try:
+            seq = mod.get_seq(mod_chrom, fastaobj=fain, alias=alias)
+            logger.info("old: %d bp -> new: %d bp",
+                        mod.refmeta[mod_chrom].length,
+                        len(seq))
+            seq2fasta(faout, sample, seq, chrom, args.width)
+
+        except ValueError as e:
+            logger.warning("Chromosome '%s' not found in Fasta. Skipped." %
+                           mod_chrom)
+
+    faout.close()
+    logger.info("All Done!")
+
+
+if __name__ == '__main__':
+    init_logger()
+    parse_arguments()
+    run()
