@@ -1,0 +1,162 @@
+{% load i18n %}
+{% load staticfiles %}
+{% load wger_extras %}
+
+
+
+<div data-role="popup"
+     id="editoptions-day-{{ day.obj.id }}"
+     data-theme="d"
+     data-overlay-theme="a">
+        <div data-role="header" data-theme="b">
+            <h3>{{day.obj.description}}</h3>
+        </div>
+        <div role="main" class="ui-content">
+        <a href="{% url 'day-log' day.obj.id %}"
+           title="{% trans 'Add weight log to this day' %}"
+           data-role="button">
+                <img src="{% static 'images/icons/statistics.svg' %}"
+                     width="22"
+                     height="22"
+                     alt="{% trans 'Add weight log to this day' %}">
+                    {% trans 'Add weight log to this day' %}
+        </a>
+        {% if day.set_list|length > 0 %}
+        <a href="{% url 'workout-timer' day.obj.id %}"
+           title="{% trans 'Start gym mode' %}"
+           data-role="button"
+           data-ajax="false">
+                <img src="{% static 'images/icons/play.svg' %}"
+                     width="22"
+                     height="22"
+                     alt="{% trans 'Start gym mode' %}">
+                    {% trans "Start gym mode" %}
+        </a>
+        {% endif %}
+        <a href="{% url 'day-edit' day.obj.id %}"
+            title="{% trans 'Edit' %}"
+            data-role="button">
+                <img src="{% static 'images/icons/edit.svg' %}"
+                     width="22"
+                     height="22"
+                     alt="{% trans 'Edit' %}">
+                    {% trans 'Edit' %}
+        </a>
+        <a href="{% url 'day-delete' day.obj.id %}"
+           title="{% trans 'Delete' %}"
+           data-role="button">
+                <img src="{% static 'images/icons/trash.svg' %}"
+                     width="22"
+                     height="22"
+                     alt="{% trans 'Delete' %}">
+                     {% trans "Delete" %}
+        </a>
+        </div>
+</div>
+
+
+{% for set in day.set_list %}
+<div data-role="popup"
+     id="editoptions-set-{{ set.obj.id }}"
+     data-overlay-theme="a">
+        <div data-role="header" data-theme="b">
+            <h3>{% trans "Options" %}</h3>
+        </div>
+        <div role="main" class="ui-content">
+        <a href="{% url 'wger.manager.views.set.edit' set.obj.id %}"
+           title="{% trans 'Delete' %}"
+           data-role="button">
+                <img src="{% static 'images/icons/edit.svg' %}"
+                     width="16"
+                     height="16"
+                     alt="{% trans 'Edit' %}"
+                     class="ui-li-icon ui-corner-none">
+                {% trans "Edit" %}
+        </a>
+        <a href="{% url 'wger.manager.views.set.delete' set.obj.id %}"
+           title="{% trans 'Delete' %}"
+           data-role="button">
+                <img src="{% static 'images/icons/trash.svg' %}"
+                     width="16"
+                     height="16"
+                     alt="{% trans 'Delete' %}"
+                     class="ui-li-icon ui-corner-none">
+                {% trans "Delete" %}
+        </a>
+
+        <h5>{% trans "Exercises" %}</h5>
+        {% for exercise in set.exercise_list %}
+            <a href="{{ exercise.obj.get_absolute_url }}"
+               title="{{ exercise.obj.name }}"
+               data-role="button">
+                {{ exercise.obj.name }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+<ul data-role="listview"
+    id="table-day-{{ day.obj.id }}"
+    style="margin-top: 3em;"
+    data-split-icon="grid"
+    data-split-theme="b">
+    <li data-theme="b">
+        <a href="#editoptions-day-{{ day.obj.id }}" data-rel="popup">
+            <h4>{{ day.obj.description }}</h4>
+            {{ day.days_of_week.text }}
+        </a>
+
+        <a href="{% url 'day-log' day.obj.id %}"></a>
+    </li>
+    {% for set in day.set_list %}
+    <li id="set-{{ set.obj.id }}" data-icon="false">
+    {% if set.has_settings %}
+        <a href="#editoptions-set-{{ set.obj.id }}"
+           data-rel="popup"
+           data-position-to="window">
+    {% else %}
+        <a href="{% url 'set-edit' set.obj.id %}">
+    {% endif %}
+
+        {% for exercise in set.exercise_list %}
+            <div id="exercise-{{ exercise.obj.id }}" class="ajax-set-edit-target">
+                <h3>{{ exercise.obj.name }}</h3>
+                <p><strong>{{exercise.setting_text}}</strong></p>
+
+                {% if not exercise.setting_list %}
+                <p>
+                    {% trans "This exercise has no repetitions." %}<br>
+                    {% trans "Edit them now."%}
+                </p>
+                {% endif %}
+
+                <p class="exercise-comments">
+                    {% for comment in exercise.comment_list %}
+                        {{comment}}<br>
+                    {% endfor %}
+                </p>
+            </div>
+        {% endfor %} <!--for exercise in set-->
+    </a>
+    </li>
+    {% empty %}
+    <li>
+        <a href="{% url 'set-add' day.obj.id %}"
+           data-ajax="false">
+               {% trans "No exercises selected for this day." %}<br>
+               {% trans "Add one now." %}
+            </a>
+    </li>
+    {% endfor %} <!--for set in day-->
+
+    {% if day.set_list %}
+    <li data-icon="arrow-r">
+        <a href="{% url 'set-add' day.obj.id %}"
+           data-ajax="false"
+           >{% trans "Add exercises to this workout day" %}</a>
+    </li>
+    {% endif %}
+
+</ul>
+

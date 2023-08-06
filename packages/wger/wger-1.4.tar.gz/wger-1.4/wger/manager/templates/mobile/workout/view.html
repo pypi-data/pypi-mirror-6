@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load staticfiles %}
+{% load wger_extras %}
+
+{% block title %}{% trans "Workout" %} – {{ workout.creation_date }}{% endblock %}
+
+
+{% block header %}{% endblock %}
+
+
+{% block scripts %}
+<script>
+$( document ).off("pageinit").on("pageinit", function() {
+    /*
+     * Show/Hide the comments to the exercises
+     */
+    {% if user.userprofile.show_comments %}
+        showComment = 1;
+        $(".exercise-comments").show();
+    {% else %}
+        showComment = 0;
+        $(".exercise-comments").hide();
+    {% endif %}
+        toggle_comments();
+
+    /*
+     * At the moment (Oct. 2013), firefox OS has no possibility to download
+     * authenticated files, like these PDFs: when using web activities, we
+     * can only pass the PDF's URL to the reader but this will fail, since that
+     * application is not authenticated.
+     */
+    if(typeof MozActivity != 'undefined') {
+        $(".pdf-button").remove();
+    }
+});
+</script>
+{% endblock %}
+
+
+{% block content %}
+{% if workout.comment %}
+<p>
+    <span class="dimmed">{{workout.comment}}</span>
+</p>
+{% endif %}
+
+{% for day in workout.canonical_representation.day_list %}
+    <div id="div-day-{{ day.obj.id }}">
+        {% render_day day.obj %}
+    </div>
+{% empty %}
+
+    <ul data-role="listview" data-inset="false">
+        <li>
+            <a href="{% url 'day-add' workout.id %}">
+            {% trans "No days for this workout." %}<br>
+            {% trans "Add training day." %}
+            </a>
+        </li>
+    </ul>
+{% endfor %}
+
+
+<p style="margin-top:2em;">
+<a href="{% url 'day-add' workout.id %}"
+   data-role="button"
+   data-mini="true">
+    {% trans "Add training day" %}
+</a>
+
+
+<a id="exercise-comments-toggle"
+   href="{% url 'core:preferences' %}"
+   data-role="button"
+   data-mini="true">
+    {% trans "Show/Hide exercise comments" %}
+</a>
+
+
+</p>
+{% endblock %}
+
+
+
+<!--
+        Side bar
+-->
+{% block sidebar %}
+<h3>{% trans "Steps" %}</h3>
+
+<ol>
+    <li>{% trans "Add training days" %}</li>
+    <li>{% trans "Add working sets to days" %}</li>
+    <li>
+        {% trans "Set the repetitions for each set" %}
+        ({% trans "use '99' for 'all repetitions you can do'" %})
+    </li>
+</ol>
+
+
+<h3>{% trans "Muscles trained" %}</h3>
+
+<p>
+    {% trans "Images show combined muscles as trained by the exercises on the workout." %}
+</p>
+
+<div class="ui-grid-a">
+    <div class="ui-block-a">
+        <div id="muscle-front"
+                class="muscle-background"
+                style="width: 120px; height: 220px; background-size: 120px; background-image: {% for background in muscle_backgrounds_front %}url({% static background %}){% if not forloop.last %},{% endif %}{% endfor %};">
+        </div>
+    </div>
+
+    <div class="ui-block-b">
+        <div id="muscle-back"
+                class="muscle-background"
+                style="width: 120px; height: 220px; background-size: 120px; background-image: {% for background in muscle_backgrounds_back %}url({% static background %}){% if not forloop.last %},{% endif %}{% endfor %};">
+        </div>
+    </div>
+</div>
+
+
+<h3>{% trans "Options" %}</h3>
+
+<a href="#export-pdf-link"
+   data-role="button"
+   data-rel="popup">
+    <img src="{% static 'images/icons/save.svg' %}"
+         width="32"
+         height="32"
+         alt="{% trans 'Download as PDF' %}"
+         title="{% trans 'Download as PDF' %}">
+    {% trans "Download as PDF" %}
+</a>
+
+<a href="{% url 'workout-log' workout.id %}"
+   data-role="button">
+   <img src="{% static 'images/icons/statistics.svg' %}"
+         width="32"
+         height="32"
+         alt="{% trans 'View weight log' %}"
+         title="{% trans 'View weight log' %}">
+   {% trans "View weight log" %}
+</a>
+
+<a href="{% url 'workout-edit' workout.id %}"
+   data-role="button">
+   <img src="{% static 'images/icons/edit.svg' %}"
+         width="32"
+         height="32"
+         alt="{% trans 'Edit workout' %}"
+         title="{% trans 'Edit workout' %}">
+   {% trans "Edit workout" %}
+</a>
+
+<a href="#export-ical-link"
+   data-rel="popup"
+   data-role="button"
+   data-position-to="window">
+   <img src="{% static 'images/icons/calendar.svg' %}"
+         width="32"
+         height="32"
+         alt="{% trans 'Export calendar file' %}"
+         title="{% trans 'Export calendar file' %}">
+   {% trans "Export calendar file" %}
+</a>
+
+<a href="{% url 'workout-copy' workout.id %}"
+   data-role="button">
+   <img src="{% static 'images/icons/copy.svg' %}"
+         width="32"
+         height="32"
+         alt="{% trans 'Make a copy of this workout' %}"
+         title="{% trans 'Make a copy of this workout' %}">
+   {% trans "Make a copy of this workout" %}
+</a>
+
+<a href="{% url 'workout-delete' workout.id %}"
+   data-role="button">
+    <img src="{% static 'images/icons/trash.svg' %}"
+         width="32"
+         height="32"
+         alt="{% trans 'Delete this workout' %}">
+    {% trans "Delete this workout" %}
+</a>
+
+
+<div data-role="popup"
+     id="export-ical-link"
+     data-overlay-theme="a">
+     <div data-role="header" data-theme="b">
+        <h3>{% trans "Export calendar file" %}</h3>
+    </div>
+    <div role="main" class="ui-content">
+        <p>{% trans "Export this workout as a calendar file." %}</p>
+        <p>{% blocktrans %}You can then import the file it into your calendar
+application for example google calendar, outlook or iCal. This will create
+an appointment for each training day with the appropriate exercises.{% endblocktrans %}</p>
+        <p>
+        <a href="{% url 'workout-ical' workout.id %}"
+           data-role="button"
+           target="_blank">
+           <img src="{% static 'images/icons/calendar.svg' %}"
+                 width="32"
+                 height="32"
+                 alt="{% trans 'Export calendar file' %}"
+                 title="{% trans 'Export calendar file' %}">
+           {% trans "Export calendar file" %}
+        </a>
+        </p>
+    </div>
+</div>
+
+<div data-role="popup"
+     id="export-pdf-link"
+     data-overlay-theme="a">
+     <div data-role="header" data-theme="b">
+        <h3>{% trans "Download as PDF" %}</h3>
+    </div>
+    <div role="main" class="ui-content">
+        <a href="{% url 'workout-pdf-log' workout.id %}"
+           data-role="button"
+           data-ajax="false"
+           class="pdf-button">
+        {% trans "Log" %}
+        </a>
+
+        <a href="{% url 'workout-pdf-table' workout.id %}"
+           data-role="button"
+           data-ajax="false"
+           class="pdf-button">
+        {% trans "Table" %}
+        </a>
+    </div>
+</div>
+{% endblock %}
