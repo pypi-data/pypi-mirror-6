@@ -1,0 +1,194 @@
+from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.sites.models import Site
+from django.utils.encoding import force_bytes, force_text
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.translation import ugettext_lazy as _
+from incuna_mail import send
+from rest_framework import generics, parsers, renderers, response, status, views
+from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.permissions import AllowAny, IsAuthenticated
+
+from . import serializers, permissions
+
+
+User = get_user_model()
+
+
+class GetToken(ObtainAuthToken):
+    renderer_classes = (renderers.JSONRenderer, renderers.BrowsableAPIRenderer)
+
+
+class UserRegister(generics.CreateAPIView):
+    serializer_class = serializers.RegistrationSerializer
+    permission_classes = [permissions.IsNotAuthenticated]
+    ok_message = _('Your account has been created and an activation link sent to your email address. Please check your email to continue.')
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.DATA, files=request.FILES)
+
+        if not serializer.is_valid():
+            return response.Response(
+                serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer.save()
+
+        return response.Response(
+            data={'data': self.ok_message},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PasswordResetEmail(views.APIView):
+    permission_classes = [permissions.IsNotAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = serializers.PasswordResetEmailSerializer(data=request.DATA)
+        if not serializer.is_valid():
+            return response.Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = serializer.data['email']
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            pass
+        else:
+            self.send_email(user)
+
+        msg = _('Password reset request successful. Please check your email.')
+        return response.Response(msg, status=status.HTTP_204_NO_CONTENT)
+
+    def send_email(self, user):
+        site = Site.objects.get_current()
+        context = {
+            'protocol': 'https',
+            'site': site,
+            'token': default_token_generator.make_token(user),
+            'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+        }
+        send(
+            to=[user.email],
+            template_name='user_management/password_reset_email.html',
+            subject='{} password reset'.format(site.domain),
+            context=context,
+        )
+
+
+class OneTimeUseAPIMixin(object):
+    def dispatch(self, request, *args, **kwargs):
+        uidb64 = kwargs['uidb64']
+        uid = urlsafe_base64_decode(force_text(uidb64))
+
+        try:
+            self.user = User.objects.get(pk=uid)
+        except User.DoesNotExist:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+
+        token = kwargs['token']
+        if not default_token_generator.check_token(self.user, token):
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+
+        return super(OneTimeUseAPIMixin, self).dispatch(request, *args, **kwargs)
+
+
+class PasswordReset(OneTimeUseAPIMixin, generics.UpdateAPIView):
+    permission_classes = [permissions.IsNotAuthenticated]
+    model = User
+    serializer_class = serializers.PasswordResetSerializer
+
+    def get_object(self):
+        return self.user
+
+
+class PasswordChange(generics.UpdateAPIView):
+    model = User
+    permission_classes = (IsAuthenticated,)
+    serializer_class = serializers.PasswordChangeSerializer
+
+    def get_object(self):
+        return self.request.user
+
+
+class VerifyAccountView(OneTimeUseAPIMixin, views.APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        if self.user.verified_email:
+            return response.Response(status=status.HTTP_403_FORBIDDEN)
+
+        self.user.verified_email = True
+        self.user.is_active = True
+        self.user.save()
+        return response.Response(status=status.HTTP_200_OK)
+
+
+class ProfileDetail(generics.RetrieveUpdateAPIView):
+    model = User
+    permission_classes = (IsAuthenticated,)
+    serializer_class = serializers.ProfileSerializer
+
+    def get_object(self):
+        return self.request.user
+
+
+class ProfileAvatar(generics.RetrieveUpdateAPIView):
+    """
+    Retrieve and update the authenticated user's avatar. Pass get parameters to
+    retrieve a thumbnail of the avatar.
+
+    Thumbnail options are specified as get parameters. Options are:
+        width: Specify the width (in pixels) to resize / crop to.
+        height: Specify the height (in pixels) to resize / crop to.
+        crop: Whether to crop or not [1,0]
+        anchor: Where to anchor the crop [t,r,b,l]
+        upscale: Whether to upscale or not [1,0]
+
+    If no options are specified the users avatar is returned.
+
+    To crop avatar to 100x100 anchored to the top right:
+        avatar?width=100&height=100&crop=1&anchor=tr
+    """
+    model = User
+    serializer_class = serializers.AvatarSerializer
+    parser_classes = (parsers.MultiPartParser,)
+
+    def get_object(self):
+        return self.request.user
+
+
+class UserList(generics.ListCreateAPIView):
+    model = User
+    permission_classes = (IsAuthenticated, permissions.IsAdminOrReadOnly)
+    serializer_class = serializers.UserSerializerCreate
+
+
+class UserDetail(generics.RetrieveUpdateDestroyAPIView):
+    model = User
+    permission_classes = (IsAuthenticated, permissions.IsAdminOrReadOnly)
+    serializer_class = serializers.UserSerializer
+
+
+class UserAvatar(generics.RetrieveUpdateAPIView):
+    """
+    Retrieve and update the user's avatar. Pass get parameters to
+    retrieve a thumbnail of the avatar.
+
+    Thumbnail options are specified as get parameters. Options are:
+        width: Specify the width (in pixels) to resize / crop to.
+        height: Specify the height (in pixels) to resize / crop to.
+        crop: Whether to crop or not [1,0]
+        anchor: Where to anchor the crop [t,r,b,l]
+        upscale: Whether to upscale or not [1,0]
+
+    If no options are specified the users avatar is returned.
+
+    To crop avatar to 100x100 anchored to the top right:
+        avatar?width=100&height=100&crop=1&anchor=tr
+    """
+    model = User
+    permission_classes = (IsAuthenticated, permissions.IsAdminOrReadOnly)
+    parser_classes = (parsers.MultiPartParser,)
+    serializer_class = serializers.AvatarSerializer
