@@ -1,0 +1,10 @@
+__version__ = "0.3.9"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.3.9)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '3f1a500c2576f5a28f77e5ac7a70c3aabdd448fd'
+__git_head_subject__ = 'Finished release v0.3.9.'
+__git_head_message__ = '* release/v0.3.9:\n  buildout.cfg: adding setuptools to requirements\n  buildout.cfg: remove distribute from requirements'
+__git_dirty_diff__ = ''
