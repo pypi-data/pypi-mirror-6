@@ -1,0 +1,669 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Adapter Registry &mdash; zope.interface 4.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '4.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="zope.interface 4.0.1 documentation" href="index.html" />
+    <link rel="next" title="Using the Adapter Registry" href="human.html" />
+    <link rel="prev" title="Interfaces" href="README.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="human.html" title="Using the Adapter Registry"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="README.html" title="Interfaces"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">zope.interface 4.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="adapter-registry">
+<h1>Adapter Registry<a class="headerlink" href="#adapter-registry" title="Permalink to this headline">¶</a></h1>
+<p>Adapter registries provide a way to register objects that depend on
+one or more interface specifications and provide (perhaps indirectly)
+some interface.  In addition, the registrations have names. (You can
+think of the names as qualifiers of the provided interfaces.)</p>
+<p>The term &#8220;interface specification&#8221; refers both to interfaces and to
+interface declarations, such as declarations of interfaces implemented
+by a class.</p>
+<div class="section" id="single-adapters">
+<h2>Single Adapters<a class="headerlink" href="#single-adapters" title="Permalink to this headline">¶</a></h2>
+<p>Let&#8217;s look at a simple example, using a single required specification:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.interface.adapter</span> <span class="kn">import</span> <span class="n">AdapterRegistry</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">zope.interface</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IR1</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IP1</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IP2</span><span class="p">(</span><span class="n">IP1</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span> <span class="o">=</span> <span class="n">AdapterRegistry</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>We&#8217;ll register an object that depends on IR1 and &#8220;provides&#8221; IP2:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="mi">12</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Given the registration, we can look it up again:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">12</span>
+</pre></div>
+</div>
+<p>Note that we used an integer in the example.  In real applications,
+one would use some objects that actually depend on or provide
+interfaces. The registry doesn&#8217;t care about what gets registered, so
+we&#8217;ll use integers and strings to keep the examples simple. There is
+one exception.  Registering a value of None unregisters any
+previously-registered value.</p>
+<p>If an object depends on a specification, it can be looked up with a
+specification that extends the specification that it depends on:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IR2</span><span class="p">(</span><span class="n">IR1</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">12</span>
+</pre></div>
+</div>
+<p>We can use a class implementation specification to look up the object:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">C2</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implements</span><span class="p">(</span><span class="n">IR2</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implementedBy</span><span class="p">(</span><span class="n">C2</span><span class="p">)],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">12</span>
+</pre></div>
+</div>
+<p>and it can be looked up for interfaces that its provided interface
+extends:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">12</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">12</span>
+</pre></div>
+</div>
+<p>But if you require a specification that doesn&#8217;t extend the specification the
+object depends on, you won&#8217;t get anything:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Interface</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>By the way, you can pass a default value to lookup:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Interface</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="mi">42</span><span class="p">)</span>
+<span class="go">42</span>
+</pre></div>
+</div>
+<p>If you try to get an interface the object doesn&#8217;t provide, you also
+won&#8217;t get anything:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IP3</span><span class="p">(</span><span class="n">IP2</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP3</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You also won&#8217;t get anything if you use the wrong name:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">,</span> <span class="s">&quot;Bob&#39;s 12&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">)</span>
+<span class="go">&quot;Bob&#39;s 12&quot;</span>
+</pre></div>
+</div>
+<p>You can leave the name off when doing a lookup:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">12</span>
+</pre></div>
+</div>
+<p>If we register an object that provides IP1:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="mi">11</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>then that object will be prefered over O(12):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">11</span>
+</pre></div>
+</div>
+<p>Also, if we register an object for IR2, then that will be prefered
+when using IR2:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="mi">21</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">21</span>
+</pre></div>
+</div>
+<div class="section" id="finding-out-what-if-anything-is-registered">
+<h3>Finding out what, if anything, is registered<a class="headerlink" href="#finding-out-what-if-anything-is-registered" title="Permalink to this headline">¶</a></h3>
+<p>We can ask if there is an adapter registered for a collection of
+interfaces. This is different than lookup, because it looks for an
+exact match:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">registry</span><span class="o">.</span><span class="n">registered</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">11</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">registry</span><span class="o">.</span><span class="n">registered</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP2</span><span class="p">)</span>
+<span class="go">12</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">registry</span><span class="o">.</span><span class="n">registered</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">)</span>
+<span class="go">Bob&#39;s 12</span>
+
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">registry</span><span class="o">.</span><span class="n">registered</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">21</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">registry</span><span class="o">.</span><span class="n">registered</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP2</span><span class="p">)</span>
+<span class="go">None</span>
+</pre></div>
+</div>
+<p>In the last example, None was returned because nothing was registered
+exactly for the given interfaces.</p>
+</div>
+<div class="section" id="lookup1">
+<h3>lookup1<a class="headerlink" href="#lookup1" title="Permalink to this headline">¶</a></h3>
+<p>Lookup of single adapters is common enough that there is a specialized
+version of lookup that takes a single required interface:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup1</span><span class="p">(</span><span class="n">IR2</span><span class="p">,</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">21</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup1</span><span class="p">(</span><span class="n">IR2</span><span class="p">,</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">21</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="actual-adaptation">
+<h3>Actual Adaptation<a class="headerlink" href="#actual-adaptation" title="Permalink to this headline">¶</a></h3>
+<p>The adapter registry is intended to support adaptation, where one
+object that implements an interface is adapted to another object that
+supports a different interface.  The adapter registry supports the
+computation of adapters. In this case, we have to register adapter
+factories:</p>
+<div class="highlight-python"><pre> &gt;&gt;&gt; class IR(zope.interface.Interface):
+ ...     pass
+
+ &gt;&gt;&gt; class X:
+ ...     zope.interface.implements(IR)
+
+ &gt;&gt;&gt; class Y:
+ ...     zope.interface.implements(IP1)
+ ...     def __init__(self, context):
+ ...         self.context = context
+
+&gt;&gt;&gt; registry.register([IR], IP1, '', Y)</pre>
+</div>
+<p>In this case, we registered a class as the factory. Now we can call
+<cite>queryAdapter</cite> to get the adapted object:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">X</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">queryAdapter</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;Y&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="o">.</span><span class="n">context</span> <span class="ow">is</span> <span class="n">x</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>We can register and lookup by name too:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Y2</span><span class="p">(</span><span class="n">Y</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">,</span> <span class="n">Y2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">queryAdapter</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;Y2&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="o">.</span><span class="n">context</span> <span class="ow">is</span> <span class="n">x</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>When the adapter factory produces <cite>None</cite>, then this is treated as if no
+adapter has been found. This allows us to prevent adaptation (when desired)
+and let the adapter factory determine whether adaptation is possible based on
+the state of the object being adapted:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">factory</span><span class="p">(</span><span class="n">context</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">if</span> <span class="n">context</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s">&#39;object&#39;</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="k">return</span> <span class="s">&#39;adapter&#39;</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="bp">None</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Object</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implements</span><span class="p">(</span><span class="n">IR</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;object&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;conditional&#39;</span><span class="p">,</span> <span class="n">factory</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">obj</span> <span class="o">=</span> <span class="n">Object</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">queryAdapter</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;conditional&#39;</span><span class="p">)</span>
+<span class="go">&#39;adapter&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">obj</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#39;no object&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">queryAdapter</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;conditional&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">queryAdapter</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;conditional&#39;</span><span class="p">,</span> <span class="s">&#39;default&#39;</span><span class="p">)</span>
+<span class="go">&#39;default&#39;</span>
+</pre></div>
+</div>
+<p>An alternate method that provides the same function as <cite>queryAdapter()</cite> is
+<cite>adapter_hook()</cite>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">adapter_hook</span><span class="p">(</span><span class="n">IP1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;Y&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="o">.</span><span class="n">context</span> <span class="ow">is</span> <span class="n">x</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">adapter_hook</span><span class="p">(</span><span class="n">IP1</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;Y2&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">y</span><span class="o">.</span><span class="n">context</span> <span class="ow">is</span> <span class="n">x</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>The <cite>adapter_hook()</cite> simply switches the order of the object and
+interface arguments.  It is used to hook into the interface call
+mechanism.</p>
+</div>
+<div class="section" id="default-adapters">
+<h3>Default Adapters<a class="headerlink" href="#default-adapters" title="Permalink to this headline">¶</a></h3>
+<p>Sometimes, you want to provide an adapter that will adapt anything.
+For that, provide None as the required interface:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="bp">None</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>then we can use that adapter for interfaces we don&#8217;t have specific
+adapters for:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IQ</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IQ</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">1</span>
+</pre></div>
+</div>
+<p>Of course, specific adapters are still used when applicable:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">21</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="class-adapters">
+<h3>Class adapters<a class="headerlink" href="#class-adapters" title="Permalink to this headline">¶</a></h3>
+<p>You can register adapters for class declarations, which is almost the
+same as registering them for a class:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implementedBy</span><span class="p">(</span><span class="n">C2</span><span class="p">)],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;C21&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implementedBy</span><span class="p">(</span><span class="n">C2</span><span class="p">)],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">&#39;C21&#39;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="dict-adapters">
+<h3>Dict adapters<a class="headerlink" href="#dict-adapters" title="Permalink to this headline">¶</a></h3>
+<p>At some point it was impossible to register dictionary-based adapters due a
+bug. Let&#8217;s make sure this works now:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">adapter</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">((),</span> <span class="n">IQ</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">adapter</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">((),</span> <span class="n">IQ</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="n">adapter</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="unregistering">
+<h3>Unregistering<a class="headerlink" href="#unregistering" title="Permalink to this headline">¶</a></h3>
+<p>You can unregister by registering None, rather than an object:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implementedBy</span><span class="p">(</span><span class="n">C2</span><span class="p">)],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implementedBy</span><span class="p">(</span><span class="n">C2</span><span class="p">)],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">21</span>
+</pre></div>
+</div>
+<p>Of course, this means that None can&#8217;t be registered. This is an
+exception to the statement, made earlier, that the registry doesn&#8217;t
+care what gets registered.</p>
+</div>
+</div>
+<div class="section" id="multi-adapters">
+<h2>Multi-adapters<a class="headerlink" href="#multi-adapters" title="Permalink to this headline">¶</a></h2>
+<p>You can adapt multiple specifications:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR1</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;1q2&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR1</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">&#39;1q2&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR2</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">&#39;1q2&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IS</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR2</span><span class="p">,</span> <span class="n">IS</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IQ2</span><span class="p">(</span><span class="n">IQ</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR2</span><span class="p">,</span> <span class="n">IQ2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">&#39;1q2&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR1</span><span class="p">,</span> <span class="n">IQ2</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;1q22&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IR2</span><span class="p">,</span> <span class="n">IQ2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">&#39;1q22&#39;</span>
+</pre></div>
+</div>
+<div class="section" id="multi-adaptation">
+<h3>Multi-adaptation<a class="headerlink" href="#multi-adaptation" title="Permalink to this headline">¶</a></h3>
+<p>You can adapt multiple objects:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Q</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implements</span><span class="p">(</span><span class="n">IQ</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As with single adapters, we register a factory, which is often a class:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IM</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">M</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implements</span><span class="p">(</span><span class="n">IM</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">q</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">=</span> <span class="n">x</span><span class="p">,</span> <span class="n">q</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IM</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">M</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>And then we can call <cite>queryMultiAdapter</cite> to compute an adapter:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">q</span> <span class="o">=</span> <span class="n">Q</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">m</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">queryMultiAdapter</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">q</span><span class="p">),</span> <span class="n">IM</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">m</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;M&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">m</span><span class="o">.</span><span class="n">x</span> <span class="ow">is</span> <span class="n">x</span> <span class="ow">and</span> <span class="n">m</span><span class="o">.</span><span class="n">q</span> <span class="ow">is</span> <span class="n">q</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>and, of course, we can use names:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">M2</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IM</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">,</span> <span class="n">M2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">m</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">queryMultiAdapter</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">q</span><span class="p">),</span> <span class="n">IM</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">m</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+<span class="go">&#39;M2&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">m</span><span class="o">.</span><span class="n">x</span> <span class="ow">is</span> <span class="n">x</span> <span class="ow">and</span> <span class="n">m</span><span class="o">.</span><span class="n">q</span> <span class="ow">is</span> <span class="n">q</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id1">
+<h3>Default Adapters<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h3>
+<p>As with single adapters, you can define default adapters by specifying
+None for the <em>first</em> specification:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="bp">None</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;q2&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([</span><span class="n">IS</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">&#39;q2&#39;</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="null-adapters">
+<h2>Null Adapters<a class="headerlink" href="#null-adapters" title="Permalink to this headline">¶</a></h2>
+<p>You can also adapt no specification:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">lookup</span><span class="p">([],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="go">2</span>
+</pre></div>
+</div>
+<div class="section" id="listing-named-adapters">
+<h3>Listing named adapters<a class="headerlink" href="#listing-named-adapters" title="Permalink to this headline">¶</a></h3>
+<p>Adapters are named. Sometimes, it&#8217;s useful to get all of the named
+adapters for given interfaces:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">adapters</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">registry</span><span class="o">.</span><span class="n">lookupAll</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">adapters</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">adapters</span> <span class="o">==</span> <span class="p">[(</span><span class="s">u&#39;&#39;</span><span class="p">,</span> <span class="mi">11</span><span class="p">),</span> <span class="p">(</span><span class="s">u&#39;bob&#39;</span><span class="p">,</span> <span class="s">&quot;Bob&#39;s 12&quot;</span><span class="p">)]</span>
+</pre></div>
+</div>
+<p>This works for multi-adapters too:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([</span><span class="n">IR1</span><span class="p">,</span> <span class="n">IQ2</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">,</span> <span class="s">&#39;1q2 for bob&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">adapters</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">registry</span><span class="o">.</span><span class="n">lookupAll</span><span class="p">([</span><span class="n">IR2</span><span class="p">,</span> <span class="n">IQ2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">adapters</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">adapters</span> <span class="o">==</span> <span class="p">[(</span><span class="s">u&#39;&#39;</span><span class="p">,</span> <span class="s">&#39;1q22&#39;</span><span class="p">),</span> <span class="p">(</span><span class="s">u&#39;bob&#39;</span><span class="p">,</span> <span class="s">&#39;1q2 for bob&#39;</span><span class="p">)]</span>
+</pre></div>
+</div>
+<p>And even null adapters:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">([],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;bob&#39;</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">adapters</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">registry</span><span class="o">.</span><span class="n">lookupAll</span><span class="p">([],</span> <span class="n">IP1</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">adapters</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">assert</span> <span class="n">adapters</span> <span class="o">==</span> <span class="p">[(</span><span class="s">u&#39;&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="s">u&#39;bob&#39;</span><span class="p">,</span> <span class="mi">3</span><span class="p">)]</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="subscriptions">
+<h2>Subscriptions<a class="headerlink" href="#subscriptions" title="Permalink to this headline">¶</a></h2>
+<p>Normally, we want to look up an object that most-closely matches a
+specification.  Sometimes, we want to get all of the objects that
+match some specification.  We use subscriptions for this.  We
+subscribe objects against specifications and then later find all of
+the subscribed objects:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;sub12 1&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP2</span><span class="p">)</span>
+<span class="go">[&#39;sub12 1&#39;]</span>
+</pre></div>
+</div>
+<p>Note that, unlike regular adapters, subscriptions are unnamed.</p>
+<p>You can have multiple subscribers for the same specification:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;sub12 2&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP2</span><span class="p">)</span>
+<span class="go">[&#39;sub12 1&#39;, &#39;sub12 2&#39;]</span>
+</pre></div>
+</div>
+<p>If subscribers are registered for the same required interfaces, they
+are returned in the order of definition.</p>
+<p>You can register subscribers for all specifications using None:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="bp">None</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;sub_1&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">[&#39;sub_1&#39;, &#39;sub12 1&#39;, &#39;sub12 2&#39;]</span>
+</pre></div>
+</div>
+<p>Note that the new subscriber is returned first.  Subscribers defined
+for less general required interfaces are returned before subscribers
+for more general interfaces.</p>
+<p>Subscriptions may be combined over multiple compatible specifications:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">[&#39;sub_1&#39;, &#39;sub12 1&#39;, &#39;sub12 2&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;sub11&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">[&#39;sub_1&#39;, &#39;sub12 1&#39;, &#39;sub12 2&#39;, &#39;sub11&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;sub22&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">[&#39;sub_1&#39;, &#39;sub12 1&#39;, &#39;sub12 2&#39;, &#39;sub11&#39;, &#39;sub22&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR2</span><span class="p">],</span> <span class="n">IP2</span><span class="p">)</span>
+<span class="go">[&#39;sub12 1&#39;, &#39;sub12 2&#39;, &#39;sub22&#39;]</span>
+</pre></div>
+</div>
+<p>Subscriptions can be on multiple specifications:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="n">IR1</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;sub1q2&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR1</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IP2</span><span class="p">)</span>
+<span class="go">[&#39;sub1q2&#39;]</span>
+</pre></div>
+</div>
+<p>As with single subscriptions and non-subscription adapters, you can
+specify None for the first required interface, to specify a default:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="bp">None</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;sub_q2&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IS</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IP2</span><span class="p">)</span>
+<span class="go">[&#39;sub_q2&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR1</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IP2</span><span class="p">)</span>
+<span class="go">[&#39;sub_q2&#39;, &#39;sub1q2&#39;]</span>
+</pre></div>
+</div>
+<p>You can have subscriptions that are indepenent of any specifications:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([],</span> <span class="n">IP1</span><span class="p">))</span>
+<span class="go">[]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([],</span> <span class="n">IP2</span><span class="p">,</span> <span class="s">&#39;sub2&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">[&#39;sub2&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;sub1&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">[&#39;sub2&#39;, &#39;sub1&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([],</span> <span class="n">IP2</span><span class="p">)</span>
+<span class="go">[&#39;sub2&#39;]</span>
+</pre></div>
+</div>
+<div class="section" id="unregistering-subscribers">
+<h3>Unregistering subscribers<a class="headerlink" href="#unregistering-subscribers" title="Permalink to this headline">¶</a></h3>
+<p>We can unregister subscribers.  When unregistering a subscriber, we
+can unregister a specific subscriber:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">unsubscribe</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">,</span> <span class="s">&#39;sub11&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">[&#39;sub_1&#39;, &#39;sub12 1&#39;, &#39;sub12 2&#39;]</span>
+</pre></div>
+</div>
+<p>If we don&#8217;t specify a value, then all subscribers matching the given
+interfaces will be unsubscribed:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">unsubscribe</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP2</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="n">IP1</span><span class="p">)</span>
+<span class="go">[&#39;sub_1&#39;]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="subscription-adapters">
+<h3>Subscription adapters<a class="headerlink" href="#subscription-adapters" title="Permalink to this headline">¶</a></h3>
+<p>We normally register adapter factories, which then allow us to compute
+adapters, but with subscriptions, we get multiple adapters.  Here&#8217;s an
+example of multiple-object subscribers:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="n">IR</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IM</span><span class="p">,</span> <span class="n">M</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="n">IR</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IM</span><span class="p">,</span> <span class="n">M2</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">subscribers</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">q</span><span class="p">),</span> <span class="n">IM</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">subscribers</span><span class="p">)</span>
+<span class="go">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">class_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">subscribers</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">class_names</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">class_names</span>
+<span class="go">[&#39;M&#39;, &#39;M2&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[(</span><span class="n">s</span><span class="o">.</span><span class="n">x</span> <span class="ow">is</span> <span class="n">x</span> <span class="ow">and</span> <span class="n">s</span><span class="o">.</span><span class="n">q</span> <span class="ow">is</span> <span class="n">q</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">subscribers</span><span class="p">]</span>
+<span class="go">[True, True]</span>
+</pre></div>
+</div>
+<p>adapter factory subcribers can&#8217;t return None values:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">M3</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="bp">None</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="n">IR</span><span class="p">,</span> <span class="n">IQ</span><span class="p">],</span> <span class="n">IM</span><span class="p">,</span> <span class="n">M3</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">subscribers</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">q</span><span class="p">),</span> <span class="n">IM</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">subscribers</span><span class="p">)</span>
+<span class="go">2</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="handlers">
+<h3>Handlers<a class="headerlink" href="#handlers" title="Permalink to this headline">¶</a></h3>
+<p>A handler is a subscriber factory that doesn&#8217;t produce any normal
+output.  It returns None.  A handler is unlike adapters in that it does
+all of its work when the factory is called.</p>
+<p>To register a handler, simply provide None as the provided interface:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">handler</span><span class="p">(</span><span class="n">event</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">print</span> <span class="s">&#39;handler&#39;</span><span class="p">,</span> <span class="n">event</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscribe</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="bp">None</span><span class="p">,</span> <span class="n">handler</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">([</span><span class="n">IR1</span><span class="p">],</span> <span class="bp">None</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="n">handler</span><span class="p">]</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Adapter Registry</a><ul>
+<li><a class="reference internal" href="#single-adapters">Single Adapters</a><ul>
+<li><a class="reference internal" href="#finding-out-what-if-anything-is-registered">Finding out what, if anything, is registered</a></li>
+<li><a class="reference internal" href="#lookup1">lookup1</a></li>
+<li><a class="reference internal" href="#actual-adaptation">Actual Adaptation</a></li>
+<li><a class="reference internal" href="#default-adapters">Default Adapters</a></li>
+<li><a class="reference internal" href="#class-adapters">Class adapters</a></li>
+<li><a class="reference internal" href="#dict-adapters">Dict adapters</a></li>
+<li><a class="reference internal" href="#unregistering">Unregistering</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#multi-adapters">Multi-adapters</a><ul>
+<li><a class="reference internal" href="#multi-adaptation">Multi-adaptation</a></li>
+<li><a class="reference internal" href="#id1">Default Adapters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#null-adapters">Null Adapters</a><ul>
+<li><a class="reference internal" href="#listing-named-adapters">Listing named adapters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#subscriptions">Subscriptions</a><ul>
+<li><a class="reference internal" href="#unregistering-subscribers">Unregistering subscribers</a></li>
+<li><a class="reference internal" href="#subscription-adapters">Subscription adapters</a></li>
+<li><a class="reference internal" href="#handlers">Handlers</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="README.html"
+                        title="previous chapter">Interfaces</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="human.html"
+                        title="next chapter">Using the Adapter Registry</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/adapter.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="human.html" title="Using the Adapter Registry"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="README.html" title="Interfaces"
+             >previous</a> |</li>
+        <li><a href="index.html">zope.interface 4.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation contributors.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
