@@ -1,0 +1,52 @@
+#!/usr/bin/python
+"""
+A flask web application that downloads a page in the background.
+"""
+
+import logging
+from flask import Flask, session, escape
+from crochet import setup, in_event_loop
+
+# Can be called multiple times with no ill-effect:
+setup()
+
+app = Flask(__name__)
+
+IN_MEMORY_SESSIONS = {}
+
+@in_event_loop
+def download_page(reactor, url, downloads):
+    """
+    Download a page, setting it to the session when it arrives.
+    """
+    from twisted.web.client import getPage
+    def gotPage(data):
+        print "got page"
+        downloads[url] = data
+        print id(downloads)
+    getPage(url).addCallback(gotPage)
+
+
+@app.route('/')
+def index():
+    url = 'http://www.google.com'
+    if 'inmemory' not in session:
+        
+        print id(session['downloads'])
+        download = session['downloads'][url]
+        if download is None:
+            return "Download in progress..."
+        else:
+            return "Downloaded: " + escape(download)
+
+    # No download, start it in background:
+    session['downloads'] = downloads = {url: None}
+    download_page("http://www.google.com", downloads)
+    return "Starting download, refresh to track progress."
+
+
+if __name__ == '__main__':
+    import os, sys
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+    app.secret_key = os.urandom(24)
+    app.run()
