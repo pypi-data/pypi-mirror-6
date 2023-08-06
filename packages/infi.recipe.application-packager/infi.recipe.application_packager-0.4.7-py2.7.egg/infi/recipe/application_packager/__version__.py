@@ -1,0 +1,10 @@
+__version__ = "0.4.7"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.4.7)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '81f5da539f7ea5a38f696eede3a269ff3c038efb'
+__git_head_subject__ = 'Finished release v0.4.7.'
+__git_head_message__ = '* release/v0.4.7:\n  fixing tests\n  not downloading distribute anymore'
+__git_dirty_diff__ = ''
