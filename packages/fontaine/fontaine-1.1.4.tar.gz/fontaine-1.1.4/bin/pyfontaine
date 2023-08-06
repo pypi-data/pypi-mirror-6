@@ -1,0 +1,113 @@
+#!/usr/bin/env python2.7
+# -*- coding: utf-8 -*-
+#
+# cmap.py
+#
+# Copyright (c) 2013,
+# Виталий Волков <hash.3g@gmail.com>
+# Dave Crossland <dave@understandinglimited.com>
+#
+# Released under the GNU General Public License version 3 or later.
+# See accompanying LICENSE.txt file for details.
+from __future__ import print_function
+import argparse
+import codecs
+import os
+import re
+import sys
+
+path = os.path.join(os.path.dirname(__file__), '..')
+sys.path.append(os.path.realpath(path))
+
+sys.stdout = codecs.getwriter('utf-8')(sys.stdout)
+
+from fontaine import VERSION
+from fontaine.cmap import library
+from fontaine.builder import Builder, Director
+
+
+def usage():
+    parser = argparse.ArgumentParser(description='Output information about'
+                                                 ' fonts in different formats')
+    parser.add_argument('font', metavar='font', type=str, nargs='+')
+    if len(sys.argv) == 1:
+        print('pyFontaine %s (https://github.com/davelab6/pyfontaine)' % VERSION)
+        parser.print_help()
+        sys.exit(1)
+    parser.add_argument('--flush-cache', action='store_true',
+                        help='Clean application cache')
+    parser.add_argument('--disable-unames', action='store_true',
+                        help='This will prevent using Unicode names data')
+    parser.add_argument('--missing', action='store_true',
+                        help='Print additionally a list of each unicode value'
+                             ' that is missing from a character set')
+    parser.add_argument('--text', action='store_true',
+                        help='Output information in plain text')
+    parser.add_argument('--xml', action='store_true',
+                        help='Output information into XML')
+    parser.add_argument('--json', action='store_true',
+                        help='Output information in JSON')
+    parser.add_argument('--wiki', action='store_true',
+                        help='Print information in wikipedia format')
+    parser.add_argument('--csv', action='store_true',
+                        help='Output font coverage information in CSV')
+    parser.add_argument('--coverage', action='store_true',
+                        help='Create PNG files represented coveragin of font'
+                             ' charset in coverage_pngs directory')
+    parser.add_argument('--set', type=str, default='',
+                        help='Specify the sets based on either common'
+                             ' or native name')
+    parser.add_argument('--collections', type=str, default='',
+                        help='Specify collections of charmaps to print')
+    parser.add_argument('-V', '--version', action='version',
+                        version="%(prog)s " + VERSION + " (https://github.com/davelab6/pyfontaine)")
+    return parser.parse_args()
+
+
+def main(*argv):
+    args = usage()
+
+    fonts = []
+    for filename in args.font:
+        if re.match('0x[\w\d]+', filename):
+            # print("Languages/Character Sets used by", filename,)
+            for charmap in library.charmaps:
+                glyphs = charmap.glyphs
+                if callable(glyphs):
+                    glyphs = glyphs()
+                if int(filename, 16) in glyphs:
+                    print(charmap.common_name)
+            continue
+        if not os.path.exists(filename):
+            print("'%s' is not found" % (filename))
+            sys.exit(1)
+        fonts.append(filename)
+
+    if not fonts:
+        sys.exit(0)
+
+    if args.disable_unames:
+        os.environ['DISABLE_UNAMES'] = 'disable'
+
+    if args.collections:
+        library.collections = args.collections.split(',')
+
+    director = Director(generate_coverage=args.coverage,
+                        charmaps=args.set.split(','),
+                        missing=args.missing)
+    if args.xml:
+        tree = director.construct_tree(fonts)
+        Builder.xml_(tree).display()
+    elif args.csv:
+        sys.stdout.write(Builder.csv_(fonts))
+    elif args.json:
+        tree = director.construct_tree(fonts)
+        Builder.json_(tree)
+    elif args.wiki:
+        Builder.wiki(fonts)
+    else:
+        tree = director.construct_tree(fonts)
+        Builder.text_(tree).display()
+
+if __name__ == '__main__':
+    main()
