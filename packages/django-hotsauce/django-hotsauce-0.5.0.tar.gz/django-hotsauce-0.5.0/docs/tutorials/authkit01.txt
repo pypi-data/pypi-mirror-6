@@ -1,0 +1,173 @@
+Category: Tutorial
+Subcategory: Python
+Tags: authkit, blogengine, schevo
+Level: Intermediate-Advanced
+Intended Audience: Developers
+
+=======================================================================
+How to create a blog site with AuthKit, Schevo, and BlogEngine (Part 1)
+=======================================================================
+
+Synopsis
+========
+
+In this article, I propose a series of two tutorials for creating a standalone
+blog site using Python and the BlogEngine toolkit.  BlogEngine is a framework
+for creating custom blogging softwares in Python and is being licensed under a
+BSD license. In addition, BlogEngine can be integrated in any Django project
+or can be configured as a standalone website. 
+ 
+Requirements
+============
+
+For getting started, the following libraries are required. Please install them
+before attempting this tutorial. Upstream sources may or may not work, however the
+branches given below ensure the best success rate in completing this tutorial. 
+
+* AuthKit http://joelia.gthc.org/authkit
+* BlogEngine http://joelia.gthc.org/BlogEngine 
+* notmm http://joelia.gthc.org/notmm/branches/0.3dev
+* Schevo http://joelia.gthc.org/schevo
+
+For a simple to use graphical interface while developing your blog
+application, you can also try out the following tool: 
+
+* SchevoEditor http://joelia.gthc.org/schevo-editor
+
+Installing The Schevo Extended Server
+=====================================
+
+First of all, we'll be using the Schevo Extender Server (xdserver) to be able
+to serve multiple concurrent HTTP connections. As a convenience, the xdserver can
+be found in the notmm.dbapi.schevo_orm package.
+
+Ensure that the xdserver daemon is accepting incoming TCP/IP connections on the address 127.0.0.1:22721 
+and that Durus 3.9 is installed correctly. To start the server from the command-line, you can use
+the following script:
+
+> #!/usr/bin/env/python
+> # starts an instance of a durus extended server 
+> import sys
+>
+> if __name__ == '__main__':
+>    from notmm.dbapi.schevo_orm import xdserver
+>    root = '/var/db/blogengine'
+>    host = '127.0.0.1'
+>    port = 22972
+>    Daemon = xdserver.make_server(root, host, port)
+>    try:
+>        print 'Starting Durus Extended Server on durus://%s:%d' % (host, port)
+>        Daemon.run()
+>    except (KeyboardInterrupt, SystemExit):
+>        Daemon.stop()
+>        print 'Server stopped.'
+>        sys.exit(2)
+
+You can also check if Schevo and the SchevoDurus packages are 
+correctly installed by doing the following tests in a Python interactive shell:
+
+> >>> import schevo
+> >>> import schevodurus
+
+If Python reports no errors, then things are working well and you can advance to
+the next section.  
+
+The User Accounts Database
+==========================
+
+To authenticate editors in and out of your blog, a generic accounts.durus database file must
+be created. To create it, just use the schevo command line tool:
+
+> schevo db create --app blog_app /var/db/blogengine/blog_app/accounts.durus
+
+This command should creates the initial accounts.durus file. Notice that we've used the 
+"--app" parameter to indicate which application we're being interested in. 
+
+Once this step is done we should have a working accounts.durus
+database ready for use in our simple blog site.
+
+Defining The User Schema
+========================
+
+For this tutorial, let's simply assume the following application layout:
+
+> blog_app/__init__.py
+> blog_app/model/__init__.py
+> blog_app/schema/__init__.py
+> blog_app/schema/accounts_001.py
+> blog_app/views.py 
+> blog_app/urls.py
+
+The file "accounts_001.py" is the one we'll be using to define the User, Group,
+and Role models. The User model is the most important, and will be used for 
+authenticating users in your custom blog site based on your workflow. 
+
+Notice also that Schevo includes native support for database and schema migration, so this is
+good to keep in mind when you'll be adding features to the blog site.
+
+Example Schema File
+-------------------
+
+> from schevo.schema import *
+> schevo.schema.prep(locals())
+> 
+> class User(E.Entity):
+>    
+>    username = f.string()
+>    password = f.hashed_password()
+>    email = f.string()
+>    group = f.entity('Group')
+>
+>    _key(username)
+>    _plural = 'Users'
+>
+>    def x_groups(self):
+>        return [item for item in self.m.groups()]
+>    
+>    def x_roles(self):
+>        return [item for item in self.m.roles()]
+>
+>    def __str__(self):
+>        return type.__str__("<User account: %s>" % self.username).encode('utf8')
+>
+> class Role(E.Entity):
+>    name = f.string()
+>
+>    def __str__(self):
+>        return "<Role %s>" % self.role
+>
+> class Group(E.Entity):
+>    name = f.string()
+>
+>    def __str__(self):
+>        return "<Group %s>" % self.name
+
+As you can see, this is a really simple schema. I added the Role and Group models
+in order to allow custom user groups and roles, as suggested by the AuthKit documentation.
+
+Next section will cover using the Schevo database to authenticate Users
+using AuthKit.  
+
+Binding Schevo with AuthKit
+===========================
+
+To authenticate and authorize Users from a Schevo database, put the following option
+in your development.ini file:
+
+> authkit.form.authenticate.user.type = authkit.users.schevo_04_driver:UserManager
+
+And remove the following:
+
+> authkit.form.authenticate.user.data = erob:6974441798affc68cfc590e3297a47da:notmm root admin staff
+> authkit.form.authenticate.user.encrypt = authkit.users:md5
+> authkit.form.authenticate.user.encrypt.secret = hubuntu 
+
+Conclusion
+==========
+
+Schevo and AuthKit works very well together and can be used to create custom authentication
+backends. Using Schevo ORM also provides very good database and schema migration capabilities. 
+
+AuthKit flexible design was a breeze to integrate inside the notmm WSGI toolkit for the purpose
+of doing a simple blog application.
+

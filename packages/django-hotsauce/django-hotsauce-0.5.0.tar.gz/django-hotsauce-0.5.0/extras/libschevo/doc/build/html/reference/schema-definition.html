@@ -1,0 +1,879 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Schevo Schema Definition Reference &mdash; libschevo 3.2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="libschevo 3.2.4 documentation" href="../index.html" />
+    <link rel="up" title="Schevo References" href="index.html" />
+    <link rel="next" title="Namespaces" href="namespaces.html" />
+    <link rel="prev" title="Schevo Database Tour" href="database-tour.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="namespaces.html" title="Namespaces"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="database-tour.html" title="Schevo Database Tour"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">libschevo 3.2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Schevo References</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="schevo-schema-definition-reference">
+<h1>Schevo Schema Definition Reference<a class="headerlink" href="#schevo-schema-definition-reference" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Permalink to this headline">¶</a></h2>
+<p>A Schevo database is the combination of a schema definition, stored
+data, and an engine that exposes the two.  This document describes in
+detail the schema definition syntax used by Schevo.</p>
+<p>Schema definitions are pure-Python modules that make use of Schevo&#8217;s
+syntax extensions.  Schema definitions can be directly imported
+anywhere, but typically the import process is managed by the Schevo
+database engine in order to tie a schema to an open database.</p>
+<p>Stored data is managed by the <cite>schevo.store</cite> package, based on <a class="reference external" href="http://www.mems-exchange.org/software/durus/">Durus</a>.
+The data is kept in a general structure used by all Schevo databases,
+described in the <a class="reference external" href="../design/structures.html">internal database structures</a> reference.</p>
+<p>The database engine is defined in the <cite>schevo.database</cite> module, and
+provides read/write access to stored data using the higher-level
+structures defined by the database&#8217;s schema definition.</p>
+</div>
+<div class="section" id="doctest-setup">
+<h2>Doctest Setup<a class="headerlink" href="#doctest-setup" title="Permalink to this headline">¶</a></h2>
+<p>This document also functions as a doctest:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">schevo.test</span> <span class="kn">import</span> <span class="n">DocTest</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="schema-definition-syntax">
+<h2>Schema definition syntax<a class="headerlink" href="#schema-definition-syntax" title="Permalink to this headline">¶</a></h2>
+<p>This section describes the syntax used for schema definitions.</p>
+<div class="section" id="reserved-words">
+<h3>Reserved Words<a class="headerlink" href="#reserved-words" title="Permalink to this headline">¶</a></h3>
+<p>The following cannot be used for field names in Entity class
+definitions:</p>
+<ul class="simple">
+<li>Any single-letter name.  These are reserved for <cite>Namespaces</cite>.</li>
+<li>Any name beginning with an underscore.  These are reserved for
+private methods defined by Schevo.</li>
+<li>Any name beginning with a single letter and an underscore, such as
+<tt class="docutils literal"><span class="pre">t_something</span></tt>.  These are used for query, transaction, view, and
+extender methods.</li>
+<li><tt class="docutils literal"><span class="pre">classmethod</span></tt>.  This is a decorator used to designate a method as
+attached to a namespace on an entity class&#8217;s extent, and passed the
+entity class as the first argument when called.</li>
+<li><tt class="docutils literal"><span class="pre">db</span></tt>.  This contains the currently-open database that the schema
+is associated with.</li>
+<li><tt class="docutils literal"><span class="pre">extentmethod</span></tt> and <tt class="docutils literal"><span class="pre">extentclassmethod</span></tt>.  These are decorators
+used to designate a method as attached to a namespace on an entity
+class&#8217;s extent.</li>
+<li><tt class="docutils literal"><span class="pre">schevo</span></tt>.  This is imported into the global namespace.</li>
+<li><tt class="docutils literal"><span class="pre">sys</span></tt>.  This is used to expose standard public methods and
+properties of Schevo objects.</li>
+</ul>
+</div>
+<div class="section" id="preamble">
+<h3>Preamble<a class="headerlink" href="#preamble" title="Permalink to this headline">¶</a></h3>
+<p>All schemata must begin with the following two lines:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">schevo.schema</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="n">schevo</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">prep</span><span class="p">(</span><span class="nb">locals</span><span class="p">())</span>
+</pre></div>
+</div>
+<div class="section" id="preamble-template">
+<h4>Preamble Template<a class="headerlink" href="#preamble-template" title="Permalink to this headline">¶</a></h4>
+<p>A file is provided in the Schevo source distribution called
+<tt class="docutils literal"><span class="pre">SCHEMA-PREAMBLE.txt</span></tt> that contains the source code required for all
+Schevo schemata, as well as some additional comments that assist in
+starting a new database schema.</p>
+</div>
+<div class="section" id="icon-support">
+<h4>Icon Support<a class="headerlink" href="#icon-support" title="Permalink to this headline">¶</a></h4>
+<p>To include icon support in a database schema, add the following extent
+definition:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">SchevoIcon</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">_hidden</span> <span class="o">=</span> <span class="bp">True</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">image</span><span class="p">()</span>
+
+    <span class="n">_key</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="overall-structure">
+<h3>Overall Structure<a class="headerlink" href="#overall-structure" title="Permalink to this headline">¶</a></h3>
+<p>A Schevo database schema consists of a series of the following types
+of declarations:</p>
+<ul class="simple">
+<li><a class="reference internal" href="#entity-extent-definitions">Entity/extent definitions</a>.</li>
+<li><a class="reference internal" href="#field-definitions">Field definitions</a>.</li>
+<li>Key/index specifications.</li>
+<li><a class="reference internal" href="#query-definitions">Query definitions</a> and <a class="reference internal" href="#query-methods">query methods</a>.</li>
+<li><a class="reference internal" href="#transaction-definitions">Transaction definitions</a> and <a class="reference internal" href="#transaction-methods">transaction methods</a>.</li>
+<li><a class="reference internal" href="#view-definitions">View definitions</a> and <a class="reference internal" href="#view-methods">view methods</a>.</li>
+<li><a class="reference internal" href="#extension-methods">Extension methods</a>.</li>
+<li>Labels.</li>
+<li><a class="reference internal" href="#string-representations">String representations</a>.</li>
+<li><a class="reference internal" href="#initial-sample-data">Initial/sample data</a>.</li>
+</ul>
+<p>Code blocks defined in a schema make use of the Database API.</p>
+</div>
+<div class="section" id="schema-globals">
+<h3>Schema globals<a class="headerlink" href="#schema-globals" title="Permalink to this headline">¶</a></h3>
+<p>The following objects are available in the global Python namespace of
+a schema module:</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">d</span></tt>: The <cite>schevo.namespace.SchemaDefinition</cite> associated with the
+schema module.</li>
+<li><tt class="docutils literal"><span class="pre">db</span></tt>: The currently-open <cite>schevo.database.Database</cite> that is using
+the schema module.</li>
+</ul>
+<div class="section" id="global-namespaces">
+<h4>Global namespaces<a class="headerlink" href="#global-namespaces" title="Permalink to this headline">¶</a></h4>
+<p>The following Schevo-managed namespaces are available in the global
+Python namespace of a schema module.</p>
+<p>Methods defined in the schema definition may use any part of the
+<a class="reference external" href="reference-api.html">public API</a> exposed by the currently opened
+database that is associated with the schema.</p>
+<p>These namespaces cannot be directly modified.  Schevo manages them,
+and automatically adds objects to them when it imports a schema
+definition as a module.</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">E</span></tt>: <a class="reference external" href="class-schevo.entity.Entity.html">Entity</a> classes.  The
+standard Entity class is in this namespace by default. Each
+entity/extent definition in the schema is added to this namespace.
+See <a class="reference internal" href="#entity-extent-definitions">entity/extent definitions</a>.</li>
+<li><tt class="docutils literal"><span class="pre">F</span></tt>: <a class="reference external" href="class-schevo.field.Field.html">Field</a> classes.  The field
+classes defined in <a class="reference external" href="module-schevo.field.html">schevo.field</a> are
+in this namespace by default.  Custom field definitions in the
+schema are added to this namespace.  See <a class="reference internal" href="#field-definitions">field definitions</a>.</li>
+<li><tt class="docutils literal"><span class="pre">f</span></tt>: <a class="reference external" href="class-schevo.fieldspec.FieldDefinition.html">FieldDefinition</a> constructors.
+These correspond to the classes defined in the <tt class="docutils literal"><span class="pre">F</span></tt> namespace and
+are used to create lists of field definitions for entities, queries,
+transactions, and views. See <a class="reference internal" href="#field-definitions">field definitions</a>.</li>
+<li><tt class="docutils literal"><span class="pre">Q</span></tt>: <a class="reference external" href="class-schevo.query.Query.html">Query</a> classes.  The Query
+class, and all its subclasses defined in <a class="reference external" href="module-schevo.query.html">schevo.query</a>, are in this namespace by default.
+Each Query class defined at the database level is added to this
+namespace.  See <a class="reference internal" href="#query-definitions">query definitions</a>.</li>
+<li><tt class="docutils literal"><span class="pre">q</span></tt>: Database-level query methods.  See <a class="reference internal" href="#query-methods">query methods</a>.</li>
+<li><tt class="docutils literal"><span class="pre">T</span></tt>: <a class="reference external" href="class-schevo.transaction.Transaction.html">Transaction</a>
+classes.  The Transaction class, and all its subclasses defined in
+<a class="reference external" href="module-schevo.transaction.html">schevo.transaction</a>, are in this
+namespace by default. See <a class="reference internal" href="#transaction-definitions">transaction definitions</a>.</li>
+<li><tt class="docutils literal"><span class="pre">t</span></tt>: Database-level transaction methods.  See <a class="reference internal" href="#transaction-methods">transaction
+methods</a>.</li>
+<li><tt class="docutils literal"><span class="pre">V</span></tt>: <a class="reference external" href="class-schevo.view.View.html">View</a> classes.  The View
+class, and all its subclasses defined in <a class="reference external" href="module-schevo.view.html">schevo.view</a>, are in this namespace by default.
+Each View class defined at the database level is added to this
+namespace.  See <a class="reference internal" href="#view-definitions">view definitions</a>.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="entity-extent-definitions">
+<h3>Entity/extent definitions<a class="headerlink" href="#entity-extent-definitions" title="Permalink to this headline">¶</a></h3>
+<p>An entity/extent definition minimally consists of a subclass of
+<tt class="docutils literal"><span class="pre">E.Entity</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Foo</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Description of Foo.&quot;&quot;&quot;</span>
+</pre></div>
+</div>
+<p>The above example defines a <tt class="docutils literal"><span class="pre">Foo</span></tt> extent, which contains <tt class="docutils literal"><span class="pre">Foo</span></tt>
+entities that each have zero fields, as none were defined.</p>
+<p>The entity/extent definition may further contain the following types
+of declarations:</p>
+<ul>
+<li><p class="first"><a class="reference internal" href="#field-definitions">Field definitions</a>.  Here is a <tt class="docutils literal"><span class="pre">Foo</span></tt> extent where each entity
+has a <tt class="docutils literal"><span class="pre">name</span></tt> field of <tt class="docutils literal"><span class="pre">string</span></tt> type, and a <tt class="docutils literal"><span class="pre">FooChild</span></tt> extent
+where each entity has a reference to a <tt class="docutils literal"><span class="pre">Foo</span></tt> entity and also has a
+<tt class="docutils literal"><span class="pre">bar</span></tt> field of <tt class="docutils literal"><span class="pre">integer</span></tt> type:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Foo</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+
+<span class="k">class</span> <span class="nc">FooChild</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">foo</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">entity</span><span class="p">(</span><span class="s">&#39;Foo&#39;</span><span class="p">)</span>
+    <span class="n">bar</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">integer</span><span class="p">()</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first"><a class="reference internal" href="#calculated-field-methods">Calculated field methods</a>.  Here is a <tt class="docutils literal"><span class="pre">Gender</span></tt> extent whose
+entities have a <tt class="docutils literal"><span class="pre">count</span></tt> field of type <tt class="docutils literal"><span class="pre">integer</span></tt> that calculates
+the number of <tt class="docutils literal"><span class="pre">Person</span></tt> entities whose <tt class="docutils literal"><span class="pre">gender</span></tt> field references
+that <tt class="docutils literal"><span class="pre">Gender</span></tt> entity:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Gender</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">code</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+    <span class="nd">@f.integer</span><span class="p">()</span>
+    <span class="k">def</span> <span class="nf">count</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">s</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s">&#39;Person&#39;</span><span class="p">,</span> <span class="s">&#39;gender&#39;</span><span class="p">)</span>
+
+<span class="k">class</span> <span class="nc">Person</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+    <span class="n">gender</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">entity</span><span class="p">(</span><span class="s">&#39;Gender&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Key/index specifications.  Here is a <tt class="docutils literal"><span class="pre">Person</span></tt> extent whose
+entities must have unique values for their <tt class="docutils literal"><span class="pre">name</span></tt> field, and that
+is also indexed by <tt class="docutils literal"><span class="pre">age</span></tt> then <tt class="docutils literal"><span class="pre">name</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Person</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+    <span class="n">age</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">integer</span><span class="p">()</span>
+
+    <span class="n">_key</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">_index</span><span class="p">(</span><span class="n">age</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Extent-specific <a class="reference internal" href="#query-definitions">query definitions</a> and <a class="reference internal" href="#query-methods">query methods</a>.</p>
+</li>
+<li><p class="first">Entity/extent-specific <a class="reference internal" href="#transaction-definitions">transaction definitions</a> and <a class="reference internal" href="#transaction-methods">transaction
+methods</a>.</p>
+</li>
+<li><p class="first">Entity-specific <a class="reference internal" href="#view-definitions">view definitions</a> and <a class="reference internal" href="#view-methods">view methods</a>.</p>
+</li>
+<li><p class="first">Entity/extent-specific <a class="reference internal" href="#extension-methods">extension methods</a>.</p>
+</li>
+<li><p class="first">Extent labels.  Schevo creates a default singular and plural
+label for extents based on the class name used to define the
+extent.  This may be overridden in the class definition.  Here is a
+<tt class="docutils literal"><span class="pre">Person</span></tt> extent whose plural label is &#8220;People&#8221;:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Person</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+    <span class="n">_plural</span> <span class="o">=</span> <span class="s">u&#39;People&#39;</span>
+</pre></div>
+</div>
+<p>Here is a <tt class="docutils literal"><span class="pre">TpsReport</span></tt> extent whose singular label is
+&#8220;T.P.S. Report&#8221;.  The default plural label is based on the singular
+label, so the plural label for this extent is &#8220;T.P.S. Reports&#8221;:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">TpsReport</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+    <span class="n">_label</span> <span class="o">=</span> <span class="s">u&#39;T.P.S. Report&#39;</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Entity <a class="reference internal" href="#string-representations">string representations</a>.  Schevo user interfaces make use
+of string representations of entities when presenting short
+summaries of them.  The default string representation of an entity
+is the value of its <tt class="docutils literal"><span class="pre">name</span></tt> field if it has one, or the result of
+calling <tt class="docutils literal"><span class="pre">repr()</span></tt> on the entity if not.  Here is an example of
+a <tt class="docutils literal"><span class="pre">FooChild</span></tt> extent that has a custom string representation:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Foo</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+
+<span class="k">class</span> <span class="nc">FooChild</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">foo</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">entity</span><span class="p">(</span><span class="s">&#39;Foo&#39;</span><span class="p">)</span>
+    <span class="n">bar</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">integer</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__unicode__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">u&#39;</span><span class="si">%s</span><span class="s"> :: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">foo</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bar</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In the above example, if a <tt class="docutils literal"><span class="pre">FooChild</span></tt> entity&#8217;s <tt class="docutils literal"><span class="pre">bar</span></tt> field value
+was <tt class="docutils literal"><span class="pre">12</span></tt>, and its <tt class="docutils literal"><span class="pre">foo</span></tt> value referenced a <tt class="docutils literal"><span class="pre">Foo</span></tt> entity whose
+<tt class="docutils literal"><span class="pre">name</span></tt> was <tt class="docutils literal"><span class="pre">u'abc'</span></tt>, the result of calling <tt class="docutils literal"><span class="pre">unicode()</span></tt> on the
+<tt class="docutils literal"><span class="pre">FooChild</span></tt> entity would be <tt class="docutils literal"><span class="pre">u'abc</span> <span class="pre">::</span> <span class="pre">12'</span></tt>.</p>
+</li>
+<li><p class="first">Extent <a class="reference internal" href="#initial-sample-data">initial/sample data</a>.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="extension-methods">
+<h3>Extension methods<a class="headerlink" href="#extension-methods" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="initial-sample-data">
+<h3>Initial/sample data<a class="headerlink" href="#initial-sample-data" title="Permalink to this headline">¶</a></h3>
+<p>Initial data is data that Schevo uses when creating a new database.
+Initial data is <em>always</em> processed during new database creation.
+Specify initial data for an extent by assigning an <cite>_initial</cite>
+attribute to the entity class in your database schema.</p>
+<p>Sample data is data that Schevo uses to populate a database after its
+creation.  Sample data is only processed if the <tt class="docutils literal"><span class="pre">-p</span></tt> or <tt class="docutils literal"><span class="pre">--sample</span></tt>
+option is passed to the <tt class="docutils literal"><span class="pre">schevo</span> <span class="pre">db</span> <span class="pre">create</span></tt> command-line tool, or if
+you call the <cite>populate</cite> method on an open database.  Specify sample
+data for an extent by assigning a <cite>_sample</cite> attribute to the entity
+class in your database schema.</p>
+<p>Unit test sample data is data that Schevo populates a database with
+when running a suite of unit tests against a database schema.  Specify
+unit test sample data for an extent by assigning a
+<cite>_sample_unittest</cite> attribute to the entity class in your database
+schema.</p>
+<p>You may also specify sample data with a custom attribute name, such as
+<cite>_sample_abc</cite>. Populate a database with your custom sample data by
+passing the suffix to the call to <cite>populate</cite> on your database.
+For the example, to populate <cite>db</cite> with the <cite>abc</cite> sample data, call
+<tt class="docutils literal"><span class="pre">db.populate('abc')</span></tt>.</p>
+<p>Specify each collection of initial or sample data as a list of tuples,
+where each tuple contains values for the fields that the extent&#8217;s
+<cite>create</cite> transaction expects, in the order that it expects
+them. Normally, those fields are the same as the fields specified in
+the entity class, but in complex database schemata the fields may
+differ.</p>
+<p>To specify the default value for a field, use the constant
+<cite>DEFAULT</cite>. For example, the <cite>Foo</cite> entities that have the names
+<tt class="docutils literal"><span class="pre">'c'</span></tt> and <tt class="docutils literal"><span class="pre">'d'</span></tt> will have a <cite>size</cite> of <tt class="docutils literal"><span class="pre">5</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Foo</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+    <span class="n">size</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">integer</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+
+    <span class="n">_key</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="n">_initial</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s">&#39;a&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;b&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;c&#39;</span><span class="p">,</span> <span class="n">DEFAULT</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;d&#39;</span><span class="p">,</span> <span class="n">DEFAULT</span><span class="p">),</span>
+        <span class="p">]</span>
+</pre></div>
+</div>
+<p>To specify a value for an <cite>Entity</cite> field that allows only one entity
+type, use a tuple containing the values of the fields of the first key
+of that entity type.  For example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Foo</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+    <span class="n">for_rainy_days</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">boolean</span><span class="p">()</span>
+
+    <span class="n">_key</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">for_rainy_days</span><span class="p">)</span>
+
+    <span class="n">_initial</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s">&#39;One&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;Two&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;Buckle&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;Shoe&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">),</span>
+        <span class="p">(</span><span class="s">&#39;Shoe&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">),</span>
+        <span class="p">]</span>
+
+<span class="k">class</span> <span class="nc">Bar</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">foo</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">entity</span><span class="p">(</span><span class="s">&#39;Foo&#39;</span><span class="p">)</span>
+    <span class="n">baz</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+
+    <span class="n">_key</span><span class="p">(</span><span class="n">foo</span><span class="p">,</span> <span class="n">bar</span><span class="p">)</span>
+
+    <span class="n">_initial</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">((</span><span class="s">&#39;One&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">),</span> <span class="s">&#39;This is how it starts.&#39;</span><span class="p">),</span>
+        <span class="p">((</span><span class="s">&#39;Shoe&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">),</span> <span class="s">&#39;This is how it ends.&#39;</span><span class="p">),</span>
+        <span class="p">((</span><span class="s">&#39;Shoe&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">),</span> <span class="s">&#39;Need to have two shoes.&#39;</span><span class="p">),</span>
+        <span class="p">((</span><span class="s">&#39;Shoe&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">),</span> <span class="s">&#39;And one for a rainy day.&#39;</span><span class="p">),</span>
+        <span class="p">]</span>
+</pre></div>
+</div>
+<p>To specify a value for an <cite>Entity</cite> field that allows more than one
+entity type, use a two-tuple that first gives the entity type, then
+gives a tuple of the values of the fields of the first key of that
+entity type.  For example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Foo</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+
+    <span class="n">_key</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="n">_initial</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s">&#39;one&#39;</span><span class="p">,),</span>
+        <span class="p">(</span><span class="s">&#39;two&#39;</span><span class="p">,),</span>
+        <span class="p">]</span>
+
+<span class="k">class</span> <span class="nc">Bar</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">number</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">integer</span><span class="p">()</span>
+
+    <span class="n">_key</span><span class="p">(</span><span class="n">number</span><span class="p">)</span>
+
+    <span class="n">_initial</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="mi">1</span><span class="p">,),</span>
+        <span class="p">(</span><span class="mi">2</span><span class="p">,),</span>
+        <span class="p">]</span>
+
+<span class="k">class</span> <span class="nc">Baz</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">foo_or_bar</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">entity</span><span class="p">(</span><span class="s">&#39;Foo&#39;</span><span class="p">,</span> <span class="s">&#39;Bar&#39;</span><span class="p">)</span>
+    <span class="n">notes</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+
+    <span class="n">_initial</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">((</span><span class="s">&#39;Foo&#39;</span><span class="p">,</span> <span class="p">(</span><span class="s">&#39;one&#39;</span><span class="p">,)),</span> <span class="s">&#39;This is the Foo that is named one.&#39;</span><span class="p">),</span>
+        <span class="p">((</span><span class="s">&#39;Foo&#39;</span><span class="p">,</span> <span class="p">(</span><span class="s">&#39;two&#39;</span><span class="p">,)),</span> <span class="s">&#39;This is the Foo that is named two.&#39;</span><span class="p">),</span>
+        <span class="p">((</span><span class="s">&#39;Bar&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)),</span> <span class="s">&#39;This is the Bar that is numbered 1.&#39;</span><span class="p">),</span>
+        <span class="p">((</span><span class="s">&#39;Bar&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,)),</span> <span class="s">&#39;This is the Bar that is numbered 2.&#39;</span><span class="p">),</span>
+        <span class="p">]</span>
+</pre></div>
+</div>
+<p>To specify values for <cite>EntityList</cite> and <cite>EntitySet</cite> fields, simply
+enclose the representations of entities within a list or a set,
+respectively.</p>
+</div>
+<div class="section" id="field-definitions">
+<h3>Field definitions<a class="headerlink" href="#field-definitions" title="Permalink to this headline">¶</a></h3>
+<p>Define a field for an Entity, Parameterized Query, Transaction, or
+View by using a <cite>field factory</cite>.  Field factories are accessed using
+the global <cite>f</cite> namespace.</p>
+<p>The members of the <cite>f</cite> namespace are all of the available field types,
+converted from their &#8220;CamelCase&#8221; names to &#8220;lowercase_with_underscores&#8221;
+names, e.g. the <cite>Boolean</cite> field class becomes <cite>f.boolean</cite>, and the
+<cite>EntityList</cite> field class becomes <cite>f.entity_list</cite>.</p>
+<p>For example, this Entity subclass defines three fields:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Dog</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>                         <span class="c"># [1]</span>
+    <span class="n">birthdate</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">date</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>        <span class="c"># [2]</span>
+    <span class="n">disposition</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">entity</span><span class="p">(</span><span class="s">&#39;Disposition&#39;</span><span class="p">,</span> <span class="n">on_delete</span><span class="o">=</span><span class="n">UNASSIGN</span><span class="p">,</span>
+                           <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                           <span class="n">default</span><span class="o">=</span><span class="p">(</span><span class="s">&#39;Cheerful&#39;</span><span class="p">,))</span>    <span class="c"># [3]</span>
+</pre></div>
+</div>
+<ol class="arabic">
+<li><p class="first">The <cite>name</cite> field is a required <cite>String</cite> field.  By default, all
+fields are required.</p>
+</li>
+<li><p class="first">The <cite>birthdate</cite> field is an optional <cite>Date</cite> field.</p>
+</li>
+<li><p class="first">The <cite>disposition</cite> field is an optional <cite>Entity</cite> field that can
+store a reference to a <cite>Disposition</cite> entity.</p>
+<p>When the referenced <cite>Disposition</cite> entity is deleted, this field&#8217;s
+value is set to <cite>UNASSIGNED</cite>. See also <a class="reference internal" href="#cascading-delete-rules-for-entity-fields">cascading delete rules for
+Entity fields</a>.</p>
+<p>The default value of this field is the <cite>Disposition</cite> entity that
+matches <tt class="docutils literal"><span class="pre">('Cheerful',)</span></tt>.  See <a class="reference internal" href="#default-field-values">Default field values</a> below.</p>
+</li>
+</ol>
+<div class="section" id="calculated-field-methods">
+<h4>Calculated field methods<a class="headerlink" href="#calculated-field-methods" title="Permalink to this headline">¶</a></h4>
+</div>
+<div class="section" id="cascading-delete-rules-for-entity-fields">
+<h4>Cascading delete rules for Entity fields<a class="headerlink" href="#cascading-delete-rules-for-entity-fields" title="Permalink to this headline">¶</a></h4>
+<p>When defining an <cite>Entity</cite>, <cite>EntityList</cite>, <cite>EntitySet</cite>, or a custom
+entity-storing field, you may specify cascade delete rules for that
+field.</p>
+<p>Upon receiving a request to delete an entity whose reference is stored
+in one of these fields, Schevo will first check the rules of those
+fields to see if the deletion is allowed and, if so, what should
+happen to the field or entity that refers to the deleted entity.</p>
+<p>The default rule of the <a class="reference internal" href="#available-rules">available rules</a> is <cite>RESTRICT</cite>, which is the
+safest operation, since it prevents accidental deletion of an entity
+if it is being referred to by another entity.</p>
+</div>
+<div class="section" id="default-field-values">
+<h4>Default field values<a class="headerlink" href="#default-field-values" title="Permalink to this headline">¶</a></h4>
+<p>Default field values are assigned to fields in <cite>Create</cite> transactions.</p>
+<p>Specify default field values in a field definition by giving either a
+default value in the same notation as you would for initial or sample
+data, or by specifying a callable that returns the actual value to be
+used as the default value.</p>
+<p>Default values are not assigned to a field if a value has been
+supplied for that field in the keyword arguments specified when
+creating the <cite>Create</cite> transaction.</p>
+<div class="section" id="specifying-type-specific-rules">
+<h5>Specifying type-specific rules<a class="headerlink" href="#specifying-type-specific-rules" title="Permalink to this headline">¶</a></h5>
+<p>Specify a rule for only a certain type of entity by giving the type
+name and rule as a tuple to the field factory.</p>
+<p>For example, to specify an <cite>Entity</cite> field that can refer to a <cite>Cog</cite> or
+a <cite>Sprocket</cite> that allows cascade deletion when a <cite>Cog</cite> is deleted but
+disallows deletion of a referred-to <cite>Sprocket</cite>, use this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">part</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">entity</span><span class="p">((</span><span class="s">&#39;Cog&#39;</span><span class="p">,</span> <span class="n">CASCADE</span><span class="p">),</span> <span class="p">(</span><span class="s">&#39;Sprocket&#39;</span><span class="p">,</span> <span class="n">RESTRICT</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="specifying-default-rules">
+<h5>Specifying default rules<a class="headerlink" href="#specifying-default-rules" title="Permalink to this headline">¶</a></h5>
+<p>Specify a rule for all types of entities by giving a value to the
+<cite>on_delete</cite> keyword argument to the field factory.</p>
+<p>For example, to specify an <cite>Entity</cite> field that can refer to a <cite>Cog</cite>, a
+<cite>Sprocket</cite>, or a <cite>Widget</cite>, but that requests field unassignment on
+deletion of the referred entity, use this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">part</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">entity</span><span class="p">(</span><span class="s">&#39;Cog&#39;</span><span class="p">,</span> <span class="s">&#39;Sprocket&#39;</span><span class="p">,</span> <span class="s">&#39;Widget&#39;</span><span class="p">,</span> <span class="n">on_delete</span><span class="o">=</span><span class="n">UNASSIGN</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="available-rules">
+<h5>Available rules<a class="headerlink" href="#available-rules" title="Permalink to this headline">¶</a></h5>
+<ul>
+<li><p class="first"><cite>CASCADE</cite>: If entity <cite>B</cite> has a field that refers to entity <cite>A</cite>, and
+entity <cite>A</cite> is deleted, entity <cite>B</cite> will be deleted as well, provided
+that no other rules are restricting the deletion of entity <cite>B</cite>.</p>
+</li>
+<li><p class="first"><cite>REMOVE</cite>: If entity <cite>B</cite> has an <cite>EntityList</cite> or <cite>EntitySet</cite> field
+that contains a reference to entity <cite>A</cite>, and entity <cite>A</cite> is deleted,
+the reference to <cite>A</cite> will be removed from that field in <cite>B</cite>.</p>
+</li>
+<li><p class="first"><cite>RESTRICT</cite>: If entity <cite>B</cite> has a field that refers to entity <cite>A</cite>,
+Schevo will not allow deletion of entity <cite>A</cite>.</p>
+</li>
+<li><p class="first"><cite>UNASSIGN</cite>: If entity <cite>B</cite> has a field that refers to entity <cite>A</cite>, and
+entity <cite>A</cite> is deleted, the field containing the reference to <cite>A</cite>
+will be set to <cite>UNASSIGNED</cite>, if allowed.</p>
+<p>If the field definition in <cite>B</cite> is an <cite>Entity</cite> field, it must include
+<tt class="docutils literal"><span class="pre">required=False</span></tt>.  If the field in <cite>B</cite> is a required field, then
+the unassignment will not work and the deletion will be restricted.</p>
+<p>If the field definition in <cite>B</cite> is an <cite>EntityList</cite> field, it must
+include <tt class="docutils literal"><span class="pre">allow_unassigned=True</span></tt>. If the field in <cite>B</cite> does not
+allow <cite>UNASSIGNED</cite> to be a member of its collection, then the
+unassignment will not work and the deletion will be restricted.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="rule-interaction">
+<h5>Rule interaction<a class="headerlink" href="#rule-interaction" title="Permalink to this headline">¶</a></h5>
+<p>There may be complex interactions between cascade deletion rules if
+you have complex logic in your application.  Schevo is designed to
+handle these in a consistent manner.  As of this writing, please see
+the source for <cite>schevo.transaction</cite>, and the source for the
+<cite>test_on_delete</cite> unit test, for further information.</p>
+</div>
+</div>
+</div>
+<div class="section" id="field-types">
+<h3>Field types<a class="headerlink" href="#field-types" title="Permalink to this headline">¶</a></h3>
+<p>Schevo contains many built-in field types typically used when building
+a database schema.  You can also create <a class="reference internal" href="#custom-field-types">custom field types</a> when
+your schema has unique requirements for data types.</p>
+<div class="section" id="string-field-types">
+<h4>String field types<a class="headerlink" href="#string-field-types" title="Permalink to this headline">¶</a></h4>
+<p><strong>String</strong> fields are used to store Unicode strings. An application
+may assume that a <cite>String</cite> field&#8217;s value can be displayed to a user as
+text.</p>
+<p>String fields accept a <cite>multiline</cite> attribute that you can set to one
+of the following:</p>
+<ul class="simple">
+<li><cite>None</cite>: (default) The string field accepts newlines in its
+value. User interfaces are encouraged to render the field as a
+single-line widget.</li>
+<li><cite>True</cite>: The string field accepts newlines in its value. User
+interfaces are encouraged to render the field as a multi-line
+widget.</li>
+<li><cite>False</cite>: The string field does not accept newlines in its
+value. User interfaces are encouraged to render the field as a
+single-line widget.</li>
+</ul>
+<p><strong>Path</strong> fields are <cite>String</cite> fields used to store filesystem paths.</p>
+</div>
+<div class="section" id="bytes-field-types">
+<h4>Bytes field types<a class="headerlink" href="#bytes-field-types" title="Permalink to this headline">¶</a></h4>
+<p><strong>Bytes</strong> fields are used to store 8-bit byte sequences. An
+application should not assume that a <cite>Bytes</cite> field can be displayed to
+a user as text.</p>
+<p><strong>Image</strong> fields are <cite>Bytes</cite> fields that store binary data for an
+image.</p>
+</div>
+<div class="section" id="numeric-field-types">
+<h4>Numeric field types<a class="headerlink" href="#numeric-field-types" title="Permalink to this headline">¶</a></h4>
+<p><strong>Integer</strong> fields store integer values.</p>
+<p><strong>Float</strong> fields store floating point values.</p>
+<p><strong>Money</strong> fields store fixed-point fractional values, and are commonly
+used to store values representing monetary amounts.</p>
+</div>
+<div class="section" id="date-and-time-field-types">
+<h4>Date and time field types<a class="headerlink" href="#date-and-time-field-types" title="Permalink to this headline">¶</a></h4>
+<p><strong>Date</strong> fields store <cite>datetime.date</cite> objects.</p>
+<p><strong>Datetime</strong> fields store <cite>datetime.datetime</cite> objects.</p>
+</div>
+<div class="section" id="boolean-field-types">
+<h4>Boolean field types<a class="headerlink" href="#boolean-field-types" title="Permalink to this headline">¶</a></h4>
+<p>A <strong>Boolean</strong> field stores a boolean value.</p>
+</div>
+<div class="section" id="entity-field-types">
+<h4>Entity field types<a class="headerlink" href="#entity-field-types" title="Permalink to this headline">¶</a></h4>
+<p>An <strong>Entity</strong> field stores a reference to another entity.</p>
+<p>An <strong>EntityList</strong> field stores a list of references to other entities.</p>
+<p>An <strong>EntitySet</strong> field stores a set of references to other entities.</p>
+</div>
+<div class="section" id="hashedvalue-field-types">
+<h4>HashedValue field types<a class="headerlink" href="#hashedvalue-field-types" title="Permalink to this headline">¶</a></h4>
+<p>A <strong>HashedValue</strong> field, upon having its value set, will store a
+one-way hash of that value.</p>
+<p>Use the <cite>compare(value)</cite> method of a <cite>HashedValue</cite> field instance to
+see if the hash matches a value.</p>
+<p>It is not possible to retrieve the original value from the one-way
+hash.</p>
+<p><strong>HashedPassword</strong> fields are a convenience class to show that a field
+specifically stores hashed values of passwords.</p>
+<p>This is useful for storing information about a user&#8217;s password in a
+reasonably secure manner, preventing immediate discovery of passwords
+if a proprietary Schevo database were stolen or otherwise accessed by
+unauthorized users.</p>
+</div>
+<div class="section" id="custom-field-types">
+<h4>Custom field types<a class="headerlink" href="#custom-field-types" title="Permalink to this headline">¶</a></h4>
+</div>
+<div class="section" id="deprecated-field-types">
+<h4>Deprecated field types<a class="headerlink" href="#deprecated-field-types" title="Permalink to this headline">¶</a></h4>
+<p>Deprecated field types are those field types that are available in
+Schevo in order to support legacy schemata, but are no longer
+recommended for use.</p>
+<p>If you have a database schema that uses any of these field types, you
+should use a different field type instead.</p>
+<p>When you use a deprecated field type, Schevo will give a Python
+<cite>DeprecationWarning</cite> about such use to encourage you to use a
+different field type.</p>
+<p>The following types of fields are deprecated:</p>
+<ul>
+<li><p class="first"><strong>Blob</strong>: Use <a class="reference internal" href="#bytes-field-types">Bytes field types</a> instead.</p>
+</li>
+<li><p class="first"><strong>Memo</strong>: Use <a class="reference internal" href="#string-field-types">String field types</a> instead, setting <tt class="docutils literal"><span class="pre">multiline=True</span></tt> in your
+field definition.</p>
+</li>
+<li><p class="first"><strong>Password</strong>: Use one of the <a class="reference internal" href="#hashedvalue-field-types">HashedValue field types</a> instead.</p>
+<p>If you wish to store a plain-text password in your schema, you can
+do one of the following:</p>
+<ul>
+<li><p class="first">Use the <cite>String</cite> field type:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">Foo</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+    <span class="n">password</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Create a custom <cite>PlaintextPassword</cite> field type:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">class</span> <span class="nc">PlaintextPassword</span><span class="p">(</span><span class="n">F</span><span class="o">.</span><span class="n">String</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+<span class="k">class</span> <span class="nc">Foo</span><span class="p">(</span><span class="n">E</span><span class="o">.</span><span class="n">Entity</span><span class="p">):</span>
+    <span class="n">password</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">plaintext_password</span><span class="p">()</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</li>
+<li><p class="first"><strong>Unicode</strong>: Use <a class="reference internal" href="#string-field-types">String field types</a> to store text, or <a class="reference internal" href="#bytes-field-types">Bytes field types</a>
+to store 8-bit byte sequences.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="key-and-index-specifications">
+<h3>Key and index specifications<a class="headerlink" href="#key-and-index-specifications" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="labels-and-plural-labels">
+<h3>Labels and plural labels<a class="headerlink" href="#labels-and-plural-labels" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="string-representations">
+<h3>String representations<a class="headerlink" href="#string-representations" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="query-definitions">
+<h3>Query definitions<a class="headerlink" href="#query-definitions" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="query-methods">
+<h3>Query methods<a class="headerlink" href="#query-methods" title="Permalink to this headline">¶</a></h3>
+<p>Add query methods to entity class definitions to provide access to
+query classes.</p>
+<p>For entity-level queries, a query method looks something like this,
+where <cite>factor</cite> is an optional argument that can be given when the
+query method is called, and <cite>RelatedStuff</cite> is a global query class
+defined elsewhere:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">q_related_stuff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">q</span> <span class="o">=</span> <span class="n">RelatedStuff</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">factor</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">q</span><span class="o">.</span><span class="n">factor</span> <span class="o">=</span> <span class="n">factor</span>
+    <span class="k">return</span> <span class="n">q</span>
+</pre></div>
+</div>
+<div class="section" id="embedded-simple-queries">
+<h4>Embedded simple queries<a class="headerlink" href="#embedded-simple-queries" title="Permalink to this headline">¶</a></h4>
+<p><cite>Simple queries</cite> are queries that do not take any parameters and are
+not visibly composed of subqueries.</p>
+<p>Because of these properties, it is easy to embed a function within a
+query method to expose simple queries, without having to write a
+separate query class to hold the code that performs the query.</p>
+<p>An embedded simple query looks something like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">q_related_stuff</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">fn</span><span class="p">():</span>
+        <span class="c"># ... Do stuff to build &quot;results&quot; ...</span>
+        <span class="k">return</span> <span class="n">results</span>
+    <span class="k">return</span> <span class="n">Q</span><span class="o">.</span><span class="n">Simple</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="s">&#39;Related Stuff&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="transaction-definitions">
+<h3>Transaction definitions<a class="headerlink" href="#transaction-definitions" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="customizing-standard-create-transactions">
+<h4>Customizing standard Create transactions<a class="headerlink" href="#customizing-standard-create-transactions" title="Permalink to this headline">¶</a></h4>
+<p>See <a class="reference external" href="transaction-hook-methods.html">Transaction Hook Methods</a>.</p>
+</div>
+<div class="section" id="customizing-standard-delete-transactions">
+<h4>Customizing standard Delete transactions<a class="headerlink" href="#customizing-standard-delete-transactions" title="Permalink to this headline">¶</a></h4>
+<p>See <a class="reference external" href="transaction-hook-methods.html">Transaction Hook Methods</a>.</p>
+</div>
+<div class="section" id="customizing-standard-update-transactions">
+<h4>Customizing standard Update transactions<a class="headerlink" href="#customizing-standard-update-transactions" title="Permalink to this headline">¶</a></h4>
+<p>See <a class="reference external" href="transaction-hook-methods.html">Transaction Hook Methods</a>.</p>
+</div>
+<div class="section" id="creating-new-transactions">
+<h4>Creating new transactions<a class="headerlink" href="#creating-new-transactions" title="Permalink to this headline">¶</a></h4>
+</div>
+</div>
+<div class="section" id="transaction-methods">
+<h3>Transaction methods<a class="headerlink" href="#transaction-methods" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="view-definitions">
+<h3>View definitions<a class="headerlink" href="#view-definitions" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="view-methods">
+<h3>View methods<a class="headerlink" href="#view-methods" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Schevo Schema Definition Reference</a><ul>
+<li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#doctest-setup">Doctest Setup</a></li>
+<li><a class="reference internal" href="#schema-definition-syntax">Schema definition syntax</a><ul>
+<li><a class="reference internal" href="#reserved-words">Reserved Words</a></li>
+<li><a class="reference internal" href="#preamble">Preamble</a><ul>
+<li><a class="reference internal" href="#preamble-template">Preamble Template</a></li>
+<li><a class="reference internal" href="#icon-support">Icon Support</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#overall-structure">Overall Structure</a></li>
+<li><a class="reference internal" href="#schema-globals">Schema globals</a><ul>
+<li><a class="reference internal" href="#global-namespaces">Global namespaces</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#entity-extent-definitions">Entity/extent definitions</a></li>
+<li><a class="reference internal" href="#extension-methods">Extension methods</a></li>
+<li><a class="reference internal" href="#initial-sample-data">Initial/sample data</a></li>
+<li><a class="reference internal" href="#field-definitions">Field definitions</a><ul>
+<li><a class="reference internal" href="#calculated-field-methods">Calculated field methods</a></li>
+<li><a class="reference internal" href="#cascading-delete-rules-for-entity-fields">Cascading delete rules for Entity fields</a></li>
+<li><a class="reference internal" href="#default-field-values">Default field values</a><ul>
+<li><a class="reference internal" href="#specifying-type-specific-rules">Specifying type-specific rules</a></li>
+<li><a class="reference internal" href="#specifying-default-rules">Specifying default rules</a></li>
+<li><a class="reference internal" href="#available-rules">Available rules</a></li>
+<li><a class="reference internal" href="#rule-interaction">Rule interaction</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#field-types">Field types</a><ul>
+<li><a class="reference internal" href="#string-field-types">String field types</a></li>
+<li><a class="reference internal" href="#bytes-field-types">Bytes field types</a></li>
+<li><a class="reference internal" href="#numeric-field-types">Numeric field types</a></li>
+<li><a class="reference internal" href="#date-and-time-field-types">Date and time field types</a></li>
+<li><a class="reference internal" href="#boolean-field-types">Boolean field types</a></li>
+<li><a class="reference internal" href="#entity-field-types">Entity field types</a></li>
+<li><a class="reference internal" href="#hashedvalue-field-types">HashedValue field types</a></li>
+<li><a class="reference internal" href="#custom-field-types">Custom field types</a></li>
+<li><a class="reference internal" href="#deprecated-field-types">Deprecated field types</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#key-and-index-specifications">Key and index specifications</a></li>
+<li><a class="reference internal" href="#labels-and-plural-labels">Labels and plural labels</a></li>
+<li><a class="reference internal" href="#string-representations">String representations</a></li>
+<li><a class="reference internal" href="#query-definitions">Query definitions</a></li>
+<li><a class="reference internal" href="#query-methods">Query methods</a><ul>
+<li><a class="reference internal" href="#embedded-simple-queries">Embedded simple queries</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#transaction-definitions">Transaction definitions</a><ul>
+<li><a class="reference internal" href="#customizing-standard-create-transactions">Customizing standard Create transactions</a></li>
+<li><a class="reference internal" href="#customizing-standard-delete-transactions">Customizing standard Delete transactions</a></li>
+<li><a class="reference internal" href="#customizing-standard-update-transactions">Customizing standard Update transactions</a></li>
+<li><a class="reference internal" href="#creating-new-transactions">Creating new transactions</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#transaction-methods">Transaction methods</a></li>
+<li><a class="reference internal" href="#view-definitions">View definitions</a></li>
+<li><a class="reference internal" href="#view-methods">View methods</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="database-tour.html"
+                        title="previous chapter">Schevo Database Tour</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="namespaces.html"
+                        title="next chapter">Namespaces</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/reference/schema-definition.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="namespaces.html" title="Namespaces"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="database-tour.html" title="Schevo Database Tour"
+             >previous</a> |</li>
+        <li><a href="../index.html">libschevo 3.2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Schevo References</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Etienne Robillard.
+      Last updated on Nov 17, 2012.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

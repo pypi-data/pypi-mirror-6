@@ -1,0 +1,904 @@
+======================
+ Schevo Database Tour
+======================
+
+
+Overview
+========
+
+This document tours a Schevo database from the vantage point of
+building a `database navigator`_ that takes full advantage of the deep
+introspection Schevo offers.
+
+It covers operations to read from, and execute_ transactions_ upon, an
+`open database`_. It presents those operations in the usage order that
+is typical of building such a comprehensive application.
+
+
+Doctest setup
+=============
+
+This document also functions as a doctest:
+
+  .. sourcecode:: pycon
+
+     >>> from schevo.test import DocTest, DocTestEvolve
+
+When creating an instance of `DocTest` passing a `schema body`_
+string, we get an object `t` that has a `done` method to call when
+finished with the test object, and a `db` attribute that contains the
+in-memory open database based on the schema_.
+
+`DocTestEvolve` is similar, except we pass the name of a `schema
+package`_ and a `schema version`_ number to the constructor instead of
+a body string.
+
+In each example, we work with the open database to demonstrate how
+its API reflects the schema.
+
+
+Database label
+==============
+
+Get database label
+------------------
+
+Pass a database to the `schevo.label:label` function to get its
+persistent label_.
+
+The default label of a database is ``Schevo Database``.
+
+  .. sourcecode:: pycon
+
+     >>> from schevo.label import label
+
+     >>> t = DocTest("""
+     ...     """); db = t.db
+
+     >>> label(db)
+     u'Schevo Database'
+
+Change database label
+---------------------
+
+Pass the database to the `schevo.label:relabel` function to change its
+label:
+
+  .. sourcecode:: pycon
+
+     >>> from schevo.label import relabel
+
+     >>> relabel(db, 'My Database')
+
+     >>> label(db)
+     u'My Database'
+
+     >>> t.done()
+
+.. note::
+
+   Persistent labels cannot be changed while executing a transaction.
+
+     .. sourcecode:: pycon
+
+        >>> t = DocTest("""
+        ...     from schevo.label import relabel
+        ...     class ChangeLabel(T.Transaction):
+        ...         def _execute(self, db):
+        ...             db.label = 'New Label'
+        ...     def t_change_label():
+        ...         return ChangeLabel()
+        ...     """); db = t.db
+
+        >>> tx = db.t.change_label()
+        >>> db.execute(tx)    #doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        DatabaseExecutingTransaction: Cannot change database label...
+
+        >>> t.done()
+
+
+Database extents
+================
+
+Get list of extent names
+------------------------
+
+Call the database's `extent_names` method to get an
+alphabetically-ordered list of extent_ names:
+
+  .. sourcecode:: pycon
+
+     >>> t = DocTest("""
+     ...     class Clown(E.Entity):
+     ...         pass
+     ...
+     ...     class Acrobat(E.Entity):
+     ...         pass
+     ...
+     ...     class Balloon(E.Entity):
+     ...         pass
+     ...     """); db = t.db
+
+     >>> db.extent_names()
+     ['Acrobat', 'Balloon', 'Clown']
+
+Get list of extents
+-------------------
+
+Call the database's `extent_names` method to get an
+alphabetically-ordered list of extent_ objects:
+
+  .. sourcecode:: pycon
+
+     >>> db.extents()    #doctest: +NORMALIZE_WHITESPACE
+     [<Extent 'Acrobat' in <Database u'Schevo Database' :: V 1>>,
+      <Extent 'Balloon' in <Database u'Schevo Database' :: V 1>>,
+      <Extent 'Clown' in <Database u'Schevo Database' :: V 1>>]
+
+Get individual extent by name
+-----------------------------
+
+Pass an extent name to the database's `extent` method or accessing it
+as an attribute of the database to get an individual extent by name:
+
+  .. sourcecode:: pycon
+
+     >>> db.extent('Balloon')
+     <Extent 'Balloon' in <Database u'Schevo Database' :: V 1>>
+
+     >>> db.Balloon is db.extent('Balloon')
+     True
+
+     >>> t.done()
+
+
+Pack database
+=============
+
+Call the database's `pack` method to pack_ the database:
+
+  .. sourcecode:: pycon
+
+     >>> db.pack()    #doctest: +SKIP
+
+.. note::
+
+   The in-memory `storage backend`_ used for unit tests does not
+   support the `pack` method, so it is skipped above.
+
+
+Data sets
+=========
+
+Populate database with initial data set
+---------------------------------------
+
+The engine_ populates a database with an `initial data set`_ when it
+first creates a database.
+
+  .. sourcecode:: pycon
+
+     >>> t = DocTest("""
+     ...     class Book(E.Entity):
+     ...
+     ...         name = f.string()
+     ...
+     ...         _initial = [
+     ...             ('Schevo and You',),
+     ...             ]
+     ...
+     ...         _sample = [
+     ...             ('The Art of War',),
+     ...             ]
+     ...
+     ...         _sample_custom = [
+     ...             ('Iliad',),
+     ...             ]
+     ...     """); db = t.db
+
+     >>> sorted(book.name for book in db.Book)
+     [u'Schevo and You']
+
+Populate with default sample data set
+-------------------------------------
+
+Call a database's `populate` method with no arguments to populate a
+database with the default `sample data set`_:
+
+  .. sourcecode:: pycon
+
+     >>> db.populate()
+
+     >>> sorted(book.name for book in db.Book)
+     [u'Schevo and You', u'The Art of War']
+
+Populate with named sample data set
+-----------------------------------
+
+Call a database's `populate` method with a string argument to populate
+a database with a named `sample data set`_:
+
+  .. sourcecode:: pycon
+
+     >>> db.populate('custom')
+
+     >>> sorted(book.name for book in db.Book)
+     [u'Iliad', u'Schevo and You', u'The Art of War']
+
+     >>> t.done()
+
+
+Database schema
+===============
+
+Get database schema source
+--------------------------
+
+Access the `schema_source` property of a database to get its `schema
+source`_:
+
+  .. sourcecode:: pycon
+
+     >>> t = DocTest("""
+     ...     # Even an empty database has schema source.
+     ...     """); db = t.db
+
+     >>> print db.schema_source
+     from schevo.schema import *
+     schevo.schema.prep(locals())
+     <BLANKLINE>
+     # Even an empty database has schema source.
+     <BLANKLINE>
+
+     >>> t.done()
+
+Get database schema version
+---------------------------
+
+Access the `version` property of a database to get its current `schema
+version`_:
+
+  .. sourcecode:: pycon
+
+     >>> t = DocTestEvolve('schevo.test.testschema_evolve', 1)
+
+     >>> t.db.version
+     1
+
+     >>> t.done()
+
+     >>> t = DocTestEvolve('schevo.test.testschema_evolve', 2)
+
+     >>> t.db.version
+     2
+
+     >>> t.done()
+
+
+Database read/write locking
+===========================
+
+Schevo provides optional multiple-reader-one-writer locking to safely
+allow multiple threads access to the database.
+
+About dummy locks
+-----------------
+
+By default, a database does not have locking facilities.  Instead, it
+contains dummy objects so that code written to be multi-thread-ready
+may still be run when no locking facilities are installed on the
+database:
+
+  .. sourcecode:: pycon
+
+     >>> t = DocTest("""
+     ...     """); db = t.db
+
+     >>> db.read_lock
+     <class 'schevo.mt.dummy.dummy_lock'>
+
+     >>> db.write_lock
+     <class 'schevo.mt.dummy.dummy_lock'>
+
+Install locking support
+-----------------------
+
+If using Schevo in a multi-threaded environment, be sure to install
+locking support onto the database by using the `schevo.mt:install`
+function:
+
+  .. sourcecode:: pycon
+
+     >>> import schevo.mt
+
+     >>> schevo.mt.install(db)
+
+     >>> db.read_lock    #doctest: +ELLIPSIS
+     <bound method RWLock._acquire_locked_wrapper ...
+
+     >>> db.write_lock    #doctest: +ELLIPSIS
+     <bound method RWLock._acquire_locked_wrapper ...
+
+.. note::
+
+   After installing locking support, be sure to consistently use locks
+   to wrap *all* read and write operations.
+
+   If you do not wrap multiple read operation, and a write operation
+   occurs in another thread, you may get inconsistent results during
+   your read.
+
+   If you do not wrap write operations, then they may conflict with
+   writes occurring in another thread or cause inconsistent results
+   during reads in another thread.
+
+.. note::
+
+   The locking API does not yet take advantage of the Python 2.5
+   `with` statement.
+
+Use read locks
+--------------
+
+Acquire a read lock by calling the database's `read_lock` object to
+acquire a lock, performing the desired read operation(s), then calling
+the release method of the acquired lock:
+
+  .. sourcecode:: pycon
+
+     >>> lock = db.read_lock()
+     >>> try:
+     ...     # Do reading stuff here.
+     ...     pass
+     ... finally:
+     ...     lock.release()
+
+.. note::
+
+   When a thread attempts to acquire a read lock, it will block until
+   pending write locks have been released.
+
+Use write locks
+---------------
+
+Acquire a read lock by calling the database's `read_lock` object to
+acquire a lock, performing the desired read operation(s), then calling
+the release method of the acquired lock:
+
+  .. sourcecode:: pycon
+
+     >>> lock = db.write_lock()
+     >>> try:
+     ...     # Do reading and writing stuff here.
+     ...     pass
+     ... finally:
+     ...     lock.release()
+     >>> t.done()
+
+.. note::
+
+   When a thread attempts to acquire a write lock, it will block until
+   pending read and write locks have been released.
+
+Promote read lock to write lock via nesting
+-------------------------------------------
+
+If you acquire a read lock, and find you need to acquire a write lock
+within the same thread, acquiring a write lock while the thread still
+has the read lock will "upgrade" the read lock to a write lock for the
+remainder of the life of the thread's outermost lock:
+
+  .. sourcecode:: pycon
+
+     >>> lock_outer = db.read_lock()
+     >>> try:
+     ...     # Do reading stuff here.
+     ...     lock_inner = db.write_lock()
+     ...     try:
+     ...         # Do reading and writing stuff here.
+     ...         pass
+     ...     finally:
+     ...         lock_inner.release()
+     ... finally:
+     ...     lock_outer.release()
+
+     >>> t.done()
+
+.. note::
+
+   When a thread upgrades a read lock to a write lock, it will block
+   until pending read locks have been released.
+
+   After an outer read lock has been upgraded by an inner write lock,
+   it will continue to act as an exclusive write lock for the
+   remainder of its lifespan, even after the inner lock's `release`
+   method has been called.
+
+
+Transaction methods
+===================
+
+Get transaction method namespace
+--------------------------------
+
+Access the `t` attribute of an object that may have `transaction
+methods`_ to get the `transaction method namespace`_ of that object:
+
+  .. sourcecode:: pycon
+
+     >>> t = DocTest("""
+     ...     class Plant(E.Entity):
+     ...
+     ...         common_name = f.string()
+     ...
+     ...         _initial = [
+     ...             ('Fern',),
+     ...             ]
+     ...     """); db = t.db
+
+     >>> db.t
+     <'t' namespace on <Database u'Schevo Database' :: V 1>>
+
+     >>> db.Plant.t    #doctest: +ELLIPSIS
+     <'t' namespace on <Extent 'Plant' in <Database ...>>>
+
+     >>> db.Plant[1].t    #doctest: +ELLIPSIS
+     <'t' namespace on <Plant entity oid:1 rev:0>>
+
+     >>> db.Plant[1].v.default().t    #doctest: +ELLIPSIS
+     <'t' namespace on <schevo.entity._DefaultView ...>>
+
+     >>> t.done()
+
+Get available transaction method names
+--------------------------------------
+
+Iterate over the `t namespace`_, such as by transforming it to a
+sorted list, to get the names of available, non-hidden transaction
+methods.
+
+By default, databases do not have any transaction methods.
+
+  .. sourcecode:: pycon
+
+     >>> t = DocTest("""
+     ...     class Plant(E.Entity):
+     ...
+     ...         common_name = f.string()
+     ...
+     ...         _initial = [
+     ...             ('Fern',),
+     ...             ]
+     ...     """); db = t.db
+
+     >>> sorted(db.t)
+     []
+
+By default, extents have a transaction method used to create new
+`Create` transactions_.
+
+  .. sourcecode:: pycon
+
+     >>> sorted(db.Plant.t)
+     ['create']
+
+By default, entities have transaction methods used to create new
+`Delete` and `Update` transactions_:
+
+  .. sourcecode:: pycon
+
+     >>> sorted(db.Plant[1].t)
+     ['clone', 'delete', 'update']
+
+By default, entity views_ have transaction methods that reflect those
+of the parent entity:
+
+  .. sourcecode:: pycon
+
+     >>> sorted(db.Plant[1].v.default().t)
+     ['clone', 'delete', 'update']
+
+.. note::
+
+   If a transaction method is hidden, it is still usable, but it does
+   not show up when iterating over the `t` namespace.  This is to
+   allow programmatic usage of transactions that the schema designer
+   does not feel appropriate to expose in a dynamic user interface.
+
+     .. sourcecode:: pycon
+
+        >>> t2 = DocTest("""
+        ...     class Plant(E.Entity):
+        ...
+        ...         common_name = f.string()
+        ...
+        ...         _hide('t_update')
+        ...
+        ...         _initial = [
+        ...             ('Fern',),
+        ...             ]
+        ...     """); db2 = t2.db
+
+        >>> sorted(db2.Plant[1].t)
+        ['clone', 'delete']
+
+        >>> t2.done()
+
+Get transaction method
+----------------------
+
+Use the `__getitem__` protocol to get a transaction method from a `t`
+namespace:
+
+  .. sourcecode:: pycon
+
+     >>> method_name = 'create'
+     >>> method = db.Plant.t[method_name]
+     >>> method    #doctest: +ELLIPSIS
+     <extentclassmethod Plant.t_create ...
+
+You may also use the `__getattr__` protocol:
+
+  .. sourcecode:: pycon
+
+     >>> db.Plant.t.create    #doctest: +ELLIPSIS
+     <extentclassmethod Plant.t_create ...
+
+     >>> db.Plant.t.create is db.Plant.t['create']
+     True
+
+Get transaction method label
+----------------------------
+
+Each transaction method has a label.
+
+If the schema does not manually assign a label to a transaction
+method, Schevo automatically computes one.
+
+  .. sourcecode:: pycon
+
+     >>> label(db.Plant.t.create)
+     u'New'
+
+     >>> label(db.Plant[1].t.update)
+     u'Edit'
+
+     >>> label(db.Plant[1].t.delete)
+     u'Delete'
+
+     >>> t.done()
+
+
+Extent information
+==================
+
+Each extent_ in a database keeps useful information about itself.
+
+  .. sourcecode:: pycon
+
+     >>> t = DocTest("""
+     ...     class Food(E.Entity):
+     ...
+     ...         common_name = f.string()
+     ...         fancy_name = f.string()
+     ...         high_in_sugar = f.boolean()
+     ...
+     ...         _key(common_name)
+     ...         _key(fancy_name)
+     ...
+     ...         _index(high_in_sugar, common_name)
+     ...         _index(high_in_sugar, fancy_name)
+     ...
+     ...         _initial = [
+     ...             ('Lettuce', 'Lactuca sativa', False),
+     ...             ('Date', 'Phoenix dactylifera', True),
+     ...             ('Broccoli', 'Brassica oleracea', False),
+     ...             ]
+     ...
+     ...     class Person(E.Entity):
+     ...
+     ...         name = f.string()
+     ...         favorite_food = f.entity('Food')
+     ...
+     ...         _key(name)
+     ...
+     ...         _plural = 'People'
+     ...
+     ...         _initial = [
+     ...             ('Jill', ('Date',)),
+     ...             ('Jack', ('Lettuce',)),
+     ...             ('Jen', ('Broccoli',)),
+     ...             ('Jeff', ('Date',)),
+     ...             ]
+     ...
+     ...     class EatingRecord(E.Entity):
+     ...
+     ...         person = f.entity('Person')
+     ...         food = f.entity('Food')
+     ...         when = f.datetime()
+     ...
+     ...         _key(person, when)
+     ...
+     ...         _initial = [
+     ...             (('Jill',), ('Date',), '2008-01-15 13:05:00'),
+     ...             (('Jack',), ('Date',), '2008-01-15 13:10:00'),
+     ...             (('Jack',), ('Lettuce',), '2008-01-15 13:15:00'),
+     ...             (('Jen',), ('Broccoli',), '2008-02-02 11:13:00'),
+     ...             (('Jeff',), ('Lettuce',), '2008-03-05 14:45:00'),
+     ...             ]
+     ...     """); db = t.db
+
+Get extent database
+-------------------
+
+Access the `db` attribute of an extent to determine which database it
+belongs to:
+
+  .. sourcecode:: pycon
+
+     >>> db.Food.db is db
+     True
+
+Get extent index and key specs
+------------------------------
+
+Access the `index_spec` attribute of an extent to get a tuple of
+`index specs`_ for indices_ maintained for the extent:
+
+  .. sourcecode:: pycon
+
+     >>> sorted(db.Food.index_spec)    #doctest: +NORMALIZE_WHITESPACE
+     [('high_in_sugar', 'common_name'),
+      ('high_in_sugar', 'fancy_name')]
+
+Access the `key_spec` attribute of an extent to get a tuple of `key
+specs`_ for keys_ maintained for the extent:
+
+  .. sourcecode:: pycon
+
+     >>> sorted(db.Food.key_spec)    #doctest: +NORMALIZE_WHITESPACE
+     [('common_name',), ('fancy_name',)]
+
+Get extent default key spec
+---------------------------
+
+Access the `default_key` attribute of an extent to get the key spec
+for the `default key`_ maintained for the extent:
+
+  .. sourcecode:: pycon
+
+     >>> db.Food.default_key
+     ('common_name',)
+
+Get extent hidden flag
+----------------------
+
+Access the `hidden` attribute of an extent to determine if it should
+be hidden from a dynamic user interface:
+
+  .. sourcecode:: pycon
+
+     >>> db.Food.hidden
+     False
+
+Get extent labels
+-----------------
+
+Pass an extent object to the `schevo.label:label` function to get the
+singular form of the extent's label:
+
+  .. sourcecode:: pycon
+
+     >>> label(db.Food)
+     u'Food'
+
+     >>> label(db.EatingRecord)
+     u'Eating Record'
+
+Use the `schevo.label:plural` function to get the plural form:
+
+  .. sourcecode:: pycon
+
+     >>> from schevo.label import plural
+
+     >>> plural(db.Food)
+     u'Foods'
+
+     >>> plural(db.Person)
+     u'People'
+
+Get extent name
+---------------
+
+Access the `name` attribute of an extent to get its name:
+
+  .. sourcecode:: pycon
+
+     >>> db.Food.name
+     'Food'
+
+Get extent relationships
+------------------------
+
+Access the `relationships` attribute of an extent to get a list of its
+relationships_:
+
+  .. sourcecode:: pycon
+
+     >>> sorted(db.Food.relationships)    #doctest: +NORMALIZE_WHITESPACE
+     [('EatingRecord', 'food'),
+      ('Person', 'favorite_food')]
+
+     >>> db.Person.relationships
+     [('EatingRecord', 'person')]
+
+Get extent size
+---------------
+
+Pass an extent to the built-in `len` function to get the current size
+in entities of the extent:
+
+  .. sourcecode:: pycon
+
+     >>> len(db.Food)
+     3
+
+     >>> len(db.Person)
+     4
+
+     >>> len(db.EatingRecord)
+     5
+
+
+Extent values as sample data sets
+=================================
+
+Call the `as_unittest_code` method of an extent to get a string
+containing the values of all entities in that extent, formatted in a
+manner that you can paste into schema source code to use those
+entities as sample data for unit tests:
+
+  .. sourcecode:: pycon
+
+     >>> print db.Food.as_unittest_code()
+     E.Food._sample_unittest = [
+         (u'Broccoli', u'Brassica oleracea', False),
+         (u'Date', u'Phoenix dactylifera', True),
+         (u'Lettuce', u'Lactuca sativa', False),
+         ]
+
+     >>> print db.Person.as_unittest_code()
+     E.Person._sample_unittest = [
+         (u'Jack', (u'Lettuce',)),
+         (u'Jeff', (u'Date',)),
+         (u'Jen', (u'Broccoli',)),
+         (u'Jill', (u'Date',)),
+         ]
+
+
+Extent entity retrieval
+=======================
+
+Retrieve single entity using OID
+--------------------------------
+
+Use the `__getitem__` protocol on an extent with an OID_ to retrieve
+the entity from that extent that has that OID:
+
+  .. sourcecode:: pycon
+
+     >>> jack = db.Person.findone(name='Jack')
+     >>> oid = jack.s.oid
+     >>> type(oid)
+     <type 'int'>
+     >>> person = db.Person[oid]
+     >>> person == jack
+     True
+
+If no entity with that OID exists in the extent, the operation raises
+`schevo.error:EntityDoesNotExist`:
+
+  .. sourcecode:: pycon
+
+     >>> person = db.Person[12345]    #doctest: +ELLIPSIS
+     Traceback (most recent call last):
+     ...
+     EntityDoesNotExist: "OID 12345 does not exist in extent 'Person'."
+
+Retrieve single entity matching field values
+--------------------------------------------
+
+Pass keyword arguments to the `findone` method of an extent to
+retrieve the entity from that extent where the fields named as keys in
+the keyword arguments have values equal to the corresponding values in
+the keyword arguments:
+
+  .. sourcecode:: pycon
+
+     >>> person = db.Person.findone(name='Jack')
+     >>> jack.name
+     u'Jack'
+
+If no matching entity is found, the method returns `None`:
+
+  .. sourcecode:: pycon
+
+     >>> person = db.Person.findone(name='John')
+     >>> person is None
+     True
+
+If multiple entities match, the method raises
+`schevo.error:FindoneFoundMoreThanOne`:
+
+  .. sourcecode:: pycon
+
+     >>> date = db.Food.findone(common_name='Date')
+     >>> person = db.Person.findone(
+     ...     favorite_food=date
+     ...     )    #doctest: +ELLIPSIS
+     Traceback (most recent call last):
+     ...
+     FindoneFoundMoreThanOne: Found more than one match in extent 'Person' ...
+
+Retrieve entities matching field values
+---------------------------------------
+
+Retrieve entities using iteration
+---------------------------------
+
+Retrieve entities ordered by key or index spec
+----------------------------------------------
+
+
+Extent field spec namespace
+===========================
+
+  .. sourcecode:: pycon
+
+     >>> t.done()
+
+
+Templates
+=========
+
+Common text for new doctests:
+
+  .. sourcecode:: pycon
+
+     >>> t = DocTest("""
+     ...     """); db = t.db
+
+     >>> t.done()
+
+
+.. Glossary links:
+
+.. _database navigator: glossary.html#database-navigator
+.. _default key: glossary.html#default-key
+.. _engine: glossary.html#engine
+.. _execute: glossary.html#execute
+.. _extent: glossary.html#extent
+.. _keys: glossary.html#key
+.. _key specs: glossary.html#key-spec
+.. _index specs: glossary.html#index-spec
+.. _indices: glossary.html#index
+.. _initial data set: glossary.html#initial-data-set
+.. _label: glossary.html#label
+.. _open database: glossary.html#open-database
+.. _OID: glossary.html#oid
+.. _pack: glossary.html#pack
+.. _relationships: glossary.html#relationship
+.. _sample data set: glossary.html#sample-data-set
+.. _schema: glossary.html#schema
+.. _schema body: glossary.html#schema-body
+.. _schema package: glossary.html#schema-package
+.. _schema source: glossary.html#schema-source
+.. _schema version: glossary.html#schema-version
+.. _storage backend: glossary.html#storage-backend
+.. _t namespace: glossary.html#transaction-method-namespace
+.. _transactions: glossary.html#transaction
+.. _transaction methods: glossary.html#transaction-method
+.. _transaction method namespace: glossary.html#transaction-method-namespace
+.. _views: glossary.html#view

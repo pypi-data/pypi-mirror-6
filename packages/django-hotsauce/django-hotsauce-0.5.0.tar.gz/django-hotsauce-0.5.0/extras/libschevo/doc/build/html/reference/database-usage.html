@@ -1,0 +1,806 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Schevo Database Usage Reference &mdash; libschevo 3.2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="libschevo 3.2.4 documentation" href="../index.html" />
+    <link rel="up" title="Schevo References" href="index.html" />
+    <link rel="next" title="Schevo Glossary" href="glossary.html" />
+    <link rel="prev" title="Schevo Transaction Hook Methods" href="transaction-hook-methods.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="glossary.html" title="Schevo Glossary"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="transaction-hook-methods.html" title="Schevo Transaction Hook Methods"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">libschevo 3.2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Schevo References</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="schevo-database-usage-reference">
+<h1>Schevo Database Usage Reference<a class="headerlink" href="#schevo-database-usage-reference" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Permalink to this headline">¶</a></h2>
+<p>A Schevo database is the combination of a <em>schema definition</em>, <em>stored
+data</em>, and an <em>engine</em> that exposes the two.  This document describes
+in detail the public API exposed by the Schevo engine.</p>
+<p>Schema definitions are pure-Python modules that make use of Schevo&#8217;s
+syntax extensions.  Schema definitions can be directly imported
+anywhere, but typically the Schevo database engine manages the import
+process in order to tie a schema to an open database.</p>
+<p>Stored data is managed by the <a class="reference external" href="/schevodurus/">SchevoDurus</a> package, based on <a class="reference external" href="http://www.mems-exchange.org/software/durus/">Durus</a>.
+The data is kept in a general structure used by all Schevo databases,
+described in the <a class="reference external" href="../design/structures.html">internal database structures</a> reference.</p>
+<p>The database engine is defined in the <cite>schevo.database</cite> module, and
+provides read/write access to stored data using the higher-level
+structures defined by the database&#8217;s schema definition.</p>
+</div>
+<div class="section" id="doctest-setup">
+<h2>Doctest Setup<a class="headerlink" href="#doctest-setup" title="Permalink to this headline">¶</a></h2>
+<p>This document also functions as a doctest:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  &gt;&gt;&gt; from schevo.test import DocTest</pre>
+</div>
+</div>
+<div class="section" id="sys-namespaces">
+<h2>sys Namespaces<a class="headerlink" href="#sys-namespaces" title="Permalink to this headline">¶</a></h2>
+<p><tt class="docutils literal"><span class="pre">sys</span></tt> (short for <em>system</em>) is a namespace that contains the public
+methods and properties of a Schevo object that are not fields, query
+methods, transaction methods, or view methods.  These are kept in a
+separate namespace in order to reduce the amount of reserved words.</p>
+<p><tt class="docutils literal"><span class="pre">sys</span></tt> namespaces are accessed by getting the <tt class="docutils literal"><span class="pre">sys</span></tt> attribute from
+a Schevo object.</p>
+<p>The following types of Schevo objects have a <tt class="docutils literal"><span class="pre">sys</span></tt> namespace:</p>
+<ul class="simple">
+<li><a class="reference internal" href="#entity-instances">Entity instances</a></li>
+<li>Find query instances</li>
+<li>Param query instances</li>
+<li>Transaction instances</li>
+<li>View instances</li>
+</ul>
+</div>
+<div class="section" id="database-instances">
+<h2>Database instances<a class="headerlink" href="#database-instances" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="database-labels">
+<h3>Database labels<a class="headerlink" href="#database-labels" title="Permalink to this headline">¶</a></h3>
+<p>By default, a database instance is labeled &#8220;Schevo Database&#8221;:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  &gt;&gt;&gt; from schevo.label import label, relabel
+  &gt;&gt;&gt; t = DocTest("""
+  ...     class Foo(E.Entity):
+  ...         pass
+  ...     """)
+  &gt;&gt;&gt; print label(t.db)
+  Schevo Database</pre>
+</div>
+<p>Override the label by using <cite>relabel</cite>:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  &gt;&gt;&gt; relabel(t.db, 'My Database')
+  &gt;&gt;&gt; print label(t.db)
+  My Database</pre>
+</div>
+</div>
+</div>
+<div class="section" id="extent-instances">
+<h2>Extent instances<a class="headerlink" href="#extent-instances" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="relaxing-and-enforcing-key-restrictions">
+<h3>Relaxing and enforcing key restrictions<a class="headerlink" href="#relaxing-and-enforcing-key-restrictions" title="Permalink to this headline">¶</a></h3>
+<p>Schevo has the unique ability to temporarily relax key restrictions
+while still ensuring that the database remains in a consistent state.</p>
+<p>Key restrictions may only be relaxed within the execution of a
+transaction.</p>
+<p>Given an extent <cite>db.Foo</cite> that has a key specification of <cite>_key(field1,
+field2)</cite>, relax that key restriction by calling <cite>relax_index</cite>:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  db.Foo.relax_index('field1', 'field2')</pre>
+</div>
+<p>Key restrictions that are relaxed within a transaction are relaxed for
+the entire execution of the transaction, or until the key is enforced
+within that transaction, or until that transaction ends, whichever
+comes first.</p>
+<p>When a key restriction is relaxed by a transaction, it remains relaxed
+for all sub-transactions, regardless of any request by those
+sub-transactions to enforce the key restriction.</p>
+<p>To re-enforce the key restriction before the end of a transaction&#8217;s
+execution, call <cite>enforce_index</cite>:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  db.Foo.enforce_index('field1', 'field2')</pre>
+</div>
+<p>See the <tt class="docutils literal"><span class="pre">tests/test_relax_index.py</span></tt> test case for code examples.</p>
+</div>
+<div class="section" id="extent-labels">
+<h3>Extent labels<a class="headerlink" href="#extent-labels" title="Permalink to this headline">¶</a></h3>
+<p>By default, an extent has a singular and plural label based on the
+entity class name associated with the extent:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  &gt;&gt;&gt; from schevo.label import label, plural
+  &gt;&gt;&gt; t = DocTest("""
+  ...     class GreatPerson(E.Entity):
+  ...
+  ...         name = f.string()
+  ...     """)
+  &gt;&gt;&gt; print label(t.db.GreatPerson)
+  Great Person
+  &gt;&gt;&gt; print plural(t.db.GreatPerson)
+  Great Persons</pre>
+</div>
+<p>To override the singular and/or plural labels of an extent, assign
+values to the <cite>_label</cite> and/or <cite>_plural</cite> attributes of the associated
+entity class:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  &gt;&gt;&gt; from schevo.label import label, plural
+  &gt;&gt;&gt; t = DocTest("""
+  ...     class GreatPerson(E.Entity):
+  ...
+  ...         name = f.string()
+  ...
+  ...         _label = 'Great PERSON'
+  ...         _plural = 'Great PEOPLE'
+  ...     """)
+  &gt;&gt;&gt; print label(t.db.GreatPerson)
+  Great PERSON
+  &gt;&gt;&gt; print plural(t.db.GreatPerson)
+  Great PEOPLE</pre>
+</div>
+</div>
+</div>
+<div class="section" id="entity-instances">
+<h2>Entity instances<a class="headerlink" href="#entity-instances" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="entity-sys-namespace">
+<h3>Entity sys namespace<a class="headerlink" href="#entity-sys-namespace" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="links-return-entities-that-link-to-this-entity">
+<h4>links: Return entities that link to this entity<a class="headerlink" href="#links-return-entities-that-link-to-this-entity" title="Permalink to this headline">¶</a></h4>
+<p>Use <tt class="docutils literal"><span class="pre">links</span></tt> to find other entities that point to the calling entity.</p>
+<p>To find all entities that link to the calling entity, use the form
+<tt class="docutils literal"><span class="pre">links()</span></tt>.  The return value will be a dictionary of keys in the
+form <tt class="docutils literal"><span class="pre">(other_extent_name,</span> <span class="pre">other_field_name)</span></tt>, each mapping to a list
+of Entity instances in that extent where that field&#8217;s value is the
+calling entity:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Doctest to go here.</span>
+</pre></div>
+</div>
+<p>To find all entities in a specific extent that link to the calling
+entity, use the form <tt class="docutils literal"><span class="pre">links(other_extent_name)</span></tt>.  The return value
+will be the same as that returned by a call to <tt class="docutils literal"><span class="pre">links()</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Doctest to go here.</span>
+</pre></div>
+</div>
+<p>To find all the entities in a specific extent where a specific field
+value links to the calling entity, use the form
+<tt class="docutils literal"><span class="pre">links(other_extent_name,</span> <span class="pre">other_field_name)</span></tt>.  The return value will
+be a list of Entity instances in that extent where that field&#8217;s value
+is the calling entity:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># Doctest to go here.</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="entity-labels">
+<h3>Entity labels<a class="headerlink" href="#entity-labels" title="Permalink to this headline">¶</a></h3>
+<p>The <cite>label</cite> of an entity instance is the same as the <cite>unicode</cite>
+representation of the entity instance.</p>
+<p>By default, the label is determined by the default key defined in the
+entity class:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  &gt;&gt;&gt; from schevo.label import label
+  &gt;&gt;&gt; t = DocTest("""
+  ...     class State(E.Entity):
+  ...
+  ...         name = f.string()
+  ...         abbreviation = f.string()
+  ...
+  ...         _key(name)
+  ...         _key(abbreviation)
+  ...
+  ...         _initial = [
+  ...             ('Missouri', 'MO'),
+  ...             ]
+  ...     """)
+  &gt;&gt;&gt; missouri = t.db.State.findone(name='Missouri')
+  &gt;&gt;&gt; print label(missouri)
+  Missouri</pre>
+</div>
+<p>If the key has more than one field, the values are separated by two
+colons:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  &gt;&gt;&gt; t = DocTest("""
+  ...     class City(E.Entity):
+  ...
+  ...         name = f.string()
+  ...         state = f.entity('State')
+  ...
+  ...         _key(name, state)
+  ...
+  ...         _initial = [
+  ...             ('Monett', ('Missouri',)),
+  ...             ]
+  ...
+  ...     class State(E.Entity):
+  ...
+  ...         name = f.string()
+  ...         abbreviation = f.string()
+  ...
+  ...         _key(name)
+  ...         _key(abbreviation)
+  ...
+  ...         _initial = [
+  ...             ('Missouri', 'MO'),
+  ...             ]
+  ...     """)
+  &gt;&gt;&gt; missouri = t.db.State.findone(name='Missouri')
+  &gt;&gt;&gt; monett = t.db.City.findone(name='Monett', state=missouri)
+  &gt;&gt;&gt; print label(monett)
+  Monett :: Missouri</pre>
+</div>
+<p>Override the <cite>__unicode__</cite> method of an entity class to customize the
+label:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  &gt;&gt;&gt; t = DocTest("""
+  ...     class City(E.Entity):
+  ...
+  ...         name = f.string()
+  ...         state = f.entity('State')
+  ...
+  ...         _key(name, state)
+  ...
+  ...         def __unicode__(self):
+  ...             return u'%s, %s' % (self.name, self.state.abbreviation)
+  ...
+  ...         _initial = [
+  ...             ('Monett', ('Missouri',)),
+  ...             ]
+  ...
+  ...     class State(E.Entity):
+  ...
+  ...         name = f.string()
+  ...         abbreviation = f.string()
+  ...
+  ...         _key(name)
+  ...         _key(abbreviation)
+  ...
+  ...         _initial = [
+  ...             ('Missouri', 'MO'),
+  ...             ]
+  ...     """)
+  &gt;&gt;&gt; missouri = t.db.State.findone(name='Missouri')
+  &gt;&gt;&gt; monett = t.db.City.findone(name='Monett', state=missouri)
+  &gt;&gt;&gt; print label(monett)
+  Monett, MO</pre>
+</div>
+</div>
+</div>
+<div class="section" id="entity-placeholders">
+<h2>Entity placeholders<a class="headerlink" href="#entity-placeholders" title="Permalink to this headline">¶</a></h2>
+<p><cite>schevo.placeholder.Placeholder</cite> instances store information about an
+entity in a database.  Schevo databases keep <cite>Placeholder</cite> instances
+internally, and work with them instead of actual <cite>Entity</cite> instances
+since the latter cannot be directly persisted.</p>
+<p>Do not worry about using <cite>Placeholder</cite> instances directly, but be
+aware of their existence.  At times, you may run across an Exception
+whose message includes the <cite>repr</cite> of a <cite>Placeholder</cite> instance, such as
+a <cite>schevo.error.KeyCollision</cite> error.</p>
+</div>
+<div class="section" id="field-classes">
+<h2>Field classes<a class="headerlink" href="#field-classes" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="field-instances">
+<h2>Field instances<a class="headerlink" href="#field-instances" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="query-methods-and-objects">
+<h2>Query methods and objects<a class="headerlink" href="#query-methods-and-objects" title="Permalink to this headline">¶</a></h2>
+<p>At their highest level, <cite>schevo.query.Query</cite> objects use criteria you
+specify to create sequences of results.</p>
+<p>There are several types of queries, and some queries&#8217; criteria consist
+of subqueries, from which it obtains results during its execution.</p>
+<p>For the purposes of example, let us assume that we are working with
+the following schema for this section:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">from schevo.schema import *</span>
+<span class="gp">... </span><span class="s">schevo.schema.prep(locals())</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">class Person(E.Entity):</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    name = f.string()</span>
+<span class="gp">... </span><span class="s">    birthdate = f.date()</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    _key(name)</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    _plural = u&#39;People&#39;</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    def __unicode__(self):</span>
+<span class="gp">... </span><span class="s">        return u&#39;</span><span class="si">%s</span><span class="s">, born on </span><span class="si">%s</span><span class="s">&#39; % (self.name, self.birthdate)</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    _sample_unittest = [</span>
+<span class="gp">... </span><span class="s">        (&#39;Robert Jones&#39;, &#39;1965-02-03&#39;),</span>
+<span class="gp">... </span><span class="s">        (&#39;Roberto Gonzales&#39;, &#39;1976-04-05&#39;),</span>
+<span class="gp">... </span><span class="s">        (&#39;Roberta Smith&#39;, &#39;1987-06-07&#39;),</span>
+<span class="gp">... </span><span class="s">        (&#39;Rance Thomas&#39;, &#39;1954-12-01&#39;),</span>
+<span class="gp">... </span><span class="s">        ]</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">class Location(E.Entity):</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    name = f.string()</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    _key(name)</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    _sample_unittest = [</span>
+<span class="gp">... </span><span class="s">        (&#39;Bank&#39;,),</span>
+<span class="gp">... </span><span class="s">        (&#39;Grocery Store&#39;,),</span>
+<span class="gp">... </span><span class="s">        (&#39;Library&#39;,),</span>
+<span class="gp">... </span><span class="s">        ]</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">class Sighting(E.Entity):</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    person = f.entity(&#39;Person&#39;)</span>
+<span class="gp">... </span><span class="s">    location = f.entity(&#39;Location&#39;)</span>
+<span class="gp">... </span><span class="s">    when = f.date()</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    def __unicode__(self):</span>
+<span class="gp">... </span><span class="s">        return u&#39;</span><span class="si">%s</span><span class="s"> at </span><span class="si">%s</span><span class="s"> on </span><span class="si">%s</span><span class="s">&#39; % (</span>
+<span class="gp">... </span><span class="s">            self.person.name,</span>
+<span class="gp">... </span><span class="s">            self.location,</span>
+<span class="gp">... </span><span class="s">            self.when,</span>
+<span class="gp">... </span><span class="s">            )</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    _sample_unittest = [</span>
+<span class="gp">... </span><span class="s">        ((&#39;Robert Jones&#39;,), (&#39;Library&#39;,), &#39;2004-01-01&#39;),</span>
+<span class="gp">... </span><span class="s">        ((&#39;Roberto Gonzales&#39;,), (&#39;Library&#39;,), &#39;2004-01-04&#39;),</span>
+<span class="gp">... </span><span class="s">        ((&#39;Robert Jones&#39;,), (&#39;Grocery Store&#39;,), &#39;2004-01-02&#39;),</span>
+<span class="gp">... </span><span class="s">        ((&#39;Roberto Gonzales&#39;,), (&#39;Bank&#39;,), &#39;2004-01-05&#39;),</span>
+<span class="gp">... </span><span class="s">        ((&#39;Robert Jones&#39;,), (&#39;Bank&#39;,), &#39;2004-01-03&#39;),</span>
+<span class="gp">... </span><span class="s">        ((&#39;Roberto Gonzales&#39;,), (&#39;Grocery Store&#39;,), &#39;2004-01-06&#39;),</span>
+<span class="gp">... </span><span class="s">        ((&#39;Roberta Smith&#39;,), (&#39;Grocery Store&#39;,), &#39;2004-01-07&#39;),</span>
+<span class="gp">... </span><span class="s">        ((&#39;Rance Thomas&#39;,), (&#39;Grocery Store&#39;,), &#39;2004-01-08&#39;),</span>
+<span class="gp">... </span><span class="s">        ]</span>
+<span class="gp">... </span><span class="s">&quot;&quot;&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+</pre></div>
+</div>
+<p>Both schema modules and database engines expose all available Query
+classes in its <tt class="docutils literal"><span class="pre">Q</span></tt> namespace.  For brevity, we will use an alias:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">Q</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Q</span>
+</pre></div>
+</div>
+<div class="section" id="match-queries">
+<h3>Match queries<a class="headerlink" href="#match-queries" title="Permalink to this headline">¶</a></h3>
+<p>The simplest query is a match on a field.  Use the
+<tt class="docutils literal"><span class="pre">schevo.query.Match</span></tt> class:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">person_name</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">Match</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">,</span> <span class="s">&#39;startswith&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To set the value of the match query, set the query&#8217;s value:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">person_name</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="s">u&#39;Robert&#39;</span>
+</pre></div>
+</div>
+<p>If you already have a search in mind, you can specify it in the query
+constructor:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">person_name</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">Match</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">,</span> <span class="s">&#39;startswith&#39;</span><span class="p">,</span> <span class="s">u&#39;Robert&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>It is worth noting that at any point, you can get a human language
+version of the query by converting it to a string:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">person_name</span>
+<span class="go">People where Name starts with Robert</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="retrieving-results">
+<h3>Retrieving results<a class="headerlink" href="#retrieving-results" title="Permalink to this headline">¶</a></h3>
+<p>To retrieve the results of a query, call the Query instance to get an
+iterator over the results.  For example, if we are using the
+<tt class="docutils literal"><span class="pre">person_name</span></tt> query defined above:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">results</span> <span class="o">=</span> <span class="n">person_name</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="k">print</span> <span class="n">person</span>
+<span class="go">Robert Jones, born on 1965-02-03</span>
+<span class="go">Roberto Gonzales, born on 1976-04-05</span>
+<span class="go">Roberta Smith, born on 1987-06-07</span>
+</pre></div>
+</div>
+<p>Query results, at the minimum, must support iteration:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">results</span> <span class="o">=</span> <span class="n">person_name</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">i</span> 
+<span class="go">&lt;generator object ...&gt;</span>
+</pre></div>
+</div>
+<p>To cache the query results, use whatever tools you like.  For example,
+you can get a list of results in order to retrieve the length or
+perform slices:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">person_name</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+<span class="go">3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r0</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">r0</span>
+<span class="go">&lt;Person entity oid:1 rev:0&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">results</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">3</span><span class="p">]</span>
+<span class="go">[&lt;Person entity oid:2 rev:0&gt;, &lt;Person entity oid:3 rev:0&gt;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">results</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">r0</span><span class="p">)</span>
+<span class="go">0</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="compound-queries">
+<h3>Compound queries<a class="headerlink" href="#compound-queries" title="Permalink to this headline">¶</a></h3>
+<p>Continuing the example, let us also search for persons who have a
+birthdate before 1980-01-01, and who were most recently sighted at the
+grocery store.</p>
+<p>Create the birthdate query:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">person_birthdate</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">Match</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="p">,</span> <span class="s">&#39;birthdate&#39;</span><span class="p">,</span> <span class="s">&#39;&lt;&#39;</span><span class="p">,</span> <span class="s">&#39;1980-01-01&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">person_birthdate</span>
+<span class="go">People where Birthdate &lt; 1980-01-01</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">person_birthdate</span><span class="p">()):</span> 
+<span class="gp">... </span>    <span class="k">print</span> <span class="n">person</span>
+<span class="go">Rance Thomas, born on 1954-12-01</span>
+<span class="go">Robert Jones, born on 1965-02-03</span>
+<span class="go">Roberto Gonzales, born on 1976-04-05</span>
+</pre></div>
+</div>
+<p>Combine the results of these queries using an intersection, so that
+we get the Person entities that match both queries:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">persons</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">Intersection</span><span class="p">(</span><span class="n">person_name</span><span class="p">,</span> <span class="n">person_birthdate</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">persons</span> 
+<span class="go">the intersection of (People where Name starts with Robert,</span>
+<span class="go">People where Birthdate &lt; 1980-01-01)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">persons</span><span class="p">()):</span> 
+<span class="gp">... </span>    <span class="k">print</span> <span class="n">person</span>
+<span class="go">Robert Jones, born on 1965-02-03</span>
+<span class="go">Roberto Gonzales, born on 1976-04-05</span>
+</pre></div>
+</div>
+<p>Get all the sightings for each person:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">person_sightings</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">Match</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Sighting</span><span class="p">,</span> <span class="s">&#39;person&#39;</span><span class="p">,</span> <span class="s">&#39;in&#39;</span><span class="p">,</span> <span class="n">persons</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">person_sightings</span> 
+<span class="go">Sightings where Person in the intersection of (People where Name</span>
+<span class="go">starts with Robert, People where Birthdate &lt; 1980-01-01)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">sighting</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">person_sightings</span><span class="p">()):</span>
+<span class="gp">... </span>    <span class="k">print</span> <span class="n">sighting</span> 
+<span class="go">Robert Jones at Library on 2004-01-01</span>
+<span class="go">Roberto Gonzales at Library on 2004-01-04</span>
+<span class="go">Robert Jones at Grocery Store on 2004-01-02</span>
+<span class="go">Roberto Gonzales at Bank on 2004-01-05</span>
+<span class="go">Robert Jones at Bank on 2004-01-03</span>
+<span class="go">Roberto Gonzales at Grocery Store on 2004-01-06</span>
+</pre></div>
+</div>
+<p>Group the sightings by person.  Since we are grouping the results of a
+query, which may be heterogeneous, we also specify a field class:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">by_person</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">Group</span><span class="p">(</span><span class="n">person_sightings</span><span class="p">,</span> <span class="s">&#39;person&#39;</span><span class="p">,</span> <span class="n">db</span><span class="o">.</span><span class="n">Sighting</span><span class="o">.</span><span class="n">f</span><span class="o">.</span><span class="n">person</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">by_person</span> 
+<span class="go">Sightings where Person in the intersection of (People where Name</span>
+<span class="go">starts with Robert, People where Birthdate &lt; 1980-01-01), grouped</span>
+<span class="go">by Person</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">by_person</span><span class="p">()):</span> 
+<span class="gp">... </span>    <span class="k">print</span> <span class="s">&#39;----&#39;</span>
+<span class="gp">... </span>    <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">group</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="k">print</span> <span class="n">result</span>
+<span class="go">----</span>
+<span class="go">Robert Jones at Library on 2004-01-01</span>
+<span class="go">Robert Jones at Grocery Store on 2004-01-02</span>
+<span class="go">Robert Jones at Bank on 2004-01-03</span>
+<span class="go">----</span>
+<span class="go">Roberto Gonzales at Library on 2004-01-04</span>
+<span class="go">Roberto Gonzales at Bank on 2004-01-05</span>
+<span class="go">Roberto Gonzales at Grocery Store on 2004-01-06</span>
+</pre></div>
+</div>
+<p>The results of a Group query is a list of results.  Reduce each group
+to the result that has the maximum value for the <tt class="docutils literal"><span class="pre">when</span></tt> field.
+Again, we specify a field class since the query source may be
+heterogeneous:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">most_recent</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">Max</span><span class="p">(</span><span class="n">by_person</span><span class="p">,</span> <span class="s">&#39;when&#39;</span><span class="p">,</span> <span class="n">db</span><span class="o">.</span><span class="n">Sighting</span><span class="o">.</span><span class="n">f</span><span class="o">.</span><span class="n">when</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">most_recent</span> 
+<span class="go">results that have the maximum When in each (Sightings where Person</span>
+<span class="go">in the intersection of (People where Name starts with Robert, People</span>
+<span class="go">where Birthdate &lt; 1980-01-01), grouped by Person)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">sighting</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">most_recent</span><span class="p">()):</span> 
+<span class="gp">... </span>    <span class="k">print</span> <span class="n">sighting</span>
+<span class="go">Robert Jones at Bank on 2004-01-03</span>
+<span class="go">Roberto Gonzales at Grocery Store on 2004-01-06</span>
+</pre></div>
+</div>
+<p>Finally, filter <tt class="docutils literal"><span class="pre">most_recent</span></tt> by the grocery store Location:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">grocery_store</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Location</span><span class="o">.</span><span class="n">findone</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s">u&#39;Grocery Store&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">last_seen_shopping</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">Match</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">most_recent</span><span class="p">,</span> <span class="s">&#39;location&#39;</span><span class="p">,</span> <span class="s">&#39;==&#39;</span><span class="p">,</span> <span class="n">grocery_store</span><span class="p">,</span> <span class="n">db</span><span class="o">.</span><span class="n">Sighting</span><span class="o">.</span><span class="n">f</span><span class="o">.</span><span class="n">location</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">last_seen_shopping</span> 
+<span class="go">results that have the maximum When in each (Sightings where Person</span>
+<span class="go">in the intersection of (People where Name starts with Robert, People</span>
+<span class="go">where Birthdate &lt; 1980-01-01), grouped by Person) where Location ==</span>
+<span class="go">Grocery Store</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">sighting</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">last_seen_shopping</span><span class="p">()):</span>
+<span class="gp">... </span>    <span class="k">print</span> <span class="n">sighting</span> 
+<span class="go">Roberto Gonzales at Grocery Store on 2004-01-06</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="default-queries">
+<h3>Default queries<a class="headerlink" href="#default-queries" title="Permalink to this headline">¶</a></h3>
+<p>The default query for an extent is an Intersection of Match queries
+against all non-calculated fields of an extent, with a default
+operator of <tt class="docutils literal"><span class="pre">any</span></tt> (which means &#8220;is any value&#8221;), and a default value
+of <tt class="docutils literal"><span class="pre">UNASSIGNED</span></tt> (which is ignored when using the <tt class="docutils literal"><span class="pre">any</span></tt> operator).</p>
+<p>This query is the same as would be returned when calling
+<tt class="docutils literal"><span class="pre">db.Sighting.q.default()</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">query</span> <span class="o">=</span> <span class="n">Q</span><span class="o">.</span><span class="n">Intersection</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">Q</span><span class="o">.</span><span class="n">Match</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Sighting</span><span class="p">,</span> <span class="s">&#39;person&#39;</span><span class="p">,</span> <span class="s">&#39;any&#39;</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="n">Q</span><span class="o">.</span><span class="n">Match</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Sighting</span><span class="p">,</span> <span class="s">&#39;location&#39;</span><span class="p">,</span> <span class="s">&#39;any&#39;</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="n">Q</span><span class="o">.</span><span class="n">Match</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Sighting</span><span class="p">,</span> <span class="s">&#39;when&#39;</span><span class="p">,</span> <span class="s">&#39;any&#39;</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">query</span>
+<span class="go">all Sightings</span>
+</pre></div>
+</div>
+<p>Without changing any of the operators, iterating over the results of
+the default query for an extent yields the same thing as iterating
+over the extent itself.</p>
+<p>The Intersection query optimizes its execution plan to use the
+extent&#8217;s <tt class="docutils literal"><span class="pre">find</span></tt> method when all of the <tt class="docutils literal"><span class="pre">Match</span></tt> queries match on
+the same extent, when there is only one of any given field name, when
+the only operators used are either <tt class="docutils literal"><span class="pre">any</span></tt> or <tt class="docutils literal"><span class="pre">==</span></tt>, and when all
+values are not queries.</p>
+<p>As seen above, it also optimizes its label for brevity if all values
+have the <tt class="docutils literal"><span class="pre">any</span></tt> operator.</p>
+</div>
+</div>
+<div class="section" id="field-containers">
+<span id="field-container"></span><h2>Field Containers<a class="headerlink" href="#field-containers" title="Permalink to this headline">¶</a></h2>
+<p>The following types of objects are field containers:</p>
+<ul class="simple">
+<li><a class="reference internal" href="#entity-instances">Entity instances</a></li>
+<li>Param query instances</li>
+<li>Transaction instances</li>
+<li>View instances</li>
+</ul>
+<p>A field container <tt class="docutils literal"><span class="pre">obj</span></tt> implements the following:</p>
+<ul>
+<li><p class="first">They have a namespace, <tt class="docutils literal"><span class="pre">obj.f</span></tt>, that contains field objects.</p>
+<ul>
+<li><p class="first">The value of <tt class="docutils literal"><span class="pre">obj.f.field_name</span></tt> is a <cite>Field instance</cite> associated
+with <tt class="docutils literal"><span class="pre">obj</span></tt>, with the name <tt class="docutils literal"><span class="pre">field_name</span></tt>.</p>
+</li>
+<li><p class="first">The value of <tt class="docutils literal"><span class="pre">obj.f['field_name']</span></tt> is the same as
+<tt class="docutils literal"><span class="pre">obj.f.field_name</span></tt>.</p>
+</li>
+<li><p class="first">Iterating over <tt class="docutils literal"><span class="pre">obj.f</span></tt> yields the names of the fields, in the
+order they were defined.</p>
+</li>
+<li><p class="first">If allowed by the field container, you can remove a field named
+<tt class="docutils literal"><span class="pre">field_name</span></tt> from <tt class="docutils literal"><span class="pre">obj</span></tt> using the following:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  del obj.f.field_name</pre>
+</div>
+</li>
+<li><p class="first">If allowed by the field container, you can add a new field named
+<tt class="docutils literal"><span class="pre">field_name</span></tt> and of type <tt class="docutils literal"><span class="pre">FieldClass</span></tt> to <tt class="docutils literal"><span class="pre">obj</span></tt> using either
+of the following:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  obj.f.field_name = existing_field_instance
+  obj.f.field_name = f.field_class(...)</pre>
+</div>
+<p>The field is added to the end of the definition order.  To
+re-order fields, you can get them from <tt class="docutils literal"><span class="pre">obj.f</span></tt>, delete them from
+<tt class="docutils literal"><span class="pre">obj.f</span></tt>, then reassign them to <tt class="docutils literal"><span class="pre">obj.f</span></tt>, as in this example:</p>
+<div class="highlight-python"><pre>.. sourcecode:: pycon
+
+  # Assume original declaration order was:
+  #    foo = f.string()
+  #    bar = f.string()
+  #    baz = f.string()
+
+  bar, baz = obj.f.bar, obj.f.baz
+  del obj.f.bar, obj.f.baz
+  obj.f.baz = baz
+  obj.f.bar = bar
+
+  # Now the order is the following:
+  #    foo = f.string()
+  #    baz = f.string()
+  #    bar = f.string()</pre>
+</div>
+</li>
+</ul>
+</li>
+<li><p class="first">They have a method, <tt class="docutils literal"><span class="pre">obj.s.fields()</span></tt>, that returns a
+<cite>schevo.fieldspec.FieldMap</cite> ordered dictionary for the fields in
+<tt class="docutils literal"><span class="pre">obj</span></tt>.</p>
+<ul class="simple">
+<li>Certain types of field decorators accept additional arguments to
+the call to <tt class="docutils literal"><span class="pre">obj.s.fields()</span></tt>.</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="iterators">
+<h2>Iterators<a class="headerlink" href="#iterators" title="Permalink to this headline">¶</a></h2>
+<p>Many objects in a Schevo database provide iterators.</p>
+<div class="section" id="extents">
+<h3>Extents<a class="headerlink" href="#extents" title="Permalink to this headline">¶</a></h3>
+<p>Iterating over an extent results in a sequence of all entities in the
+extent, ordered by OID.</p>
+</div>
+<div class="section" id="query-view-and-transaction-namespaces">
+<h3>Query, view, and transaction namespaces<a class="headerlink" href="#query-view-and-transaction-namespaces" title="Permalink to this headline">¶</a></h3>
+<p>Iterating over a <tt class="docutils literal"><span class="pre">f</span></tt>, <tt class="docutils literal"><span class="pre">q</span></tt>, <tt class="docutils literal"><span class="pre">t</span></tt>, or <tt class="docutils literal"><span class="pre">v</span></tt> namespace results in a
+sequence of the names in that namespace, in no defined order.</p>
+<p>Example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="o">.</span><span class="n">q</span><span class="p">)</span>
+<span class="go">[&#39;by_example&#39;, &#39;exact&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+<span class="go">[&#39;clone&#39;, &#39;delete&#39;, &#39;update&#39;]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="entity-sys-namespaces">
+<h3>Entity sys namespaces<a class="headerlink" href="#entity-sys-namespaces" title="Permalink to this headline">¶</a></h3>
+<p>Iterating over an entity&#8217;s <tt class="docutils literal"><span class="pre">sys</span></tt> namespace has no defined result.
+It may become part of the <a class="reference internal" href="#objects-without-iterators">Objects without iterators</a>.</p>
+</div>
+<div class="section" id="objects-without-iterators">
+<h3>Objects without iterators<a class="headerlink" href="#objects-without-iterators" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li>Database instances.</li>
+<li>Entity instances.</li>
+<li>Query instances.</li>
+<li>Transaction instances.</li>
+<li>View instances.</li>
+<li><tt class="docutils literal"><span class="pre">sys</span></tt> namespaces.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="icon-plugin">
+<h2>Icon plugin<a class="headerlink" href="#icon-plugin" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Schevo Database Usage Reference</a><ul>
+<li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#doctest-setup">Doctest Setup</a></li>
+<li><a class="reference internal" href="#sys-namespaces">sys Namespaces</a></li>
+<li><a class="reference internal" href="#database-instances">Database instances</a><ul>
+<li><a class="reference internal" href="#database-labels">Database labels</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#extent-instances">Extent instances</a><ul>
+<li><a class="reference internal" href="#relaxing-and-enforcing-key-restrictions">Relaxing and enforcing key restrictions</a></li>
+<li><a class="reference internal" href="#extent-labels">Extent labels</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#entity-instances">Entity instances</a><ul>
+<li><a class="reference internal" href="#entity-sys-namespace">Entity sys namespace</a><ul>
+<li><a class="reference internal" href="#links-return-entities-that-link-to-this-entity">links: Return entities that link to this entity</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#entity-labels">Entity labels</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#entity-placeholders">Entity placeholders</a></li>
+<li><a class="reference internal" href="#field-classes">Field classes</a></li>
+<li><a class="reference internal" href="#field-instances">Field instances</a></li>
+<li><a class="reference internal" href="#query-methods-and-objects">Query methods and objects</a><ul>
+<li><a class="reference internal" href="#match-queries">Match queries</a></li>
+<li><a class="reference internal" href="#retrieving-results">Retrieving results</a></li>
+<li><a class="reference internal" href="#compound-queries">Compound queries</a></li>
+<li><a class="reference internal" href="#default-queries">Default queries</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#field-containers">Field Containers</a></li>
+<li><a class="reference internal" href="#iterators">Iterators</a><ul>
+<li><a class="reference internal" href="#extents">Extents</a></li>
+<li><a class="reference internal" href="#query-view-and-transaction-namespaces">Query, view, and transaction namespaces</a></li>
+<li><a class="reference internal" href="#entity-sys-namespaces">Entity sys namespaces</a></li>
+<li><a class="reference internal" href="#objects-without-iterators">Objects without iterators</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#icon-plugin">Icon plugin</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="transaction-hook-methods.html"
+                        title="previous chapter">Schevo Transaction Hook Methods</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="glossary.html"
+                        title="next chapter">Schevo Glossary</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/reference/database-usage.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="glossary.html" title="Schevo Glossary"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="transaction-hook-methods.html" title="Schevo Transaction Hook Methods"
+             >previous</a> |</li>
+        <li><a href="../index.html">libschevo 3.2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Schevo References</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Etienne Robillard.
+      Last updated on Nov 17, 2012.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

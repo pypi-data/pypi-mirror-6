@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+# Copyright (C) 2010 Etienne Robillard <erob@gthcfoundation.org>
+# <LICENSE>
+"""
+Script for exporting a Schevo database to JSON format.
+
+"""
+
+import sys
+import argparse
+import datetime
+import schevo.database as Database
+import schevo.constant as constant
+import schevo.entity   as entity
+import schevo.fieldspec as fieldspec
+import demjson
+import unicodedata
+
+from pprint import pprint as pp
+
+UNASSIGNED = constant.UNASSIGNED
+escape_unicode = False
+
+__all__ = ['extent_to_dict', 'exportdb', 'parse_command_line', 'main']
+
+def extent_to_dict(instance, f="_field_spec"):
+    """
+    Convert a ``schevo.extent.Extent`` instance attributes to a flattened ``dict``
+    object.
+
+    """
+    rv = {}
+    for name, field in getattr(instance, f).items():
+        #XXX: save the field type here? 
+        obj = getattr(instance, name)
+        if obj is UNASSIGNED: 
+            # convert UNASSIGNED fields to None
+            fdata = None
+        elif isinstance(obj, (datetime.datetime, datetime.date)):
+            # convert datetime objects to a string type
+            fdata = obj.strftime("%Y-%M-%d@%H:%S") # format?
+        else:
+            # follow foreing relationships
+            if hasattr(obj, 's'):
+                #field_spec = getattr(obj, f)
+                fdata = obj.s.field_map()
+                for k,v in fdata.items():
+                    #fdata[k] = "%s"%unicodedata.normalize('NFC', unicode(v))
+                    if not v is UNASSIGNED:
+                        fdata[k] = str(v)
+            else:
+                fdata = obj
+        rv[name] = fdata        
+    return rv   
+
+def dump_all(db):
+    result = []
+    info_map = {}
+    extents = [ext for ext in db.extents()]
+    for x in extents:
+        info_map[x.name] = [extent_to_dict(item) for item in x.find()]
+        result.append(info_map)
+    return result
+
+def parse_command_line(args):
+    parser = argparse.ArgumentParser(__file__)
+    #parser.add_argument('--verbose', action="store_true", help="enable verbose mode")
+    parser.add_argument('database', help="path to the Schevo db")
+    parser.add_argument('-f', '--filename', help='path to filename for export')
+    #parser.add_argument('--unique', action="store_true", \
+    #    help="Enable unique object references when saving objects")
+    #parser.add_argument('proxy', help="Proxy class to use.")
+
+    options = parser.parse_args(args=args[1:])
+    return options
+
+def main():
+    options = parse_command_line(args=sys.argv)
+    dbname = options.database
+    db = Database.open(dbname)
+    info_map = dump_all(db)
+
+    # save the info_map to a file in json format
+    json = demjson.encode(info_map, strict=True, escape_unicode=True)
+
+    if not options.filename:
+        filename = '%s.json' % dbname
+    else:
+        filename = options.filename
+
+    # write the data   
+    open(filename, 'w').write(json)
+
+    db.close()
+
+if __name__ == '__main__':
+    main()
+

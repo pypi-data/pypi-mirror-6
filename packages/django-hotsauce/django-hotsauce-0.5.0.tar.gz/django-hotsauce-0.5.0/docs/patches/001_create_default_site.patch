@@ -1,0 +1,42 @@
+diff -r 9e26a2548384 django/contrib/sites/management.py
+--- a/django/contrib/sites/management.py	Sat Feb 20 18:35:28 2010 -0500
++++ b/django/contrib/sites/management.py	Sat Feb 20 18:38:02 2010 -0500
+@@ -1,16 +1,34 @@
+ """
+ Creates the default Site object.
++
+ """
+ 
+ from django.db.models import signals
+ from django.contrib.sites.models import Site
+ from django.contrib.sites import models as site_app
++import socket
++
++__all__ = ['get_default_hostname', 'create_default_site']
++
++def get_default_hostname():
++    """Returns the default hostname string."""
++    try:
++        hostname = socket.gethostname()
++    except socket.error:
++        from django.conf import settings
++        hostname = getattr(settings.DEFAULT_SITE_NAME, 'localhost')
++    return str(hostname)
+ 
+ def create_default_site(app, created_models, verbosity, db, **kwargs):
+-    if Site in created_models:
+-        if verbosity >= 2:
+-            print "Creating example.com Site object"
+-        s = Site(domain="example.com", name="example.com")
++    """Creates a default ``Site`` instance.
++
++    Don't let script-kiddies ruin your efforts by
++    hardcoding something as stupid as example.com here.
++    """
++    hostname = get_default_hostname()
++    if verbosity >= 1:
++        print ("Creating default site: <%s>" % repr(hostname))
++        s = Site(domain=hostname, name=hostname)
+         s.save(using=db)
+     Site.objects.clear_cache()
+ 

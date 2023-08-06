@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Copyright (c) 2009 Etienne Robillard <erob@gthcfoundation.org>
+# All rights reserved.
+# Please see the "LICENSE" file for license details. 
+
+from notmm.utils.urlmap import RegexURLMap, url
+from blogengine.template import direct_to_template
+
+from model import CategoryManager
+
+urlpatterns = RegexURLMap()
+
+# Site-wide API functions accessible to registered users (editors, etc.)
+urlpatterns.add_routes('blogengine.contrib.api_v1.actions',
+    (r'^posts/add/$', 'add'),
+    (r'^posts/edit/(?P<oid>[\d]+)/$', 'edit'),
+    (r'^posts/send-to-friend/(?P<oid>[\d]+)/$', 'send_to_friend'),
+    (r'^posts/delete/(?P<oid>[\d]+)/$', 'delete')
+  )
+
+# Extended views   
+urlpatterns.add_routes('blogengine.contrib.blog.views',
+    # list of all categories
+    url(r'^categories/$', direct_to_template, 
+        {'template_name': 'blogengine/categories.mako',
+            'extra_context': {
+                'categories': CategoryManager.objects.all()
+            }
+        }
+    ),
+    # Browse by category view 
+    url(r'^categories/(?P<slug>[-\w]+)/$', 'details_for_category', {
+        'extent_class' : 'Category'
+        }
+    ),
+    # Browse by category and slug, but attempt to match the slug
+    # to a Category name first, to allow browsing by subcategory names.
+    url(r'^(?P<slug>[-\w]+)/$', 'details_for_blogentry'),
+
+    url(r'^$|index.html$', 'index', name='latest_posts'),
+
+    )
+
+# Comments
+urlpatterns.add_routes('blogengine.contrib.comments.views',
+    url(r'^(?P<category>[-\w]+)/(?P<slug>[-\w]+)/comment/$', 'preview_comment'),
+    url(r'^(?P<category>[-\w]+)/(?P<slug>[-\w]+)/comment/done/$', 'save_comment')
+    )
+# urlpatterns.include(admin.site.urls)

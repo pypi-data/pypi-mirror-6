@@ -1,0 +1,1032 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Schevo Database Tour &mdash; libschevo 3.2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="libschevo 3.2.4 documentation" href="../index.html" />
+    <link rel="up" title="Schevo References" href="index.html" />
+    <link rel="next" title="Schevo Schema Definition Reference" href="schema-definition.html" />
+    <link rel="prev" title="‘schevo’ Command-line Tool" href="command-line.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="schema-definition.html" title="Schevo Schema Definition Reference"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="command-line.html" title="‘schevo’ Command-line Tool"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">libschevo 3.2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Schevo References</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="schevo-database-tour">
+<h1>Schevo Database Tour<a class="headerlink" href="#schevo-database-tour" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Permalink to this headline">¶</a></h2>
+<p>This document tours a Schevo database from the vantage point of
+building a <a class="reference external" href="glossary.html#database-navigator">database navigator</a> that takes full advantage of the deep
+introspection Schevo offers.</p>
+<p>It covers operations to read from, and <a class="reference external" href="glossary.html#execute">execute</a> <a class="reference external" href="glossary.html#transaction">transactions</a> upon, an
+<a class="reference external" href="glossary.html#open-database">open database</a>. It presents those operations in the usage order that
+is typical of building such a comprehensive application.</p>
+</div>
+<div class="section" id="doctest-setup">
+<h2>Doctest setup<a class="headerlink" href="#doctest-setup" title="Permalink to this headline">¶</a></h2>
+<p>This document also functions as a doctest:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">schevo.test</span> <span class="kn">import</span> <span class="n">DocTest</span><span class="p">,</span> <span class="n">DocTestEvolve</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>When creating an instance of <cite>DocTest</cite> passing a <a class="reference external" href="glossary.html#schema-body">schema body</a>
+string, we get an object <cite>t</cite> that has a <cite>done</cite> method to call when
+finished with the test object, and a <cite>db</cite> attribute that contains the
+in-memory open database based on the <a class="reference external" href="glossary.html#schema">schema</a>.</p>
+<p><cite>DocTestEvolve</cite> is similar, except we pass the name of a <a class="reference external" href="glossary.html#schema-package">schema
+package</a> and a <a class="reference external" href="glossary.html#schema-version">schema version</a> number to the constructor instead of
+a body string.</p>
+<p>In each example, we work with the open database to demonstrate how
+its API reflects the schema.</p>
+</div>
+<div class="section" id="database-label">
+<h2>Database label<a class="headerlink" href="#database-label" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="get-database-label">
+<h3>Get database label<a class="headerlink" href="#get-database-label" title="Permalink to this headline">¶</a></h3>
+<p>Pass a database to the <cite>schevo.label:label</cite> function to get its
+persistent <a class="reference external" href="glossary.html#label">label</a>.</p>
+<p>The default label of a database is <tt class="docutils literal"><span class="pre">Schevo</span> <span class="pre">Database</span></tt>.</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">schevo.label</span> <span class="kn">import</span> <span class="n">label</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">label</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+<span class="go">u&#39;Schevo Database&#39;</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="change-database-label">
+<h3>Change database label<a class="headerlink" href="#change-database-label" title="Permalink to this headline">¶</a></h3>
+<p>Pass the database to the <cite>schevo.label:relabel</cite> function to change its
+label:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">schevo.label</span> <span class="kn">import</span> <span class="n">relabel</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">relabel</span><span class="p">(</span><span class="n">db</span><span class="p">,</span> <span class="s">&#39;My Database&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">label</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+<span class="go">u&#39;My Database&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>Persistent labels cannot be changed while executing a transaction.</p>
+<blockquote class="last">
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    from schevo.label import relabel</span>
+<span class="gp">... </span><span class="s">    class ChangeLabel(T.Transaction):</span>
+<span class="gp">... </span><span class="s">        def _execute(self, db):</span>
+<span class="gp">... </span><span class="s">            db.label = &#39;New Label&#39;</span>
+<span class="gp">... </span><span class="s">    def t_change_label():</span>
+<span class="gp">... </span><span class="s">        return ChangeLabel()</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">tx</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">change_label</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">tx</span><span class="p">)</span>    
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="nc">DatabaseExecutingTransaction</span>: <span class="n-Identifier">Cannot change database label...</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+</div>
+</div>
+<div class="section" id="database-extents">
+<h2>Database extents<a class="headerlink" href="#database-extents" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="get-list-of-extent-names">
+<h3>Get list of extent names<a class="headerlink" href="#get-list-of-extent-names" title="Permalink to this headline">¶</a></h3>
+<p>Call the database&#8217;s <cite>extent_names</cite> method to get an
+alphabetically-ordered list of <a class="reference external" href="glossary.html#extent">extent</a> names:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    class Clown(E.Entity):</span>
+<span class="gp">... </span><span class="s">        pass</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    class Acrobat(E.Entity):</span>
+<span class="gp">... </span><span class="s">        pass</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    class Balloon(E.Entity):</span>
+<span class="gp">... </span><span class="s">        pass</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">extent_names</span><span class="p">()</span>
+<span class="go">[&#39;Acrobat&#39;, &#39;Balloon&#39;, &#39;Clown&#39;]</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-list-of-extents">
+<h3>Get list of extents<a class="headerlink" href="#get-list-of-extents" title="Permalink to this headline">¶</a></h3>
+<p>Call the database&#8217;s <cite>extent_names</cite> method to get an
+alphabetically-ordered list of <a class="reference external" href="glossary.html#extent">extent</a> objects:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">extents</span><span class="p">()</span>    
+<span class="go">[&lt;Extent &#39;Acrobat&#39; in &lt;Database u&#39;Schevo Database&#39; :: V 1&gt;&gt;,</span>
+<span class="go"> &lt;Extent &#39;Balloon&#39; in &lt;Database u&#39;Schevo Database&#39; :: V 1&gt;&gt;,</span>
+<span class="go"> &lt;Extent &#39;Clown&#39; in &lt;Database u&#39;Schevo Database&#39; :: V 1&gt;&gt;]</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-individual-extent-by-name">
+<h3>Get individual extent by name<a class="headerlink" href="#get-individual-extent-by-name" title="Permalink to this headline">¶</a></h3>
+<p>Pass an extent name to the database&#8217;s <cite>extent</cite> method or accessing it
+as an attribute of the database to get an individual extent by name:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">extent</span><span class="p">(</span><span class="s">&#39;Balloon&#39;</span><span class="p">)</span>
+<span class="go">&lt;Extent &#39;Balloon&#39; in &lt;Database u&#39;Schevo Database&#39; :: V 1&gt;&gt;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Balloon</span> <span class="ow">is</span> <span class="n">db</span><span class="o">.</span><span class="n">extent</span><span class="p">(</span><span class="s">&#39;Balloon&#39;</span><span class="p">)</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="pack-database">
+<h2>Pack database<a class="headerlink" href="#pack-database" title="Permalink to this headline">¶</a></h2>
+<p>Call the database&#8217;s <cite>pack</cite> method to <a class="reference external" href="glossary.html#pack">pack</a> the database:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">pack</span><span class="p">()</span>    
+</pre></div>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The in-memory <a class="reference external" href="glossary.html#storage-backend">storage backend</a> used for unit tests does not
+support the <cite>pack</cite> method, so it is skipped above.</p>
+</div>
+</div>
+<div class="section" id="data-sets">
+<h2>Data sets<a class="headerlink" href="#data-sets" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="populate-database-with-initial-data-set">
+<h3>Populate database with initial data set<a class="headerlink" href="#populate-database-with-initial-data-set" title="Permalink to this headline">¶</a></h3>
+<p>The <a class="reference external" href="glossary.html#engine">engine</a> populates a database with an <a class="reference external" href="glossary.html#initial-data-set">initial data set</a> when it
+first creates a database.</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    class Book(E.Entity):</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        name = f.string()</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _initial = [</span>
+<span class="gp">... </span><span class="s">            (&#39;Schevo and You&#39;,),</span>
+<span class="gp">... </span><span class="s">            ]</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _sample = [</span>
+<span class="gp">... </span><span class="s">            (&#39;The Art of War&#39;,),</span>
+<span class="gp">... </span><span class="s">            ]</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _sample_custom = [</span>
+<span class="gp">... </span><span class="s">            (&#39;Iliad&#39;,),</span>
+<span class="gp">... </span><span class="s">            ]</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">book</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">book</span> <span class="ow">in</span> <span class="n">db</span><span class="o">.</span><span class="n">Book</span><span class="p">)</span>
+<span class="go">[u&#39;Schevo and You&#39;]</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="populate-with-default-sample-data-set">
+<h3>Populate with default sample data set<a class="headerlink" href="#populate-with-default-sample-data-set" title="Permalink to this headline">¶</a></h3>
+<p>Call a database&#8217;s <cite>populate</cite> method with no arguments to populate a
+database with the default <a class="reference external" href="glossary.html#sample-data-set">sample data set</a>:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">populate</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">book</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">book</span> <span class="ow">in</span> <span class="n">db</span><span class="o">.</span><span class="n">Book</span><span class="p">)</span>
+<span class="go">[u&#39;Schevo and You&#39;, u&#39;The Art of War&#39;]</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="populate-with-named-sample-data-set">
+<h3>Populate with named sample data set<a class="headerlink" href="#populate-with-named-sample-data-set" title="Permalink to this headline">¶</a></h3>
+<p>Call a database&#8217;s <cite>populate</cite> method with a string argument to populate
+a database with a named <a class="reference external" href="glossary.html#sample-data-set">sample data set</a>:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">populate</span><span class="p">(</span><span class="s">&#39;custom&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">book</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">book</span> <span class="ow">in</span> <span class="n">db</span><span class="o">.</span><span class="n">Book</span><span class="p">)</span>
+<span class="go">[u&#39;Iliad&#39;, u&#39;Schevo and You&#39;, u&#39;The Art of War&#39;]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="database-schema">
+<h2>Database schema<a class="headerlink" href="#database-schema" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="get-database-schema-source">
+<h3>Get database schema source<a class="headerlink" href="#get-database-schema-source" title="Permalink to this headline">¶</a></h3>
+<p>Access the <cite>schema_source</cite> property of a database to get its <a class="reference external" href="glossary.html#schema-source">schema
+source</a>:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    # Even an empty database has schema source.</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">db</span><span class="o">.</span><span class="n">schema_source</span>
+<span class="go">from schevo.schema import *</span>
+<span class="go">schevo.schema.prep(locals())</span>
+
+<span class="go"># Even an empty database has schema source.</span>
+
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-database-schema-version">
+<h3>Get database schema version<a class="headerlink" href="#get-database-schema-version" title="Permalink to this headline">¶</a></h3>
+<p>Access the <cite>version</cite> property of a database to get its current <a class="reference external" href="glossary.html#schema-version">schema
+version</a>:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTestEvolve</span><span class="p">(</span><span class="s">&#39;schevo.test.testschema_evolve&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">version</span>
+<span class="go">1</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTestEvolve</span><span class="p">(</span><span class="s">&#39;schevo.test.testschema_evolve&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">version</span>
+<span class="go">2</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="database-read-write-locking">
+<h2>Database read/write locking<a class="headerlink" href="#database-read-write-locking" title="Permalink to this headline">¶</a></h2>
+<p>Schevo provides optional multiple-reader-one-writer locking to safely
+allow multiple threads access to the database.</p>
+<div class="section" id="about-dummy-locks">
+<h3>About dummy locks<a class="headerlink" href="#about-dummy-locks" title="Permalink to this headline">¶</a></h3>
+<p>By default, a database does not have locking facilities.  Instead, it
+contains dummy objects so that code written to be multi-thread-ready
+may still be run when no locking facilities are installed on the
+database:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">read_lock</span>
+<span class="go">&lt;class &#39;schevo.mt.dummy.dummy_lock&#39;&gt;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">write_lock</span>
+<span class="go">&lt;class &#39;schevo.mt.dummy.dummy_lock&#39;&gt;</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="install-locking-support">
+<h3>Install locking support<a class="headerlink" href="#install-locking-support" title="Permalink to this headline">¶</a></h3>
+<p>If using Schevo in a multi-threaded environment, be sure to install
+locking support onto the database by using the <cite>schevo.mt:install</cite>
+function:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">schevo.mt</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">schevo</span><span class="o">.</span><span class="n">mt</span><span class="o">.</span><span class="n">install</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">read_lock</span>    
+<span class="go">&lt;bound method RWLock._acquire_locked_wrapper ...</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">write_lock</span>    
+<span class="go">&lt;bound method RWLock._acquire_locked_wrapper ...</span>
+</pre></div>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>After installing locking support, be sure to consistently use locks
+to wrap <em>all</em> read and write operations.</p>
+<p>If you do not wrap multiple read operation, and a write operation
+occurs in another thread, you may get inconsistent results during
+your read.</p>
+<p class="last">If you do not wrap write operations, then they may conflict with
+writes occurring in another thread or cause inconsistent results
+during reads in another thread.</p>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The locking API does not yet take advantage of the Python 2.5
+<cite>with</cite> statement.</p>
+</div>
+</div>
+<div class="section" id="use-read-locks">
+<h3>Use read locks<a class="headerlink" href="#use-read-locks" title="Permalink to this headline">¶</a></h3>
+<p>Acquire a read lock by calling the database&#8217;s <cite>read_lock</cite> object to
+acquire a lock, performing the desired read operation(s), then calling
+the release method of the acquired lock:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">lock</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">read_lock</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">try</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="c"># Do reading stuff here.</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">... </span><span class="k">finally</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">When a thread attempts to acquire a read lock, it will block until
+pending write locks have been released.</p>
+</div>
+</div>
+<div class="section" id="use-write-locks">
+<h3>Use write locks<a class="headerlink" href="#use-write-locks" title="Permalink to this headline">¶</a></h3>
+<p>Acquire a read lock by calling the database&#8217;s <cite>read_lock</cite> object to
+acquire a lock, performing the desired read operation(s), then calling
+the release method of the acquired lock:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">lock</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">write_lock</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">try</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="c"># Do reading and writing stuff here.</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">... </span><span class="k">finally</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">When a thread attempts to acquire a write lock, it will block until
+pending read and write locks have been released.</p>
+</div>
+</div>
+<div class="section" id="promote-read-lock-to-write-lock-via-nesting">
+<h3>Promote read lock to write lock via nesting<a class="headerlink" href="#promote-read-lock-to-write-lock-via-nesting" title="Permalink to this headline">¶</a></h3>
+<p>If you acquire a read lock, and find you need to acquire a write lock
+within the same thread, acquiring a write lock while the thread still
+has the read lock will &#8220;upgrade&#8221; the read lock to a write lock for the
+remainder of the life of the thread&#8217;s outermost lock:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">lock_outer</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">read_lock</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">try</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="c"># Do reading stuff here.</span>
+<span class="gp">... </span>    <span class="n">lock_inner</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">write_lock</span><span class="p">()</span>
+<span class="gp">... </span>    <span class="k">try</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="c"># Do reading and writing stuff here.</span>
+<span class="gp">... </span>        <span class="k">pass</span>
+<span class="gp">... </span>    <span class="k">finally</span><span class="p">:</span>
+<span class="gp">... </span>        <span class="n">lock_inner</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+<span class="gp">... </span><span class="k">finally</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">lock_outer</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>When a thread upgrades a read lock to a write lock, it will block
+until pending read locks have been released.</p>
+<p class="last">After an outer read lock has been upgraded by an inner write lock,
+it will continue to act as an exclusive write lock for the
+remainder of its lifespan, even after the inner lock&#8217;s <cite>release</cite>
+method has been called.</p>
+</div>
+</div>
+</div>
+<div class="section" id="transaction-methods">
+<h2>Transaction methods<a class="headerlink" href="#transaction-methods" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="get-transaction-method-namespace">
+<h3>Get transaction method namespace<a class="headerlink" href="#get-transaction-method-namespace" title="Permalink to this headline">¶</a></h3>
+<p>Access the <cite>t</cite> attribute of an object that may have <a class="reference external" href="glossary.html#transaction-method">transaction
+methods</a> to get the <a class="reference external" href="glossary.html#transaction-method-namespace">transaction method namespace</a> of that object:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    class Plant(E.Entity):</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        common_name = f.string()</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _initial = [</span>
+<span class="gp">... </span><span class="s">            (&#39;Fern&#39;,),</span>
+<span class="gp">... </span><span class="s">            ]</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">t</span>
+<span class="go">&lt;&#39;t&#39; namespace on &lt;Database u&#39;Schevo Database&#39; :: V 1&gt;&gt;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="o">.</span><span class="n">t</span>    
+<span class="go">&lt;&#39;t&#39; namespace on &lt;Extent &#39;Plant&#39; in &lt;Database ...&gt;&gt;&gt;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">t</span>    
+<span class="go">&lt;&#39;t&#39; namespace on &lt;Plant entity oid:1 rev:0&gt;&gt;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">default</span><span class="p">()</span><span class="o">.</span><span class="n">t</span>    
+<span class="go">&lt;&#39;t&#39; namespace on &lt;schevo.entity._DefaultView ...&gt;&gt;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-available-transaction-method-names">
+<h3>Get available transaction method names<a class="headerlink" href="#get-available-transaction-method-names" title="Permalink to this headline">¶</a></h3>
+<p>Iterate over the <a class="reference external" href="glossary.html#transaction-method-namespace">t namespace</a>, such as by transforming it to a
+sorted list, to get the names of available, non-hidden transaction
+methods.</p>
+<p>By default, databases do not have any transaction methods.</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    class Plant(E.Entity):</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        common_name = f.string()</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _initial = [</span>
+<span class="gp">... </span><span class="s">            (&#39;Fern&#39;,),</span>
+<span class="gp">... </span><span class="s">            ]</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>By default, extents have a transaction method used to create new
+<cite>Create</cite> <a class="reference external" href="glossary.html#transaction">transactions</a>.</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+<span class="go">[&#39;create&#39;]</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>By default, entities have transaction methods used to create new
+<cite>Delete</cite> and <cite>Update</cite> <a class="reference external" href="glossary.html#transaction">transactions</a>:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+<span class="go">[&#39;clone&#39;, &#39;delete&#39;, &#39;update&#39;]</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>By default, entity <a class="reference external" href="glossary.html#view">views</a> have transaction methods that reflect those
+of the parent entity:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">default</span><span class="p">()</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+<span class="go">[&#39;clone&#39;, &#39;delete&#39;, &#39;update&#39;]</span>
+</pre></div>
+</div>
+</div></blockquote>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>If a transaction method is hidden, it is still usable, but it does
+not show up when iterating over the <cite>t</cite> namespace.  This is to
+allow programmatic usage of transactions that the schema designer
+does not feel appropriate to expose in a dynamic user interface.</p>
+<blockquote class="last">
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t2</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    class Plant(E.Entity):</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        common_name = f.string()</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _hide(&#39;t_update&#39;)</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _initial = [</span>
+<span class="gp">... </span><span class="s">            (&#39;Fern&#39;,),</span>
+<span class="gp">... </span><span class="s">            ]</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db2</span> <span class="o">=</span> <span class="n">t2</span><span class="o">.</span><span class="n">db</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">db2</span><span class="o">.</span><span class="n">Plant</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">t</span><span class="p">)</span>
+<span class="go">[&#39;clone&#39;, &#39;delete&#39;]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t2</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="get-transaction-method">
+<h3>Get transaction method<a class="headerlink" href="#get-transaction-method" title="Permalink to this headline">¶</a></h3>
+<p>Use the <cite>__getitem__</cite> protocol to get a transaction method from a <cite>t</cite>
+namespace:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">method_name</span> <span class="o">=</span> <span class="s">&#39;create&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">method</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="n">method_name</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">method</span>    
+<span class="go">&lt;extentclassmethod Plant.t_create ...</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>You may also use the <cite>__getattr__</cite> protocol:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">create</span>    
+<span class="go">&lt;extentclassmethod Plant.t_create ...</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">create</span> <span class="ow">is</span> <span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="o">.</span><span class="n">t</span><span class="p">[</span><span class="s">&#39;create&#39;</span><span class="p">]</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-transaction-method-label">
+<h3>Get transaction method label<a class="headerlink" href="#get-transaction-method-label" title="Permalink to this headline">¶</a></h3>
+<p>Each transaction method has a label.</p>
+<p>If the schema does not manually assign a label to a transaction
+method, Schevo automatically computes one.</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">label</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">create</span><span class="p">)</span>
+<span class="go">u&#39;New&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">label</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">update</span><span class="p">)</span>
+<span class="go">u&#39;Edit&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">label</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Plant</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">delete</span><span class="p">)</span>
+<span class="go">u&#39;Delete&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="extent-information">
+<h2>Extent information<a class="headerlink" href="#extent-information" title="Permalink to this headline">¶</a></h2>
+<p>Each <a class="reference external" href="glossary.html#extent">extent</a> in a database keeps useful information about itself.</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    class Food(E.Entity):</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        common_name = f.string()</span>
+<span class="gp">... </span><span class="s">        fancy_name = f.string()</span>
+<span class="gp">... </span><span class="s">        high_in_sugar = f.boolean()</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _key(common_name)</span>
+<span class="gp">... </span><span class="s">        _key(fancy_name)</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _index(high_in_sugar, common_name)</span>
+<span class="gp">... </span><span class="s">        _index(high_in_sugar, fancy_name)</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _initial = [</span>
+<span class="gp">... </span><span class="s">            (&#39;Lettuce&#39;, &#39;Lactuca sativa&#39;, False),</span>
+<span class="gp">... </span><span class="s">            (&#39;Date&#39;, &#39;Phoenix dactylifera&#39;, True),</span>
+<span class="gp">... </span><span class="s">            (&#39;Broccoli&#39;, &#39;Brassica oleracea&#39;, False),</span>
+<span class="gp">... </span><span class="s">            ]</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    class Person(E.Entity):</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        name = f.string()</span>
+<span class="gp">... </span><span class="s">        favorite_food = f.entity(&#39;Food&#39;)</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _key(name)</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _plural = &#39;People&#39;</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _initial = [</span>
+<span class="gp">... </span><span class="s">            (&#39;Jill&#39;, (&#39;Date&#39;,)),</span>
+<span class="gp">... </span><span class="s">            (&#39;Jack&#39;, (&#39;Lettuce&#39;,)),</span>
+<span class="gp">... </span><span class="s">            (&#39;Jen&#39;, (&#39;Broccoli&#39;,)),</span>
+<span class="gp">... </span><span class="s">            (&#39;Jeff&#39;, (&#39;Date&#39;,)),</span>
+<span class="gp">... </span><span class="s">            ]</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    class EatingRecord(E.Entity):</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        person = f.entity(&#39;Person&#39;)</span>
+<span class="gp">... </span><span class="s">        food = f.entity(&#39;Food&#39;)</span>
+<span class="gp">... </span><span class="s">        when = f.datetime()</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _key(person, when)</span>
+<span class="gp">...</span><span class="s"></span>
+<span class="gp">... </span><span class="s">        _initial = [</span>
+<span class="gp">... </span><span class="s">            ((&#39;Jill&#39;,), (&#39;Date&#39;,), &#39;2008-01-15 13:05:00&#39;),</span>
+<span class="gp">... </span><span class="s">            ((&#39;Jack&#39;,), (&#39;Date&#39;,), &#39;2008-01-15 13:10:00&#39;),</span>
+<span class="gp">... </span><span class="s">            ((&#39;Jack&#39;,), (&#39;Lettuce&#39;,), &#39;2008-01-15 13:15:00&#39;),</span>
+<span class="gp">... </span><span class="s">            ((&#39;Jen&#39;,), (&#39;Broccoli&#39;,), &#39;2008-02-02 11:13:00&#39;),</span>
+<span class="gp">... </span><span class="s">            ((&#39;Jeff&#39;,), (&#39;Lettuce&#39;,), &#39;2008-03-05 14:45:00&#39;),</span>
+<span class="gp">... </span><span class="s">            ]</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+</pre></div>
+</div>
+</div></blockquote>
+<div class="section" id="get-extent-database">
+<h3>Get extent database<a class="headerlink" href="#get-extent-database" title="Permalink to this headline">¶</a></h3>
+<p>Access the <cite>db</cite> attribute of an extent to determine which database it
+belongs to:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="o">.</span><span class="n">db</span> <span class="ow">is</span> <span class="n">db</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-extent-index-and-key-specs">
+<h3>Get extent index and key specs<a class="headerlink" href="#get-extent-index-and-key-specs" title="Permalink to this headline">¶</a></h3>
+<p>Access the <cite>index_spec</cite> attribute of an extent to get a tuple of
+<a class="reference external" href="glossary.html#index-spec">index specs</a> for <a class="reference external" href="glossary.html#index">indices</a> maintained for the extent:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="o">.</span><span class="n">index_spec</span><span class="p">)</span>    
+<span class="go">[(&#39;high_in_sugar&#39;, &#39;common_name&#39;),</span>
+<span class="go"> (&#39;high_in_sugar&#39;, &#39;fancy_name&#39;)]</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>Access the <cite>key_spec</cite> attribute of an extent to get a tuple of <a class="reference external" href="glossary.html#key-spec">key
+specs</a> for <a class="reference external" href="glossary.html#key">keys</a> maintained for the extent:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="o">.</span><span class="n">key_spec</span><span class="p">)</span>    
+<span class="go">[(&#39;common_name&#39;,), (&#39;fancy_name&#39;,)]</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-extent-default-key-spec">
+<h3>Get extent default key spec<a class="headerlink" href="#get-extent-default-key-spec" title="Permalink to this headline">¶</a></h3>
+<p>Access the <cite>default_key</cite> attribute of an extent to get the key spec
+for the <a class="reference external" href="glossary.html#default-key">default key</a> maintained for the extent:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="o">.</span><span class="n">default_key</span>
+<span class="go">(&#39;common_name&#39;,)</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-extent-hidden-flag">
+<h3>Get extent hidden flag<a class="headerlink" href="#get-extent-hidden-flag" title="Permalink to this headline">¶</a></h3>
+<p>Access the <cite>hidden</cite> attribute of an extent to determine if it should
+be hidden from a dynamic user interface:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="o">.</span><span class="n">hidden</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-extent-labels">
+<h3>Get extent labels<a class="headerlink" href="#get-extent-labels" title="Permalink to this headline">¶</a></h3>
+<p>Pass an extent object to the <cite>schevo.label:label</cite> function to get the
+singular form of the extent&#8217;s label:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">label</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="p">)</span>
+<span class="go">u&#39;Food&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">label</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">EatingRecord</span><span class="p">)</span>
+<span class="go">u&#39;Eating Record&#39;</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>Use the <cite>schevo.label:plural</cite> function to get the plural form:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">schevo.label</span> <span class="kn">import</span> <span class="n">plural</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plural</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="p">)</span>
+<span class="go">u&#39;Foods&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plural</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="p">)</span>
+<span class="go">u&#39;People&#39;</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-extent-name">
+<h3>Get extent name<a class="headerlink" href="#get-extent-name" title="Permalink to this headline">¶</a></h3>
+<p>Access the <cite>name</cite> attribute of an extent to get its name:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="o">.</span><span class="n">name</span>
+<span class="go">&#39;Food&#39;</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-extent-relationships">
+<h3>Get extent relationships<a class="headerlink" href="#get-extent-relationships" title="Permalink to this headline">¶</a></h3>
+<p>Access the <cite>relationships</cite> attribute of an extent to get a list of its
+<a class="reference external" href="glossary.html#relationship">relationships</a>:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="o">.</span><span class="n">relationships</span><span class="p">)</span>    
+<span class="go">[(&#39;EatingRecord&#39;, &#39;food&#39;),</span>
+<span class="go"> (&#39;Person&#39;, &#39;favorite_food&#39;)]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="o">.</span><span class="n">relationships</span>
+<span class="go">[(&#39;EatingRecord&#39;, &#39;person&#39;)]</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="get-extent-size">
+<h3>Get extent size<a class="headerlink" href="#get-extent-size" title="Permalink to this headline">¶</a></h3>
+<p>Pass an extent to the built-in <cite>len</cite> function to get the current size
+in entities of the extent:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="p">)</span>
+<span class="go">3</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="p">)</span>
+<span class="go">4</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">EatingRecord</span><span class="p">)</span>
+<span class="go">5</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="extent-values-as-sample-data-sets">
+<h2>Extent values as sample data sets<a class="headerlink" href="#extent-values-as-sample-data-sets" title="Permalink to this headline">¶</a></h2>
+<p>Call the <cite>as_unittest_code</cite> method of an extent to get a string
+containing the values of all entities in that extent, formatted in a
+manner that you can paste into schema source code to use those
+entities as sample data for unit tests:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="o">.</span><span class="n">as_unittest_code</span><span class="p">()</span>
+<span class="go">E.Food._sample_unittest = [</span>
+<span class="go">    (u&#39;Broccoli&#39;, u&#39;Brassica oleracea&#39;, False),</span>
+<span class="go">    (u&#39;Date&#39;, u&#39;Phoenix dactylifera&#39;, True),</span>
+<span class="go">    (u&#39;Lettuce&#39;, u&#39;Lactuca sativa&#39;, False),</span>
+<span class="go">    ]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="o">.</span><span class="n">as_unittest_code</span><span class="p">()</span>
+<span class="go">E.Person._sample_unittest = [</span>
+<span class="go">    (u&#39;Jack&#39;, (u&#39;Lettuce&#39;,)),</span>
+<span class="go">    (u&#39;Jeff&#39;, (u&#39;Date&#39;,)),</span>
+<span class="go">    (u&#39;Jen&#39;, (u&#39;Broccoli&#39;,)),</span>
+<span class="go">    (u&#39;Jill&#39;, (u&#39;Date&#39;,)),</span>
+<span class="go">    ]</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="extent-entity-retrieval">
+<h2>Extent entity retrieval<a class="headerlink" href="#extent-entity-retrieval" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="retrieve-single-entity-using-oid">
+<h3>Retrieve single entity using OID<a class="headerlink" href="#retrieve-single-entity-using-oid" title="Permalink to this headline">¶</a></h3>
+<p>Use the <cite>__getitem__</cite> protocol on an extent with an <a class="reference external" href="glossary.html#oid">OID</a> to retrieve
+the entity from that extent that has that OID:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">jack</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="o">.</span><span class="n">findone</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#39;Jack&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">oid</span> <span class="o">=</span> <span class="n">jack</span><span class="o">.</span><span class="n">s</span><span class="o">.</span><span class="n">oid</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">oid</span><span class="p">)</span>
+<span class="go">&lt;type &#39;int&#39;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">person</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="p">[</span><span class="n">oid</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">person</span> <span class="o">==</span> <span class="n">jack</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>If no entity with that OID exists in the extent, the operation raises
+<cite>schevo.error:EntityDoesNotExist</cite>:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">person</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="p">[</span><span class="mi">12345</span><span class="p">]</span>    
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="nc">EntityDoesNotExist</span>: <span class="n-Identifier">&quot;OID 12345 does not exist in extent &#39;Person&#39;.&quot;</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="retrieve-single-entity-matching-field-values">
+<h3>Retrieve single entity matching field values<a class="headerlink" href="#retrieve-single-entity-matching-field-values" title="Permalink to this headline">¶</a></h3>
+<p>Pass keyword arguments to the <cite>findone</cite> method of an extent to
+retrieve the entity from that extent where the fields named as keys in
+the keyword arguments have values equal to the corresponding values in
+the keyword arguments:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">person</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="o">.</span><span class="n">findone</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#39;Jack&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">jack</span><span class="o">.</span><span class="n">name</span>
+<span class="go">u&#39;Jack&#39;</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>If no matching entity is found, the method returns <cite>None</cite>:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">person</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="o">.</span><span class="n">findone</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#39;John&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">person</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>If multiple entities match, the method raises
+<cite>schevo.error:FindoneFoundMoreThanOne</cite>:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">date</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Food</span><span class="o">.</span><span class="n">findone</span><span class="p">(</span><span class="n">common_name</span><span class="o">=</span><span class="s">&#39;Date&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">person</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Person</span><span class="o">.</span><span class="n">findone</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">favorite_food</span><span class="o">=</span><span class="n">date</span>
+<span class="gp">... </span>    <span class="p">)</span>    
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="nc">FindoneFoundMoreThanOne</span>: <span class="n-Identifier">Found more than one match in extent &#39;Person&#39; ...</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="retrieve-entities-matching-field-values">
+<h3>Retrieve entities matching field values<a class="headerlink" href="#retrieve-entities-matching-field-values" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="retrieve-entities-using-iteration">
+<h3>Retrieve entities using iteration<a class="headerlink" href="#retrieve-entities-using-iteration" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="retrieve-entities-ordered-by-key-or-index-spec">
+<h3>Retrieve entities ordered by key or index spec<a class="headerlink" href="#retrieve-entities-ordered-by-key-or-index-spec" title="Permalink to this headline">¶</a></h3>
+</div>
+</div>
+<div class="section" id="extent-field-spec-namespace">
+<h2>Extent field spec namespace<a class="headerlink" href="#extent-field-spec-namespace" title="Permalink to this headline">¶</a></h2>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="templates">
+<h2>Templates<a class="headerlink" href="#templates" title="Permalink to this headline">¶</a></h2>
+<p>Common text for new doctests:</p>
+<blockquote>
+<div><div class="highlight-pycon"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">DocTest</span><span class="p">(</span><span class="s">&quot;&quot;&quot;</span>
+<span class="gp">... </span><span class="s">    &quot;&quot;&quot;</span><span class="p">);</span> <span class="n">db</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">db</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">t</span><span class="o">.</span><span class="n">done</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Schevo Database Tour</a><ul>
+<li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#doctest-setup">Doctest setup</a></li>
+<li><a class="reference internal" href="#database-label">Database label</a><ul>
+<li><a class="reference internal" href="#get-database-label">Get database label</a></li>
+<li><a class="reference internal" href="#change-database-label">Change database label</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#database-extents">Database extents</a><ul>
+<li><a class="reference internal" href="#get-list-of-extent-names">Get list of extent names</a></li>
+<li><a class="reference internal" href="#get-list-of-extents">Get list of extents</a></li>
+<li><a class="reference internal" href="#get-individual-extent-by-name">Get individual extent by name</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#pack-database">Pack database</a></li>
+<li><a class="reference internal" href="#data-sets">Data sets</a><ul>
+<li><a class="reference internal" href="#populate-database-with-initial-data-set">Populate database with initial data set</a></li>
+<li><a class="reference internal" href="#populate-with-default-sample-data-set">Populate with default sample data set</a></li>
+<li><a class="reference internal" href="#populate-with-named-sample-data-set">Populate with named sample data set</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#database-schema">Database schema</a><ul>
+<li><a class="reference internal" href="#get-database-schema-source">Get database schema source</a></li>
+<li><a class="reference internal" href="#get-database-schema-version">Get database schema version</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#database-read-write-locking">Database read/write locking</a><ul>
+<li><a class="reference internal" href="#about-dummy-locks">About dummy locks</a></li>
+<li><a class="reference internal" href="#install-locking-support">Install locking support</a></li>
+<li><a class="reference internal" href="#use-read-locks">Use read locks</a></li>
+<li><a class="reference internal" href="#use-write-locks">Use write locks</a></li>
+<li><a class="reference internal" href="#promote-read-lock-to-write-lock-via-nesting">Promote read lock to write lock via nesting</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#transaction-methods">Transaction methods</a><ul>
+<li><a class="reference internal" href="#get-transaction-method-namespace">Get transaction method namespace</a></li>
+<li><a class="reference internal" href="#get-available-transaction-method-names">Get available transaction method names</a></li>
+<li><a class="reference internal" href="#get-transaction-method">Get transaction method</a></li>
+<li><a class="reference internal" href="#get-transaction-method-label">Get transaction method label</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#extent-information">Extent information</a><ul>
+<li><a class="reference internal" href="#get-extent-database">Get extent database</a></li>
+<li><a class="reference internal" href="#get-extent-index-and-key-specs">Get extent index and key specs</a></li>
+<li><a class="reference internal" href="#get-extent-default-key-spec">Get extent default key spec</a></li>
+<li><a class="reference internal" href="#get-extent-hidden-flag">Get extent hidden flag</a></li>
+<li><a class="reference internal" href="#get-extent-labels">Get extent labels</a></li>
+<li><a class="reference internal" href="#get-extent-name">Get extent name</a></li>
+<li><a class="reference internal" href="#get-extent-relationships">Get extent relationships</a></li>
+<li><a class="reference internal" href="#get-extent-size">Get extent size</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#extent-values-as-sample-data-sets">Extent values as sample data sets</a></li>
+<li><a class="reference internal" href="#extent-entity-retrieval">Extent entity retrieval</a><ul>
+<li><a class="reference internal" href="#retrieve-single-entity-using-oid">Retrieve single entity using OID</a></li>
+<li><a class="reference internal" href="#retrieve-single-entity-matching-field-values">Retrieve single entity matching field values</a></li>
+<li><a class="reference internal" href="#retrieve-entities-matching-field-values">Retrieve entities matching field values</a></li>
+<li><a class="reference internal" href="#retrieve-entities-using-iteration">Retrieve entities using iteration</a></li>
+<li><a class="reference internal" href="#retrieve-entities-ordered-by-key-or-index-spec">Retrieve entities ordered by key or index spec</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#extent-field-spec-namespace">Extent field spec namespace</a></li>
+<li><a class="reference internal" href="#templates">Templates</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="command-line.html"
+                        title="previous chapter">&#8216;schevo&#8217; Command-line Tool</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="schema-definition.html"
+                        title="next chapter">Schevo Schema Definition Reference</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/reference/database-tour.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="schema-definition.html" title="Schevo Schema Definition Reference"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="command-line.html" title="‘schevo’ Command-line Tool"
+             >previous</a> |</li>
+        <li><a href="../index.html">libschevo 3.2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Schevo References</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Etienne Robillard.
+      Last updated on Nov 17, 2012.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,314 @@
+# HG changeset patch
+# Parent 275eaf2ae67f52ef94492b3ecf81b7b6b55c14c3
+diff --git a/django/conf/global_settings.py b/django/conf/global_settings.py
+--- a/django/conf/global_settings.py
++++ b/django/conf/global_settings.py
+@@ -399,7 +399,7 @@
+ MIDDLEWARE_CLASSES = (
+     'django.middleware.common.CommonMiddleware',
+     'django.contrib.sessions.middleware.SessionMiddleware',
+-    'django.middleware.csrf.CsrfViewMiddleware',
++#    'django.middleware.csrf.CsrfViewMiddleware',
+     'django.contrib.auth.middleware.AuthenticationMiddleware',
+     'django.contrib.messages.middleware.MessageMiddleware',
+ #     'django.middleware.http.ConditionalGetMiddleware',
+diff --git a/django/contrib/admin/sites.py b/django/contrib/admin/sites.py
+--- a/django/contrib/admin/sites.py
++++ b/django/contrib/admin/sites.py
+@@ -3,7 +3,7 @@
+ from django.contrib.admin import ModelAdmin
+ from django.contrib.admin import actions
+ from django.contrib.auth import authenticate, login
+-from django.views.decorators.csrf import csrf_protect
++#from django.views.decorators.csrf import csrf_protect
+ from django.db.models.base import ModelBase
+ from django.core.exceptions import ImproperlyConfigured
+ from django.core.urlresolvers import reverse
+@@ -192,8 +192,8 @@
+             inner = never_cache(inner)
+         # We add csrf_protect here so this function can be used as a utility
+         # function for any view, without having to repeat 'csrf_protect'.
+-        if not getattr(view, 'csrf_exempt', False):
+-            inner = csrf_protect(inner)
++        #if not getattr(view, 'csrf_exempt', False):
++        #    inner = csrf_protect(inner)
+         return update_wrapper(inner, view)
+ 
+     def get_urls(self):
+@@ -300,18 +300,19 @@
+         Displays the login form for the given HttpRequest.
+         """
+         from django.contrib.auth.models import User
++        # If this isn't already the login page, display it.
++        new_data = request.POST.copy()
++        #print 'here some new_data to play with: %s' % new_data
+ 
+-        # If this isn't already the login page, display it.
+-        if not request.POST.has_key(LOGIN_FORM_KEY):
+-            if request.POST:
++        if not LOGIN_FORM_KEY in new_data:
++            if request.method == 'POST':
+                 message = _("Please log in again, because your session has expired.")
+             else:
+                 message = ""
+             return self.display_login_form(request, message)
+-
+-        # Check that the user accepts cookies.
++        
+         if not request.session.test_cookie_worked():
+-            message = _("Looks like your browser isn't configured to accept cookies. Please enable cookies, reload this page, and try again.")
++            message = _("Please activate cookies and try again.")
+             return self.display_login_form(request, message)
+         else:
+             request.session.delete_test_cookie()
+diff --git a/django/contrib/admin/templates/admin/change_form.html b/django/contrib/admin/templates/admin/change_form.html
+--- a/django/contrib/admin/templates/admin/change_form.html
++++ b/django/contrib/admin/templates/admin/change_form.html
+@@ -30,7 +30,7 @@
+   </ul>
+ {% endif %}{% endif %}
+ {% endblock %}
+-<form {% if has_file_field %}enctype="multipart/form-data" {% endif %}action="{{ form_url }}" method="post" id="{{ opts.module_name }}_form">{% csrf_token %}{% block form_top %}{% endblock %}
++<form {% if has_file_field %}enctype="multipart/form-data" {% endif %}action="{{ form_url }}" method="post" id="{{ opts.module_name }}_form">{% block form_top %}{% endblock %}
+ <div>
+ {% if is_popup %}<input type="hidden" name="_popup" value="1" />{% endif %}
+ {% if save_on_top %}{% submit_row %}{% endif %}
+diff --git a/django/contrib/admin/templates/admin/change_list.html b/django/contrib/admin/templates/admin/change_list.html
+--- a/django/contrib/admin/templates/admin/change_list.html
++++ b/django/contrib/admin/templates/admin/change_list.html
+@@ -85,7 +85,7 @@
+         {% endif %}
+       {% endblock %}
+       
+-      <form id="changelist-form" action="" method="post"{% if cl.formset.is_multipart %} enctype="multipart/form-data"{% endif %}>{% csrf_token %}
++      <form id="changelist-form" action="" method="post"{% if cl.formset.is_multipart %} enctype="multipart/form-data"{% endif %}>
+       {% if cl.formset %}
+         {{ cl.formset.management_form }}
+       {% endif %}
+diff --git a/django/contrib/admin/templates/admin/template_validator.html b/django/contrib/admin/templates/admin/template_validator.html
+--- a/django/contrib/admin/templates/admin/template_validator.html
++++ b/django/contrib/admin/templates/admin/template_validator.html
+@@ -4,7 +4,7 @@
+ 
+ <div id="content-main">
+ 
+-<form action="" method="post">{% csrf_token %}
++<form action="" method="post">
+ 
+ {% if form.errors %}
+ <p class="errornote">Your template had {{ form.errors|length }} error{{ form.errors|pluralize }}:</p>
+diff --git a/django/core/cache/__init__.py b/django/core/cache/__init__.py
+--- a/django/core/cache/__init__.py
++++ b/django/core/cache/__init__.py
+@@ -67,7 +67,7 @@
+ 
+ cache = get_cache(settings.CACHE_BACKEND)
+ 
+-# Some caches -- pythont-memcached in particular -- need to do a cleanup at the
++# Some caches -- python-memcached in particular -- need to do a cleanup at the
+ # end of a request cycle. If the cache provides a close() method, wire it up
+ # here.
+ if hasattr(cache, 'close'):
+diff --git a/django/core/handlers/base.py b/django/core/handlers/base.py
+--- a/django/core/handlers/base.py
++++ b/django/core/handlers/base.py
+@@ -142,7 +142,8 @@
+         finally:
+             # Reset URLconf for this thread on the way out for complete
+             # isolation of request.urlconf
+-            urlresolvers.set_urlconf(None)
++            # urlresolvers.set_urlconf(None)
++            pass
+ 
+     def handle_uncaught_exception(self, request, resolver, exc_info):
+         """
+diff --git a/django/core/handlers/wsgi.py b/django/core/handlers/wsgi.py
+--- a/django/core/handlers/wsgi.py
++++ b/django/core/handlers/wsgi.py
+@@ -231,6 +231,7 @@
+             self.initLock.release()
+ 
+         set_script_prefix(base.get_script_name(environ))
++        
+         signals.request_started.send(sender=self.__class__)
+         try:
+             try:
+@@ -247,6 +248,7 @@
+         finally:
+             signals.request_finished.send(sender=self.__class__)
+ 
++
+         try:
+             status_text = STATUS_CODE_TEXT[response.status_code]
+         except KeyError:
+diff --git a/django/core/servers/basehttp.py b/django/core/servers/basehttp.py
+--- a/django/core/servers/basehttp.py
++++ b/django/core/servers/basehttp.py
+@@ -73,7 +73,7 @@
+ 
+ class Headers(object):
+     """Manage a collection of HTTP response headers"""
+-    def __init__(self,headers):
++    def __init__(self, headers):
+         if not isinstance(headers, list):
+             raise TypeError("Headers must be a list of name/value tuples")
+         self._headers = headers
+diff --git a/django/core/urlresolvers.py b/django/core/urlresolvers.py
+--- a/django/core/urlresolvers.py
++++ b/django/core/urlresolvers.py
+@@ -183,7 +183,8 @@
+             else:
+                 bits = normalize(p_pattern)
+                 lookups.appendlist(pattern.callback, (bits, p_pattern))
+-                lookups.appendlist(pattern.name, (bits, p_pattern))
++                if hasattr(pattern, 'name'):
++                    lookups.appendlist(pattern.name, (bits, p_pattern))
+         self._reverse_dict = lookups
+         self._namespace_dict = namespaces
+         self._app_dict = apps
+@@ -214,12 +215,13 @@
+             for pattern in self.url_patterns:
+                 try:
+                     sub_match = pattern.resolve(new_path)
+-                except Resolver404, e:
+-                    sub_tried = e.args[0].get('tried')
+-                    if sub_tried is not None:
+-                        tried.extend([(pattern.regex.pattern + '   ' + t) for t in sub_tried])
+-                    else:
+-                        tried.append(pattern.regex.pattern)
++                except Resolver404:
++                    continue
++                    #sub_tried = e.args[0].get('tried')
++                    #if sub_tried is not None:
++                    #    tried.extend([(pattern.regex.pattern + '   ' + t) for t in sub_tried])
++                    #else:
++                    #    tried.append(pattern.regex.pattern)
+                 else:
+                     if sub_match:
+                         sub_match_dict = dict([(smart_str(k), v) for k, v in match.groupdict().items()])
+@@ -228,8 +230,7 @@
+                             sub_match_dict[smart_str(k)] = v
+                         return sub_match[0], sub_match[1], sub_match_dict
+                     tried.append(pattern.regex.pattern)
+-            raise Resolver404({'tried': tried, 'path': new_path})
+-        raise Resolver404({'path' : path})
++        raise Resolver404('resource not found: %s' % path)
+ 
+     def _get_urlconf_module(self):
+         try:
+diff --git a/django/db/backends/sqlite3/base.py b/django/db/backends/sqlite3/base.py
+--- a/django/db/backends/sqlite3/base.py
++++ b/django/db/backends/sqlite3/base.py
+@@ -21,6 +21,9 @@
+ try:
+     try:
+         from pysqlite2 import dbapi2 as Database
++        # Enable shared cache mode for the calling thread
++        Database.enable_shared_cache(True)
++
+     except ImportError, e1:
+         from sqlite3 import dbapi2 as Database
+ except ImportError, exc:
+diff --git a/django/http/__init__.py b/django/http/__init__.py
+--- a/django/http/__init__.py
++++ b/django/http/__init__.py
+@@ -23,18 +23,12 @@
+ 
+ absolute_http_url_re = re.compile(r"^https?://", re.I)
+ 
+-try:
+-    # Try to import HTTPNotFound first
+-    from webob.exc import HTTPNotFound
+-except ImportError:
+-    # We'll provide a fallback in case that webob isn't available
+-    class Http404(Exception):
+-        """default 404 error response"""
+-        pass
+-else:
+-    class Http404(HTTPNotFound):
+-        """WebOb-based 404 error response"""
+-        pass
++from notmm.utils.wsgilib import HTTPNotFound
++class Http404(HTTPNotFound):
++    def __init__(self, dct):
++        if isinstance(dct, dict):
++           value = "%s: %r" % ('resource not found', dct)
++        super(Http404, self).__init__(dct, status=404)
+ 
+ class HttpRequest(object):
+     """A basic HTTP request."""
+diff --git a/django/middleware/csrf.py b/django/middleware/csrf.py
+--- a/django/middleware/csrf.py
++++ b/django/middleware/csrf.py
+@@ -65,7 +65,11 @@
+         if getattr(request, 'csrf_processing_done', False):
+             return None
+ 
+-        reject = lambda s: _get_failure_view()(request, reason=s)
++        #pseudo code: do not add the CSRF noob protection if
++        #settings.ENABLE_CSRF is False.
++        if settings.ENABLE_CSRF:
++            reject = lambda s: _get_failure_view()(request, reason=s)
++        
+         def accept():
+             # Avoid checking the request twice by adding a custom attribute to
+             # request.  This will be relevant when both decorator and middleware
+@@ -156,7 +160,9 @@
+ 
+             # check incoming token
+             request_csrf_token = request.POST.get('csrfmiddlewaretoken', None)
+-            if request_csrf_token != csrf_token:
++            if (settings.ENABLE_CSRF 
++            and request_csrf_token != csrf_token
++            ):
+                 if cookie_is_new:
+                     # probably a problem setting the CSRF cookie
+                     return reject("CSRF cookie not set.")
+diff --git a/django/template/context.py b/django/template/context.py
+--- a/django/template/context.py
++++ b/django/template/context.py
+@@ -6,7 +6,8 @@
+ # We need the CSRF processor no matter what the user has in their settings,
+ # because otherwise it is a security vulnerability, and we can't afford to leave
+ # this to human error or failure to read migration instructions.
+-_builtin_context_processors =  ('django.core.context_processors.csrf',)
++#_builtin_context_processors =  ('django.core.context_processors.csrf',)
++_builtin_context_processors = ()
+ 
+ class ContextPopException(Exception):
+     "pop() has been called more times than push()"
+diff --git a/django/template/defaulttags.py b/django/template/defaulttags.py
+--- a/django/template/defaulttags.py
++++ b/django/template/defaulttags.py
+@@ -160,7 +160,7 @@
+             if unpack:
+                 # If there are multiple loop variables, unpack the item into
+                 # them.
+-                context.update(dict(zip(self.loopvars, item)))
++                context.update(dict(zip(self.loopvars, [item])))
+             else:
+                 context[self.loopvars[0]] = item
+             for node in self.nodelist_loop:
+diff --git a/django/views/csrf.py b/django/views/csrf.py
+--- a/django/views/csrf.py
++++ b/django/views/csrf.py
+@@ -79,11 +79,11 @@
+ </html>
+ """
+ 
+-def csrf_failure(request, reason=""):
+-    """
+-    Default view used when request fails CSRF protection
+-    """
+-    t = Template(CSRF_FAILRE_TEMPLATE)
+-    c = Context({'DEBUG': settings.DEBUG,
+-                 'reason': reason})
+-    return HttpResponseForbidden(t.render(c), mimetype='text/html')
++#def csrf_failure(request, reason=""):
++#    """
++#    Default view used when request fails CSRF protection
++#    """
++#    t = Template(CSRF_FAILRE_TEMPLATE)
++##    c = Context({'DEBUG': settings.DEBUG,
++#                 'reason': reason})
++#    return HttpResponseForbidden(t.render(c), mimetype='text/html')
