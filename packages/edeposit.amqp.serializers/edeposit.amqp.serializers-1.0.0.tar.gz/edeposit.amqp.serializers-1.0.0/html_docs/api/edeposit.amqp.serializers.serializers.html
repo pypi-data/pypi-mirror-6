@@ -1,0 +1,273 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>edeposit.amqp.serializers module &mdash; edeposit.amqp.serializers 1.0.0 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '1.0.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="edeposit.amqp.serializers 1.0.0 documentation" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../index.html">edeposit.amqp.serializers 1.0.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-edeposit.amqp.serializers.serializers">
+<span id="edeposit-amqp-serializers-module"></span><h1>edeposit.amqp.serializers module<a class="headerlink" href="#module-edeposit.amqp.serializers.serializers" title="Permalink to this headline">¶</a></h1>
+<p>This module is just wrapper over python&#8217;s
+<a class="reference external" href="http://docs.python.org/2/library/json.html">JSON module</a>. It allows you to
+serialize <tt class="docutils literal"><span class="pre">namedtuple</span></tt> and other default python data in very comfortable
+way - if you initialize it properly, it just works and you don&#8217;t have to take
+care about anything.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This module exists only because standard JSON module can&#8217;t serialize
+<tt class="docutils literal"><span class="pre">namedtuple</span></tt>. If you don&#8217;t need to serialize <tt class="docutils literal"><span class="pre">namedtuple</span></tt>, you don&#8217;t
+need this module.</p>
+</div>
+<div class="section" id="serialization-details">
+<h2>Serialization details<a class="headerlink" href="#serialization-details" title="Permalink to this headline">¶</a></h2>
+<p><tt class="docutils literal"><span class="pre">namedtuple</span></tt> is serialized to <tt class="docutils literal"><span class="pre">dict</span></tt> with special property <tt class="docutils literal"><span class="pre">__nt_name</span></tt>,
+where the name of the <tt class="docutils literal"><span class="pre">namedtuple</span></tt> <cite>class</cite> is stored.</p>
+<p>Live example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">namedtuple</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">edeposit.amqp.serializers</span> <span class="kn">import</span> <span class="n">serialize</span><span class="p">,</span> <span class="n">init_globals</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">init_globals</span><span class="p">(</span><span class="nb">globals</span><span class="p">())</span>
+<span class="go">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">Person</span> <span class="o">=</span> <span class="n">namedtuple</span><span class="p">(</span><span class="s">&quot;Person&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;name&quot;</span><span class="p">,</span> <span class="s">&quot;surname&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="n">Person</span><span class="p">(</span><span class="s">&quot;Lishaak&quot;</span><span class="p">,</span> <span class="s">&quot;Bystroushaak&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">p</span>
+<span class="go">Person(name=&#39;Lishaak&#39;, surname=&#39;Bystroushaak&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">serialize</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="go">&#39;{&quot;surname&quot;: &quot;Bystroushaak&quot;, &quot;name&quot;: &quot;Lishaak&quot;, &quot;__nt_name&quot;: &quot;Person&quot;}&#39;</span>
+</pre></div>
+</div>
+<div class="section" id="isinstance">
+<h3>isinstance<a class="headerlink" href="#isinstance" title="Permalink to this headline">¶</a></h3>
+<p>If you try to serialize module from different hierarchy path, than where it
+will be deserialized, you may run into problems with <tt class="docutils literal"><span class="pre">isinstance()</span></tt>, which
+compares by full path, not just by <cite>class</cite> identity.</p>
+<p>Lets take object <cite>p</cite> from previous example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">p</span>
+<span class="go">Person(name=&#39;Lishaak&#39;, surname=&#39;Bystroushaak&#39;)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="go">&lt;class &#39;__main__.Person&#39;&gt;</span>
+</pre></div>
+</div>
+<p>As you can see, type of the object is <tt class="docutils literal"><span class="pre">&lt;class</span> <span class="pre">'__main__.Person'&gt;</span></tt>. In case
+where the <tt class="docutils literal"><span class="pre">namedtuple</span></tt> <cite>class</cite> would be defined in module <tt class="docutils literal"><span class="pre">Y</span></tt>, you would
+get something like <tt class="docutils literal"><span class="pre">&lt;class</span> <span class="pre">'Y.Person'&gt;</span></tt> and you would run into errors, when
+you would try to compare these two for identity.</p>
+<p>This is not the issue in normal <tt class="docutils literal"><span class="pre">namedtuple</span></tt> usage, because you usually
+wouldn´t have two definitions of same <cite>class</cite>. In case of desesrialization, you
+can run into this problems.</p>
+<p>Trivial solution is to compare without full paths, just the names of the
+<cite>classes</cite> by using <tt class="xref py py-func docutils literal"><span class="pre">iiofany()</span></tt>.</p>
+</div>
+</div>
+<div class="section" id="api">
+<h2>API<a class="headerlink" href="#api" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="edeposit.amqp.serializers.serializers.init_globals">
+<tt class="descclassname">edeposit.amqp.serializers.serializers.</tt><tt class="descname">init_globals</tt><big>(</big><em>given_globals</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/serializers/serializers.html#init_globals"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.serializers.serializers.init_globals" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize global variables, so the module will be able to guess names of
+classes automatically.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>given_globals</strong> (<em>dict</em>) &#8211;
+data returned from <tt class="docutils literal"><span class="pre">globals()</span></tt> call in your
+module</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This function has to be called before you can use (de)serialization
+functions!</p>
+</div>
+<p>Example of initialization:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">serializers</span>
+<span class="n">serializers</span><span class="o">.</span><span class="n">init_globals</span><span class="p">(</span><span class="nb">globals</span><span class="p">())</span>
+<span class="n">serializers</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="n">some_crazy_data</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="edeposit.amqp.serializers.serializers.serialize">
+<tt class="descclassname">edeposit.amqp.serializers.serializers.</tt><tt class="descname">serialize</tt><big>(</big><em>python_data</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/serializers/serializers.html#serialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.serializers.serializers.serialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Serialize class hierarchy into JSON.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>data</strong> (<em>any</em>) &#8211;
+any python type serializable to JSON, with added support of
+namedtuples</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><em>unicode</em> &#8211;
+JSON string</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="edeposit.amqp.serializers.serializers.deserialize">
+<tt class="descclassname">edeposit.amqp.serializers.serializers.</tt><tt class="descname">deserialize</tt><big>(</big><em>json_str</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/serializers/serializers.html#deserialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.serializers.serializers.deserialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Deserialize classes from JSON back to python data.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>json_str</strong> (<em>str</em>) &#8211;
+JSON encoded string.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><em>any</em> &#8211;
+any python type (make sure you have namedtuples imported)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="edeposit.amqp.serializers.serializers.iiOfAny">
+<tt class="descclassname">edeposit.amqp.serializers.serializers.</tt><tt class="descname">iiOfAny</tt><big>(</big><em>instance</em>, <em>classes</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/serializers/serializers.html#iiOfAny"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.serializers.serializers.iiOfAny" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns true, if <cite>instance</cite> is instance of any (iiOfAny) of the <cite>classes</cite>.</p>
+<p>This function doesn&#8217;t use isinstance() check, it just compares the
+<cite>class</cite> names.</p>
+<p>This can be generaly dangerous, but it is really useful when you are
+comparing class serialized in one module and deserialized in another.</p>
+<p>This causes, that module paths in class internals are different and
+<tt class="docutils literal"><span class="pre">isinstance()</span></tt> and <tt class="docutils literal"><span class="pre">type()</span></tt> comparsions thus fails.</p>
+<p>Use this function instead, if you wan&#8217;t to check what type is your
+deserialized message.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>instance</strong> (<em>object</em>) &#8211;
+class instance you want to know the type</li>
+<li><strong>classes</strong> (<em>list</em>) &#8211;
+classes, or just one class you want to compare - func
+automatically converts nonlist/nontuple parameters to
+list</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"><em>bool</em> &#8211;
+True if <cite>instance</cite> <strong>can be</strong> instance of any of the <cite>classes</cite>.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+<div class="section" id="project-details">
+<h2>Project details<a class="headerlink" href="#project-details" title="Permalink to this headline">¶</a></h2>
+<p>Whole project is hosted at github:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://github.com/edeposit/edeposit.amqp.serializers">https://github.com/edeposit/edeposit.amqp.serializers</a></li>
+</ul>
+<p>and can be installed using PIP:</p>
+<div class="highlight-python"><div class="highlight"><pre>pip install edeposit.amqp.serializers
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">edeposit.amqp.serializers module</a><ul>
+<li><a class="reference internal" href="#serialization-details">Serialization details</a><ul>
+<li><a class="reference internal" href="#isinstance">isinstance</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#api">API</a></li>
+<li><a class="reference internal" href="#project-details">Project details</a></li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/api/edeposit.amqp.serializers.serializers.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../index.html">edeposit.amqp.serializers 1.0.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

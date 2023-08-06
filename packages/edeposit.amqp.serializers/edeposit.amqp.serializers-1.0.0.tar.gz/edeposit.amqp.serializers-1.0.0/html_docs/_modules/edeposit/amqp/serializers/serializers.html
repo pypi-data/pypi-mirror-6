@@ -1,0 +1,310 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>edeposit.amqp.serializers.serializers &mdash; edeposit.amqp.serializers 1.0.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '1.0.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="edeposit.amqp.serializers 1.0.0 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">edeposit.amqp.serializers 1.0.0 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for edeposit.amqp.serializers.serializers</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c">#</span>
+<span class="c"># Interpreter version: python 2.7</span>
+<span class="c">#</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This module is just wrapper over python&#39;s</span>
+<span class="sd">`JSON module &lt;http://docs.python.org/2/library/json.html&gt;`_. It allows you to</span>
+<span class="sd">serialize ``namedtuple`` and other default python data in very comfortable</span>
+<span class="sd">way - if you initialize it properly, it just works and you don&#39;t have to take</span>
+<span class="sd">care about anything.</span>
+
+<span class="sd">Note:</span>
+<span class="sd">    This module exists only because standard JSON module can&#39;t serialize</span>
+<span class="sd">    ``namedtuple``. If you don&#39;t need to serialize ``namedtuple``, you don&#39;t</span>
+<span class="sd">    need this module.</span>
+
+<span class="sd">Serialization details</span>
+<span class="sd">---------------------</span>
+<span class="sd">``namedtuple`` is serialized to ``dict`` with special property ``__nt_name``,</span>
+<span class="sd">where the name of the ``namedtuple`` `class` is stored.</span>
+
+<span class="sd">Live example::</span>
+
+<span class="sd">    &gt;&gt;&gt; from collections import namedtuple</span>
+<span class="sd">    &gt;&gt;&gt; from edeposit.amqp.serializers import serialize, init_globals</span>
+<span class="sd">    &gt;&gt;&gt; init_globals(globals())</span>
+<span class="sd">    &gt;&gt;&gt; </span>
+<span class="sd">    &gt;&gt;&gt; Person = namedtuple(&quot;Person&quot;, [&quot;name&quot;, &quot;surname&quot;])</span>
+<span class="sd">    &gt;&gt;&gt; p = Person(&quot;Lishaak&quot;, &quot;Bystroushaak&quot;)</span>
+<span class="sd">    &gt;&gt;&gt; p</span>
+<span class="sd">    Person(name=&#39;Lishaak&#39;, surname=&#39;Bystroushaak&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; serialize(p)</span>
+<span class="sd">    &#39;{&quot;surname&quot;: &quot;Bystroushaak&quot;, &quot;name&quot;: &quot;Lishaak&quot;, &quot;__nt_name&quot;: &quot;Person&quot;}&#39;</span>
+
+<span class="sd">isinstance</span>
+<span class="sd">==========</span>
+<span class="sd">If you try to serialize module from different hierarchy path, than where it</span>
+<span class="sd">will be deserialized, you may run into problems with ``isinstance()``, which</span>
+<span class="sd">compares by full path, not just by `class` identity.</span>
+
+<span class="sd">Lets take object `p` from previous example::</span>
+
+<span class="sd">    &gt;&gt;&gt; p</span>
+<span class="sd">    Person(name=&#39;Lishaak&#39;, surname=&#39;Bystroushaak&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; type(p)</span>
+<span class="sd">    &lt;class &#39;__main__.Person&#39;&gt;</span>
+
+<span class="sd">As you can see, type of the object is ``&lt;class &#39;__main__.Person&#39;&gt;``. In case</span>
+<span class="sd">where the ``namedtuple`` `class` would be defined in module ``Y``, you would</span>
+<span class="sd">get something like ``&lt;class &#39;Y.Person&#39;&gt;`` and you would run into errors, when</span>
+<span class="sd">you would try to compare these two for identity.</span>
+
+<span class="sd">This is not the issue in normal ``namedtuple`` usage, because you usually</span>
+<span class="sd">wouldn´t have two definitions of same `class`. In case of desesrialization, you</span>
+<span class="sd">can run into this problems.</span>
+
+<span class="sd">Trivial solution is to compare without full paths, just the names of the</span>
+<span class="sd">`classes` by using :func:`iiofany`.</span>
+
+
+<span class="sd">API</span>
+<span class="sd">---</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="c">#= Imports ====================================================================</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">namedtuple</span>  <span class="c"># has to be imported for deserialization</span>
+
+
+<span class="c">#= Functions &amp; objects ========================================================</span>
+<div class="viewcode-block" id="init_globals"><a class="viewcode-back" href="../../../../index.html#edeposit.amqp.serializers.serializers.init_globals">[docs]</a><span class="k">def</span> <span class="nf">init_globals</span><span class="p">(</span><span class="n">given_globals</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Initialize global variables, so the module will be able to guess names of</span>
+<span class="sd">    classes automatically.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        given_globals (dict): data returned from ``globals()`` call in your</span>
+<span class="sd">                              module</span>
+
+<span class="sd">    Warning:</span>
+<span class="sd">        This function has to be called before you can use (de)serialization</span>
+<span class="sd">        functions!</span>
+
+<span class="sd">    Example of initialization::</span>
+
+<span class="sd">        import serializers</span>
+<span class="sd">        serializers.init_globals(globals())</span>
+<span class="sd">        serializers.serialize(some_crazy_data)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">local_globals</span> <span class="o">=</span> <span class="nb">globals</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">given_globals</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">local_globals</span><span class="p">:</span>
+            <span class="n">local_globals</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">given_globals</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_serializeNT</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Serialize namedtuples (and other basic python types) to dictionary with</span>
+<span class="sd">    some special properties.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        data (namedtuple/other python types): Data which will be serialized to</span>
+<span class="sd">             dict.</span>
+
+<span class="sd">    Data can be later automatically de-serialized by calling _deserializeNT().</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">_serializeNT</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">data</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s">&quot;_fields&quot;</span><span class="p">):</span>  <span class="c"># is namedtuple</span>
+        <span class="n">serialized</span> <span class="o">=</span> <span class="n">_serializeNT</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">_asdict</span><span class="p">()))</span>
+        <span class="n">serialized</span><span class="p">[</span><span class="s">&quot;__nt_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+
+        <span class="k">return</span> <span class="n">serialized</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">_serializeNT</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">data</span><span class="p">))</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="nb">map</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">key</span><span class="p">:</span> <span class="p">[</span><span class="n">key</span><span class="p">,</span> <span class="n">_serializeNT</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">key</span><span class="p">])],</span>
+                <span class="n">data</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data</span>
+
+
+<div class="viewcode-block" id="serialize"><a class="viewcode-back" href="../../../../index.html#edeposit.amqp.serializers.serializers.serialize">[docs]</a><span class="k">def</span> <span class="nf">serialize</span><span class="p">(</span><span class="n">python_data</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Serialize class hierarchy into JSON.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        data (any): any python type serializable to JSON, with added support of</span>
+<span class="sd">                    namedtuples</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        unicode: JSON string</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">_serializeNT</span><span class="p">(</span><span class="n">python_data</span><span class="p">))</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_deserializeNT</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Deserialize special kinds of dicts from _serializeNT().</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">_deserializeNT</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">data</span><span class="p">)</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">_deserializeNT</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">data</span><span class="p">))</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="s">&quot;__nt_name&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>  <span class="c"># is namedtuple</span>
+        <span class="n">class_name</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s">&quot;__nt_name&quot;</span><span class="p">]</span>
+        <span class="k">del</span> <span class="n">data</span><span class="p">[</span><span class="s">&quot;__nt_name&quot;</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="nb">globals</span><span class="p">()[</span><span class="n">class_name</span><span class="p">](</span>
+            <span class="o">**</span><span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">_deserializeNT</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">())))</span>
+        <span class="p">)</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="nb">map</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">key</span><span class="p">:</span> <span class="p">[</span><span class="n">key</span><span class="p">,</span> <span class="n">_deserializeNT</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">key</span><span class="p">])],</span>
+                <span class="n">data</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">unicode</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&quot;utf-8&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data</span>
+
+
+<div class="viewcode-block" id="deserialize"><a class="viewcode-back" href="../../../../index.html#edeposit.amqp.serializers.serializers.deserialize">[docs]</a><span class="k">def</span> <span class="nf">deserialize</span><span class="p">(</span><span class="n">json_str</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Deserialize classes from JSON back to python data.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        json_str (str): JSON encoded string.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        any: any python type (make sure you have namedtuples imported)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_deserializeNT</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">json_str</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="iiOfAny"><a class="viewcode-back" href="../../../../index.html#edeposit.amqp.serializers.serializers.iiOfAny">[docs]</a><span class="k">def</span> <span class="nf">iiOfAny</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">classes</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns true, if `instance` is instance of any (iiOfAny) of the `classes`.</span>
+
+<span class="sd">    This function doesn&#39;t use isinstance() check, it just compares the</span>
+<span class="sd">    `class` names.</span>
+
+<span class="sd">    This can be generaly dangerous, but it is really useful when you are</span>
+<span class="sd">    comparing class serialized in one module and deserialized in another.</span>
+
+<span class="sd">    This causes, that module paths in class internals are different and</span>
+<span class="sd">    ``isinstance()`` and ``type()`` comparsions thus fails.</span>
+
+<span class="sd">    Use this function instead, if you wan&#39;t to check what type is your</span>
+<span class="sd">    deserialized message.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        instance (object): class instance you want to know the type</span>
+<span class="sd">        classes (list): classes, or just one class you want to compare - func</span>
+<span class="sd">                        automatically converts nonlist/nontuple parameters to</span>
+<span class="sd">                        list</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        bool: True if `instance` **can be** instance of any of the `classes`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">classes</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">]:</span>
+        <span class="n">classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">classes</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">type</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span><span class="o">.</span><span class="n">__name__</span> <span class="o">==</span> <span class="n">x</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">classes</span><span class="p">))</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">edeposit.amqp.serializers 1.0.0 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
