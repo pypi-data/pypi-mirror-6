@@ -1,0 +1,131 @@
+Requirements
+============
+
+- Twisted >= 8.0.1:
+   - Twisted Core
+   - Twisted Words
+- uuid.py (Python 2.5 std. lib. or http://pypi.python.org/pypi/uuid)
+- Wokkel >= 0.5.0 (http://wokkel.ik.nu/)
+- A Jabber server that supports the component protocol (XEP-0114),
+  and, to enable the micro-blogging feature, the remote roster
+  management protocol (XEP-0321). We recommend using Prosody.
+
+For the PostgreSQL backend, the following is also required:
+
+- PostgreSQL
+- Psycopg 2
+
+
+Installation
+============
+
+sat_pubsub uses setuptools for package building and installing.
+To build from the source run:
+
+  python setup.py build
+
+Then, to install run the following, possibly as root:
+
+  python setup.py install
+
+See the setuptools documentation for further information on changing
+installation locations.
+
+
+Configuration
+=============
+
+sat_pubsub uses Twisted's twistd command for running its services. Starting with
+Twisted 2.5.0, twistd supports running Twisted Application Plugins directly,
+without the use of mktap. In Twisted 8.1.0, the use of mktap for configuration
+is deprecated.
+
+Idavoll, on which sat_pubsub is based, provides two types of storage for the backend:
+a memory-based storage facility, which is volatile, and a persistent storage facility
+using PostgreSQL. For now, sat_pubsub only uses the persistent storage facility.
+
+For using the PostgreSQL backend, create a database (for example named pubsub):
+
+  sudo -u postgres createuser -d -P `whoami`
+  createdb pubsub
+  psql pubsub < sat_pubsub/db/pubsub.sql
+
+
+Your Jabber server must also be configured to accept component connections and,
+to enable the micro-blogging feature, remote roster management. See below for details.
+
+
+Running sat_pubsub
+==================
+
+The minimal example for running sat_pubsub is:
+
+  twistd sat_pubsub
+
+This will start the service and run it in the background. It generates a
+file twistd.pid that holds the PID of the service and a log file twistd.log.
+The twistd utility has a fair number of options that might be useful, and
+can be viewed with:
+
+  twistd --help
+
+When the service starts, it will connect to the Jabber server at the local
+machine using the component protocol, and assumes the JID 'pubsub'. This
+assumes a couple of defaults which can be overridden by passing parameters to
+the twistd plugin. You can get an overview of the parameters and their defaults
+using:
+
+  twistd sat_pubsub --help
+
+In particular, the following parameters will be of interest:
+
+ --jid: The Jabber ID the component will assume.
+ --rport: the port number of the Jabber server to connect to
+ --secret: the secret used to authenticate with the Jabber server.
+
+For example:
+
+  twistd sat_pubsub --jid=sat-pubsub.<xmpp_domain> --secret=<password>
+
+You may also want to provide the --verbose flag to see the traffic flow,
+for example to debug the configuration. Below some specifics for the
+Prosody XMPP server implementation.
+
+
+Running sat_pubsub with Prosody 
+===============================
+
+To enable the micro-blogging feature with Prosody XMPP server, you need
+the remote_roster plugin. Check if the remote_roster plugin is already
+in your Prosody installation:
+
+  cd prosody/plugins
+  ls mod_remote_roster.lua
+
+If you can't see it, download it from here:
+
+  wget http://prosody-modules.googlecode.com/hg/mod_remote_roster/mod_remote_roster.lua
+
+You need to patch the file (commenting two lines to make all contacts available):
+
+  wget http://paste.debian.net/download/12106
+  patch -p2 < paste_1206
+
+Edit the prosodi.cfg.lua file to add this module:
+
+  modules_enabled = {
+                [...]
+                "remote_roster";
+                [...]
+  }
+
+Also add these two lines at the end of the file, adapting them to your XMPP server
+domain (virtual host) and selecting a password of your choice:
+
+  Component "sat-pubsub.<xmpp_domain>"
+          component_secret = "<password>"
+
+For a more complete installation and configuration of Prosody to be used with
+sat_pubsub, please report yourself to the Salut à Toi wiki:
+
+http://wiki.goffi.org/wiki/Libervia/en#XMPP_server
