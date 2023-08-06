@@ -1,0 +1,120 @@
+#!/bin/python
+
+__requires__ = ['moncov > 0.1']
+
+import moncov; moncov.ctl.disable()
+import aaargh
+import re
+import argparse
+import sys
+import logging
+import functools
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__file__)
+
+
+def catching(func):
+    '''decorating in try/exept&log err'''
+    @functools.wraps(func)
+    def decorated(*args, **kvs):
+        try:
+            func(*args, **kvs)
+        except Exception as e:
+            log.error(func.func_name + ' failed: %r' % e)
+            sys.exit(2)
+    return decorated
+
+class ReAction(argparse.Action):
+    '''custom Re.compiling argparse action'''
+    def __call__(self, parser, namespace, values, option_string=None):
+        '''Re.compile action'''
+        setattr(namespace, self.dest, [re.compile(value) for value in values])
+
+app = aaargh.App(description='moncov collects coverage remotelly')
+app.arg('-a', '--dbhost', help='Host name of the MongoDB to use', default=moncov.conf.DBHOST)
+app.arg('-b', '--dbport', help='Port of the MongoDB service', type=int, default=moncov.conf.DBPORT)
+app.arg('-c', '--dbname', help='Name of the db to collect stats in', default=moncov.conf.DBNAME)
+
+@app.cmd(help='cobertura xml output')
+@app.cmd_arg('-o', '--output', help='output xml filename', default='moncov.xml')
+@catching
+def cobertura(dbhost, dbport, dbname, output):
+    moncov.stats.cobertura.generate_xml(dbhost, dbport, dbname, output)
+
+@app.cmd(help='reset traces counting')
+@app.cmd_arg('-p', '--events-count', help='length of the events buffer to use', type=int, default=moncov.conf.EVENTS_COUNT)
+@app.cmd_arg('-q', '--events-totalsize', help='byte capacity of the buffer to use', type=int, default=moncov.conf.EVENTS_TOTALSIZE)
+@app.cmd_arg('-r', '--no-init', help='just drop', default=False, action='store_true')
+@catching
+def reset(dbhost, dbport, dbname, events_count, events_totalsize, no_init):
+    db = moncov.conf.get_db(dbhost=dbhost, dbport=dbport, dbname=dbname)
+    moncov.ctl.drop(db=db)
+    if not no_init:
+        moncov.ctl.init(db=db, events_count=events_count, events_totalsize=events_totalsize)
+
+@app.cmd(help='enable collecting')
+@app.cmd_arg('-e', '--system', help='apply sytem-wide', default=True, action='store_true')
+@app.cmd_arg('-f', '--whitelist', help='filter regexps', default=moncov.conf.WHITELIST, action=ReAction, nargs='+')
+@app.cmd_arg('-g', '--blacklist', help='filter regexps', default=moncov.conf.BLACKLIST, action=ReAction, nargs='+')
+@catching
+def enable(dbhost, dbport, dbname, system, whitelist, blacklist):
+    moncov.ctl.sys_enable(dbhost=dbhost, dbport=dbport, dbname=dbname, whitelist=whitelist, blacklist=blacklist)
+
+@app.cmd(help='disable collecting')
+@app.cmd_arg('-e', '--system', help='apply sytem-wide', default=True, action='store_true')
+@catching
+def disable(*args, **kvs):
+    moncov.ctl.sys_disable()
+
+@app.cmd(help='simple stats')
+@app.cmd_arg('-f', '--whitelist', help='filter regexps', default=moncov.conf.WHITELIST, action=ReAction, nargs='+')
+@app.cmd_arg('-g', '--blacklist', help='filter regexps', default=moncov.conf.BLACKLIST, action=ReAction, nargs='+')
+@catching
+def simple(dbhost, dbport, dbname, whitelist, blacklist):
+    db = moncov.conf.get_db(dbhost=dbhost, dbport=dbport, dbname=dbname)
+    moncov.stats.simple.print_stats(db=db, whitelist=whitelist, blacklist=blacklist)
+
+@app.cmd(help='simple xml stats')
+@app.cmd_arg('-f', '--whitelist', help='filter regexps', default=moncov.conf.WHITELIST, action=ReAction, nargs='+')
+@app.cmd_arg('-g', '--blacklist', help='filter regexps', default=moncov.conf.BLACKLIST, action=ReAction, nargs='+')
+@app.cmd_arg('-o', '--output', help='output xml filename', default='moncov.xml')
+@catching
+def simple_xml(dbhost, dbport, dbname, whitelist, blacklist, output):
+    db = moncov.conf.get_db(dbhost=dbhost, dbport=dbport, dbname=dbname)
+    with open(output, 'w+') as fd:
+        fd.write(moncov.stats.simple.get_stats_xml(db=db, whitelist=whitelist, blacklist=blacklist)) 
+
+@catching
+@app.cmd(help='calculate stats updates')
+@app.cmd_arg('-s', '--daemon', help='fork a collecting daemon', action='store_true', default=False)
+@app.cmd_arg('-t', '--sleep_interval', help='sleep interval of the background updater process', type=float, default=3)
+@app.cmd_arg('-u', '--logfile', help='filename the daemon should log actions to''', default='/tmp/moncov_updater.log')
+@app.cmd_arg('-v', '--pidfile', help='filename the daemon should use as lock; no locking if omitted''', default=None)
+@catching
+def update(dbhost, dbport, dbname, daemon, sleep_interval, logfile, pidfile):
+    db = moncov.conf.get_db(dbhost=dbhost, dbport=dbport, dbname=dbname)
+    moncov.stats.update.update(db=db)
+    if daemon:
+        def updater():
+            import moncov; moncov.ctl.disable()
+            import time
+            import daemon
+            import logging
+            import sys
+            logging.basicConfig(filename=logfile, level=logging.INFO)
+            with daemon.DaemonContext(pidfile=pidfile):
+                while True:
+                    try:
+                        moncov.stats.update.update(db=db)
+                        time.sleep(sleep_interval)
+                    except Exception as e:
+                        logging.error("exiting with error: %r" % e)
+                        sys.exit(2)
+        import os
+        pid = os.fork()
+        if not pid:
+            updater()
+
+if __name__ == '__main__':
+    app.run()
