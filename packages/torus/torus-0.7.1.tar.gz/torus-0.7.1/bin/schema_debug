@@ -1,0 +1,59 @@
+#!/usr/bin/env python
+'''
+Copyright (c) 2013, Agora Games, LLC All rights reserved.
+
+https://github.com/agoragames/torus/blob/master/LICENSE.txt
+'''
+import sys, os, argparse, re, signal
+
+import gevent, gevent.monkey
+gevent.monkey.patch_all()
+
+from torus.configuration import Configuration
+
+parser = argparse.ArgumentParser(
+  description='Debugging tool for schemas')
+parser.add_argument('--config',
+  type=str, action='append', default=[],
+  help='Configuration file to load. Can be called multiple times for multiple configuration files.')
+parser.add_argument('strings',
+  type=str, nargs='+',
+  help='One or more input strings to test against the scheams')
+
+args = parser.parse_args()
+
+c = Configuration()
+for fname in args.config:
+  c.load( fname )
+
+def print_matches(s, level=0, seen=None):
+  if not seen:
+    seen = set()
+  elif s in seen:
+    return
+  seen.add( s )
+
+  indent = '  '*level
+  print '%s%s'%(indent,s)
+  for schema in c._schemas:
+    if schema.match(s):
+      print '  %sschema: %s'%(indent,schema.name)
+      print '  %shost: %s'%(indent,schema.host)
+      # This is a bit of a hack and could easily fail for cases that this is
+      # not assuming
+      if schema._transform:
+        k,v = schema._transform(s, 1)
+        print '  %stransform: %s, %s'%(indent,k,v)
+  aggregates = c._aggregates.match(s)
+  if len(aggregates):
+    print ''
+    print '%s%s'%(indent,'AGGREGATES')
+  for ag in aggregates:
+    print_matches(ag, level+1, seen)
+    print ''
+
+for s in args.strings:
+  print '===================================================='
+  print_matches(s)
+  print '===================================================='
+  print ''
