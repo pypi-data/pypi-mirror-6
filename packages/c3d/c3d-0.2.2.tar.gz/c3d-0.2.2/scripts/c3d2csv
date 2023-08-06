@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+
+# Copyright (c) 2013 Leif Johnson <leif@leifjohnson.net>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+'''Convert a C3D file to CSV (text) format.'''
+
+from __future__ import print_function
+
+import argparse
+import c3d
+import climate
+import sys
+
+climate.add_arg('-a', '--include-analog', action='store_true',
+                help='output analog values after point positions')
+climate.add_arg('-c', '--include-camera', action='store_true',
+                help='output camera count with each point position')
+climate.add_arg('-r', '--include-error', action='store_true',
+                help='output error value with each point position')
+climate.add_arg('-e', '--end', default='\\n', metavar='K',
+                help='write K between records')
+climate.add_arg('-s', '--sep', default=',', metavar='C',
+                help='write C between fields in a record')
+
+climate.add_arg('input', default='-', metavar='FILE', nargs=argparse.REMAINDER,
+                help='process data from this input FILE')
+
+
+def convert(filename, args, sep, end):
+    input = sys.stdin
+    output = sys.stdout
+    if filename != '-':
+        input = open(filename, 'rb')
+        output = open(filename.replace('.c3d', '.csv'), 'w')
+    for frame_no, points, analog in c3d.Reader(input).read_frames():
+        fields = [frame_no]
+        for x, y, z, err, cam in points:
+            fields.append(str(x))
+            fields.append(str(y))
+            fields.append(str(z))
+            if args.include_error:
+                fields.append(str(err))
+            if args.include_camera:
+                fields.append(str(cam))
+        if args.include_analog:
+            fields.extend(str(x) for x in analog.flatten())
+        print(*fields, sep=sep, end=end, file=output)
+
+
+def main(args):
+    sep = args.sep.replace('\\t', '\t').replace('TAB', '\t')
+    end = args.end.replace(
+        '\\r', '\r').replace('CR', '\r').replace(
+        '\\n', '\n').replace('NL', '\n')
+    for filename in args.input:
+        convert(filename, args, sep, end)
+
+
+if __name__ == '__main__':
+    climate.call(main)
