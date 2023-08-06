@@ -1,0 +1,224 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>11. Testing Your Extenstions &mdash; django cms 3.0b4.dev7 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0b4.dev7',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="django cms 3.0b4.dev7 documentation" href="../index.html" />
+    <link rel="next" title="1. Introduction" href="../concepts/introduction.html" />
+    <link rel="prev" title="10. Form and model fields" href="fields.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../concepts/introduction.html" title="1. Introduction"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="fields.html" title="10. Form and model fields"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">django cms 3.0b4.dev7 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="testing-your-extenstions">
+<h1>11. Testing Your Extenstions<a class="headerlink" href="#testing-your-extenstions" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="testing-apps">
+<h2>11.1. Testing Apps<a class="headerlink" href="#testing-apps" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="resolving-view-names">
+<h3>11.1.1. Resolving View Names<a class="headerlink" href="#resolving-view-names" title="Permalink to this headline">¶</a></h3>
+<p>Your apps need testing, but in your live site they aren&#8217;t in <tt class="docutils literal"><span class="pre">urls.py</span></tt> as
+they are attached to a CMS page.  So if you want to be able to use
+<a class="reference external" href="http://readthedocs.org/docs/django/en/latest/ref/urlresolvers.html#django.core.urlresolvers.reverse" title="(in Django v1.7)"><tt class="xref py py-func docutils literal"><span class="pre">reverse()</span></tt></a> in your tests, or test templates that
+use the <a class="reference external" href="http://readthedocs.org/docs/django/en/latest/ref/templates/builtins.html#std:templatetag-url" title="(in Django v1.7)"><tt class="xref std std-ttag docutils literal"><span class="pre">url</span></tt></a> template tag, you need to hook up your app to a special
+test version of <tt class="docutils literal"><span class="pre">urls.py</span></tt> and tell your tests to use that.</p>
+<p>So you could create <tt class="docutils literal"><span class="pre">myapp/tests/test_urls.py</span></tt> with the following code:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.contrib</span> <span class="kn">import</span> <span class="n">admin</span>
+<span class="kn">from</span> <span class="nn">django.conf.urls</span> <span class="kn">import</span> <span class="n">url</span><span class="p">,</span> <span class="n">patterns</span><span class="p">,</span> <span class="n">include</span>
+
+<span class="n">urlpatterns</span> <span class="o">=</span> <span class="n">patterns</span><span class="p">(</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+    <span class="n">url</span><span class="p">(</span><span class="s">r&#39;^admin/&#39;</span><span class="p">,</span> <span class="n">include</span><span class="p">(</span><span class="n">admin</span><span class="o">.</span><span class="n">site</span><span class="o">.</span><span class="n">urls</span><span class="p">)),</span>
+    <span class="n">url</span><span class="p">(</span><span class="s">r&#39;^myapp/&#39;</span><span class="p">,</span> <span class="n">include</span><span class="p">(</span><span class="s">&#39;myapp.urls&#39;</span><span class="p">)),</span>
+    <span class="n">url</span><span class="p">(</span><span class="s">r&#39;&#39;</span><span class="p">,</span> <span class="n">include</span><span class="p">(</span><span class="s">&#39;cms.urls&#39;</span><span class="p">)),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>And then in your tests you can plug this in with the
+<tt class="xref py py-func docutils literal"><span class="pre">override_settings()</span></tt> decorator:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.test.utils</span> <span class="kn">import</span> <span class="n">override_settings</span>
+<span class="kn">from</span> <span class="nn">cms.test_utils.testcases</span> <span class="kn">import</span> <span class="n">CMSTestCase</span>
+
+<span class="k">class</span> <span class="nc">MyappTests</span><span class="p">(</span><span class="n">CMSTestCase</span><span class="p">):</span>
+
+    <span class="nd">@override_settings</span><span class="p">(</span><span class="n">ROOT_URLCONF</span><span class="o">=</span><span class="s">&#39;myapp.tests.test_urls&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">test_myapp_page</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">test_url</span> <span class="o">=</span> <span class="n">reverse</span><span class="p">(</span><span class="s">&#39;myapp_view_name&#39;</span><span class="p">)</span>
+        <span class="c"># rest of test as normal</span>
+</pre></div>
+</div>
+<p>If you want to the test url conf throughout your test class, then you can use
+apply the decorator to the whole class:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.test.utils</span> <span class="kn">import</span> <span class="n">override_settings</span>
+<span class="kn">from</span> <span class="nn">cms.test_utils.testcases</span> <span class="kn">import</span> <span class="n">CMSTestCase</span>
+
+<span class="nd">@override_settings</span><span class="p">(</span><span class="n">ROOT_URLCONF</span><span class="o">=</span><span class="s">&#39;myapp.tests.test_urls&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">MyappTests</span><span class="p">(</span><span class="n">CMSTestCase</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">test_myapp_page</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">test_url</span> <span class="o">=</span> <span class="n">reverse</span><span class="p">(</span><span class="s">&#39;myapp_view_name&#39;</span><span class="p">)</span>
+        <span class="c"># rest of test as normal</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="cmstestcase">
+<h3>11.1.2. CMSTestCase<a class="headerlink" href="#cmstestcase" title="Permalink to this headline">¶</a></h3>
+<p>Django CMS includes <tt class="docutils literal"><span class="pre">CMSTestCase</span></tt> which has various utility methods that
+might be useful for testing your CMS app and manipulating CMS pages.</p>
+</div>
+</div>
+<div class="section" id="testing-plugins">
+<h2>11.2. Testing Plugins<a class="headerlink" href="#testing-plugins" title="Permalink to this headline">¶</a></h2>
+<p>Plugins can just be created as objects and then have methods called on them.
+So you could do:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.test</span> <span class="kn">import</span> <span class="n">TestCase</span>
+<span class="kn">from</span> <span class="nn">myapp.cms_plugins</span> <span class="kn">import</span> <span class="n">MyPlugin</span>
+<span class="kn">from</span> <span class="nn">myapp.models</span> <span class="kn">import</span> <span class="n">MyappPlugin</span> <span class="k">as</span> <span class="n">MyappPluginModel</span>
+
+<span class="k">class</span> <span class="nc">MypluginTests</span><span class="p">(</span><span class="n">TestCase</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plugin</span> <span class="o">=</span> <span class="n">MyPlugin</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plugin</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">test_plugin</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;info&#39;</span><span class="p">:</span> <span class="s">&#39;value&#39;</span><span class="p">}</span>
+        <span class="n">instance</span> <span class="o">=</span> <span class="n">MyappPluginModel</span><span class="p">(</span><span class="n">num_items</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+        <span class="n">rendered_html</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">plugin</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIn</span><span class="p">(</span><span class="s">&#39;string&#39;</span><span class="p">,</span> <span class="n">rendered_html</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Sometimes you might want to add a placeholder - say to check how the plugin
+renders when it is in different size placeholders.  In that case you can create
+the placeholder directly and pass it in:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.test</span> <span class="kn">import</span> <span class="n">TestCase</span>
+<span class="kn">from</span> <span class="nn">cms.api</span> <span class="kn">import</span> <span class="n">add_plugin</span>
+<span class="kn">from</span> <span class="nn">myapp.cms_plugins</span> <span class="kn">import</span> <span class="n">MyPlugin</span>
+<span class="kn">from</span> <span class="nn">myapp.models</span> <span class="kn">import</span> <span class="n">MyappPlugin</span> <span class="k">as</span> <span class="n">MyappPluginModel</span>
+
+<span class="k">class</span> <span class="nc">ImageSetTypePluginMixinContainerWidthTests</span><span class="p">(</span><span class="n">TestCase</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">placeholder</span> <span class="o">=</span> <span class="n">Placeholder</span><span class="p">(</span><span class="n">slot</span><span class="o">=</span><span class="s">u&quot;some_slot&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">placeholder</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plugin</span> <span class="o">=</span> <span class="n">add_plugin</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">placeholder</span><span class="p">,</span>
+            <span class="s">u&quot;MyPlugin&quot;</span><span class="p">,</span>
+            <span class="s">u&quot;en&quot;</span><span class="p">,</span>
+            <span class="n">num_items</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">11. Testing Your Extenstions</a><ul>
+<li><a class="reference internal" href="#testing-apps">11.1. Testing Apps</a><ul>
+<li><a class="reference internal" href="#resolving-view-names">11.1.1. Resolving View Names</a></li>
+<li><a class="reference internal" href="#cmstestcase">11.1.2. CMSTestCase</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#testing-plugins">11.2. Testing Plugins</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="fields.html"
+                        title="previous chapter">10. Form and model fields</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../concepts/introduction.html"
+                        title="next chapter">1. Introduction</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/extending_cms/testing.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../concepts/introduction.html" title="1. Introduction"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="fields.html" title="10. Form and model fields"
+             >previous</a> |</li>
+        <li><a href="../index.html">django cms 3.0b4.dev7 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2009, Patrick Lauber.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.
+    </div>
+  </body>
+</html>
