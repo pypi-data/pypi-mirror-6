@@ -1,0 +1,132 @@
+Initialisation du programme
+###########################
+
+Initialisation de l'écran LCD
+*****************************
+Il faut créer une variable pour contrôler l'affichage LCD:
+
+.. py:function:: Adafruit_CharLCDPlate.Adafruit_CharLCDPlate()
+
+    :return: objet
+    :rtype: Adafruit_CharLCDPlate()
+
+Ici la variable créée est lcd
+
+Initialisation de l'Arduino
+***************************
+Avec Firmata_ sur l'Arduino.
+Comme avec l'écran,
+Création de la variable :
+
+.. py:function:: pyfirmata.Arduino(id)
+
+    :param id: identifiant de l'Arduino dans le répertoire /dev
+    :type id: string
+    :return: objet Arduino
+    :rtype: Arduino
+
+Ici, la variable est appelée board.
+
+Il faut ensuite commencer l'écoute sur les entrées :
+
+.. py:function:: board.analog[i].enable_reporting()
+
+    :param i: numéro de l'entrée analogique
+    :type i: integer
+    :return: None
+
+.. _Firmata: http://firmata.org
+
+Lorsque la Raspberry Pi commence à écouter, l'Arduino renvoit comme valeur None au début, il faut donc attendre que l'Arduino envoit une valeur valide avant de commencer.
+
+
+Initialisation des fichiers de sauvegarde
+*****************************************
+On désire avoir un fichier par capteur et un fichier d'horodatage.
+La création des fichiers se fait en 3 étapes :
+
+    1. définition du répertoire de stockage des fichiers
+    2. création des fichiers et d'une liste
+    3. ouverture des fichiers et remplissage de la liste
+
+La liste permet de stocker le nom des fichiers.
+
+Pour toutes ces opérations, on utilisera le module os.
+
+Chemin des fichiers
+===================
+On lit dans quel dossier on se trouve actuellement avec
+
+.. autofunction:: os.getcwd()
+
+Puis on définit le dossier de sortie par la chaîne de caractères "data" et on crée le chemin avec
+
+.. autofunction:: os.path.join(currentDir, newDir)
+
+    :param currentDir: chemin initial
+    :type currentDir: string
+    :param newDir: chemin à ajouter au currentDir
+    :type newDir: string
+    :return: nouveau chemin
+    :rtype: string
+
+On obtient alors le chemin du dossier dans lequel seront stockés les fichiers
+
+Si le dossier n'existait pas, il est créé avec
+
+.. autofunction:: os.makedirs(newpath)
+
+    :param newpath: chemin du dossier à créer
+    :type nepath: string
+    :return: None
+
+L'existence du dossier est testée avec :
+
+.. autofunction:: os.path.exists(newpath)
+
+    :param newpath: chemin dont on regarde l'existence
+    :type newpath: string
+    :return: booléen indiquant l'existence ou non du dossier
+    :rtype: boolean
+
+Création des fichiers
+=====================
+On crée la liste contenant les fichiers nommée fileList.
+On crée les noms de fichiers :
+
+.. py:function:: 'data_%s'%str(i)
+
+    :param i: numéro de l'entrée analogique correspondant à ce fichier
+    :type i: integer
+    :return: le nom de fichier sous la forme data_i avec i le numéro d'entrée analogique
+    :rtype: string
+
+On crée le chemin du fichier avec
+
+.. py:function:: os.path.join(path, filename)
+
+    :return: le chemin complet du fichier
+
+Enfin, on ouvre le fichier avec
+
+.. autofunction:: io.open(filepath, mode)
+
+On procède de même avec le fichier d'horodatage, sauf que le nom ne sera pas data_i mais timestamp.
+
+Initialisation de l'horodatage
+******************************
+
+L'initialisation de l'horodatage est faite dans la boucle principale pour avoir le moins d'écart entre l'initialisation du temps et la première mesure, i.e pour que
+la première mesure ait pour abscisse 0.
+
+Pour cela on crée un booléen timestampInitDone qu'on met à False au début. On va donc faire l'initialisation du timestamp  si et seulement si timestampInitDone est à False :
+
+.. literalinclude:: ../../EweeStats/EweeStats.py
+    :language: python
+    :lines: 147
+
+On utilise la fonction time.time pour initialiser l'horodatage :
+
+.. autofunction:: time.time()
+
+On met ensuite le booléen timestampInitDone à True pour indiquer que l'initialisation de l'horodatage a été effectuée.

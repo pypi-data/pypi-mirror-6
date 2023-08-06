@@ -1,0 +1,77 @@
+
+Multithreading
+**************
+
+Le programme a été décomposé en deux threads : un pour la lecture, le
+traitement et l'enregistrement des données et l'autre pour la création
+du graphique. Si on n'avait mis qu'un seul thread, il y aurait une
+grosse perte d'informations au moment de créer le graphique. En effet,
+celui-ci met quelques secondes à se faire. Le programme ne prendrait
+alors qu'une mesure toutes les deux ou trois secondes, ce qui est
+inacceptable. Le multithreading permet de prendre des mesures et créer
+le graphique en même temps, c'est-à-dire que le programme n'attend pas
+que le graphique ait été créé pour commencer une nouvelle mesure.
+
+
+Synchronisation des threads
+===========================
+
+Les threads sont synchronisés grâce à une queue et la variable
+transmit_is_ready.
+
+queue.Queue(maxsize=i)
+
+   Create a queue object with a given maximum size.
+
+   If maxsize is <= 0, the queue size is infinite.
+
+   Paramètres:
+      **i** (*integer*) -- taille de la queue
+
+La synchronisation se déroule comme ceci :
+
+   1. La boucle principale lit la variable transmit_is_ready, si
+      elle est à 0, on ne fait rien, si elle est à 1, on remplit la
+      queue
+
+   2. le threadGraph lit la queue, dès qu'elle est remplie :
+
+   3. on passe la variable transmit_is_ready à 0 pour que la boucle
+      principale ne remplisse plus la queue
+
+   4. le threadGraph crée le graphique, puis remet la variable
+      transmit_is_ready à 1
+
+Ainsi, dès que le threadGraph est prêt, et que la boucle principale a
+lu une valeur, un graphique est crée.
+
+Il y a donc 3 méthodes dans le programme :
+   * le premier thread dédié à la lecture, écriture ... des données
+
+   * le second dédié à la création du graphique
+
+   * et le lancement des threads
+
+La dernière méthode ne sert qu'à créer et lancer les threads à l'aide
+des fonctions
+
+threading.Thread()
+
+   A class that represents a thread of control.
+
+   This class can be safely subclassed in a limited fashion. There are
+   two ways to specify the activity: by passing a callable object to
+   the constructor, or by overriding the run() method in a subclass.
+
+et
+
+threading.Thread.start()
+
+   Start the thread's activity.
+
+   It must be called at most once per thread object. It arranges for
+   the object's run() method to be invoked in a separate thread of
+   control.
+
+   This method will raise a RuntimeError if called more than once on
+   the same thread object.

@@ -1,0 +1,188 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Multithreading &mdash; documentation EweeStats 0.0dev1</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0dev1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/translations.js"></script>
+    <link rel="top" title="documentation EweeStats 0.0dev1" href="index.html" />
+    <link rel="next" title="Diffusion du graphique" href="tech_diffusion.html" />
+    <link rel="prev" title="Création du graphique" href="tech_graph.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="Index général"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Index des modules Python"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="tech_diffusion.html" title="Diffusion du graphique"
+             accesskey="N">suivant</a> |</li>
+        <li class="right" >
+          <a href="tech_graph.html" title="Création du graphique"
+             accesskey="P">précédent</a> |</li>
+        <li><a href="index.html">documentation EweeStats 0.0dev1</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="multithreading">
+<h1>Multithreading<a class="headerlink" href="#multithreading" title="Lien permanent vers ce titre">¶</a></h1>
+<p>Le programme a été décomposé en deux threads : un pour la lecture, le traitement et l&#8217;enregistrement des données et l&#8217;autre pour la création du graphique.
+Si on n&#8217;avait mis qu&#8217;un seul thread, il y aurait une grosse perte d&#8217;informations au moment de créer le graphique. En effet, celui-ci met quelques secondes à se faire.
+Le programme ne prendrait alors qu&#8217;une mesure toutes les deux ou trois secondes, ce qui est inacceptable.
+Le multithreading permet de prendre des mesures et créer le graphique en même temps, c&#8217;est-à-dire que le programme n&#8217;attend pas que le graphique ait été créé pour commencer une nouvelle mesure.</p>
+<div class="section" id="synchronisation-des-threads">
+<h2>Synchronisation des threads<a class="headerlink" href="#synchronisation-des-threads" title="Lien permanent vers ce titre">¶</a></h2>
+<p>Les threads sont synchronisés grâce à une queue et la variable transmit_is_ready.</p>
+<dl class="function">
+<dt id="queue.Queue">
+<tt class="descclassname">queue.</tt><tt class="descname">Queue</tt><big>(</big><em>maxsize=i</em><big>)</big><a class="reference internal" href="_modules/queue.html#Queue"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#queue.Queue" title="Lien permanent vers cette définition">¶</a></dt>
+<dd><p>Create a queue object with a given maximum size.</p>
+<p>If maxsize is &lt;= 0, the queue size is infinite.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Paramètres:</th><td class="field-body"><strong>i</strong> (<em>integer</em>) &#8211; taille de la queue</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<p>La synchronisation se déroule comme ceci :</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li>La boucle principale lit la variable transmit_is_ready, si elle est à 0, on ne fait rien, si elle est à 1, on remplit la queue</li>
+<li>le threadGraph lit la queue, dès qu&#8217;elle est remplie :</li>
+<li>on passe la variable transmit_is_ready à 0 pour que la boucle principale ne remplisse plus la queue</li>
+<li>le threadGraph crée le graphique, puis remet la variable transmit_is_ready à 1</li>
+</ol>
+</div></blockquote>
+<p>Ainsi, dès que le threadGraph est prêt, et que la boucle principale a lu une valeur, un graphique est crée.</p>
+<dl class="docutils">
+<dt>Il y a donc 3 méthodes dans le programme :</dt>
+<dd><ul class="first last simple">
+<li>le premier thread dédié à la lecture, écriture ... des données</li>
+<li>le second dédié à la création du graphique</li>
+<li>et le lancement des threads</li>
+</ul>
+</dd>
+</dl>
+<p>La dernière méthode ne sert qu&#8217;à créer et lancer les threads à l&#8217;aide des fonctions</p>
+<dl class="function">
+<dt id="threading.Thread">
+<tt class="descclassname">threading.</tt><tt class="descname">Thread</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/threading.html#Thread"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#threading.Thread" title="Lien permanent vers cette définition">¶</a></dt>
+<dd><p>A class that represents a thread of control.</p>
+<p>This class can be safely subclassed in a limited fashion. There are two ways
+to specify the activity: by passing a callable object to the constructor, or
+by overriding the run() method in a subclass.</p>
+</dd></dl>
+
+<p>et</p>
+<dl class="function">
+<dt id="threading.Thread.start">
+<tt class="descclassname">threading.Thread.</tt><tt class="descname">start</tt><big>(</big><big>)</big><a class="headerlink" href="#threading.Thread.start" title="Lien permanent vers cette définition">¶</a></dt>
+<dd><p>Start the thread&#8217;s activity.</p>
+<p>It must be called at most once per thread object. It arranges for the
+object&#8217;s run() method to be invoked in a separate thread of control.</p>
+<p>This method will raise a RuntimeError if called more than once on the
+same thread object.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table des Matières</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Multithreading</a><ul>
+<li><a class="reference internal" href="#synchronisation-des-threads">Synchronisation des threads</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Sujet précédent</h4>
+  <p class="topless"><a href="tech_graph.html"
+                        title="Chapitre précédent">Création du graphique</a></p>
+  <h4>Sujet suivant</h4>
+  <p class="topless"><a href="tech_diffusion.html"
+                        title="Chapitre suivant">Diffusion du graphique</a></p>
+  <h3>Cette page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/tech_multithreading.txt"
+           rel="nofollow">Montrer la source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Recherche rapide</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Saisissez un mot clef ou un nom de module, classe ou fonction.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="Index général"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Index des modules Python"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="tech_diffusion.html" title="Diffusion du graphique"
+             >suivant</a> |</li>
+        <li class="right" >
+          <a href="tech_graph.html" title="Création du graphique"
+             >précédent</a> |</li>
+        <li><a href="index.html">documentation EweeStats 0.0dev1</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Gabriel Hondet.
+      Créé avec <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
