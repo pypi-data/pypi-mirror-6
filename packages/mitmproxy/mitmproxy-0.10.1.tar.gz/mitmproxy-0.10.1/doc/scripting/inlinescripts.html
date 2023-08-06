@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><meta  content="text/html; charset=utf-8" http-equiv="Content-Type"/>
+
+
+<link  href="../01-bootstrap.min.css" type="text/css" rel="StyleSheet"/>
+<link  href="../02-docstyle.css" type="text/css" rel="StyleSheet"/>
+<link  href="../syntax.css" type="text/css" rel="StyleSheet"/>
+<title>mitmproxy 0.10 - Inline Scripts</title></head><body><div class="navbar navbar-fixed-top">
+  <div class="navbar-inner">
+    <div class="container">
+      <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </a>
+      <a class="brand" href="../index.html">mitmproxy 0.10 docs</a>
+      </div><!--/.nav-collapse -->
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="row">
+    <div class="span3">
+      <div class="well sidebar-nav">
+            <ul class="nav nav-list">
+    <li><a href="../index.html">Introduction</a></li>
+    <li><a href="../install.html">Installation</a></li>
+    <li><a href="../howmitmproxy.html">How mitmproxy works</a></li>
+
+    <li class="nav-header">Tools</li>
+        <li><a href="../mitmproxy.html">mitmproxy</a></li>
+        <li><a href="../mitmdump.html">mitmdump</a></li>
+
+    <li class="nav-header">Features</li>
+        <li><a href="../features/anticache.html">Anticache</a></li>
+        <li><a href="../features/clientreplay.html">Client-side replay</a></li>
+        <li><a href="../features/filters.html">Filter expressions</a></li>
+        <li><a href="../features/forwardproxy.html">Forward proxy mode</a></li>
+        <li><a href="../features/proxyauth.html">Proxy Authentication</a></li>
+        <li><a href="../features/replacements.html">Replacements</a></li>
+        <li><a href="../features/serverreplay.html">Server-side replay</a></li>
+        <li><a href="../features/setheaders.html">Set Headers</a></li>
+        <li><a href="../features/sticky.html">Sticky cookies and auth</a></li>
+        <li><a href="../features/reverseproxy.html">Reverse proxy mode</a></li>
+        <li><a href="../features/upstreamcerts.html">Upstream Certs</a></li>
+
+    <li class="nav-header">Installing Certificates</li>
+        <li><a href="../ssl.html">Overview</a></li>
+        <li><a href="../certinstall/webapp.html">Using the Web App</a></li>
+        <li><a href="../certinstall/android.html">Android</a></li>
+        <li><a href="../certinstall/firefox.html">Firefox</a></li>
+        <li><a href="../certinstall/ios.html">IOS</a></li>
+        <li><a href="../certinstall/ios-simulator.html">IOS Simulator</a></li>
+        <li><a href="../certinstall/java.html">Java</a></li>
+        <li><a href="../certinstall/osx.html">OSX</a></li>
+        <li><a href="../certinstall/windows7.html">Windows 7</a></li>
+
+    <li class="nav-header">Transparent Proxying</li>
+        <li><a href="../transparent.html">Overview</a></li>
+        <li><a href="../transparent/linux.html">Linux</a></li>
+        <li><a href="../transparent/osx.html">OSX</a></li>
+
+    <li class="nav-header">Scripting mitmproxy</li>
+        <li class="active"><a href="inlinescripts.html">Inline Scripts</a></li>
+        <li><a href="libmproxy.html">libmproxy</a></li>
+
+    <li class="nav-header">Tutorials</li>
+        <li><a href="../tutorials/30second.html">Client playback: a 30 second example</a></li>
+        <li><a href="../tutorials/gamecenter.html">Setting highscores on Apple's GameCenter</a></li>
+        <li><a href="../tutorials/transparent-dhcp.html">Transparently proxify virtual machines</a></li>
+
+    <li class="nav-header">Hacking</li>
+        <li><a href="../dev/testing.html">Testing</a></li>
+</ul>
+
+      </div>
+    </div>
+
+    <div class="span9">
+        <div class="page-header">
+        <h1>Inline Scripts</h1>
+        </div>
+        <p><strong>mitmproxy</strong> has a powerful scripting API that allows you to modify flows
+on-the-fly or rewrite previously saved flows locally. </p>
+
+<p>The mitmproxy scripting API is event driven - a script is simply a Python
+module that exposes a set of event methods. Here's a complete mitmproxy script
+that adds a new header to every HTTP response before it is returned to the
+client:</p>
+
+<div class="example"><div class="highlight"><pre><span class="k">def</span> <span class="nf">response</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">flow</span><span class="p">):</span>
+    <span class="n">flow</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">headers</span><span class="p">[</span><span class="s">&quot;newheader&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;foo&quot;</span><span class="p">]</span>
+</pre></div>
+
+<div class="example_legend">(examples/add_header.py)</div></div>
+
+<p>The first argument to each event method is an instance of ScriptContext that
+lets the script interact with the global mitmproxy state. The <strong>response</strong>
+event also gets an instance of Flow, which we can use to manipulate the
+response itself.</p>
+
+<p>We can now run this script using mitmdump or mitmproxy as follows:</p>
+
+<pre class="terminal">
+> mitmdump -s add_header.py
+</pre>
+
+<p>The new header will be added to all responses passing through the proxy.</p>
+
+<h2>Events</h2>
+
+<h3>start(ScriptContext, argv)</h3>
+
+<p>Called once on startup, before any other events.</p>
+
+<h3>clientconnect(ScriptContext, ClientConnect)</h3>
+
+<p>Called when a client initiates a connection to the proxy. Note that
+a connection can correspond to multiple HTTP requests.</p>
+
+<h3>serverconnect(ScriptContext, ServerConnection)</h3>
+
+<p>Called when the proxy initiates a connection to the target server. Note that
+a connection can correspond to multiple HTTP requests.</p>
+
+<h3>request(ScriptContext, Flow)</h3>
+
+<p>Called when a client request has been received. The <strong>Flow</strong> object is
+guaranteed to have a non-None <strong>request</strong> attribute.</p>
+
+<h3>response(ScriptContext, Flow)</h3>
+
+<p>Called when a server response has been received. The <strong>Flow</strong> object is
+guaranteed to have non-None <strong>request</strong> and <strong>response</strong> attributes.</p>
+
+<h3>error(ScriptContext, Flow)</h3>
+
+<p>Called when a flow error has occurred, e.g. invalid server responses, or
+interrupted connections. This is distinct from a valid server HTTP error
+response, which is simply a response with an HTTP error code. The <strong>Flow</strong>
+object is guaranteed to have non-None <strong>request</strong> and <strong>error</strong> attributes.</p>
+
+<h3>clientdisconnect(ScriptContext, ClientDisconnect)</h3>
+
+<p>Called when a client disconnects from the proxy.</p>
+
+<h3>done(ScriptContext)</h3>
+
+<p>Called once on script shutdown, after any other events.</p>
+
+<h2>API</h2>
+
+<p>The main classes you will deal with in writing mitmproxy scripts are:</p>
+
+<table class="table">
+    <tr>
+        <th>libmproxy.flow.ClientConnection</th>
+        <td>Describes a client connection.</td>
+    </tr>
+    <tr>
+        <th>libmproxy.flow.ClientDisconnection</th>
+        <td>Describes a client disconnection.</td>
+    </tr>
+    <tr>
+        <th>libmproxy.flow.Error</th>
+        <td>A communications error.</td>
+    </tr>
+    <tr>
+        <th>libmproxy.flow.Flow</th>
+        <td>A collection of objects representing a single HTTP transaction.</td>
+    </tr>
+    <tr>
+        <th>libmproxy.flow.Headers</th>
+        <td>HTTP headers for a request or response.</td>
+    </tr>
+    <tr>
+        <th>libmproxy.flow.ODict</th>
+
+        <td>A dictionary-like object for managing sets of key/value data. There
+        is also a variant called CaselessODict that ignores key case for some
+        calls (used mainly for headers).</td>
+    </tr>
+    <tr>
+        <th>libmproxy.flow.Response</th>
+        <td>An HTTP response.</td>
+    </tr>
+    <tr>
+        <th>libmproxy.flow.Request</th>
+        <td>An HTTP request.</td>
+    </tr>
+    <tr>
+        <th>libmproxy.flow.ScriptContext</th>
+        <td> A handle for interacting with mitmproxy's from within scripts.  </td>
+    </tr>
+    <tr>
+        <th>libmproxy.certutils.SSLCert</th>
+        <td>Exposes information SSL certificates.</td>
+    </tr>
+</table>
+
+<p>The canonical API documentation is the code. You can view the API documentation
+using pydoc (which is installed with Python by default), like this:</p>
+
+<pre class="terminal">
+> pydoc libmproxy.flow.Request
+</pre>
+
+<h2>Running scripts in parallel</h2>
+
+<p>We have a single flow primitive, so when a script is handling something, other requests block.
+While that's a very desirable behaviour under some circumstances, scripts can be run threaded by using the <code>libmproxy.script.concurrent</code> decorator.</p>
+
+<div class="example"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">libmproxy.script</span> <span class="kn">import</span> <span class="n">concurrent</span>
+
+<span class="nd">@concurrent</span>
+<span class="k">def</span> <span class="nf">request</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">flow</span><span class="p">):</span>
+    <span class="k">print</span> <span class="s">&quot;handle request: </span><span class="si">%s%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">flow</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="n">flow</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+    <span class="k">print</span> <span class="s">&quot;start  request: </span><span class="si">%s%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">flow</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="n">flow</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+</pre></div>
+
+<div class="example_legend">(examples/nonblocking.py)</div></div>
+
+<h2>Running scripts on saved flows</h2>
+
+<p>Sometimes, we want to run a script on <strong>Flow</strong> objects that are already
+complete.  This happens when you start a script, and then load a saved set of
+flows from a file (see the "scripted data transformation" example on the
+<a href="../mitmdump.html">mitmdump</a> page). It also happens when you run a
+one-shot script on a single flow through the <em>|</em> (pipe) shortcut in mitmproxy.</p>
+
+<p>In this case, there are no client connections, and the events are run in the
+following order: <strong>start</strong>, <strong>request</strong>, <strong>response</strong>, <strong>error</strong>, <strong>done</strong>.  If
+the flow doesn't have a <strong>response</strong> or <strong>error</strong> associated with it, the
+matching event will be skipped. </p>
+
+    </div>
+  </div>
+
+  <hr>
+
+  <footer>
+    <p>© mitmproxy project, 2014</p>
+  </footer>
+</div>
+</body></html>
