@@ -1,0 +1,124 @@
+#! /bin/env python
+'''
+A script for getting meta data from reference fasta file
+
+The output meta data has three columns:
+sequence (chromosome) name, length of the sequence, and MD5.
+
+The MD5 of a sequence is the MD5sum of all bases in the sequence; line break
+characters and description lines are not included.
+
+
+Created on Sep 11, 2013
+
+@author: Shunping Huang
+'''
+
+from __future__ import print_function
+
+import sys
+import os.path
+import gzip
+import hashlib  # for md5
+
+try:
+    # For Python 3
+    from urllib.request import urlopen
+except ImportError:
+    # Fall back to Python 2's urllib2
+    from urllib2 import urlopen
+
+import pysam  # for faidx
+import argparse as ap  # for argument passing
+
+from modtools.fareader import FaReader
+from modtools.alias import Alias
+from modtools.refmeta import RefMeta
+from modtools.utils import *
+
+DESC = 'To compute meta data from a reference FASTA'
+
+pool = []
+alias = None
+
+
+def compute_meta(fasta_fn):
+    '''compute length and md5 (if any) for each sequence'''
+
+    global pool
+    fr = FaReader(fasta_fn)
+    fa_chroms = sorted(list(fr.chrom_names))  # chrom in the fasta file
+
+    assert len(fa_chroms) > 0, "Empty chromosomes in fasta '%s'" % fasta_fn
+    for fa_chrom in fa_chroms:
+        print("Processing '%s' in '%s' ..." % (fa_chrom, fasta_fn))
+
+        try:
+            length = fr.chrom_len(fa_chrom)
+            md5sum = fr.chrom_md5(fa_chrom)
+        except ValueError as e:
+            print(e)
+            raise ValueError("Error occured when obtaining meta "
+                             "for '%s'" % fa_chrom)
+
+        chrom = alias.getName(fa_chrom)
+        if chrom is None:  # fa_chrom not found in the alias file
+            chrom = fa_chrom
+        pool.append((chrom, length, md5sum))
+
+
+def write_meta(meta_fn):
+    '''Write meta output'''
+
+    print("Writing meta file '%s' ..." % meta_fn)
+    with open(meta_fn, 'w') as out_fp:
+        for chrom, length, md5sum in pool:
+            out_fp.write(','.join([chrom, str(length), md5sum]))
+            out_fp.write('\n')
+    print("Meta output Finished.")
+
+
+if __name__ == '__main__':
+    # Usage:
+    # refmaker [-f][-t tmp_dir][-a alias.csv][-i meta.in][-o meta.out] ref.fa
+    p = ap.ArgumentParser(description=DESC,
+                          formatter_class=ap.RawTextHelpFormatter)
+
+    p.add_argument("-f", dest='force', action='store_true',
+                   help='overwrite existing meta output')
+
+    p.add_argument('-a', metavar='alias.csv', dest='alias_fn',
+                   default=None,
+                   help='the csv file for alias classes of sequence name'
+                   ' (default: None)')
+
+    p.add_argument('-o', metavar='ref.meta', dest='metaout_fn',
+                   default=None,
+                   help='the output meta data file (default: <ref_name>.meta)')
+
+    p.add_argument('ref_name', metavar='ref_name',
+                   help='the name/id of the reference')
+
+    p.add_argument('fasta_fn', metavar='ref.fa',
+                   default="ref.fa",
+                   help='the input reference in fasta format')
+
+    args = p.parse_args()
+
+    if args.alias_fn is not None:
+        is_file_readable(args.alias_fn)
+
+    alias = Alias()
+    try:
+        alias.load(args.alias_fn)
+    except:
+        pass
+
+    is_file_readable(args.fasta_fn)
+
+    if args.metaout_fn is None:
+        args.metaout_fn = '%s.meta' % args.ref_name
+    is_file_writable(args.metaout_fn, args.force)
+
+    compute_meta(args.fasta_fn)
+    write_meta(args.metaout_fn)

@@ -1,0 +1,56 @@
+#! /bin/env python
+
+'''
+Show the Statistics of a MOD file.
+
+Created on Oct 6, 2012
+
+@author: Shunping Huang
+'''
+
+from modtools.mod import Mod
+import sys
+import os.path
+
+
+if len(sys.argv) != 2:
+    print("Usage: python %s in.mod" % sys.argv[0])
+    sys.exit(1)
+
+mod_fn = sys.argv[1]
+mod = Mod(mod_fn)
+
+print('Date:%s' % mod.meta.get('date', 'NULL'))
+print('')
+print('Reference:%s' % mod.meta.get('reference', 'NULL'))
+for chrom in sorted(mod.refmeta.keys()):
+    meta = mod.refmeta.get(chrom)
+    print(meta)
+print('')
+print('Sample:%s' % mod.meta.get('sample', 'NULL'))
+
+total = dict()
+total['s'] = 0
+total['i'] = 0
+total['d'] = 0
+
+counts = dict()
+for chrom in sorted(mod.refmeta.keys()):
+    counts['s'] = 0
+    counts['i'] = 0
+    counts['d'] = 0
+    mod.load(chrom)
+    for tup in mod.data:
+        if tup[0] in counts.keys():
+            counts[tup[0]] += (1 if tup[0] == 's' else len(tup[3]))
+        else:
+            print("Unknown op: '%s'" % tup[0])
+
+    for inst in ['s', 'i', 'd']:
+        total[inst] += counts[inst]
+
+    print('chrom=%s, length=%d, s=%d, i=%d, d=%d' %
+          (chrom, mod.refmeta[chrom].length + counts['i'] - counts['d'],
+           counts['s'], counts['i'], counts['d']))
+
+print('Genome-wide: s=%d, i=%d, d=%d' % (total['s'], total['i'], total['d']))
