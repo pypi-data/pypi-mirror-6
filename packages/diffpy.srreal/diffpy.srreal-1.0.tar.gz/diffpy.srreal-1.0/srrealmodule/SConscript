@@ -1,0 +1,55 @@
+import sys
+import os
+
+Import('env', 'GlobSources', 'pyoutput')
+
+# make sure numpy headers are available
+npdirs = pyoutput(
+    'from numpy.distutils.misc_util import get_numpy_include_dirs\n'
+    'print "\\n".join(get_numpy_include_dirs())')
+npdirs = map(str.strip, npdirs.split('\n'))
+env.AppendUnique(CPPPATH=npdirs)
+
+# configure the boost_python library, which may have different extensions
+if not (GetOption('clean') or env.GetOption('help')):
+    SConscript('SConscript.configure')
+
+# python extension module
+module = env.SharedLibrary('srreal_ext', GlobSources('*.cpp'),
+        SHLIBPREFIX='', SHLIBSUFFIX='.so')
+Alias('module', module)
+
+# install in a development mode
+egginfo = env.Command('#/diffpy.srreal.egg-info', None,
+        '$python setup.py egg_info')
+develop = Alias('develop', [egginfo, Install('#/diffpy/srreal', module)])
+
+test = env.Alias('test', develop,
+        '$python -m diffpy.srreal.tests.run')
+AlwaysBuild(test)
+
+# normal install - trick distutils into using this module.
+build_platlib = pyoutput('\n'.join([
+    "from distutils.core import Distribution",
+    "from distutils.command.build import build",
+    "bcmd = build(Distribution())",
+    "bcmd.finalize_options()",
+    "print bcmd.build_platlib",
+    ]))
+distmodfile = os.path.join(build_platlib,
+    'diffpy', 'srreal', os.path.basename(str(module[0])))
+cmd_install = '$python setup.py install'
+if 'prefix' in env:
+    cmd_install += ' --prefix=' + env['prefix']
+install = env.Alias('install', module, [
+    Mkdir(os.path.dirname(distmodfile)),
+    Copy(distmodfile, '$SOURCE'),
+    Touch(distmodfile),
+    cmd_install,
+    ])
+AlwaysBuild(install)
+
+# default targets:
+Default(module)
+
+# vim: ft=python
