@@ -1,0 +1,234 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>edeposit.amqp.calibre &mdash; edeposit.amqp.calibre 1.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '1.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="edeposit.amqp.calibre 1.0.1 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">edeposit.amqp.calibre 1.0.1 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for edeposit.amqp.calibre</h1><div class="highlight"><pre>
+<span class="c">#! /usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c">#</span>
+<span class="c"># Interpreter version: python 2.7</span>
+<span class="c">#</span>
+<span class="c">#= Imports ====================================================================</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">AMQP communication wrapper for calibre&#39;s ``ebook-convert`` program.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">namedtuple</span>
+
+
+<span class="kn">import</span> <span class="nn">calibre</span>
+
+
+<span class="c">#= Variables ==================================================================</span>
+<span class="n">INPUT_FORMATS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s">&quot;cbz&quot;</span><span class="p">,</span>
+    <span class="s">&quot;cbr&quot;</span><span class="p">,</span>
+    <span class="s">&quot;cbc&quot;</span><span class="p">,</span>
+    <span class="s">&quot;chm&quot;</span><span class="p">,</span>
+    <span class="s">&quot;djvu&quot;</span><span class="p">,</span>
+    <span class="s">&quot;docx&quot;</span><span class="p">,</span>
+    <span class="s">&quot;epub&quot;</span><span class="p">,</span>
+    <span class="s">&quot;fb2&quot;</span><span class="p">,</span>
+    <span class="s">&quot;html&quot;</span><span class="p">,</span>
+    <span class="s">&quot;htmlz&quot;</span><span class="p">,</span>
+    <span class="s">&quot;lit&quot;</span><span class="p">,</span>
+    <span class="s">&quot;lrf&quot;</span><span class="p">,</span>
+    <span class="s">&quot;mobi&quot;</span><span class="p">,</span>
+    <span class="s">&quot;odt&quot;</span><span class="p">,</span>
+    <span class="s">&quot;pdf&quot;</span><span class="p">,</span>
+    <span class="s">&quot;prc&quot;</span><span class="p">,</span>
+    <span class="s">&quot;pdb&quot;</span><span class="p">,</span>
+    <span class="s">&quot;pml&quot;</span><span class="p">,</span>
+    <span class="s">&quot;rb&quot;</span><span class="p">,</span>
+    <span class="s">&quot;rtf&quot;</span><span class="p">,</span>
+    <span class="s">&quot;snb&quot;</span><span class="p">,</span>
+    <span class="s">&quot;tcr&quot;</span><span class="p">,</span>
+    <span class="s">&quot;txt&quot;</span><span class="p">,</span>
+    <span class="s">&quot;txtz&quot;</span>
+<span class="p">]</span>
+<span class="s">&quot;List of `available input &lt;http://bit.ly/1c1bHZP&gt;`_ formats.&quot;</span>
+
+<span class="n">OUTPUT_FORMATS</span> <span class="o">=</span> <span class="p">[</span>  <span class="c">#:</span>
+    <span class="s">&quot;azw3&quot;</span><span class="p">,</span>
+    <span class="s">&quot;epub&quot;</span><span class="p">,</span>
+    <span class="s">&quot;fb2&quot;</span><span class="p">,</span>
+    <span class="s">&quot;oeb&quot;</span><span class="p">,</span>
+    <span class="s">&quot;lit&quot;</span><span class="p">,</span>
+    <span class="s">&quot;lrf&quot;</span><span class="p">,</span>
+    <span class="s">&quot;mobi&quot;</span><span class="p">,</span>
+    <span class="s">&quot;htmlz&quot;</span><span class="p">,</span>
+    <span class="s">&quot;pdb&quot;</span><span class="p">,</span>
+    <span class="s">&quot;pml&quot;</span><span class="p">,</span>
+    <span class="s">&quot;rb&quot;</span><span class="p">,</span>
+    <span class="s">&quot;pdf&quot;</span><span class="p">,</span>
+    <span class="s">&quot;rtf&quot;</span><span class="p">,</span>
+    <span class="s">&quot;snb&quot;</span><span class="p">,</span>
+    <span class="s">&quot;tcr&quot;</span><span class="p">,</span>
+    <span class="s">&quot;txt&quot;</span><span class="p">,</span>
+    <span class="s">&quot;txtz&quot;</span>
+<span class="p">]</span>
+<span class="s">&quot;List of `available output &lt;http://bit.ly/1c1bHZP&gt;`_ formats.&quot;</span>
+
+
+<span class="c">#= Functions &amp; objects ========================================================</span>
+<div class="viewcode-block" id="ConversionRequest"><a class="viewcode-back" href="../../../index.html#edeposit.amqp.calibre.ConversionRequest">[docs]</a><span class="k">class</span> <span class="nc">ConversionRequest</span><span class="p">(</span><span class="n">namedtuple</span><span class="p">(</span><span class="s">&quot;ConversionRequest&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;input_format&quot;</span><span class="p">,</span>
+                                                         <span class="s">&quot;output_format&quot;</span><span class="p">,</span>
+                                                         <span class="s">&quot;b64_data&quot;</span><span class="p">])):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This structure specifies details of AMQP message, which is passed to</span>
+<span class="sd">    :func:`reactToAMQPMessage` as request for conversion.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        input_format (str):  see :attr:`INPUT_FORMATS` for list of valid input</span>
+<span class="sd">                             formats</span>
+<span class="sd">        output_format (str): see :attr:`OUTPUT_FORMATS` for list of valid output</span>
+<span class="sd">                             formats</span>
+<span class="sd">        b64_data (base64 str): :py:mod:`base64` encoded file</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: if invalid input/output format is provided.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_format</span><span class="p">,</span> <span class="n">output_format</span><span class="p">,</span> <span class="n">b64_data</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">input_format</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">INPUT_FORMATS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Unsupported input format!&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">output_format</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">OUTPUT_FORMATS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Unsupported output format!&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">input_format</span> <span class="o">==</span> <span class="n">output_format</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Input and output formats are the same.&quot;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="ConversionResponse"><a class="viewcode-back" href="../../../index.html#edeposit.amqp.calibre.ConversionResponse">[docs]</a><span class="k">class</span> <span class="nc">ConversionResponse</span><span class="p">(</span><span class="n">namedtuple</span><span class="p">(</span><span class="s">&quot;ConversionResponse&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;format&quot;</span><span class="p">,</span>
+                                                           <span class="s">&quot;b64_data&quot;</span><span class="p">,</span>
+                                                           <span class="s">&quot;protocol&quot;</span><span class="p">])):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Structure is returned as response from :func:`reactToAMQPMessage`, when</span>
+<span class="sd">    the file is converted.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        type (str): see OUTPUT_FORMATS for details</span>
+<span class="sd">        b64_data (base64 str): :py:mod:`base64` encoded converted data</span>
+<span class="sd">        protocol (str): protocol of the conversion</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_instanceof</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">class_</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check type by matching ``.__name__``.&quot;&quot;&quot;</span>
+    <span class="nb">type</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span><span class="o">.</span><span class="n">__name__</span> <span class="o">==</span> <span class="n">class_</span><span class="o">.</span><span class="n">__name__</span>
+
+
+<div class="viewcode-block" id="reactToAMQPMessage"><a class="viewcode-back" href="../../../index.html#edeposit.amqp.calibre.reactToAMQPMessage">[docs]</a><span class="k">def</span> <span class="nf">reactToAMQPMessage</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">UUID</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    React to given (AMQP) message. `message` is usually expected to be</span>
+<span class="sd">    :py:func:`collections.namedtuple` structure filled with all necessary data.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        message (\*Request class): only :class:`ConversionRequest` class is</span>
+<span class="sd">                                  supported right now</span>
+<span class="sd">        UUID (str): unique ID of received message</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        ConversionResponse: response filled with data about conversion and\</span>
+<span class="sd">                            converted file.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: if bad type of `message` structure is given.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">_instanceof</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">ConversionRequest</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">calibre</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span>
+            <span class="n">message</span><span class="o">.</span><span class="n">input_format</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">.</span><span class="n">output_format</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">.</span><span class="n">b64_data</span>
+        <span class="p">)</span>
+
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+        <span class="s">&quot;Unknown type of request: &#39;&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">message</span><span class="p">))</span> <span class="o">+</span> <span class="s">&quot;&#39;!&quot;</span>
+    <span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">edeposit.amqp.calibre 1.0.1 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
