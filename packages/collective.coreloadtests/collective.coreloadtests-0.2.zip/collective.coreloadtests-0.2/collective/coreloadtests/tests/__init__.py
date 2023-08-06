@@ -1,0 +1,1 @@
+"""collective.coreloadtests.tests"""
