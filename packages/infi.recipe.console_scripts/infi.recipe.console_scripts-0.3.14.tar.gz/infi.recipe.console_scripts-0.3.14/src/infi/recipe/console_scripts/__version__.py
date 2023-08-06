@@ -1,0 +1,10 @@
+__version__ = "0.3.14"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.3.14)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '9eb4f7a0dccb4d5d6578a50b82651e52dd2ef773'
+__git_head_subject__ = 'Finished release v0.3.14.'
+__git_head_message__ = '* release/v0.3.14:\n  white space\n  using infi.pyutils instead of mock to patch pkg_resources'
+__git_dirty_diff__ = ''
