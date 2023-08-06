@@ -1,0 +1,302 @@
+#!/bin/bash
+# exit on any error, exit if any command in a pipe fails
+set -e -o pipefail
+# for debugging: print all commands
+# set -x
+
+# to avoid problems when the script changes while it is
+# run, we copy it to a 'safe' place and execute it from there
+if [ "$1" = "--dontexec" ]; then
+	shift
+else
+	TMPFILE=$(mktemp -t runbwa.XXXXXXXX).sh || exit 1
+	cat $0 >> $TMPFILE
+	chmod +x $TMPFILE
+	trap "rm $TMPFILE" exit
+	$TMPFILE --dontexec "$@"
+	exit
+fi
+CMDLINE="$@"
+
+DEFAULTFASTAREF=hg1kv37.fasta.gz
+DEFAULTCSFASTAREF=hg1kv37.fasta.gz
+DEFAULTTHREADS=4
+BUFFER="pv -q -B 40M"
+#BUFFER="bfr -m 0 -b 40M"
+
+# memory used by samtools sort, in million bytes (MB)
+MEMORY=2000
+THREADS=$DEFAULTTHREADS
+CS="" # set to -c to enable color space
+PE="" # set to 'pe' to enable paired-end mapping
+
+function usage() {
+	echo "Usage:"
+	echo
+	echo "sqt-bwa [options] <BAM> <FASTQ1> [<FASTQ2>]"
+	echo
+	echo "Map single-end or paired-end reads with BWA. FASTQ1 (and FASTQ2) are the input"
+	echo "files (can be gzipped). If FASTQ2 is not given, single-end mapping is done."
+	echo "BAM is the name of the output BAM file."
+	echo "The BAM file will be sorted unless --dontsort is given."
+	echo "Duplicates will be marked unless --dontmarkdup is given."
+	echo
+	echo "As last step, the BAM files is written atomically (it is renamed"
+	echo "from a temporary file). That is, the file exists iff everything"
+	echo "was successful."
+	echo
+	echo "Options"
+	echo
+	echo "-r REF      Reference FASTA file to use. Allowed extensions"
+	echo "            are .fa.gz, .fa, .fasta.gz and .fasta (the first"
+	echo "            found is used). A bwa index should exist at that"
+	echo "            location."
+	echo "            (Default: $DEFAULTFASTAREF)"
+	echo "            (Default for color space: $DEFAULTCSFASTAREF)"
+	echo
+	echo "--dontsort  Do not create a sorted BAM file (will also disable duplicate marking)"
+	echo "--dontmarkdup Do not mark duplicates in BAM file"
+	echo "-t THREADS  No. of threads to use. This is divided by two for paired-end when -b is used (Default: $DEFAULTTHREADS)"
+	echo "-c          Enable color space"
+	echo "-b          Run all processes at the same time using a FIFO -- needs up to three times as much RAM"
+	echo "-f, --force When an output file exists, overwrite it instead of failing."
+	echo
+	echo "Options passed on to 'bwa aln'"
+	echo "-k SEEDERRS allowed errors in seed"
+	echo "-l SEEDLEN  seed length"
+	echo "-n ERRORS   allowed errors or allowed missing prob."
+	echo "-q QUAL     quality threshold for read trimming"
+	echo
+	echo "Options passed on to 'bwa samse' or 'bwa sampe'"
+	echo "-i ID   read group identifier (ID)"
+	echo "-m SM   read group sample (SM), required if ID is given"
+# 	echo "-l LB   read group library (LB)"
+	echo "-p PL   read group platform (PL)"
+	echo
+	echo "Error: $1"
+	exit 2
+}
+
+SORT="yes"
+MARKDUP="yes"
+FASTAREF=""
+BWAPARAMETERS=""
+RGPARAMETERS=""
+QUALFILTER="no"
+FIFO="no"
+FORCE="no"
+
+while true; do
+	case "$1" in
+		"-b") FIFO=yes; shift;;
+		"-r") FASTAREF=$2; shift 2;;
+		"-c") CS="-c"; shift 1;;
+		"-t") THREADS=$2; shift 2;;
+		"--dontsort") SORT="no"; MARKDUP="no"; shift 1;;
+		"--dontmarkdup") MARKDUP="no"; shift 1;;
+		"--force"|"-f") FORCE="yes"; shift 1;;
+		"-n"|"-k"|"-l") BWAPARAMETERS="$BWAPARAMETERS $1 $2"; shift 2;;
+		"-q") BWAPARAMETERS="$BWAPARAMETERS $1 $2"; QUALFILTER=yes; shift 2;;
+		"-i") RGID=$2; shift 2;;
+		"-m") RGSM=$2; shift 2;;
+		"-p") RGPL=$2; shift 2;;
+		-*) usage "parameter $1 not recognized";;
+		*) break;;
+	esac
+done
+
+if [ x$CS = x-c ] && [ x$QUALFILTER = xyes ]; then
+	echo "Sorry, trimming low-quality ends does not work in colorspace"
+	echo "(BWA bug)"
+	exit 2
+fi
+
+RGLINE=""
+if [ x$RGID != x ]; then
+	if [ x$RGSM = x ]; then
+		echo "If -i is used, -m is also required"
+		exit 2
+	fi
+	RGLINE="@RG\\tID:${RGID}\\tSM:${RGSM}"
+	if [ x$RGPL != x ]; then
+		RGLINE="$RGLINE\\tPL:${RGPL}"
+	fi
+	RGPARAMETERS="-r $RGLINE"
+fi
+
+# If FASTAREF wasn't set via command-line parameter,
+# assign defaults.
+if [ x$FASTAREF = x ]; then
+	if [ x$CS != x ]; then
+		FASTAREF=$DEFAULTCSFASTAREF
+	else
+		FASTAREF=$DEFAULTFASTAREF
+	fi
+fi
+
+if [ $# -ne 2 -a $# -ne 3 ]; then
+	usage "Two or three parameters needed."
+fi
+
+if [ ! -e "${FASTAREF}" ]; then
+	usage "File $FASTAREF does not exist."
+fi
+REF=$FASTAREF
+
+if [ ! -e $REF.pac ]; then
+	echo "File $REF.pac does not exist -- it seems there's no index"
+	echo "usable by bwa at the given reference location."
+	echo
+	if [ x$CS = "x-c" ]; then
+		echo "You can create a color space index as follows:"
+	else
+		echo "You can create an index as follows:"
+	fi
+	echo
+	echo "bwa index $CS $FASTAREF"
+	echo
+	exit 2
+fi
+
+if [ x$CS != x -a ! -e $REF.nt.ann ]; then
+	echo "An index was found at $REF, but no $REF.nt.ann exists."
+	echo "This is probably not a color space index. Use the -c option"
+	echo "to bwa index to create one."
+	exit 2
+elif [ x$CS = x -a -e $REF.nt.ann ]; then
+	echo "An index was found at $REF, but a file $REF.nt.ann exists."
+	echo "This means that this is probably a color space index, which"
+	echo "will not work with non-colorspace data."
+	exit 2
+fi
+
+BAM="$1"
+
+if [ "${FORCE}" = "no" -a -e "${BAM}" ]; then
+	echo "Output file ${BAM} already exists, will not overwrite."
+	exit 1
+fi
+
+# Create a temporary directory
+TMPDIR=$(mktemp -d --tmpdir runbwa.XXXXXXXX) || exit 1
+trap "rm -r ${TMPDIR}" EXIT
+
+READS1="$2"
+NAME1=$(basename ${READS1})
+
+# Create a FIFO
+SAI1=${TMPDIR}/${NAME1}.1.sai
+if [ x$FIFO = xyes ]; then
+	mkfifo ${SAI1}
+fi
+
+# When paired-end ...
+if [ $# -eq 3 ]; then
+	PE=pe
+	READS2=$3
+	if ! sqt-checkfastqpe -q "${READS1}" "${READS2}"; then
+		echo "Sorry, your paired-end FASTQ files are not properly paired"
+		exit 3
+	fi
+	NAME2=$(basename ${READS2})
+	SAI2=${TMPDIR}/${NAME2}.2.sai
+	if [ x$FIFO = xyes ]; then
+		mkfifo ${SAI2}
+		THREADS=$[(THREADS+1)/2]
+	fi
+fi
+
+if [ x$SORT = xno -a x$MARKDUP = xno ]; then
+	# If the next step is the last step,
+	# put target on same partition as final BAM.
+	MAPPEDBAM=${BAM}.runbwatmp.unsorted.$$.bam
+else
+	# Otherwise, put on tmp file system
+	MAPPEDBAM=${TMPDIR}/runbwa.unsorted.bam
+fi
+
+echo -n "Time started: "; date +'%F %T %:z'
+echo "Command line:" $0 $CMDLINE
+echo "Running on host:" $HOSTNAME
+echo "Running processes in parallel: " $FIFO
+echo "Paired-end:" $PE
+# echo "running bwa aln (SAI: ${SAI1}) ..."
+BWACMD="bwa aln ${BWAPARAMETERS} $CS -t ${THREADS} ${REF}"
+echo "running: $BWACMD ${READS1} > ${SAI1}"
+if [ x$FIFO = xyes ]; then
+	${BWACMD} ${READS1} | ${BUFFER} > ${SAI1} &
+else
+	${BWACMD} ${READS1} > ${SAI1}
+fi
+
+if [ x$PE = xpe ]; then
+	echo "running bwa aln for second set of reads ..."
+	if [ x$FIFO = xyes ]; then
+		${BWACMD} ${READS2} > ${SAI2} | ${BUFFER} &
+	else
+		${BWACMD} ${READS2} > ${SAI2}
+	fi
+
+	BWASAMPE="bwa sampe ${RGPARAMETERS} ${REF} ${SAI1} ${SAI2} ${READS1} ${READS2}"
+	echo "running: ${BWACMD2}"
+	(	echo -e "@PG\tID:bwa_aln1\tCL:\"${BWACMD} ${READS1}\""
+		echo -e "@PG\tID:bwa_aln2\tCL:\"${BWACMD} ${READS2}\""
+		${BWASAMPE}
+	) |  sqt-samfixn | samtools view -bS - > ${MAPPEDBAM}
+	echo "bwa sampe finished."
+else
+
+	BWASAMSE="bwa samse ${RGPARAMETERS} ${REF} ${SAI1} ${READS1}"
+	echo "running: $BWASAMSE"
+	# TODO -n 10
+	(
+		echo -e "@PG\tID:bwa_aln\tCL:\"${BWACMD} ${READS1}\""
+		${BWASAMSE}
+	) | sqt-samfixn | samtools view -bS - > ${MAPPEDBAM}
+	echo "bwa samse finished."
+fi
+echo -n "Time: "; date +'%F %T %:z'
+
+echo "Written: ${MAPPEDBAM}"
+CURRENTBAM=${MAPPEDBAM}
+
+if [ x$SORT = xyes ]; then
+	echo "Checking BAM file ..."
+	if ! sqt-bam-eof -q ${CURRENTBAM}; then
+		echo "BAM file is corrupt (truncated)"
+		exit 1
+	fi
+	if [ x$MARKDUP = xno ]; then
+		# this is the last step:
+		# put target on same partition as final BAM.
+		TMPBAM=${BAM}.runbwatmp.sorted.$$.bam
+	else
+		# Otherwise, put on tmp file system
+		TMPBAM=${TMPDIR}/runbwa.sorted.bam
+	fi
+	echo "Sorting BAM file ..."
+	samtools sort -m ${MEMORY}000000 ${CURRENTBAM} ${TMPBAM%.bam}
+	echo "Sorting finished."
+
+	rm ${CURRENTBAM}
+	CURRENTBAM=${TMPBAM}
+fi
+
+
+if [ x$MARKDUP = xyes ]; then
+	TMPBAM=${BAM}.runbwatmp.dupmarked.$$.bam
+	samtools index ${CURRENTBAM}
+	picard-tools MarkDuplicates ASSUME_SORTED=true I=${CURRENTBAM} O=${TMPBAM} M=${BAM}.metrices VALIDATION_STRINGENCY=LENIENT
+	CURRENTBAM=${TMPBAM}
+fi
+
+# final steps: indexing and renaming
+if [ x$SORT = xyes ]; then
+	echo "Indexing BAM file ..."
+	samtools index ${CURRENTBAM}
+	echo "Indexing finished."
+	mv ${CURRENTBAM}.bai ${BAM}.bai
+fi
+mv ${CURRENTBAM} ${BAM}
+
+echo -n "Time finished: "; date +'%F %T %:z'

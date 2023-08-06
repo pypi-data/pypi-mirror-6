@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+%prog [options] <CSFASTA> <QUALFASTA>
+
+Read SAM from standard input, add CS and CQ tags using the reads from
+CSFASTA/QUALFASTA (.csfasta/.qual), and write the modified SAM file to
+standard output.
+
+The order of reads in the CSFASTA/QUALFASTA files must be the same as the order
+of reads in the input SAM file.
+
+CSFASTA and QUALFASTA may be gzip compressed.
+"""
+
+from __future__ import print_function, division
+import sys
+import gzip
+from sqt import HelpfulOptionParser
+from pysam import Samfile, AlignedRead
+from sqt.io.fasta import FastaQualReader
+
+
+__author__ = "Marcel Martin"
+
+def SamOrBam(name, mode='r'):
+	if name.endswith('.bam'):
+		mode += 'b'
+	return Samfile(name, mode)
+
+
+def xopen(name):
+	if name.endswith('.gz'):
+		return gzip.open(name)
+	else:
+		return open(name)
+
+
+def main():
+	parser = HelpfulOptionParser(usage=__doc__)
+	(options, args) = parser.parse_args()
+	if len(args) != 2:
+		parser.error("Sorry, two file names required!")
+
+	csfastafilename, csqualfilename = args
+
+	# open csfasta/qual
+	csfasta = xopen(csfastafilename)
+	csqual = xopen(csqualfilename)
+	csfastaqual = FastaQualReader(csfasta, csqual, colorspace=True)
+	sequenceit = iter(csfastaqual)
+
+	# open both SAM/BAM files
+	insam = SamOrBam("-")
+	header = insam.header.copy() # TODO needed?
+	outsam = Samfile("-", "wh", header=header)
+
+	n = 0
+	total = 0
+	for record in insam:
+		desc, seq, qual = sequenceit.next()
+		if desc.endswith('_F3'):
+			desc = desc[:-3]
+		assert desc == record.qname, "FASTQ read name: '{}' does not match SAM read name: '{}'".format(desc, record.qname)
+		if record.tags is None:
+			record.tags = [('CS', seq), ('CQ', qual)]
+			n += 1
+		elif 'CS' not in dict(record.tags):
+			record.tags += [ ('CS', seq), ('CQ', qual) ]
+			n += 1
+		outsam.write(record)
+		total += 1
+	insam.close()
+	outsam.close()
+	print("CS/CQ tags added to {} of {} reads".format(n, total), file=sys.stderr)
+
+
+if __name__ == '__main__':
+	main()

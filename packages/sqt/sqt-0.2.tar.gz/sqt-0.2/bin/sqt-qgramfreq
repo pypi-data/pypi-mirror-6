@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""
+Determine q-gram (also called k-mer) frequencies in a FASTA or FASTQ file.
+
+The result is a list of q-grams and their counts, sorted by counts from
+least to most frequent.
+
+Example:
+
+%(prog)s file.fastq
+"""
+import sys
+from collections import Counter
+
+from sqt import HelpfulArgumentParser
+from sqt.io.fasta import SequenceReader
+
+__author__ = "Marcel Martin"
+
+def q_grams(s, q):
+	"""yield all q-grams in s"""
+	for i in range(len(s) - q):
+		yield s[i:i+q]
+
+
+def main():
+	parser = HelpfulArgumentParser(description=__doc__)
+	parser.add_argument("-q", default=4,
+		help="length of the q-grams (also called k-mers) (default: %(default)s)")
+	#parser.add_argument("-s", "--summarize", action="store_true", dest="summary", default=False,
+		#help="Print summary (default: %(default)s)")
+	#parser.add_argument("-c", "--colorspace", action='store_true', default=False,
+		#help="Work in color space")
+	parser.add_argument("path", metavar='FASTA/FASTQ', help="input FASTA or FASTQ file")
+	args = parser.parse_args()
+
+	counts = Counter()
+	with SequenceReader(args.path) as reader:
+		for record in reader:
+			counts.update(q_grams(record.sequence, args.q))
+	for elem, count in counts.most_common()[::-1]:
+		print(elem, count)
+
+
+if __name__ == '__main__':
+	main()

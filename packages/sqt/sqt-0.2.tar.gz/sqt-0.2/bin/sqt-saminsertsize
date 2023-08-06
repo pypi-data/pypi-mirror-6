@@ -1,0 +1,41 @@
+#!/bin/bash
+set -e -o pipefail
+
+HELP="Usage:
+$(basename $0) <BAM> [<region1> ...]
+
+Print mean and standard deviation of insert sizes of properly paired
+paired-end reads within the given region, or of the entire file if no
+region is specified.
+"
+
+function usage() {
+	echo "$HELP"
+
+	if [ "$1" = help ]; then
+		exit 0
+	else
+		echo
+		echo "Error: $1"
+		exit 2
+	fi
+}
+
+if [ "$1" == "--help" ]; then
+	usage help
+fi
+if [ $# -eq 0 ]; then
+	usage "Need at least the name of a BAM file"
+fi
+
+samtools view -f 0x42 "$@" | \
+	awk '{
+		v = ($9<0)?-$9:$9
+		sqsum += v*v
+		sum += v
+	}
+	END {
+		variance = (sqsum-sum*sum/NR)/(NR-1)
+		print "mean:", sum/NR
+		print "stddev:", sqrt(variance)
+	}'
