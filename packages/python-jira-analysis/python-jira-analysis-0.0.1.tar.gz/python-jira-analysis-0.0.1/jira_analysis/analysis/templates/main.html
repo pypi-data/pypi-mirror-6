@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% load extra_tags %}
+
+{% block head-extra %}
+<script type="text/javascript">
+    $(function () {
+
+        //$('#navbar').scrollspy();
+
+        $('#histogram_container').highcharts({
+            chart: {
+                zoomType: 'x',
+                spacingRight: 20
+            },
+            title: {
+                text: 'Histogram'
+            },
+            xAxis: [{
+                categories: [
+                    {% for v in histogram %}'{{ v.0|days }}'{% if not forloop.last %},{% endif %}{% endfor %}
+                ]
+/*                type: 'datetime',
+                maxZoom: 14 * 24 * 3600000, // fourteen days
+                title: {
+                    text: null
+                }*/
+            }],
+            yAxis: {
+                title: {
+                    text: 'Work items'
+                }
+            },
+            tooltip: {
+                shared: true
+            },
+            legend: {
+                enabled: true
+            },
+            plotOptions: {
+                spline: {
+                    dashStyle: 'Solid',
+                    shadow: true,
+                    lineWidth: 5,
+                    marker: {
+                        enabled: false
+                    }
+                }
+            },
+            series: [{
+                name: 'Work items',
+                type: 'column',
+                data: [{% for v in histogram %}
+                    {{ v.1 }}{% if not forloop.last %},{% endif %}
+                {% endfor %}],
+                tooltip: {
+                    pointFormat: '{point.y:.1f}',
+                }
+            }, {
+                name: 'Bugs',
+                type: 'column',
+                data: [{% for v in histogram %}
+                    {{ v.2 }}{% if not forloop.last %},{% endif %}
+                {% endfor %}],
+                tooltip: {
+                    pointFormat: '{point.y:.1f}',
+                }
+            }, {
+                name: 'Non bugs',
+                type: 'column',
+                data: [{% for v in histogram %}
+                    {{ v.3 }}{% if not forloop.last %},{% endif %}
+                {% endfor %}],
+                tooltip: {
+                    pointFormat: '{point.y:.1f}',
+                }
+            }, {
+                name: 'Work items',
+                type: 'errorbar',
+                data: [[1, 2], [2, 3]
+                ],
+                tooltip: {
+                    pointFormat: '{point.y:.1f}',
+                }
+            }, {
+                type: 'spline',
+                name: 'min',
+                data: [
+                       {% for pr in project_records %}
+                       [{{ pr.record.timestamp|date:"U000" }}, {{pr.effort }}]{% if forloop.last %}{% else %},{% endif %}
+                       {% endfor %}
+                ]
+            }, {
+                type: 'spline',
+                name: 'duration',
+                data: [
+                       {% for pr in project_records %}
+                       [{{ pr.record.timestamp|date:"U000" }}, {{pr.duration }}]{% if forloop.last %}{% else %},{% endif %}
+                       {% endfor %}
+                ]
+            }
+            ]
+        });
+    });
+</script>
+{% endblock %}
+
+{% block content %}
+
+Data generated for JQL: <code>{{ context.jql }}</code>
+
+<h2 data-toggle="collapse" data-target="#loops"><span class="glyphicon glyphicon-chevron-down"></span>Loops</h2>
+<div id="loops" class="collapse row">
+    {% include "loops.html" %}
+</div>
+<hr/>
+
+<div id="fixing_time" class="row">
+<h2>Fixing time</h2>
+
+<table class="table">
+<th>Type</th>
+<th>Dev time > 0</th>
+<th>Finished</th>
+<th>Dev time [d]</th>
+<th>Fix time [d]</th>
+<th>Fix time [%]</th>
+<th>Items needed fixing</th>
+<th>Moved back to Dev</th>
+{% for summary in fix_time_summary %}
+    <tr><td>
+    {{ summary.type }}
+    </td><td>
+    {{ summary.started_items }}
+    </td><td>
+    {{ summary.finished_items }}
+    </td><td>
+    {{ summary.total_dev_time|days }}
+    </td><td>
+    {{ summary.total_fix_time|days }}
+    </td><td>
+    {{ summary.total_fix_time_p|floatformat:1 }}%
+    </td><td>
+    {{ summary.items_needed_fixing }}
+    </td><td>
+    {{ summary.qa_to_dev_move }}
+    </td></tr>
+{% endfor %}
+</table>
+
+<h3 data-toggle="collapse" data-target="#fixing_time_per_issue">
+    <span class="glyphicon glyphicon-chevron-down"></span>Fixing time per issue
+</h3>
+    <div id="fixing_time_per_issue" class="collapse">
+        <table class="table">
+            <th>Issue</th>
+            <th>Type</th>
+            <th>Finished</th>
+            <th>Loops</th>
+            <th>Dev time</th>
+            <th>Fixing time</th>
+            {% for r in sorted_fix_time_results %}
+            <tr><td>
+            {{ r.0 }}
+            </td><td>
+            {{ r.1.type }}
+            </td><td>
+            {{ r.1.finished }}
+            </td><td>
+            {{ r.1.loops }}
+            </td><td>
+            {{ r.1.dev_time|days }}
+            </td><td>
+            {{ r.1.fix_time|days }}
+            </td></tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+<hr/>
+
+<div id="todo" class="row">
+<h2>Bottlenecks</h2>
+
+    <h3 data-toggle="collapse" data-target="#times_per_work_item">
+        <span class="glyphicon glyphicon-chevron-down"></span>Times spent in columns per work item
+    </h3>
+    <div id="times_per_work_item" class="collapse">
+        <table>
+            <th>Key</th>
+            {% for status in statuses %}
+            <th>{{ status_names|key:status }}</th>
+            {% endfor %}
+            {% for times in times_in_columns %}
+                <tr>
+                <td>{{ times.0 }}</td>
+                {% for status in statuses %}
+                    <td>{{ times.1|key:status|days }}</td>
+                {% endfor %}
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <h3>Total times in columns</h3>
+    <table class="table">
+        <th>Status</th>
+        <th>Mean</th>
+        <th>Median</th>
+        <th>StdDev</th>
+        <th>Min</th>
+        <th>Max</th>
+        {% for summary in times_in_columns_summary %}
+            <tr><td>
+            {{ status_names|key:summary.0 }} ({{summary.0}})
+            </td><td>
+            {{ summary.1.mean|days }}
+            </td><td>
+            {{ summary.1.median|days }}
+            </td><td>
+            {{ summary.1.std|days }}
+            </td><td>
+            {{ summary.1.min|days }}
+            </td><td>
+            {{ summary.1.max|days }}
+            </td></tr>
+        {% endfor %}
+    </table>
+</div>
+<hr/>
+
+
+<div id="histograms" class="row">
+<h2>Histograms</h2>
+<p>Assumptions
+<ul>
+<li>tasks that took less than {{ context.minLeadTime }}s are ignored to not skew the results artifically</li>
+<li>start statuses are:{% for status in context.startStatuses %}{{ status_names|key:status }}{% endfor %}</li>
+<li>end statuses are:{% for status in context.endStatuses %}{{ status_names|key:status }}{% endfor %}</li>
+<li>only finished tasks (i.e. those which reached end status) are taken into account</li>
+</p>
+
+<h3>Histogram</h3>
+    <div class="clear" id="histogram_container" style="min-width: 400px; height: auto; margin: 0 auto"></div>
+
+<table class="table">
+<th>Bin</th>
+<th>Value</th>
+<th>Bugs</th>
+<th>Non bugs</th>
+{% for v in histogram %}
+    <tr><td>
+    {{ v.0|days }}
+    </td><td>
+    {{ v.1 }}
+    </td><td>
+    {{ v.2 }}
+    </td><td>
+    {{ v.3 }}
+    </td></tr>
+{% endfor %}
+</table>
+
+
+    <h3 data-toggle="collapse" data-target="#lead_times">
+        <span class="glyphicon glyphicon-chevron-down"></span>
+        Lead times
+    </h3>
+    <div id="lead_times" class="collapse">
+    <table class="table">
+    <th>Key</th>
+    <th>Lead time</th>
+    <th>Finished</th>
+    <th>Start-end</th>
+    {% for lead_time in lead_times %}
+        {% if lead_time.end %}
+            <tr><td>
+            {{ lead_time.key }}
+            </td><td>
+            {{ lead_time.timedelta|days }}
+            </td><td>
+            {% if lead_time.end %}True{% else %}False{% endif %}
+            </td><td>
+            {{ lead_time.start }} - {{ lead_time.end }}
+            </td></tr>
+        {% endif %}
+    {% endfor %}
+    </table>
+
+    <table class="table">
+    <th>Key</th>
+    <th>Lead time</th>
+    <th>Finished</th>
+    <th>Start-end</th>
+    {% for lead_time in lead_times %}
+        <tr><td>
+        {{ lead_time.key }}
+        </td><td>
+        {{ lead_time.timedelta|days }}
+        </td><td>
+        {% if lead_time.end %}True{% else %}False{% endif %}
+        </td><td>
+        {{ lead_time.start }} - {{ lead_time.end }}
+        </td></tr>
+    {% endfor %}
+    </table>
+    </div>
+
+</div>
+<hr/>
+
+{% endblock %}
