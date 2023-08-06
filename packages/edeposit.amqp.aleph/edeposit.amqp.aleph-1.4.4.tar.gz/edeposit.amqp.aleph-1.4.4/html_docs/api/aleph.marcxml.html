@@ -1,0 +1,900 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Marc XML / Marc OAI parser &mdash; edeposit.amqp.aleph 1.4.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '1.4.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="edeposit.amqp.aleph 1.4.4 documentation" href="../index.html" />
+    <link rel="up" title="aleph package" href="aleph.html" />
+    <link rel="next" title="ISBN validation module" href="aleph.isbn.html" />
+    <link rel="prev" title="Aleph lowlevel API" href="aleph.aleph.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="aleph.isbn.html" title="ISBN validation module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="aleph.aleph.html" title="Aleph lowlevel API"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">edeposit.amqp.aleph 1.4.4 documentation</a> &raquo;</li>
+          <li><a href="aleph.html" accesskey="U">aleph package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-edeposit.amqp.aleph.marcxml">
+<span id="marc-xml-marc-oai-parser"></span><h1>Marc XML / Marc OAI parser<a class="headerlink" href="#module-edeposit.amqp.aleph.marcxml" title="Permalink to this headline">¶</a></h1>
+<p>Module for parsing and high-level processing of MARC XML records.</p>
+<p>About format and how the class work; Standard MARC record is made from
+three parts:</p>
+<ul class="simple">
+<li><cite>leader</cite> - binary something, you can probably ignore it</li>
+<li><cite>controlfileds</cite> - marc fields &lt; 10</li>
+<li><cite>datafields</cite> - important information you actually want</li>
+</ul>
+<p>Basic MARC XML scheme uses this structure:</p>
+<div class="highlight-python"><div class="highlight"><pre>&lt;record xmlns=definition..&gt;
+    &lt;leader&gt;optional_binary_something&lt;/leader&gt;
+    &lt;controlfield tag=&quot;001&quot;&gt;data&lt;/controlfield&gt;
+    ...
+    &lt;controlfield tag=&quot;010&quot;&gt;data&lt;/controlfield&gt;
+    &lt;datafield tag=&quot;011&quot; ind1=&quot; &quot; ind2=&quot; &quot;&gt;
+        &lt;subfield code=&quot;scode&quot;&gt;data&lt;/subfield&gt;
+        &lt;subfield code=&quot;a&quot;&gt;data&lt;/subfield&gt;
+        &lt;subfield code=&quot;a&quot;&gt;another data, but same code!&lt;/subfield&gt;
+        ...
+        &lt;subfield code&quot;scode+&quot;&gt;another data&lt;/subfield&gt;
+    &lt;/datafield&gt;
+    ...
+    &lt;datafield tag=&quot;999&quot; ind1=&quot; &quot; ind2=&quot; &quot;&gt;
+    ...
+    &lt;/datafield&gt;
+&lt;/record&gt;
+</pre></div>
+</div>
+<p><cite>&lt;leader&gt;</cite> is optional and it is parsed into <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.leader" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.leader"><tt class="xref py py-attr docutils literal"><span class="pre">MARCXMLRecord.leader</span></tt></a> as
+string.</p>
+<p><cite>&lt;controlfield&gt;s</cite> are optional and parsed as dictionary into
+<a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.controlfields" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.controlfields"><tt class="xref py py-class docutils literal"><span class="pre">MARCXMLRecord.controlfields</span></tt></a>, and dictionary for data from example
+would look like this:</p>
+<div class="highlight-python"><div class="highlight"><pre>MARCXMLRecord.controlfields = {
+    &quot;001&quot;: &quot;data&quot;,
+    ...
+    &quot;010&quot;: &quot;data&quot;
+}
+</pre></div>
+</div>
+<p><cite>&lt;datafield&gt;s</cite> are non-optional and are parsed into
+<a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.datafields" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.datafields"><tt class="xref py py-class docutils literal"><span class="pre">MARCXMLRecord.datafields</span></tt></a>, which is little bit more complicated
+dictionary. Complicated is mainly because tag parameter is not unique, so there
+can be more <cite>&lt;datafield&gt;s</cite> with same tag!</p>
+<p><cite>scode</cite> (subfield code) is always one character (ASCII lowercase), or number.</p>
+<p>Example dict:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">MARCXMLRecord</span><span class="o">.</span><span class="n">datafields</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&quot;011&quot;</span><span class="p">:</span> <span class="p">[{</span>
+        <span class="s">&quot;ind1&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+        <span class="s">&quot;ind2&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+        <span class="s">&quot;scode&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;data&quot;</span><span class="p">],</span>
+        <span class="s">&quot;scode+&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;another data&quot;</span><span class="p">]</span>
+    <span class="p">}],</span>
+
+    <span class="c"># real example</span>
+    <span class="s">&quot;928&quot;</span><span class="p">:</span> <span class="p">[{</span>
+        <span class="s">&quot;ind1&quot;</span><span class="p">:</span> <span class="s">&quot;1&quot;</span><span class="p">,</span>
+        <span class="s">&quot;ind2&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+        <span class="s">&quot;a&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;Portál&quot;</span><span class="p">]</span>
+    <span class="p">}],</span>
+
+    <span class="s">&quot;910&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s">&quot;ind1&quot;</span><span class="p">:</span> <span class="s">&quot;1&quot;</span><span class="p">,</span>
+            <span class="s">&quot;ind2&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+            <span class="s">&quot;a&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;ABA001&quot;</span><span class="p">]</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s">&quot;ind1&quot;</span><span class="p">:</span> <span class="s">&quot;2&quot;</span><span class="p">,</span>
+            <span class="s">&quot;ind2&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+            <span class="s">&quot;a&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;BOA001&quot;</span><span class="p">],</span>
+            <span class="s">&quot;b&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;2-1235.975&quot;</span><span class="p">]</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s">&quot;ind1&quot;</span><span class="p">:</span> <span class="s">&quot;3&quot;</span><span class="p">,</span>
+            <span class="s">&quot;ind2&quot;</span><span class="p">:</span> <span class="s">&quot; &quot;</span><span class="p">,</span>
+            <span class="s">&quot;a&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;OLA001&quot;</span><span class="p">],</span>
+            <span class="s">&quot;b&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s">&quot;1-218.844&quot;</span><span class="p">]</span>
+        <span class="p">}</span>
+    <span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>As you can see in <tt class="docutils literal"><span class="pre">910</span></tt> record example, sometimes there are multiple records
+in a list!</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">NOTICE, THAT RECORDS ARE STORED IN ARRAY, NO MATTER IF IT IS JUST ONE
+RECORD, OR MULTIPLE RECORDS. SAME APPLY TO SUBFIELDS.</p>
+</div>
+<p>Example above corresponds with this piece of code from real world:</p>
+<div class="highlight-python"><div class="highlight"><pre>&lt;datafield tag=&quot;910&quot; ind1=&quot;1&quot; ind2=&quot; &quot;&gt;
+&lt;subfield code=&quot;a&quot;&gt;ABA001&lt;/subfield&gt;
+&lt;/datafield&gt;
+&lt;datafield tag=&quot;910&quot; ind1=&quot;2&quot; ind2=&quot; &quot;&gt;
+&lt;subfield code=&quot;a&quot;&gt;BOA001&lt;/subfield&gt;
+&lt;subfield code=&quot;b&quot;&gt;2-1235.975&lt;/subfield&gt;
+&lt;/datafield&gt;
+&lt;datafield tag=&quot;910&quot; ind1=&quot;3&quot; ind2=&quot; &quot;&gt;
+&lt;subfield code=&quot;a&quot;&gt;OLA001&lt;/subfield&gt;
+&lt;subfield code=&quot;b&quot;&gt;1-218.844&lt;/subfield&gt;
+&lt;/datafield&gt;
+</pre></div>
+</div>
+<div class="section" id="oai">
+<h2>OAI<a class="headerlink" href="#oai" title="Permalink to this headline">¶</a></h2>
+<p>To prevent things to be too much simple, there is also another type of MARC
+XML document - OAI format.</p>
+<p>OAI documents are little bit different, but almost same in structure.</p>
+<p><cite>leader</cite> is optional and is stored in <tt class="docutils literal"><span class="pre">MARCXMLRecord.controlfields[&quot;LDR&quot;]</span></tt>,
+but also in <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.leader" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.leader"><tt class="xref py py-attr docutils literal"><span class="pre">MARCXMLRecord.leader</span></tt></a> for backward compatibility.</p>
+<p><cite>&lt;controlfield&gt;</cite> is renamed to <cite>&lt;fixfield&gt;</cite> and its &#8220;tag&#8221; parameter to &#8220;label&#8221;.</p>
+<p><cite>&lt;datafield&gt;</cite> tag is not named datafield, but <cite>&lt;varfield&gt;</cite>, &#8220;tag&#8221; parameter is
+&#8220;id&#8221; and ind1/ind2 are named i1/i2, but works the same way.</p>
+<p><cite>&lt;subfield&gt;s</cite> parameter &#8220;code&#8221; is renamed to &#8220;label&#8221;.</p>
+<p>Real world example:</p>
+<div class="highlight-python"><div class="highlight"><pre>&lt;oai_marc&gt;
+&lt;fixfield id=&quot;LDR&quot;&gt;-----nam-a22------aa4500&lt;/fixfield&gt;
+&lt;fixfield id=&quot;FMT&quot;&gt;BK&lt;/fixfield&gt;
+&lt;fixfield id=&quot;001&quot;&gt;cpk19990652691&lt;/fixfield&gt;
+&lt;fixfield id=&quot;003&quot;&gt;CZ-PrNK&lt;/fixfield&gt;
+&lt;fixfield id=&quot;005&quot;&gt;20130513104801.0&lt;/fixfield&gt;
+&lt;fixfield id=&quot;007&quot;&gt;tu&lt;/fixfield&gt;
+&lt;fixfield id=&quot;008&quot;&gt;990330m19981999xr-af--d------000-1-cze--&lt;/fixfield&gt;
+&lt;varfield id=&quot;015&quot; i1=&quot; &quot; i2=&quot; &quot;&gt;
+&lt;subfield label=&quot;a&quot;&gt;cnb000652691&lt;/subfield&gt;
+&lt;/varfield&gt;
+&lt;varfield id=&quot;020&quot; i1=&quot; &quot; i2=&quot; &quot;&gt;
+&lt;subfield label=&quot;a&quot;&gt;80-7174-091-8 (sv. 1 : váz.) :&lt;/subfield&gt;
+&lt;subfield label=&quot;c&quot;&gt;Kč 182,00&lt;/subfield&gt;
+&lt;/varfield&gt;
+...
+&lt;/oai_marc&gt;
+</pre></div>
+</div>
+<div class="section" id="marc-documentation">
+<h3>MARC documentation<a class="headerlink" href="#marc-documentation" title="Permalink to this headline">¶</a></h3>
+<p><a class="reference external" href="http://www.openarchives.org/OAI/oai_marc.xsd">Definition of MARC OAI</a>, <a class="reference external" href="http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd">simplified MARC XML schema</a> and <a class="reference external" href="http://www.loc.gov/standards/marcxml/mrcbxmlfile.dtd">full MARC XML
+specification</a> of all elements (19492 lines of code) is freely accessible for
+anyone interested.</p>
+</div>
+</div>
+<div class="section" id="api">
+<h2>API<a class="headerlink" href="#api" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="edeposit.amqp.aleph.marcxml.resorted">
+<tt class="descclassname">edeposit.amqp.aleph.marcxml.</tt><tt class="descname">resorted</tt><big>(</big><em>values</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#resorted"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.resorted" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sort values, but put numbers after alphabetically sorted words.</p>
+<p>This function is here to make outputs diff-compatible with Aleph.</p>
+<p class="rubric">Example</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">([</span><span class="s">&quot;b&quot;</span><span class="p">,</span> <span class="s">&quot;1&quot;</span><span class="p">,</span> <span class="s">&quot;a&quot;</span><span class="p">])</span>
+<span class="go">[&#39;1&#39;, &#39;a&#39;, &#39;b&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">resorted</span><span class="p">([</span><span class="s">&quot;b&quot;</span><span class="p">,</span> <span class="s">&quot;1&quot;</span><span class="p">,</span> <span class="s">&quot;a&quot;</span><span class="p">])</span>
+<span class="go">[&#39;a&#39;, &#39;b&#39;, &#39;1&#39;]</span>
+</pre></div>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>values</strong> (<em>iterable</em>) &#8211;
+any iterable object/list/tuple/whatever.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">list of sorted values, but with numbers after words</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="edeposit.amqp.aleph.marcxml.Person">
+<em class="property">class </em><tt class="descclassname">edeposit.amqp.aleph.marcxml.</tt><tt class="descname">Person</tt><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#Person"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.Person" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.Person" title="edeposit.amqp.aleph.marcxml.Person"><tt class="xref py py-class docutils literal"><span class="pre">edeposit.amqp.aleph.marcxml.Person</span></tt></a></p>
+<p>This class represents informations about persons as they are defined in
+MARC standards.</p>
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.Person.name">
+<tt class="descname">name</tt><em class="property"> str</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.Person.name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.Person.second_name">
+<tt class="descname">second_name</tt><em class="property"> str</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.Person.second_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.Person.surname">
+<tt class="descname">surname</tt><em class="property"> str</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.Person.surname" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.Person.title">
+<tt class="descname">title</tt><em class="property"> str</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.Person.title" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="edeposit.amqp.aleph.marcxml.Corporation">
+<em class="property">class </em><tt class="descclassname">edeposit.amqp.aleph.marcxml.</tt><tt class="descname">Corporation</tt><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#Corporation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.Corporation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.Corporation" title="edeposit.amqp.aleph.marcxml.Corporation"><tt class="xref py py-class docutils literal"><span class="pre">edeposit.amqp.aleph.marcxml.Corporation</span></tt></a></p>
+<p>Some informations about corporations (fields 110, 610, 710, 810).</p>
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.Corporation.name">
+<tt class="descname">name</tt><em class="property"> str</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.Corporation.name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Name of the corporation.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.Corporation.place">
+<tt class="descname">place</tt><em class="property"> str</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.Corporation.place" title="Permalink to this definition">¶</a></dt>
+<dd><p>Location of the corporation/action.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.Corporation.date">
+<tt class="descname">date</tt><em class="property"> str</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.Corporation.date" title="Permalink to this definition">¶</a></dt>
+<dd><p>Date in unspecified format.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="edeposit.amqp.aleph.marcxml.MarcSubrecord">
+<em class="property">class </em><tt class="descclassname">edeposit.amqp.aleph.marcxml.</tt><tt class="descname">MarcSubrecord</tt><big>(</big><em>arg</em>, <em>ind1</em>, <em>ind2</em>, <em>other_subfields</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MarcSubrecord"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">str</span></tt></p>
+<p>This class is used to store data returned from
+<a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDataRecords" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDataRecords"><tt class="xref py py-meth docutils literal"><span class="pre">MARCXMLRecord.getDataRecords()</span></tt></a>.</p>
+<p>It looks kinda like overshot, but when you are parsing the MARC XML,
+values from <cite>subrecords</cite>, you need to know the context in which the
+<cite>subrecord</cite> is put.</p>
+<p>This context is provided by the <tt class="docutils literal"><span class="pre">i1</span></tt>/<tt class="docutils literal"><span class="pre">i2</span></tt> values, but sometimes it is
+also useful to have access to the other subfields from this <cite>subrecord</cite>.</p>
+<p>This class provides this access by <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getI1" title="edeposit.amqp.aleph.marcxml.MarcSubrecord.getI1"><tt class="xref py py-meth docutils literal"><span class="pre">getI1()</span></tt></a>/<a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getI2" title="edeposit.amqp.aleph.marcxml.MarcSubrecord.getI2"><tt class="xref py py-meth docutils literal"><span class="pre">getI2()</span></tt></a> and
+<a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getOtherSubfiedls" title="edeposit.amqp.aleph.marcxml.MarcSubrecord.getOtherSubfiedls"><tt class="xref py py-meth docutils literal"><span class="pre">getOtherSubfiedls()</span></tt></a> getters. As a bonus, it is also fully replaceable
+with string, in which case only the value of <cite>subrecord</cite> is preserved.</p>
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.MarcSubrecord.arg">
+<tt class="descname">arg</tt><em class="property"> str</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.arg" title="Permalink to this definition">¶</a></dt>
+<dd><p>Value of <cite>subrecord</cite>.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.MarcSubrecord.ind1">
+<tt class="descname">ind1</tt><em class="property"> char</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.ind1" title="Permalink to this definition">¶</a></dt>
+<dd><p>Indicator one.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.MarcSubrecord.ind2">
+<tt class="descname">ind2</tt><em class="property"> char</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.ind2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Indicator two.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.MarcSubrecord.other_subfields">
+<tt class="descname">other_subfields</tt><em class="property"> dict</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.other_subfields" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dictionary with other subfields from the same
+<cite>subrecord</cite>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MarcSubrecord.getI1">
+<tt class="descname">getI1</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MarcSubrecord.getI1"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getI1" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MarcSubrecord.getI2">
+<tt class="descname">getI2</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MarcSubrecord.getI2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getI2" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MarcSubrecord.getOtherSubfiedls">
+<tt class="descname">getOtherSubfiedls</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MarcSubrecord.getOtherSubfiedls"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getOtherSubfiedls" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return reference to dictionary, from which the <cite>subrecord</cite> was given.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This method is used to get <cite>backlink</cite> to other fields (reference to
+field in <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.datafields" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.datafields"><tt class="xref py py-attr docutils literal"><span class="pre">MARCXMLRecord.datafields</span></tt></a>). It is not clean, but it
+works.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord">
+<em class="property">class </em><tt class="descclassname">edeposit.amqp.aleph.marcxml.</tt><tt class="descname">MARCXMLRecord</tt><big>(</big><em>xml=None</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord" title="Permalink to this definition">¶</a></dt>
+<dd><p>Class for serialization/deserialization of MARC XML and MARC OAI
+documents.</p>
+<p>This class parses everything between <tt class="docutils literal"><span class="pre">&lt;root&gt;</span></tt> elements. It checks, if
+there is root element, so please, give it full XML.</p>
+<p>Internal format is described in module docstring. You can access
+internal data directly, or using few handy methods on two different
+levels of abstraction.</p>
+<p><strong>No abstraction at all</strong></p>
+<p>You can choose to access data directly and for this use, there is few
+important properties:</p>
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.leader">
+<tt class="descname">leader</tt><em class="property"> string</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.leader" title="Permalink to this definition">¶</a></dt>
+<dd><p>Leader of MARC XML document.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.oai_marc">
+<tt class="descname">oai_marc</tt><em class="property"> bool</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.oai_marc" title="Permalink to this definition">¶</a></dt>
+<dd><p>True/False, depending if doc is OAI doc or not</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.controlfields">
+<tt class="descname">controlfields</tt><em class="property"> dict</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.controlfields" title="Permalink to this definition">¶</a></dt>
+<dd><p>Controlfields stored in dict.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.datafields">
+<tt class="descname">datafields</tt><em class="property"> dict of arrays of dict of arrays of strings ^-^</em><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.datafields" title="Permalink to this definition">¶</a></dt>
+<dd><p>Datafileds stored in nested dicts/arrays.</p>
+</dd></dl>
+
+<p><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.controlfields" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.controlfields"><tt class="xref py py-attr docutils literal"><span class="pre">controlfields</span></tt></a> is simple and easy to use dictionary, where keys are
+field identificators (string, 3 chars, all chars digits). Value is
+always string.</p>
+<p><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.datafields" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.datafields"><tt class="xref py py-attr docutils literal"><span class="pre">datafields</span></tt></a> is little more complicated; it is dictionary made of
+arrays of dictionaries, which consists of arrays of strings and two special
+parameters.</p>
+<p>It sounds horrible, but it is not that hard to understand:</p>
+<div class="highlight-python"><div class="highlight"><pre>.datafields = {
+    &quot;011&quot;: [&quot;ind1&quot;: &quot; &quot;, &quot;ind2&quot;: &quot; &quot;]  # array of 0 or more dicts
+    &quot;012&quot;: [
+        {
+            &quot;a&quot;: [&quot;a) subsection value&quot;],
+            &quot;b&quot;: [&quot;b) subsection value&quot;],
+            &quot;ind1&quot;: &quot; &quot;,
+            &quot;ind2&quot;: &quot; &quot;
+        },
+        {
+            &quot;a&quot;: [
+                &quot;multiple values in a) subsections are possible!&quot;,
+                &quot;another value in a) subsection&quot;
+            ],
+            &quot;c&quot;: [
+                &quot;subsection identificator is always one character long&quot;
+            ],
+            &quot;ind1&quot;: &quot; &quot;,
+            &quot;ind2&quot;: &quot; &quot;
+        }
+    ]
+}
+</pre></div>
+</div>
+<p>Notice <tt class="docutils literal"><span class="pre">ind1</span></tt>/<tt class="docutils literal"><span class="pre">ind2</span></tt> keywords, which are reserved indicators and used
+in few cases thru MARC standard.</p>
+<p>Dict structure is not that hard to understand, but kinda long to access,
+so there is also higher-level abstraction access methods.</p>
+<p><strong>Lowlevel abstraction</strong></p>
+<p>To access data little bit easier, there are defined two methods to
+access and two methods to add data to internal dictionaries:</p>
+<blockquote>
+<div><ul class="simple">
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.addControlField" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.addControlField"><tt class="xref py py-meth docutils literal"><span class="pre">addControlField()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.addDataField" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.addDataField"><tt class="xref py py-meth docutils literal"><span class="pre">addDataField()</span></tt></a></li>
+</ul>
+</div></blockquote>
+<p>Getters are also simple to use:</p>
+<blockquote>
+<div><ul class="simple">
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getControlRecord" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getControlRecord"><tt class="xref py py-meth docutils literal"><span class="pre">getControlRecord()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDataRecords" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDataRecords"><tt class="xref py py-meth docutils literal"><span class="pre">getDataRecords()</span></tt></a></li>
+</ul>
+</div></blockquote>
+<p><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getControlRecord" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getControlRecord"><tt class="xref py py-meth docutils literal"><span class="pre">getControlRecord()</span></tt></a> is just wrapper over <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.controlfields" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.controlfields"><tt class="xref py py-attr docutils literal"><span class="pre">controlfields</span></tt></a> and
+works same way as accessing <tt class="docutils literal"><span class="pre">.controlfields[controlfield]</span></tt>.</p>
+<p><tt class="docutils literal"><span class="pre">.getDataRecords(datafield,</span> <span class="pre">subfield,</span> <span class="pre">throw_exceptions)</span></tt> return list of
+<a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord" title="edeposit.amqp.aleph.marcxml.MarcSubrecord"><tt class="xref py py-class docutils literal"><span class="pre">MarcSubrecord</span></tt></a> objects* with informations from section <cite>datafield</cite>
+subsection <cite>subfield</cite>.</p>
+<p>If <cite>throw_exceptions</cite> parameter is set to <tt class="docutils literal"><span class="pre">False</span></tt>, method returns empty
+list instead of throwing <a class="reference external" href="http://docs.python.org/2.7/library/exceptions.html#exceptions.KeyError" title="(in Python v2.7)"><tt class="xref py py-exc docutils literal"><span class="pre">KeyError</span></tt></a>.</p>
+<p>*As I said, function returns list of <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord" title="edeposit.amqp.aleph.marcxml.MarcSubrecord"><tt class="xref py py-class docutils literal"><span class="pre">MarcSubrecord</span></tt></a> objects. They
+are almost same thing as normal <tt class="docutils literal"><span class="pre">str</span></tt> (they are actually subclassed
+strings), but defines few important methods, which can make your life
+little bit easier:</p>
+<blockquote>
+<div><ul class="simple">
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getI1" title="edeposit.amqp.aleph.marcxml.MarcSubrecord.getI1"><tt class="xref py py-meth docutils literal"><span class="pre">getI1()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getI2" title="edeposit.amqp.aleph.marcxml.MarcSubrecord.getI2"><tt class="xref py py-meth docutils literal"><span class="pre">getI2()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getOtherSubfiedls" title="edeposit.amqp.aleph.marcxml.MarcSubrecord.getOtherSubfiedls"><tt class="xref py py-meth docutils literal"><span class="pre">getOtherSubfiedls()</span></tt></a></li>
+</ul>
+</div></blockquote>
+<p><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getOtherSubfiedls" title="edeposit.amqp.aleph.marcxml.MarcSubrecord.getOtherSubfiedls"><tt class="xref py py-meth docutils literal"><span class="pre">getOtherSubfiedls()</span></tt></a> returns dictionary with other
+subsections from subfield requested by calling <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDataRecords" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDataRecords"><tt class="xref py py-meth docutils literal"><span class="pre">getDataRecords()</span></tt></a>. It
+works as backlink to object, from which you get the record.</p>
+<p><strong>Highlevel abstractions</strong></p>
+<p>There is also lot of highlevel getters:</p>
+<blockquote>
+<div><ul class="simple">
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getName" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getName"><tt class="xref py py-meth docutils literal"><span class="pre">getName()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getSubname" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getSubname"><tt class="xref py py-meth docutils literal"><span class="pre">getSubname()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPrice" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPrice"><tt class="xref py py-meth docutils literal"><span class="pre">getPrice()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPart" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPart"><tt class="xref py py-meth docutils literal"><span class="pre">getPart()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPartName" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPartName"><tt class="xref py py-meth docutils literal"><span class="pre">getPartName()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPublisher" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPublisher"><tt class="xref py py-meth docutils literal"><span class="pre">getPublisher()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubDate" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubDate"><tt class="xref py py-meth docutils literal"><span class="pre">getPubDate()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubOrder" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubOrder"><tt class="xref py py-meth docutils literal"><span class="pre">getPubOrder()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getFormat" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getFormat"><tt class="xref py py-meth docutils literal"><span class="pre">getFormat()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubPlace" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubPlace"><tt class="xref py py-meth docutils literal"><span class="pre">getPubPlace()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getAuthors" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getAuthors"><tt class="xref py py-meth docutils literal"><span class="pre">getAuthors()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getCorporations" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getCorporations"><tt class="xref py py-meth docutils literal"><span class="pre">getCorporations()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDistributors" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDistributors"><tt class="xref py py-meth docutils literal"><span class="pre">getDistributors()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getISBNs" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getISBNs"><tt class="xref py py-meth docutils literal"><span class="pre">getISBNs()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getBinding" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getBinding"><tt class="xref py py-meth docutils literal"><span class="pre">getBinding()</span></tt></a></li>
+<li><a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getOriginals" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getOriginals"><tt class="xref py py-meth docutils literal"><span class="pre">getOriginals()</span></tt></a></li>
+</ul>
+</div></blockquote>
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.addControlField">
+<tt class="descname">addControlField</tt><big>(</big><em>name</em>, <em>value</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.addControlField"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.addControlField" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add new control field <cite>value</cite> with under <cite>name</cite> into control field
+dictionary <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.controlfields" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.controlfields"><tt class="xref py py-attr docutils literal"><span class="pre">controlfields</span></tt></a>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.addDataField">
+<tt class="descname">addDataField</tt><big>(</big><em>name</em>, <em>i1</em>, <em>i2</em>, <em>subfields_dict</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.addDataField"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.addDataField" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add new datafield into <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.datafields" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.datafields"><tt class="xref py py-attr docutils literal"><span class="pre">datafields</span></tt></a>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>name</strong> (<em>str</em>) &#8211;
+name of datafield</li>
+<li><strong>i1</strong> (<em>char</em>) &#8211;
+value of i1/ind1 parameter</li>
+<li><strong>i2</strong> (<em>char</em>) &#8211;
+value of i2/ind2 parameter</li>
+<li><strong>subfields_dict</strong> (<em>dict</em>) &#8211;
+dictionary containing subfields</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p><cite>subfields_dict</cite> is expected to be in this format:</p>
+<div class="highlight-python"><div class="highlight"><pre>{
+    &quot;field_id&quot;: [&quot;subfield data&quot;,],
+    ...
+    &quot;z&quot;: [&quot;X0456b&quot;]
+}
+</pre></div>
+</div>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last"><tt class="docutils literal"><span class="pre">field_id</span></tt> can be only one character long!</p>
+</div>
+<p>Function takes care of OAI MARC.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getControlRecord">
+<tt class="descname">getControlRecord</tt><big>(</big><em>controlfield</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getControlRecord"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getControlRecord" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return record from given <cite>controlfield</cite>. Returned type: str.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDataRecords">
+<tt class="descname">getDataRecords</tt><big>(</big><em>datafield</em>, <em>subfield</em>, <em>throw_exceptions=True</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getDataRecords"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDataRecords" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return content of given <cite>subfield</cite> in <cite>datafield</cite>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>datafield</strong> (<em>str</em>) &#8211;
+Section name (for example &#8220;001&#8221;, &#8220;100&#8221;, &#8220;700&#8221;)</li>
+<li><strong>subfield</strong> (<em>str</em>) &#8211;
+Subfield name (for example &#8220;a&#8221;, &#8220;1&#8221;, etc..)</li>
+<li><strong>throw_exceptions</strong> (<em>bool</em>) &#8211;
+If <tt class="docutils literal"><span class="pre">True</span></tt>, <a class="reference external" href="http://docs.python.org/2.7/library/exceptions.html#exceptions.KeyError" title="(in Python v2.7)"><tt class="xref py py-exc docutils literal"><span class="pre">KeyError</span></tt></a> is
+raised if method couldn&#8217;t found given
+<cite>datafield</cite>/<cite>subfield</cite>. If <tt class="docutils literal"><span class="pre">False</span></tt>, blank
+array <tt class="docutils literal"><span class="pre">[]</span></tt> is returned.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"><em>list</em> &#8211;
+of <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord" title="edeposit.amqp.aleph.marcxml.MarcSubrecord"><tt class="xref py py-class docutils literal"><span class="pre">MarcSubrecord</span></tt></a>. MarcSubrecord is practically              same thing as string, but has defined <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getI1" title="edeposit.amqp.aleph.marcxml.MarcSubrecord.getI1"><tt class="xref py py-meth docutils literal"><span class="pre">getI1()</span></tt></a>           and <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MarcSubrecord.getI2" title="edeposit.amqp.aleph.marcxml.MarcSubrecord.getI2"><tt class="xref py py-meth docutils literal"><span class="pre">getI2()</span></tt></a> properties. Believe me, you will            need to be able to get this, because MARC XML depends on them from time        to time (name of authors for example).</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getName">
+<tt class="descname">getName</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getName"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getName" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+Name of the book.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body"><tt class="xref py py-exc docutils literal"><span class="pre">KeyError</span></tt> &#8211; 
+when name is not specified.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getSubname">
+<tt class="descname">getSubname</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getSubname"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getSubname" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>undefined</strong> (<em>optional</em>) &#8211;
+returned if sub-name record is not found.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+Sub-name of the book or <cite>undefined</cite> if name is not defined.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPrice">
+<tt class="descname">getPrice</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getPrice"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPrice" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+Price of the book (with currency).</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPart">
+<tt class="descname">getPart</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getPart"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPart" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+Which part of the book series is this record.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPartName">
+<tt class="descname">getPartName</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getPartName"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPartName" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+Name of the part of the series.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPublisher">
+<tt class="descname">getPublisher</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getPublisher"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPublisher" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+name of the publisher (&#8220;<tt class="docutils literal"><span class="pre">Grada</span></tt>&#8221; for example)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubDate">
+<tt class="descname">getPubDate</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getPubDate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubDate" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+date of publication (month and year usually)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubOrder">
+<tt class="descname">getPubOrder</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getPubOrder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubOrder" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+information about order in which was the book published</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getFormat">
+<tt class="descname">getFormat</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getFormat"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getFormat" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+dimensions of the book (&#8216;<tt class="docutils literal"><span class="pre">23</span> <span class="pre">cm</span></tt>&#8216; for example)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubPlace">
+<tt class="descname">getPubPlace</tt><big>(</big><em>undefined=''</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getPubPlace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getPubPlace" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+name of city/country where the book was published</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getAuthors">
+<tt class="descname">getAuthors</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getAuthors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getAuthors" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+authors represented as Person objects</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getCorporations">
+<tt class="descname">getCorporations</tt><big>(</big><em>roles=['dst']</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getCorporations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getCorporations" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>roles</strong> (<em>list, optional</em>) &#8211;
+specify which types of corporations you
+need. Set to <tt class="docutils literal"><span class="pre">[&quot;any&quot;]</span></tt> for any role, <tt class="docutils literal"><span class="pre">[&quot;dst&quot;]</span></tt> for
+distributors, etc..
+See <a class="reference external" href="http://www.loc.gov/marc/relators/relaterm.html">http://www.loc.gov/marc/relators/relaterm.html</a> for
+details.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+<a class="reference internal" href="#edeposit.amqp.aleph.marcxml.Corporation" title="edeposit.amqp.aleph.marcxml.Corporation"><tt class="xref py py-class docutils literal"><span class="pre">Corporation</span></tt></a> objects specified by roles parameter.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDistributors">
+<tt class="descname">getDistributors</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getDistributors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getDistributors" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+distributors represented as <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.Corporation" title="edeposit.amqp.aleph.marcxml.Corporation"><tt class="xref py py-class docutils literal"><span class="pre">Corporation</span></tt></a> object</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getISBNs">
+<tt class="descname">getISBNs</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getISBNs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getISBNs" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+array with ISBN strings</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getBinding">
+<tt class="descname">getBinding</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getBinding"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getBinding" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+array of strings with bindings (<tt class="docutils literal"><span class="pre">[&quot;brož.&quot;]</span></tt>) or blank list</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getOriginals">
+<tt class="descname">getOriginals</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getOriginals"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getOriginals" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>list</em> &#8211;
+of original names</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.getI">
+<tt class="descname">getI</tt><big>(</big><em>num</em><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.getI"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.getI" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method is used mainly internally, but it can be handy if you work
+with with raw MARC XML object and not using getters.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+current name of <tt class="docutils literal"><span class="pre">i1</span></tt>/<tt class="docutils literal"><span class="pre">ind1</span></tt> parameter based on                  <a class="reference internal" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.oai_marc" title="edeposit.amqp.aleph.marcxml.MARCXMLRecord.oai_marc"><tt class="xref py py-attr docutils literal"><span class="pre">oai_marc</span></tt></a> property.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="edeposit.amqp.aleph.marcxml.MARCXMLRecord.toXML">
+<tt class="descname">toXML</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/edeposit/amqp/aleph/marcxml.html#MARCXMLRecord.toXML"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#edeposit.amqp.aleph.marcxml.MARCXMLRecord.toXML" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert object back to XML string.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><em>str</em> &#8211;
+String which should be same as original input, if everything                 works as expected.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../index.html">
+              <img class="logo" src="../_static/nkp_logo.png" alt="Logo"/>
+            </a></p>
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Marc XML / Marc OAI parser</a><ul>
+<li><a class="reference internal" href="#oai">OAI</a><ul>
+<li><a class="reference internal" href="#marc-documentation">MARC documentation</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#api">API</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="aleph.aleph.html"
+                        title="previous chapter">Aleph lowlevel API</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="aleph.isbn.html"
+                        title="next chapter">ISBN validation module</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/api/aleph.marcxml.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="aleph.isbn.html" title="ISBN validation module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="aleph.aleph.html" title="Aleph lowlevel API"
+             >previous</a> |</li>
+        <li><a href="../index.html">edeposit.amqp.aleph 1.4.4 documentation</a> &raquo;</li>
+          <li><a href="aleph.html" >aleph package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014 E-deposit team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
