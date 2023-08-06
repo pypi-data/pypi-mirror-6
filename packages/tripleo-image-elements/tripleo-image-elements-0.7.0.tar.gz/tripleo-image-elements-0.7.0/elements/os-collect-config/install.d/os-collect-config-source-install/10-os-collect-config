@@ -1,0 +1,69 @@
+#!/bin/bash
+set -eux
+
+manifest=$(get-pip-manifest os-collect-config)
+
+install-packages build-essential libz-dev libxslt-dev libxml2-dev python-dev
+
+virtualenv --setuptools /opt/stack/venvs/os-collect-config
+set +u
+source /opt/stack/venvs/os-collect-config/bin/activate
+set -u
+
+if [ -n "$manifest" ]; then
+  use-pip-manifest $manifest
+else
+  # Need setuptools>=1.0 to manage connections when
+  # downloading from pypi using http_proxy and https_proxy
+  /opt/stack/venvs/os-collect-config/bin/pip install -U 'setuptools>=1.0'
+  # bug #1293812 : Avoid easy_install triggering on pbr.
+  /opt/stack/venvs/os-collect-config/bin/pip install -U 'pbr>=0.6,<1.0'
+  /opt/stack/venvs/os-collect-config/bin/pip install -U os-collect-config
+fi
+
+# Write the manifest of what was installed
+write-pip-manifest os-collect-config
+
+ln -s /opt/stack/venvs/os-collect-config/bin/os-collect-config /usr/local/bin/os-collect-config
+
+# Minimal static config for bootstrapping
+cat > /etc/os-collect-config.conf <<eof
+[DEFAULT]
+command=os-refresh-config
+eof
+chmod 600 /etc/os-collect-config.conf
+
+if [ "$DIB_INIT_SYSTEM" == "upstart" ] ; then
+    cat > /etc/init/os-collect-config.conf <<eof
+start on runlevel [2345]
+stop on runlevel [016]
+respawn
+exec os-collect-config
+eof
+
+elif [ "$DIB_INIT_SYSTEM" == "systemd" ] ; then
+    cat > /lib/systemd/system/os-collect-config.service <<eof
+[Unit]
+Description=Collect metadata and run hook commands.
+After=cloud-final.service
+Before=crond.service
+
+[Service]
+ExecStart=/usr/local/bin/os-collect-config
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+eof
+
+  # Enable the service
+  systemctl enable os-collect-config.service
+
+else
+    echo Only systems with systemd or upstart are supported.
+    exit 1
+fi
+
+set +u
+deactivate
+set -u
