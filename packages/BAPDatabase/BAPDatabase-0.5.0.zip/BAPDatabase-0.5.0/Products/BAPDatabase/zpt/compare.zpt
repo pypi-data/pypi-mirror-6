@@ -1,0 +1,200 @@
+<tal:block define="dummy python:request.set('disable_plone.leftcolumn', True);
+                   dummy python:request.set('disable_plone.rightcolumn', True);
+">
+<metal:block metal:use-macro="here/main_template/macros/master">
+
+<metal:block metal:fill-slot="title">
+    <title tal:content="string:${here/site_title} - BAP Report 2010 comparison" />
+</metal:block>tabs
+
+<metal:block metal:fill-slot="style_slot">
+    <script src="http://code.jquery.com/ui/1.10.3/jquery-ui.js"></script>
+    <script type="text/javascript" tal:attributes="src string:/misc_/BAPDatabase/showLoading.js"></script>
+    <script type="text/javascript" tal:attributes="src string:/misc_/BAPDatabase/bapCompare.js"></script>
+    <link rel="stylesheet" type="text/css" media="screen" tal:attributes="href string:/misc_/BAPDatabase/bap_style.css" />
+    <link rel="stylesheet" type="text/css" media="screen" href="/misc_/BAPDatabase/full-width-style.css" />
+    <tal:block content="structure string:<!--[if lt IE 8]>" />
+    <link rel="stylesheet" type="text/css" media="screen" href="/misc_/BAPDatabase/tabs-ie.css" />
+    <tal:block content="structure string:<![endif]-->" />
+</metal:block>
+
+<metal:block fill-slot="column_one_slot"></metal:block>
+<metal:block fill-slot="column_two_slot"></metal:block>
+
+<metal:block fill-slot="custom_breadcrumb">
+    <div id="portal-breadcrumbs" tal:define="parents request/PARENTS;
+                                             dummy python:parents.reverse();
+                                             breadcrumbs python:parents[2:];
+    ">
+
+    <span id="breadcrumbs-home">
+        <a href="/">Home</a>
+        <span tal:condition="breadcrumbs" class="breadcrumbSeparator">
+            &raquo;
+        </span>
+        <span tal:repeat="crumb breadcrumbs"
+                dir="ltr"
+          tal:attributes="id string:breadcrumbs-${repeat/crumb/number}">
+        <tal:item tal:define="is_last repeat/crumb/end;
+                              url crumb/absolute_url;
+                              title crumb/title_or_id">
+            <a href="#"
+               tal:omit-tag="not: url"
+               tal:condition="python:not is_last"
+               tal:attributes="href url"
+               tal:content="title">
+                crumb
+            </a>
+            <span class="breadcrumbSeparator" tal:condition="not: is_last">
+                &raquo;
+            </span>
+            <span id="breadcrumbs-current"
+                  tal:condition="is_last"
+                  tal:content="string:BAP Report 2010 comparison">
+                  Title
+
+            </span>
+         </tal:item>
+    </span>
+    </span>
+
+
+    </div>
+</metal:block>
+
+<metal:block fill-slot="main">
+
+<div id="center_content"
+        tal:define="req_country request/country|nothing;
+                    req_objective request/objective|nothing;
+                    req_target request/target|nothing;
+                    req_cmp_countries request/cmp_countries|python:[];">
+
+    <div class="bap-action-holder">
+        <h1>BAP Report 2010 - comparative view</h1>
+        <div class="compare-form-holder">
+            <p>
+                Select the countries, objective and target to compare. Finally select the action.
+                The data for two countries will show side by side; by selecting multiple countries, you will show each corresponding data in a separate tab.
+            </p>
+
+            <form action="" name="compare_values" method="get" id="compare-form">
+                <div class="field left">
+                    <label for="ctlCountry">Country</label>
+                    <select name="country" id="ctlCountry" class="compare-select">
+                        <optgroup label="Countries">
+                            <tal:block repeat="country here/get_countries">
+                            <option tal:attributes="value country;
+                                                    selected python:country == req_country and 'selected' or '';"
+                                    tal:content="country" />
+                                    </tal:block>
+                        </optgroup>
+                        <optgroup label="EU Level">
+                            <option value="Community report"
+                                tal:attributes="selected python:req_country == 'Community report'">EU Community Report</option>
+                        </optgroup>
+                    </select>
+                </div>
+
+                <div class="field left">
+                    <label for="ctlObjective">Objective</label>
+                    <select name="objective" id="ctlObjective" class="compare-select">
+                        <option value="">select objective</option>
+                        <tal:block repeat="objective here/get_objectives">
+                        <option tal:define="objective_name objective/name"
+                                tal:attributes="value objective_name;
+                                                selected python:objective_name == req_objective;
+                                                title string:${objective_name}: ${objective/headline}"
+                                tal:content="objective_name" />
+                        </tal:block>
+                    </select>
+                </div>
+
+                <div class="field left">
+                    <tal:block define="objective python:here.get_objective_by_name(req_objective)">
+                    <label for="ctlTarget">Target</label>
+                    <select name="target" id="ctlTarget" class="compare-select">
+                        <option value="">select target</option>
+                        <tal:block condition="objective">
+                        <tal:block define="objective_id objective/id" repeat="target python:here.get_objective_targets(objective_id)" >
+                        <option tal:define="target_id target/id"
+                                tal:attributes="value target_id;
+                                            selected python:target_id == req_target and 'selected' or '';
+                                            title target/name"
+                                            tal:content="target/name" />
+                        </tal:block>
+                        </tal:block>
+                    </select>
+                    </tal:block>
+                </div>
+
+                <div class="field left">
+                    <label for="ctlCmpCountries">Compare with</label>
+                    <select name="cmp_countries:list" id="ctlCmpCountries" multiple="multiple" class="compare-select multiple-select">
+                        <tal:block repeat="country python:here.get_countries()">
+                        <option tal:condition="python: country != req_country"
+                                tal:attributes="value country;
+                                             selected python: country in req_cmp_countries"
+                                tal:content="country" />
+                        </tal:block>
+                    </select><br />
+                    <em class="help">CTRL-click to select multiple</em>
+                </div>
+
+                <div class="field left">
+                    <label>&nbsp;</label>
+                    <input type="submit" name="compare" value="Compare" />
+                </div>
+            </form>
+
+            <div class="cleaner">&nbsp;</div>
+        </div>
+
+        <div class="bap-actions" tal:condition="python:request.get('compare', '') and req_country and req_objective and req_cmp_countries">
+            <tal:block define="objective python:here.get_objective_by_name(req_objective);
+                                objective_id objective/id;
+                                actions python:here.get_actions(req_target, objective_id)">
+
+            <span class="objective-description">
+                <strong tal:content="objective/name" />
+                <span tal:replace="objective/description" />
+            </span>
+
+            <span class="target-description" tal:condition="req_target">
+                <tal:block define="target python:here.get_target(req_target)">
+                <strong>Target: <span tal:replace="target/name" /></strong>
+                <span tal:replace="target/description" />
+                </tal:block>
+            </span>
+
+            <span class="target-description" tal:condition="not:req_target">
+                <strong>Target: all</strong>
+            </span>
+
+            <tal:block repeat="action actions">
+                <div tal:attributes="class python:test(path('repeat/action/start'), 'bap-action first-element', 'bap-action')">
+                    <span>
+                        <a class="action-link" title="Click to see details" href="#" tal:content="string:Action: ${action/name}" />
+                        <span tal:content="action/action" />
+                    </span>
+
+                    <div class="bap-mop-content" tal:attributes="id action/id; style python:test(path('repeat/action/start'), 'display: block', 'display: none');">
+                        <h3>Measures of Progress</h3>
+                        <tal:block define="tabid string:tab${action/id}">
+                            <tal:block condition="python:len(req_cmp_countries) > 1" replace="structure python:here.compare_multiple(action=action)" />
+                            <tal:block condition="python:len(req_cmp_countries) == 1" replace="structure python:here.compare_side_by_side(action=action)" />
+                        </tal:block>
+                    </div>
+                </div>
+            </tal:block>
+            </tal:block>
+        </div>
+        <div class="bap-actions" tal:condition="python: request.get('compare', '') and not (req_country and req_objective and req_cmp_countries)">
+            <p><strong>Missing parameters. Please try again.</strong></p>
+        </div>
+    </div>
+</div>
+</metal:block>
+
+</metal:block>
+</tal:block>
