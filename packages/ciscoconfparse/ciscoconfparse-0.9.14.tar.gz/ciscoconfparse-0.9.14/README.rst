@@ -1,0 +1,49 @@
+==============
+ciscoconfparse
+==============
+
+DOCS
+====
+The latest copy of the docs are archived here:
+http://www.pennington.net/py/ciscoconfparse/
+
+FAQ
+===
+
+Q1: Is there a way to use this module with perl?
+A1: Yes, I do this myself. Install the python package as you normally would 
+and import it into perl with Inline.pm and Inline::Python from CPAN.
+
+Q2: When I use find_children("interface GigabitEthernet3/2"), I'm getting all 
+interfaces beginning with 3/2, including 3/21, 3/22, 3/23 and 3/24. How can I 
+limit my results?
+A2. There are two ways... the simplest is to use the 'exactmatch' option... 
+find_children("interface GigabitEthernet3/2", exactmatch=True). Another way is 
+to utilize regex expansion that is native to many methods... 
+find_children("interface GigabitEthernet3/2$")
+
+
+AUTHOR
+======
+
+David Michael Pennington
+
+
+THANKS
+------
+
+Thanks to David Muir Sharnoff for his suggestion about making a special case 
+for IOS banners. Thanks to Alan Cownie for his API suggestions. Thanks to 
+everyone in advance for their bug reports and patience. Sola Dei Gloria.
+
+Travis CI
+---------
+
+I use the `Travis CI project <https://travis-ci.org>`_ to continuously test ciscoconfparse on Python versions 2.6 through 3.3.
+
+Click the image below for details; the current build status is:
+
+.. image:: https://travis-ci.org/mpenning/ciscoconfparse.png?branch=master
+   :align: center
+   :target: https://travis-ci.org/mpenning/ciscoconfparse
+
