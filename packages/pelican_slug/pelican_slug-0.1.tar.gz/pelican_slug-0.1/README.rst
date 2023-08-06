@@ -1,0 +1,60 @@
+Pelican Slug Pugin
+==================
+
+Pelican is good project but slugify function is a little bit unuseful and not customizable.
+This problem will appear if you are a developer using multi-byte language.
+So we wanna exchange multi-byte words to alphabetical words caused by multi-byte url problem.
+
+URL encoded word is not beautiful, Japanese word Otaku will change like this "%83I%83%5E%83N".
+If we can use an URL containing only alphabets and other marks not multi-byte, we wanna do that.
+
+Pelican try to automatically exchange it. But Japanese and some multi-byte languages are very complex
+that because they are having some pronounciations. This try will absolutely be failure and they make
+funny words we could not read it.
+
+This plugin will help these situation. You can define some slugs for your categories like this::
+
+    CATEGORY_SLUGS = (
+        (u'オタク', u'otaku'),
+        (u'寿司', u'sushi'),
+    )
+
+Another feature is that to define your slugify function like this::
+
+    def SLUG_FUNC(value, substitutions=()):
+        value = value.replace(u'禅', 'zen')
+        return value
+
+These settings are on your pelicanconf.py then just work.
+
+
+Installation
+------------
+
+This plugin is not registered on PyPI. You should clone this repository and install through pip::
+
+    git clone git@github.com:wutali/pelican_slug.git
+    cd pelican_slug
+    pip install -e .
+
+
+Configuration
+-------------
+
+Put this code on your pelicanconf.py and customize it::
+
+    PLUGINS = ['pelican_slug']
+
+    def SLUG_FUNC(value, substitutions=()):
+        # Do something you want.
+        return value
+
+    CATEGORY_SLUGS = (
+        (u'オタク', u'otaku'),
+        (u'寿司', u'sushi'),
+    )
+
+License
+-------
+
+Pelican Slug is released under the MIT License. http://www.opensource.org/licenses/mit-license
