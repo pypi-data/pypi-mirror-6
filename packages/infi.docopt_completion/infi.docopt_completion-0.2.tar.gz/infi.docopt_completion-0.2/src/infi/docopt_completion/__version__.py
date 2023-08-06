@@ -1,0 +1,10 @@
+__version__ = "0.2"
+__git_commiter_name__ = "Arnon Yaari"
+__git_commiter_email__ = "arnony@infinidat.com"
+__git_branch__ = '(detached from v0.2)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'f4e4de9f93cc80b991b9b88e49a04a34ccbe8472'
+__git_head_subject__ = 'fix bash subcommand redirection - broken since 7603668'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
