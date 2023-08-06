@@ -1,0 +1,139 @@
+**wikify** your texts!  
+*micro-framework for text wikification*
+
+goals - avoid conflicts between text modifications rules
+        and be easy to extend and debug
+
+**author**: anatoly techtonik <techtonik@gmail.com>   
+**license**: Public Domain
+
+
+#### usage
+1. define rules that match and process parts of text
+2. text = wikify(text, rules)
+
+`rule` is a function or an object run() method that takes text and
+returns either `None` (means not matched) or this text split into
+three parts [ not-matched, processed, the-rest ]. `processed` part
+of text is returned modified by the rule.
+
+example of a rule in action:
+
+    >>> import wikify
+    >>> wikify.rule_link_wikify('wikify your texts!')
+    ('', '<a href="https://bitbucket.org/techtonik/wikify/">wikify</a>', ' your texts!')
+
+and its source code:
+
+    def rule_link_wikify(text):
+      """ replace `wikify` text with a link to repository """
+      if not 'wikify' in text:
+        return None
+      res = text.split('wikify', 1)
+      site = 'https://bitbucket.org/techtonik/wikify/'
+      url = '<a href="%s">wikify</a>' % site
+      return (res[0], url, res[1])
+
+using the rule with wikify to get processed text:
+
+    >>> from wikify import wikify, rule_link_wikify
+    >>> wikify('wikify your texts!', rule_link_wikify)
+    '<a href="https://bitbucket.org/techtonik/wikify/">wikify</a> your texts!'
+
+you probably want change url and searched string, so to avoid
+rewriting the rule from scratch, **wikify** provides some.
+
+
+#### API
+
+###### RegexpRule(search, replace=r'\0')
+wikify rule class. `search` is regexp, `replace` can be string
+with backreferences (like \0, \1 etc.) or a callable that receives
+`re.MatchObject`.
+
+    r = RegexpRule('(\d+)', '[\\1]')
+    print(wikify('wrap list 1 2 3 45', r))
+    # wrap list [1] [2] [3] [45]
+
+###### tracker_link_rule(url)
+chained function rule (function that returns list of rules) that
+replaces references like #123, issue #123 with link to `url` with
+issue number appended.
+
+    w = tracker_link_rule('https://bitbucket.org/techtonik/wikify/issue/')
+    print(wikify('issue #123, &#8121;', w))
+    # <a href="https://bitbucket.org/techtonik/wikify/issue/123">issue #123</a>, &#8121;
+
+###### wikify(text, rules)
+`rules` argument can be a list of rules. **wikify** ensures that text
+processed by one rule is not reachable by others. if you try to process
+some text without **wikify** with just a series of replacement commands,
+there can be situations when later replacement may affect the text just
+pasted by previous one. **wikify** was made to prevent this from
+happening.
+
+
+#### using as a Sphinx extension
+**wikify** is also a Sphinx extension. the following lines if added
+to `conf.py`, will link issue numbers on `changes` page to bugtracker for
+the `sphinx` project:
+
+    extensions = ['wikify']
+
+    # setup wikify extension to convert issue references to links
+    from wikify import RegexpRule, tracker_link_rule
+    wikify_html_rules = [
+        # PR#123 or pull request #123
+        RegexpRule('(PR|pull request\s)\s*#(\d+)',
+            '<a href="https://bitbucket.org/birkenfeld/sphinx/pull-request/\\2">\\0</a>'),
+        # issue #123 or just #123
+        tracker_link_rule('https://bitbucket.org/birkenfeld/sphinx/issue/')
+    ]
+    wikify_html_pages = ['changes']
+
+
+#### operation (flat algorithm)
+for each region
+  - find region in processed text
+  - process text matched by region
+  - exclude processed text from further processing
+
+note: (flat algorithm) doesn't process nested markup,
+such as:
+
+    *`bold preformatted text`*
+
+example - replace all wiki:something with HTML links
+  - [x] wrap text into list with single item
+  - [x] split text into three parts using regexp `wiki:\w+`
+  - [x] copy 1st part (not-matched) into the resulting list
+  - [x] replace matched part with link, insert (processed)
+    into the resulting list
+  - [ ] process (the-rest) until text list doesn't change
+  - [x] repeat the above for the rest of rules, skipping
+    (processed) parts
+  - [x] reassemble text from the list
+
+
+#### roadmap
+- [ ] optimize - measure perfomance of using indexes
+    instead of text chunks
+- [x] write docs
+- [ ] upload to PyPI
+
+
+#### history
+- 1.3  - create_tracker_link_rule to tracker_link_rule
+- 1.2  - convert create_regexp_rule to RegexpRule class
+- 1.1  - allow rules to be classes (necessary for Sphinx)
+- 1.0  - use wikify as Sphinx extension
+
+- 0.9  - case insensitive match in tracker link rule
+- 0.8  - python 3 compatibility
+- 0.7  - fixed major flaw in text replacements mapping
+- 0.5  - helper to build rules to link tracker references
+- 0.6  - flatten nested rule lists
+- 0.4  - accept single rule in wikify in addition to list
+- 0.3  - allow callables in replacements for regexp rules
+- 0.2  - helper to build regexp based rules
+- 0.1  - proof of concept, production ready, no API sugar and optimizations
