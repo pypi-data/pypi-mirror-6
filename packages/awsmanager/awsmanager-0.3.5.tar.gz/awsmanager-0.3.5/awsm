@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+import boto.ec2, os, sys, logging, socket, smtplib, traceback
+import boto.exception
+from awsmanager import snapshots, utils, reports, instances, options
+
+def main():
+    cmd_options = options.parse_options()
+    config_options = options.read_config_file(cmd_options)
+
+    # Compile the config file and command line options down into one dictionary of options.
+    # Command line options will override the config file
+    opts = dict(config_options.items() + cmd_options.__dict__.items())
+
+    if opts['debug']:
+        print 'Debugging output enabled, boto is now logging to boto.log'
+        logging.basicConfig(filename='boto.log', level=logging.DEBUG)
+
+    # If we're doing a non-region specific job, fudge the requested region
+    if opts['print_policies']:
+        opts['region'] = 'ap-southeast-1'
+
+    # Loop so that all regions get processed unless we're looking for one specifically
+    if opts['region']:
+            try:
+                ec2 = boto.ec2.connect_to_region(opts['region'])
+            except:
+                print "Error connecting to region %s" % opts['region']
+                return 1
+
+            print "Operating on only region %s" % (opts['region'])
+            options.process_options(ec2, opts)
+            print "Region finished\n"
+    else:
+        for region in boto.ec2.regions():
+            try:
+                ec2 = boto.ec2.connect_to_region(region.name)
+            except:
+                print "Error connecting to region at %s line %s" % (__FILE__, __LINE__)
+                return 1
+                
+            print "Operating on region %s" % (region.name)
+            options.process_options(ec2, opts)
+            print "Region finished\n"
+
+if __name__ == "__main__":
+    main()
