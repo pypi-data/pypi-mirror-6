@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Copyright (C) 2011-2012 CRS4.
+
+This file is part of Seal.
+
+Seal is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option)
+any later version.
+
+Seal is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License along
+with Seal.  If not, see <http://www.gnu.org/licenses/>.
+-->
+
+<project name="seal" default="package" basedir=".">
+	<!-- user directories -->
+	<property name="src.dir" value="src" />
+	<property name="test.dir" value="tests" />
+	<property name="lib.dir" value="lib" />
+	<property name="build.dir" value="build" />
+	<property name="class.dir" value="classes" />
+	<property name="test.class.dir" value="test-${class.dir}" />
+	<property name="jar.file" value="${ant.project.name}.jar" />
+
+	<!-- set to true to ignore Ant/Java version -->
+	<property name="override_version_check" value="false" />
+
+	<tstamp>
+		<format property="time.now" pattern="yyyyMMdd" />
+	</tstamp>
+
+	<!-- override the version property for a release -->
+	<property name="version" value="devel-${time.now}" />
+
+	<property name="debug.build" value="false" />
+	<echo message="debug.build: ${debug.build}" />
+
+	<!-- extra properties -->
+	<property environment="env"/>
+
+	<property name="jars.override" value="" />
+
+	<fileset id="junit_jars_ubuntu" dir="/usr/share/java">
+		<include name="junit4.jar"/>
+		<include name="hamcrest-*.jar"/>
+	</fileset>
+
+	<fileset id="junit_jars_gentoo" dir="/usr/share">
+		<include name="junit-4/lib/*.jar"/>
+		<include name="hamcrest-core/lib/*.jar" />
+	</fileset>
+
+	<fileset id="junit_jars_scientific_linux" dir="/usr/share/java/">
+		<include name="ant/*junit*.jar" />
+		<include name="junit4.jar" />
+		<include name="hamcrest/*.jar" />
+	</fileset>
+
+	<!-- clumsy, but effective.  Since the fileset is evaluated in '/'
+			 and ant doesn't like double slashes, you have to provide
+			 jars.override patterns as absolute paths without the first /.
+	 -->
+	<fileset id="jars_override" dir="/">
+		<include name="${jars.override}"/>
+	</fileset>
+	
+	<!-- tasks -->
+	<target name="find_hadoop">
+		<exec executable="python" outputproperty="hadoop.dir" logError="true" failonerror="true">
+			<arg value="-c" />
+			<arg value="import pydoop,sys; sys.stdout.write(pydoop.hadoop_home())" />
+		</exec>
+		<echo message="using hadoop directory = ${hadoop.dir}" />
+
+		<fileset id="hadoop_jars" dir="${hadoop.dir}">
+			<include name="hadoop-*.jar"/>
+			<include name="lib/*.jar"/>
+		</fileset>
+
+		<property name="hadoop.bam" value="${env.HADOOP_BAM}" />
+		<echo message="using hadoop.bam = ${hadoop.bam}" />
+
+		<fileset id="hadoop_bam_jars" dir="${hadoop.bam}" erroronmissingdir="false">
+			<include name="hadoop-bam*.jar" />
+			<include name="picard-*.jar" />
+			<include name="sam-*.jar" />
+		</fileset>
+
+		<path id="build.classpath">
+			<fileset refid="jars_override" />
+			<fileset refid="hadoop_jars"/>
+			<fileset refid="hadoop_bam_jars" />
+		</path>
+
+		<path id="test.classpath">
+			<pathelement path="${class.dir}"/>
+			<pathelement path="${test.class.dir}"/>
+			<path refid="build.classpath" />
+			<fileset refid="junit_jars_ubuntu" />
+			<fileset refid="junit_jars_gentoo" />
+			<fileset refid="junit_jars_scientific_linux" />
+		</path>
+	</target>
+
+	<target name="clean">
+		<delete failonerror="false" dir="${build.dir}"/>
+		<delete failonerror="false" dir="${class.dir}"/>
+		<delete failonerror="false" dir="${test.class.dir}"/>
+	</target>
+
+	<target name="version_check">
+		<fail message="Please use ant version 1.7 and Java 1.6 or newer (using ${ant.version} and Java ${ant.java.version}).  To override this check use override_version_check=true">
+			<condition>
+				<not>
+					<or>
+						<istrue value="${override_version_check}" />
+						<and>
+							<antversion atleast="1.7"/>
+							<matches string="${ant.java.version}" pattern="1\.[6-9]" />
+						</and>
+					</or>
+				</not>
+			</condition>
+		</fail>
+	</target>
+
+	<target name="compile" depends="version_check,find_hadoop">
+		<mkdir dir="${class.dir}"/>
+		<mkdir dir="${build.dir}"/>
+		<javac srcdir="${src.dir}" destdir="${class.dir}" includeAntRuntime="false" debug="${debug.build}">
+			<classpath refid="build.classpath" />
+
+			<!--
+				We suppress deprecation warnings to avoid lots of warnings on the
+				mapred classes, which have been "undeprecated" in newer releases
+				of Hadoop (since 0.20.203).
+				-->
+			<compilerarg value="-Xlint"/>
+			<compilerarg value="-Xlint:-deprecation"/>
+		</javac>
+
+		<manifest file="${build.dir}/MANIFEST.MF">
+			<attribute name="Built-By" value="${user.name}"/>
+			<attribute name="Specification-Title" value="Seal"/>
+			<attribute name="Specification-Version" value="${version}"/>
+			<attribute name="Implementation-Title" value="Seal"/>
+			<attribute name="Implementation-Version" value="${version}"/>
+		</manifest>
+	</target>
+
+	<target name="package" depends="compile">
+		<mkdir dir="${build.dir}"/>
+
+		<!-- create the jar and include the hadoop-bam jars within it, under the lib directory -->
+		<fail unless="hadoop.bam" message="hadoop.bam property not set.  Set it to the directory containing your hadoop-bam jars" />
+		<jar destfile="${build.dir}/${jar.file}" manifest="${build.dir}/MANIFEST.MF" >
+			<fileset dir="${class.dir}" />
+			<!-- Unfortunately I can't seem to re-use the fileset hadoop_bam_jars already defined.
+			     When I try ant gives me the error 
+			      "only single argument resource collections are supported as archives"
+					 So, we have to specify the names of the hadoop-bam jars here again. -->
+			<zipfileset dir="${hadoop.bam}" includes="hadoop-bam*.jar picard-*.jar sam-*.jar" prefix="lib" />
+		</jar>
+	</target>
+
+	<target name="build-tests" depends="compile">
+		<mkdir dir="${test.class.dir}"/>
+		<javac srcdir="${test.dir}" destdir="${test.class.dir}" includeAntRuntime="false" debug="true">
+			<classpath refid="test.classpath" />
+			<!--
+				We suppress deprecation warnings to avoid lots of warnings on the
+				mapred classes, which have been "undeprecated" in newer releases
+				of Hadoop (since 0.20.203).
+				-->
+			<compilerarg value="-Xlint"/>
+			<compilerarg value="-Xlint:-deprecation"/>
+		</javac>
+	</target>
+
+	<target name="run-tests" depends="build-tests">
+		<property name="log4jconfig" location="${test.dir}/log4j.properties" />
+		<junit showoutput="true" failureproperty="junit.failure">
+			<classpath refid="test.classpath" />
+			<formatter type="brief" usefile="false"/>
+			<batchtest>
+				<fileset dir="${test.class.dir}">
+					 <include name="**/Test*.class" />
+					 <exclude name="**/Test*$*.class" />  <!-- exclude inner classes -->
+				</fileset>
+			</batchtest>
+			<sysproperty key="log4j.configuration" value="file://${log4jconfig}"/>
+		</junit>
+		<local name="log4jconfig" />
+		<fail if="junit.failure" message="Unit test(s) failed.  See reports!"/>
+	</target>
+
+	<target name="run-one-test" depends="build-tests">
+		<fail unless="run.class" message="You must set the class to run with -Drun.class=&lt;your class&gt;" />
+		<echo message="Running class ${run.class}" />
+		<property name="log4jconfig" location="${test.dir}/log4j.properties" />
+		<java classname="${run.class}">
+			<classpath refid="test.classpath" />
+			<sysproperty key="log4j.configuration" value="file://${log4jconfig}"/>
+		</java>
+		<local name="log4jconfig" />
+	</target>
+
+  <target name="run_integration_tests" depends="package">
+	<!-- get the exact PYTHONPATH.  This changes according to the python version and system architecture -->
+	<!-- Though this is useful in development, to run proper tests on an installation,
+	     the PYTHONPATH should probably not be set automatically.
+		<exec executable="find" outputproperty="pythonpath" logError="true" failonerror="true">
+			<arg value="${basedir}/${build.dir}" />
+			<arg value="-name" />
+			<arg value="lib.*" />
+			<arg value="-print0" />
+		</exec>
+        -->
+
+		<exec dir="tests" executable="integration_tests/run_all.sh">
+			<!--<env key="PYTHONPATH" path="${pythonpath}/" />-->
+		</exec>
+	</target>
+
+	<target name="classpath" depends="find_hadoop">
+		<property name="myclasspath" refid="test.classpath"/>
+		<echo message="CLASSPATH=${myclasspath}" />
+	</target>
+
+	<target name="all" depends="clean,package,run-tests" />
+</project>
