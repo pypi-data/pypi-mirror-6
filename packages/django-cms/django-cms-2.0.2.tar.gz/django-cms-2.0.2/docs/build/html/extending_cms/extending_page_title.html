@@ -1,0 +1,231 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>2. Extending the page &amp; title models &mdash; django cms 3.0b4.dev7 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '3.0b4.dev7',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="django cms 3.0b4.dev7 documentation" href="../index.html" />
+    <link rel="next" title="3. Custom Plugins" href="custom_plugins.html" />
+    <link rel="prev" title="1. Extending the CMS: Examples" href="extending_examples.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="custom_plugins.html" title="3. Custom Plugins"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="extending_examples.html" title="1. Extending the CMS: Examples"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">django cms 3.0b4.dev7 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="extending-the-page-title-models">
+<h1>2. Extending the page &amp; title models<a class="headerlink" href="#extending-the-page-title-models" title="Permalink to this headline">¶</a></h1>
+<div class="versionadded">
+<p><span class="versionmodified">New in version 3.0.</span></p>
+</div>
+<p>You can extend the page and title models with your own fields (e.g. adding
+an icon for every page) by using the extension models:
+<tt class="docutils literal"><span class="pre">cms.extensions.PageExtension</span></tt> and <tt class="docutils literal"><span class="pre">cms.extensions.TitleExtension</span></tt>,
+respectively.</p>
+<div class="section" id="how-to">
+<h2>2.1. How To<a class="headerlink" href="#how-to" title="Permalink to this headline">¶</a></h2>
+<p>To add a field to the page model, subclass a class that inherits from
+<tt class="docutils literal"><span class="pre">cms.extensions.PageExtension</span></tt>. Make sure to import the <tt class="docutils literal"><span class="pre">PageExtension</span></tt>
+model from the given path. It isn&#8217;t importable from <tt class="docutils literal"><span class="pre">cms.models</span></tt>. Your class
+should live in one of your apps&#8217; <tt class="docutils literal"><span class="pre">models.py</span></tt>. You are free to add any field
+you want but make sure you don&#8217;t use a unique constraint on any of your added
+fields because uniqueness prevents the copy mechanism of the extension from
+working correctly. This means that you can&#8217;t use one-to-one relations on the
+extension model. Finally, you&#8217;ll need to register the model with the
+<tt class="docutils literal"><span class="pre">extension_pool</span></tt>.</p>
+<p>Here&#8217;s a complete example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">django.db</span> <span class="kn">import</span> <span class="n">models</span>
+
+<span class="kn">from</span> <span class="nn">cms.extensions</span> <span class="kn">import</span> <span class="n">PageExtension</span>
+<span class="kn">from</span> <span class="nn">cms.extensions.extension_pool</span> <span class="kn">import</span> <span class="n">extension_pool</span>
+
+
+<span class="k">class</span> <span class="nc">IconExtension</span><span class="p">(</span><span class="n">PageExtension</span><span class="p">):</span>
+    <span class="n">image</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">ImageField</span><span class="p">(</span><span class="n">upload_to</span><span class="o">=</span><span class="s">&#39;icons&#39;</span><span class="p">)</span>
+
+<span class="n">extension_pool</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">IconExtension</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="hooking-the-extension-to-the-admin-site">
+<h2>2.2. Hooking the extension to the admin site<a class="headerlink" href="#hooking-the-extension-to-the-admin-site" title="Permalink to this headline">¶</a></h2>
+<p>To make your extension editable, create an admin that subclasses
+<tt class="docutils literal"><span class="pre">cms.extensions.PageExtensionAdmin</span></tt>. This admin handles page permissions. If
+you want to use your own admin class, make sure to exclude the live versions of
+the extensions by using <tt class="docutils literal"><span class="pre">filter(extended_page__publisher_is_draft=True)</span></tt> on
+the queryset.</p>
+<p>If you save an extension, the corresponding page is marked as having
+unpublished changes. To see your extension live make sure to publish the page.</p>
+<p>You&#8217;ll also want to make your model editable from the cms toolbar in order to
+associate each instance of the extension model with a page. (Page isn&#8217;t an
+editable attribute in the default admin interface.) The following example,
+which should live in a file named <tt class="docutils literal"><span class="pre">cms_toolbar.py</span></tt> in one of your apps, adds
+a menu entry for the extension on each page:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">from</span> <span class="nn">cms.api</span> <span class="kn">import</span> <span class="n">get_page_draft</span>
+<span class="kn">from</span> <span class="nn">cms.toolbar_pool</span> <span class="kn">import</span> <span class="n">toolbar_pool</span>
+<span class="kn">from</span> <span class="nn">cms.toolbar_base</span> <span class="kn">import</span> <span class="n">CMSToolbar</span>
+<span class="kn">from</span> <span class="nn">cms.utils</span> <span class="kn">import</span> <span class="n">get_cms_setting</span>
+<span class="kn">from</span> <span class="nn">cms.utils.permissions</span> <span class="kn">import</span> <span class="n">has_page_change_permission</span>
+<span class="kn">from</span> <span class="nn">django.core.urlresolvers</span> <span class="kn">import</span> <span class="n">reverse</span><span class="p">,</span> <span class="n">NoReverseMatch</span>
+<span class="kn">from</span> <span class="nn">django.utils.translation</span> <span class="kn">import</span> <span class="n">ugettext_lazy</span> <span class="k">as</span> <span class="n">_</span>
+<span class="kn">from</span> <span class="nn">.models</span> <span class="kn">import</span> <span class="n">IconExtension</span>
+
+
+<span class="nd">@toolbar_pool.register</span>
+<span class="k">class</span> <span class="nc">IconExtensionToolbar</span><span class="p">(</span><span class="n">CMSToolbar</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">populate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># always use draft if we have a page</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">page</span> <span class="o">=</span> <span class="n">get_page_draft</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">current_page</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">page</span><span class="p">:</span>
+            <span class="c"># Nothing to do</span>
+            <span class="k">return</span>
+
+        <span class="c"># check global permissions if CMS_PERMISSIONS is active</span>
+        <span class="k">if</span> <span class="n">get_cms_setting</span><span class="p">(</span><span class="s">&#39;PERMISSION&#39;</span><span class="p">):</span>
+            <span class="n">has_global_current_page_change_permission</span> <span class="o">=</span> <span class="n">has_page_change_permission</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">has_global_current_page_change_permission</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="c"># check if user has page edit permission</span>
+        <span class="n">can_change</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">current_page</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">current_page</span><span class="o">.</span><span class="n">has_change_permission</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">has_global_current_page_change_permission</span> <span class="ow">or</span> <span class="n">can_change</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">icon_extension</span> <span class="o">=</span> <span class="n">IconExtension</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">extended_object_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">page</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">IconExtension</span><span class="o">.</span><span class="n">DoesNotExist</span><span class="p">:</span>
+                <span class="n">icon_extension</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">icon_extension</span><span class="p">:</span>
+                    <span class="n">url</span> <span class="o">=</span> <span class="n">reverse</span><span class="p">(</span><span class="s">&#39;admin:myapp_iconextension_change&#39;</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">icon_extension</span><span class="o">.</span><span class="n">pk</span><span class="p">,))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">url</span> <span class="o">=</span> <span class="n">reverse</span><span class="p">(</span><span class="s">&#39;admin:myapp_iconextension_add&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s">&#39;?extended_object=</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">page</span><span class="o">.</span><span class="n">pk</span>
+            <span class="k">except</span> <span class="n">NoReverseMatch</span><span class="p">:</span>
+                <span class="c"># not in urls</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">not_edit_mode</span> <span class="o">=</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">toolbar</span><span class="o">.</span><span class="n">edit_mode</span>
+                <span class="n">current_page_menu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">toolbar</span><span class="o">.</span><span class="n">get_or_create_menu</span><span class="p">(</span><span class="s">&#39;page&#39;</span><span class="p">)</span>
+                <span class="n">current_page_menu</span><span class="o">.</span><span class="n">add_modal_item</span><span class="p">(</span><span class="n">_</span><span class="p">(</span><span class="s">&#39;Page Icon&#39;</span><span class="p">),</span> <span class="n">url</span><span class="o">=</span><span class="n">url</span><span class="p">,</span> <span class="n">disabled</span><span class="o">=</span><span class="n">not_edit_mode</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="using-extensions-with-menus">
+<h2>2.3. Using extensions with menus<a class="headerlink" href="#using-extensions-with-menus" title="Permalink to this headline">¶</a></h2>
+<p>If you want the extension to show up in the menu (e.g. if you had created an
+extension that added an icon to the page) use menu modifiers. Every <tt class="docutils literal"><span class="pre">node.id</span></tt>
+corresponds to their related <tt class="docutils literal"><span class="pre">page.id</span></tt>. <tt class="docutils literal"><span class="pre">Page.objects.get(pk=node.id)</span></tt> is
+the way to get the page object. Every page extension has a one-to-one
+relationship with the page so you can access it by using the reverse relation,
+e.g. <tt class="docutils literal"><span class="pre">extension</span> <span class="pre">=</span> <span class="pre">page.yourextensionlowercased</span></tt>. Now you can hook this
+extension by storing it on the node: <tt class="docutils literal"><span class="pre">node.extension</span> <span class="pre">=</span> <span class="pre">extension</span></tt>. In the
+menu template you can access your icon on the child object:
+<tt class="docutils literal"><span class="pre">child.extension.icon</span></tt>.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">2. Extending the page &amp; title models</a><ul>
+<li><a class="reference internal" href="#how-to">2.1. How To</a></li>
+<li><a class="reference internal" href="#hooking-the-extension-to-the-admin-site">2.2. Hooking the extension to the admin site</a></li>
+<li><a class="reference internal" href="#using-extensions-with-menus">2.3. Using extensions with menus</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="extending_examples.html"
+                        title="previous chapter">1. Extending the CMS: Examples</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="custom_plugins.html"
+                        title="next chapter">3. Custom Plugins</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/extending_cms/extending_page_title.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="custom_plugins.html" title="3. Custom Plugins"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="extending_examples.html" title="1. Extending the CMS: Examples"
+             >previous</a> |</li>
+        <li><a href="../index.html">django cms 3.0b4.dev7 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2009, Patrick Lauber.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.
+    </div>
+  </body>
+</html>
