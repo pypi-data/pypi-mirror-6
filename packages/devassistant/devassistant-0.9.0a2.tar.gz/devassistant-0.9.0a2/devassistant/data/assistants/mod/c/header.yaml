@@ -1,0 +1,35 @@
+fullname: Adding header
+description: 'This assistant will help you add header file into already created project by devassistant.
+  Just run it in the projects directory and specify which header you want to add and check.'
+
+args:
+  path:
+    use: common_args
+
+  header:
+    flags:
+    - --header
+    help:
+        Specify C/C++ header file which will be added into configure.ac
+    required: True
+
+pre_run:
+- if $path:
+  - cl: cd "$path"
+- dda_r: .
+
+run:
+- if "$header":
+  - log_i: Header file "$header" will be added into configure.ac
+  - if $(grep $header configure.ac):
+    - log_i: Header "$header" already exists in configure.ac
+  - else:
+    - cl: sed -i "s|\(# DEFINE YOUR OWN HEADERS CHECK.*\)|\1\\nAC_CHECK_HEADERS([$header], , [AC_MSG_ERROR(Could not find $header)])|" "configure.ac"
+    - log_i: Header was added into configure.ac
+- log_i: Project will be build up with new configure.ac
+- log_i: Calling autoreconf
+- cl: autoreconf -vfi
+- log_i: Calling configure script
+- cl: ./configure
+- log_i: Building project by make command
+- cl: make

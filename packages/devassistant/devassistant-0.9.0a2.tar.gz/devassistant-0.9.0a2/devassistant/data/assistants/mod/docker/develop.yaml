@@ -1,0 +1,71 @@
+name: Run a Development Container
+description: Runs a Docker container for your project, mounting your source code in. Let this run while you're developing.
+
+args:
+  reuse_image:
+    flags: [-i, --reuse-image]
+    help: "Provide a name of image to reuse."
+  path:
+    use: common_args
+  mountpoint:
+    flags: [-m, --mountpoint]
+    help: "Specify directory to mount source code in; defaults to first 'ADD' instruction of Dockerfile."
+
+dependencies:
+- rpm: [docker-io]
+
+pre_run:
+- if $path:
+  - cl: cd $path
+
+run:
+- $pwd~: $(pwd)
+- if not $(test -f Dockerfile):
+  - log_e: No Dockerfile found in $pwd, exiting!
+
+- if $reuse_image:
+  - $found, $image~:
+    - docker_find_img: $reuse_image
+  - if not $found:
+    - if ' ' in $image:
+      - $logmsg: "Multiple images found for '$reuse_image': $image"
+    - else:
+      - $logmsg: No image found for '$reuse_image'.
+    - log_e: $logmsg
+  - else:
+    - $image~: $(echo $image | cut -c -12)
+- else:
+  - $success, $image~:
+    - docker_build: .
+  - if not $success:
+    - log_e: Failed to build Docker image, exiting ...
+
+- log_i: Using image "$image" - you can use this next time with --reuse-image option.
+- if not $mountpoint:
+  # we assume that there's just one "ADD" instruction and we mount code there
+  - $mountpoint~: $(cat Dockerfile | grep "^ADD" -m 1 | awk '{ print $3 }')
+  - if not $mountpoint:
+    - log_e: Can't find a place where to mount source code, please rerun with -m parameter.
+- $curdir~: $(basename `pwd`)
+
+- $container~:
+  - docker_run:
+      args: "-P -d -t -v $pwd:$mountpoint"
+      image: $image
+
+- $ip~:
+  - docker_container_ip: $container
+
+- $container_name~:
+  - docker_container_name: $container
+
+- $container_short~: $(echo $container | cut -c -12)
+
+- log_i: 'New container: hash "$container_short", name "$container_name"'
+- log_i: Your source code is mounted in container directory "$mountpoint"
+- log_i: 'IP address of the container: "$ip"'
+
+# TODO: use a docker_a command, that will be able to react to users interrupt signal
+# but not shut down DA
+- log_i: Attaching to container output ...
+- docker_attach: $container

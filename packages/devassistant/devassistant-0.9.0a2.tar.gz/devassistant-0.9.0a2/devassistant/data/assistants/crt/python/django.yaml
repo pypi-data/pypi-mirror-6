@@ -1,0 +1,147 @@
+fullname: Django
+description: 'Django assistant will help you create a basic Django project and install its dependencies.'
+
+dependencies:
+- use: super.dependencies
+- if $venv:
+  - rpm: ['python${py3}-virtualenv']
+- else:
+  - rpm: ['python${py3}-django']
+
+dependencies_eclipse:
+- use: eclipse.dependencies_python
+
+dependencies_vim:
+- use: vim.dependencies
+
+dependencies_docker:
+- rpm: [docker-io]
+
+args:
+  name:
+    use: common_args
+
+  eclipse:
+    use: eclipse
+
+  github:
+    use: common_args
+
+  vim:
+    use: vim
+
+  venv:
+    use: common_args
+
+  py3:
+    use: common_args
+
+  docker:
+    use: common_args
+
+files:
+  gitignore: &gitignore
+    source: ../.gitignore
+  dockerfile: &dockerfile
+    source: Dockerfile
+
+run:
+- if $py3 and $venv:
+  # TODO: fix this
+  - log_e: Virtualenv is currently unsupported with Python 3.
+- $dirname~: $(dirname "$name")
+- $basename~: $(basename "$name")
+
+- if $(test -e "$name"):
+  - log_e: '$name already exists, cannot proceed.'
+- cl: mkdir -p "$dirname"
+- cl: cd "$dirname"
+
+- use: self.run_startproject
+- use: self.run_modify_settings
+
+- dda_c: $basename
+
+# per-argument sections
+- cl: cd "$basename"
+- if defined $vim:
+  - use: vim.run
+- if $eclipse:
+  - use: eclipse.run_python
+- if $docker:
+  - use: self.run_create_dockerfile
+
+- cl: cp *gitignore .
+- use: git_init_add_commit.run
+- if defined $github:
+  - github: create_and_push
+
+- if $docker:
+  - $docker_image~:
+    - docker_build: .
+
+- log_i: 'Django project $basename in $dirname has been created.'
+- if $venv:
+  - log_i: 'To switch to the created virtualenv, use "source ${dirname}/${basename}/bin/activate"'
+- if $docker:
+  - if not $docker_image:
+    - log_i: Docker image failed to build, you can try building it again as part of development process.
+    - log_i: 'To build an image, start a container and mount source code in it, switch to project dir and use'
+    - log_i: da mod docker develop
+  - else:
+    - log_i: 'To start a container and mount source code in it, switch to project dir and use'
+    - log_i: 'da mod docker develop --reuse-image $docker_image'
+  - log_i: 'Then access http://{printed_ip_address}:8000 in your browser.'
+- else:
+  - log_i: 'To run the application use: ./manage.py runserver'
+- log_i: 'For more information about Django project visit https://www.djangoproject.com'
+
+
+run_startproject: # also creates requirements.txt if $venv is used
+- if $venv:
+  - cl_i: virtualenv "$basename"
+  - cl: cd "$basename"
+  - log_i: 'Installing Django into virtual environment ...'
+  - cl_i: source bin/activate && pip install django
+
+# create the project using proper form of django-admin
+- log_i: 'Creating Django project $basename in $dirname ...'
+- if $venv:
+  - cl: source bin/activate && django-admin.py startproject "$basename"
+  - cl: echo django==`source bin/activate && django-admin.py --version` > "$basename/requirements.txt"
+- else:
+  - if $py3: # also replace the python shebang for Python 3
+    - cl: python3-django-admin startproject "$basename"
+    - cl: sed -i "s|env python|env python3|" "${basename}/manage.py"
+  - else:
+    - cl: django-admin startproject "$basename"
+
+
+run_modify_settings:
+- cl: chmod +x "$basename/manage.py"
+- $settings: "$basename/$basename/settings.py"
+
+# new versions of Django (>= 1.6) already have this stuff done
+- if not $(grep BASE_DIR "$settings"):
+  # make modifications to settings.py so that project can be run immediately
+  - cl: sed -i "s|django.db.backends.|django.db.backends.sqlite3|" "$settings"
+  # \(.\) is workaround for ":", which cannot be here because it would mean yaml error
+  - cl: sed -i "1i\import os\n" "$settings"
+  - cl: sed -i "2i\BASE_DIR = os.path.join(os.path.dirname(__file__), '..')\n" "$settings"
+  - cl: sed -i "s|'NAME'\(.\) ''|'NAME'\1 os.path.join(BASE_DIR, 'db.sqlite3')|" "$settings"
+
+
+run_create_dockerfile:
+- if $venv:
+  - $setup_command: 'RUN yum -y install python-virtualenv && virtualenv "$basename" &&
+                     cd "$basename" && source bin/activate &&
+                     pip install -r "${basename}/requirements.txt"'
+- else:
+  - $setup_command: "RUN yum -y install python${py3}-django"
+- jinja_render:
+    template: *dockerfile
+    destination: .
+    data:
+      basename: $basename
+      venv: $venv
+      setup_command: $setup_command

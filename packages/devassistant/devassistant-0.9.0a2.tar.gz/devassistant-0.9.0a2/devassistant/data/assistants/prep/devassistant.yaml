@@ -1,0 +1,36 @@
+fullname: DevAssistant
+description: Set up environment for DevAssistant and checkout sources.
+
+dependencies:
+# if the user is getting DevAssistant through DevAssistant,
+# he should already have most of these, but whatever...
+- rpm: ['PyYAML', 'python-PyGithub', 'pytest', 'python-flexmock']
+
+args:
+  url:
+    flags:
+    - -u
+    - --url
+    help:
+      If used, will check out DevAssistant from given URL (useful when working with fork).
+    required: False
+    default: https://github.com/bkabrda/devassistant
+  path:
+    use: common_args
+    help:
+      Path where to checkout the repo (will be created if it does not exist).
+
+run:
+  - if not $(test -e "$path"):
+    - cl: mkdir -p "$path"
+  - cl: cd "$path"
+  - if $(test -e devassistant):
+    - log_e: 'devassistant directory/file already exists in directory "$path", exiting'
+  - log_i: Getting DevAssistant sources ...
+  - $git_output~: $(git clone "$url")
+  - if $(echo "$git_output" | grep "fatal"):
+    - log_e: Could not checkout sources - $git_output
+  - cl: cd devassistant
+  - cl: git submodule init
+  - cl: git submodule update
+  - log_i: DevAssistant is prepared in $path/devassistant.
