@@ -1,0 +1,146 @@
+#!/usr/bin/env python
+
+from optparse import OptionParser
+
+import yaml
+from mom_utils import nml_decode, yaml2nml
+from mom_utils.utils import check_namelist_exist, convert_inputnml_mom4_to_mom5
+
+
+# ==== Parsing the options on command line
+parser = OptionParser()
+#parser.add_option("--full",
+#                  action="store_true", dest="fullvacuum", default=False,
+#                  help="Make a full vacuum on the DBs")
+parser.add_option("-n", "--namelist", dest="namelist",
+                  help="Namelist filename", default="./input.yaml",
+                  metavar="config.yaml")
+parser.add_option("-o", "--output", dest="output",
+                  help="Output filename", default="./input.nml",
+                  metavar="ref.yaml")
+parser.add_option("-r", "--referencefile", dest="reference",
+                  help="Reference filename", default="./input.ref",
+                  metavar="ref.yaml")
+parser.add_option("--momsrc", dest="momsrc",
+                  help="Path to MOM source code",)
+
+(options, args) = parser.parse_args()
+
+
+tasks = ['nml2yaml', 'n2y', 'compare', 'co', 'check', '4to5']
+
+if args[0] not in tasks:
+    print "Check the help"
+
+
+
+if args[0] in ['nml2yaml', 'n2y']:
+    print "Hay, I'll encode it"
+    print "reading file: %s", args[1]
+    text = open(args[1]).read()
+    x = nml_decode(text)
+    print yaml.dump(x, default_flow_style=False)
+
+if args[0] in ['compare', 'co']:
+    print "Hay, I'll compare it"
+
+    text = open(args[1]).read()
+    cfg = nml_decode(text)
+
+    text = open(args[2]).read()
+    cfg2 = nml_decode(text)
+
+    groups = list(set(cfg.keys()+cfg2.keys()))
+    groups.sort()
+
+    tmp = ""
+    for g in groups:
+        if (g in cfg.keys()) and (g not in cfg2.keys()):
+            tmp+="Only in \033[93m%s\033[0m: \033[93m%s\033[0m\n" % (args[1], g)
+        elif (g not in cfg.keys()) and (g in cfg2.keys()):
+            tmp+="Only in \033[93m%s\033[0m: \033[93m%s\033[0m\n" % (args[2], g)
+        elif (g in cfg.keys()) and (g in cfg2.keys()):
+            if cfg[g] != cfg2[g]:
+                gtmp = ""
+                if cfg[g] is None:
+                    keys1 = []
+                else:
+                    keys1 = cfg[g].keys()
+                if cfg2[g] is None:
+                    keys2 = []
+                else:
+                    keys2 = cfg2[g].keys()
+                for p in list(set(keys1 + keys2)):
+                    if (p in keys1) and (p not in keys2):
+                      gtmp+="\tOnly in \033[93m%s\033[0m: \033[93m%s(%s)\033[0m\n" % (args[1], p, cfg[g][p])
+                    elif (p not in keys1) and (p in keys2):
+                      gtmp+="\tOnly in \033[93m%s\033[0m: \033[93m%s(%s)\033[0m\n" % (args[2], p, cfg2[g][p])
+                    elif cfg[g][p] != cfg2[g][p]:
+                      gtmp+="\t\033[91m%s\033[0m is different \033[91m(%s X %s)\033[0m\n" % (p, cfg[g][p], cfg2[g][p])
+                if len(gtmp)>0:
+                    tmp+="%s\n" % g
+                    tmp+=gtmp
+        else:
+            tmp+=g
+    if tmp == "":
+        print "The %s and %s are the same configs" % (args[1], args[2])
+    else:
+        print tmp
+
+if args[0] in ['check']:
+    print "Hay, I'll check it"
+    print "reading file: %s", args[1]
+    text = open(args[1]).read()
+    inputnml = nml_decode(text)
+
+    nml = check_namelist_exist(options.momsrc, inputnml)
+    tmp = "\033[91mThese namelists/parameters do not exist in the source code:\033[0m\n"
+    for n in nml:
+        tmp += "%s\n" % n
+        if nml[n] is not None:
+            for p in nml[n]:
+                tmp += "\t%s\n" % p
+    print tmp
+
+if args[0] in ['4to5']:
+    #print "Hay, I'll convert it from MOM4 to MOM5"
+    #print "reading file: %s", args[1]
+    text = open(args[1]).read()
+    inputnml = nml_decode(text)
+
+    inputnml = convert_inputnml_mom4_to_mom5(inputnml)
+    print yaml2nml(inputnml)
+
+#print " ================== "
+#print " ================== "
+#
+#print "options", dir(options)
+#print options.namelist
+#print "args", args
+
+
+#cfg = nml_decode(text)
+
+
+#f = open(options.namelist, 'r')
+#text = f.read()
+#text = text.replace('\t',' ')
+#cfg = yaml.safe_load(text)
+##cfg = yaml.safe_load(ref_text)
+
+#print "heyhey"
+#print cfg
+#print "aqui: ",cfg['ocean_tracer_advect_nml']
+
+#f = open('input.yaml','r')
+#text = f.read()
+#cfg = yaml.safe_load(text)
+
+#print yaml.dump(cfg_ref, default_flow_style=False)
+
+
+
+#f = open(options.output,'w')
+#f.write(yaml2nml(cfg))
+#f.close()
+
