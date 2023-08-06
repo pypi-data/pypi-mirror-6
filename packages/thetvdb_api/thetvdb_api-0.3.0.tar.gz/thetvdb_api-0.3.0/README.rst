@@ -1,0 +1,1 @@
+Get the documentation at http://thetvdb-api.readthedocs.org/
