@@ -1,0 +1,495 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pywws.Tasks &mdash; pywws 14.03.dev1177 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '14.03.dev1177',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../../_static/pywws_logo.ico"/>
+    <link rel="top" title="pywws 14.03.dev1177 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pywws 14.03.dev1177 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pywws.Tasks</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+
+<span class="c"># pywws - Python software for USB Wireless Weather Stations</span>
+<span class="c"># http://github.com/jim-easterbrook/pywws</span>
+<span class="c"># Copyright (C) 2008-13  Jim Easterbrook  jim@jim-easterbrook.me.uk</span>
+
+<span class="c"># This program is free software; you can redistribute it and/or</span>
+<span class="c"># modify it under the terms of the GNU General Public License</span>
+<span class="c"># as published by the Free Software Foundation; either version 2</span>
+<span class="c"># of the License, or (at your option) any later version.</span>
+
+<span class="c"># This program is distributed in the hope that it will be useful,</span>
+<span class="c"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c"># GNU General Public License for more details.</span>
+
+<span class="c"># You should have received a copy of the GNU General Public License</span>
+<span class="c"># along with this program; if not, write to the Free Software</span>
+<span class="c"># Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.</span>
+
+<span class="sd">&quot;&quot;&quot;Routines to perform common tasks such as plotting gaphs or uploading files.&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">deque</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">Queue</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+
+<span class="kn">from</span> <span class="nn">pywws.calib</span> <span class="kn">import</span> <span class="n">Calib</span>
+<span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">Plot</span>
+<span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">Template</span>
+<span class="kn">from</span> <span class="nn">pywws.TimeZone</span> <span class="kn">import</span> <span class="n">Local</span>
+<span class="kn">from</span> <span class="nn">pywws.toservice</span> <span class="kn">import</span> <span class="n">ToService</span><span class="p">,</span> <span class="n">FIVE_MINS</span><span class="p">,</span> <span class="n">FIFTY_SECS</span>
+<span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">Upload</span>
+<span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">WindRose</span>
+<span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">YoWindow</span>
+
+<div class="viewcode-block" id="RegularTasks"><a class="viewcode-back" href="../../api/pywws.Tasks.html#pywws.Tasks.RegularTasks">[docs]</a><span class="k">class</span> <span class="nc">RegularTasks</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span>
+                 <span class="n">raw_data</span><span class="p">,</span> <span class="n">calib_data</span><span class="p">,</span> <span class="n">hourly_data</span><span class="p">,</span> <span class="n">daily_data</span><span class="p">,</span> <span class="n">monthly_data</span><span class="p">,</span>
+                 <span class="n">asynch</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;pywws.Tasks.RegularTasks&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">status</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">raw_data</span> <span class="o">=</span> <span class="n">raw_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span> <span class="o">=</span> <span class="n">calib_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span> <span class="o">=</span> <span class="n">hourly_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">daily_data</span> <span class="o">=</span> <span class="n">daily_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">monthly_data</span> <span class="o">=</span> <span class="n">monthly_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">asynch</span> <span class="o">=</span> <span class="n">asynch</span>
+        <span class="c"># get directories</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;paths&#39;</span><span class="p">,</span> <span class="s">&#39;work&#39;</span><span class="p">,</span> <span class="s">&#39;/tmp/weather&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">template_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s">&#39;paths&#39;</span><span class="p">,</span> <span class="s">&#39;templates&#39;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="s">&#39;~/weather/templates/&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph_template_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s">&#39;paths&#39;</span><span class="p">,</span> <span class="s">&#39;graph_templates&#39;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="s">&#39;~/weather/graph_templates/&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">local_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s">&#39;paths&#39;</span><span class="p">,</span> <span class="s">&#39;local_files&#39;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="s">&#39;~/weather/results/&#39;</span><span class="p">))</span>
+        <span class="c"># create calibration object</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">calibrator</span> <span class="o">=</span> <span class="n">Calib</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">raw_data</span><span class="p">)</span>
+        <span class="c"># create templater object</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">templater</span> <span class="o">=</span> <span class="n">Template</span><span class="o">.</span><span class="n">Template</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">daily_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">monthly_data</span><span class="p">)</span>
+        <span class="c"># create plotter objects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span> <span class="o">=</span> <span class="n">Plot</span><span class="o">.</span><span class="n">GraphPlotter</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">daily_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">monthly_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">roseplotter</span> <span class="o">=</span> <span class="n">WindRose</span><span class="o">.</span><span class="n">RosePlotter</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">daily_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">monthly_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span><span class="p">)</span>
+        <span class="c"># create FTP uploader object</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uploader</span> <span class="o">=</span> <span class="n">Upload</span><span class="o">.</span><span class="n">Upload</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uploads_directory</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span><span class="p">,</span> <span class="s">&#39;uploads&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uploads_directory</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uploads_directory</span><span class="p">)</span>
+        <span class="c"># delay creation of a Twitter object until we know it&#39;s needed</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">twitter</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c"># create a YoWindow object</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">yowindow</span> <span class="o">=</span> <span class="n">YoWindow</span><span class="o">.</span><span class="n">YoWindow</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="p">)</span>
+        <span class="c"># get local time&#39;s offset from UTC, without DST</span>
+        <span class="n">now</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="o">.</span><span class="n">before</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">max</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">now</span><span class="p">:</span>
+            <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+        <span class="n">time_offset</span> <span class="o">=</span> <span class="n">Local</span><span class="o">.</span><span class="n">utcoffset</span><span class="p">(</span><span class="n">now</span><span class="p">)</span> <span class="o">-</span> <span class="n">Local</span><span class="o">.</span><span class="n">dst</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+        <span class="c"># get daytime end hour, in UTC</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">day_end_hour</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;config&#39;</span><span class="p">,</span> <span class="s">&#39;day end hour&#39;</span><span class="p">,</span> <span class="s">&#39;21&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">day_end_hour</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">day_end_hour</span> <span class="o">-</span> <span class="p">(</span><span class="n">time_offset</span><span class="o">.</span><span class="n">seconds</span> <span class="o">//</span> <span class="mi">3600</span><span class="p">))</span> <span class="o">%</span> <span class="mi">24</span>
+        <span class="c"># create service uploader objects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">services</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="p">(</span><span class="s">&#39;live&#39;</span><span class="p">,</span> <span class="s">&#39;logged&#39;</span><span class="p">,</span> <span class="s">&#39;hourly&#39;</span><span class="p">,</span> <span class="s">&#39;12 hourly&#39;</span><span class="p">,</span> <span class="s">&#39;daily&#39;</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="s">&#39;services&#39;</span><span class="p">,</span> <span class="s">&#39;[]&#39;</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">services</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">ToService</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="p">,</span>
+                        <span class="n">service_name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">asynch</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">service_start</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">service_queued</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">services</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">service_start</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">catchup_start</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">service_queued</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c"># start asynchronous thread to do uploads</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">asynch</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Starting asynchronous thread&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">uploads_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">to_thread</span> <span class="o">=</span> <span class="n">Queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">from_thread</span> <span class="o">=</span> <span class="n">Queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">thread</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_asynch_thread</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+<div class="viewcode-block" id="RegularTasks.stop_thread"><a class="viewcode-back" href="../../api/pywws.Tasks.html#pywws.Tasks.RegularTasks.stop_thread">[docs]</a>    <span class="k">def</span> <span class="nf">stop_thread</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">asynch</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">to_thread</span><span class="o">.</span><span class="n">put</span><span class="p">((</span><span class="s">&#39;shutdown&#39;</span><span class="p">,))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">thread</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">_asynch_thread</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">service_queue</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">uploads_pending</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">tweet_queue</span> <span class="o">=</span> <span class="n">deque</span><span class="p">()</span>
+        <span class="n">running</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">while</span> <span class="n">running</span><span class="p">:</span>
+                <span class="n">timeout</span> <span class="o">=</span> <span class="mi">600</span>
+                <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">command</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_thread</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+                    <span class="k">except</span> <span class="n">Queue</span><span class="o">.</span><span class="n">Empty</span><span class="p">:</span>
+                        <span class="k">break</span>
+                    <span class="k">if</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;shutdown&#39;</span><span class="p">:</span>
+                        <span class="n">running</span> <span class="o">=</span> <span class="bp">False</span>
+                        <span class="k">break</span>
+                    <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;upload&#39;</span><span class="p">:</span>
+                        <span class="n">uploads_pending</span> <span class="o">=</span> <span class="bp">True</span>
+                    <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;twitter&#39;</span><span class="p">:</span>
+                        <span class="n">tweet_queue</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                    <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;service&#39;</span><span class="p">:</span>
+                        <span class="n">name</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">,</span> <span class="n">coded_data</span> <span class="o">=</span> <span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+                        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">service_queue</span><span class="p">:</span>
+                            <span class="n">service_queue</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">deque</span><span class="p">()</span>
+                        <span class="n">service_queue</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">timestamp</span><span class="p">,</span> <span class="n">coded_data</span><span class="p">))</span>
+                    <span class="n">timeout</span> <span class="o">=</span> <span class="mi">5</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Doing asynchronous tasks&#39;</span><span class="p">)</span>
+                <span class="k">while</span> <span class="n">tweet_queue</span><span class="p">:</span>
+                    <span class="n">tweet</span> <span class="o">=</span> <span class="n">tweet_queue</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Tweeting&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">twitter</span><span class="o">.</span><span class="n">Upload</span><span class="p">(</span><span class="n">tweet</span><span class="p">):</span>
+                        <span class="n">tweet_queue</span><span class="o">.</span><span class="n">popleft</span><span class="p">()</span>
+                <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">service_queue</span><span class="p">:</span>
+                    <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+                    <span class="k">while</span> <span class="n">service_queue</span><span class="p">[</span><span class="n">name</span><span class="p">]:</span>
+                        <span class="n">timestamp</span><span class="p">,</span> <span class="n">coded_data</span> <span class="o">=</span> <span class="n">service_queue</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+                        <span class="k">if</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">service_queue</span><span class="p">[</span><span class="n">name</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span>
+                                            <span class="bp">self</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">catchup</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">):</span>
+                            <span class="c"># don&#39;t send &#39;catchup&#39; records</span>
+                            <span class="k">pass</span>
+                        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">send_data</span><span class="p">(</span><span class="n">coded_data</span><span class="p">):</span>
+                            <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="k">break</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">from_thread</span><span class="o">.</span><span class="n">put</span><span class="p">((</span><span class="s">&#39;service&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">))</span>
+                        <span class="n">service_queue</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">popleft</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%d</span><span class="s"> records sent&#39;</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">uploads_pending</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">uploads_lock</span><span class="o">.</span><span class="n">acquire</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_uploads</span><span class="p">():</span>
+                        <span class="n">uploads_pending</span> <span class="o">=</span> <span class="bp">False</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">uploads_lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">ex</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RegularTasks.has_live_tasks"><a class="viewcode-back" href="../../api/pywws.Tasks.html#pywws.Tasks.RegularTasks.has_live_tasks">[docs]</a>    <span class="k">def</span> <span class="nf">has_live_tasks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">yowindow_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;live&#39;</span><span class="p">,</span> <span class="s">&#39;yowindow&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">yowindow_file</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">for</span> <span class="n">template</span> <span class="ow">in</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;live&#39;</span><span class="p">,</span> <span class="s">&#39;twitter&#39;</span><span class="p">,</span> <span class="s">&#39;[]&#39;</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;live&#39;</span><span class="p">,</span> <span class="s">&#39;services&#39;</span><span class="p">,</span> <span class="s">&#39;[]&#39;</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">for</span> <span class="n">template</span> <span class="ow">in</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;live&#39;</span><span class="p">,</span> <span class="s">&#39;plot&#39;</span><span class="p">,</span> <span class="s">&#39;[]&#39;</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">for</span> <span class="n">template</span> <span class="ow">in</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;live&#39;</span><span class="p">,</span> <span class="s">&#39;text&#39;</span><span class="p">,</span> <span class="s">&#39;[]&#39;</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="bp">False</span>
+</div>
+    <span class="k">def</span> <span class="nf">_parse_templates</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">section</span><span class="p">,</span> <span class="n">option</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">template</span> <span class="ow">in</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="n">option</span><span class="p">,</span> <span class="s">&#39;[]&#39;</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+                <span class="k">yield</span> <span class="n">template</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="n">template</span><span class="p">,</span> <span class="s">&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="nf">_do_common</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sections</span><span class="p">,</span> <span class="n">live_data</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">OK</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">:</span>
+            <span class="n">yowindow_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="s">&#39;yowindow&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">yowindow_file</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">yowindow</span><span class="o">.</span><span class="n">write_file</span><span class="p">(</span><span class="n">yowindow_file</span><span class="p">)</span>
+                <span class="k">break</span>
+        <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">template</span><span class="p">,</span> <span class="n">flags</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_templates</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="s">&#39;twitter&#39;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">do_twitter</span><span class="p">(</span><span class="n">template</span><span class="p">):</span>
+                    <span class="n">OK</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="n">uploads</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">local_files</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">service_done</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="s">&#39;services&#39;</span><span class="p">,</span> <span class="s">&#39;[]&#39;</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">service_done</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_do_service</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">live_data</span><span class="p">)</span>
+                    <span class="n">service_done</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">template</span><span class="p">,</span> <span class="n">flags</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_templates</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="s">&#39;text&#39;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="s">&#39;T&#39;</span> <span class="ow">in</span> <span class="n">flags</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">do_twitter</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="n">live_data</span><span class="p">):</span>
+                        <span class="n">OK</span> <span class="o">=</span> <span class="bp">False</span>
+                    <span class="k">continue</span>
+                <span class="n">upload</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">do_template</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="n">live_data</span><span class="p">)</span>
+                <span class="k">if</span> <span class="s">&#39;L&#39;</span> <span class="ow">in</span> <span class="n">flags</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">upload</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">local_files</span><span class="p">:</span>
+                        <span class="n">local_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">upload</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">upload</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">uploads</span><span class="p">:</span>
+                    <span class="n">uploads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">upload</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">template</span><span class="p">,</span> <span class="n">flags</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_templates</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="s">&#39;plot&#39;</span><span class="p">):</span>
+                <span class="n">upload</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">do_plot</span><span class="p">(</span><span class="n">template</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">upload</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="s">&#39;L&#39;</span> <span class="ow">in</span> <span class="n">flags</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">upload</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">local_files</span><span class="p">:</span>
+                        <span class="n">local_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">upload</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">upload</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">uploads</span><span class="p">:</span>
+                    <span class="n">uploads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">upload</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">local_files</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">local_dir</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">local_dir</span><span class="p">)</span>
+            <span class="k">for</span> <span class="nb">file</span> <span class="ow">in</span> <span class="n">local_files</span><span class="p">:</span>
+                <span class="n">targ</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">local_dir</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="nb">file</span><span class="p">))</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">targ</span><span class="p">):</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">targ</span><span class="p">)</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="nb">file</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">local_dir</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">uploads</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">asynch</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">thread</span><span class="o">.</span><span class="n">isAlive</span><span class="p">():</span>
+                    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;upload thread has terminated&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">uploads_lock</span><span class="o">.</span><span class="n">acquire</span><span class="p">()</span>
+            <span class="k">for</span> <span class="nb">file</span> <span class="ow">in</span> <span class="n">uploads</span><span class="p">:</span>
+                <span class="n">targ</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">uploads_directory</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="nb">file</span><span class="p">))</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">targ</span><span class="p">):</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">targ</span><span class="p">)</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="nb">file</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">uploads_directory</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">asynch</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">uploads_lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">to_thread</span><span class="o">.</span><span class="n">put</span><span class="p">((</span><span class="s">&#39;upload&#39;</span><span class="p">,))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">asynch</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_do_uploads</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">asynch</span><span class="p">:</span>
+            <span class="c"># process replies from thread</span>
+            <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">message</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">from_thread</span><span class="o">.</span><span class="n">get_nowait</span><span class="p">()</span>
+                <span class="k">except</span> <span class="n">Queue</span><span class="o">.</span><span class="n">Empty</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="k">if</span> <span class="n">message</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;service&#39;</span><span class="p">:</span>
+                    <span class="n">name</span><span class="p">,</span> <span class="n">timestamp</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">set_status</span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">service_queued</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">-=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">OK</span>
+
+<div class="viewcode-block" id="RegularTasks.do_live"><a class="viewcode-back" href="../../api/pywws.Tasks.html#pywws.Tasks.RegularTasks.do_live">[docs]</a>    <span class="k">def</span> <span class="nf">do_live</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_common</span><span class="p">([</span><span class="s">&#39;live&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">calibrator</span><span class="o">.</span><span class="n">calib</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="RegularTasks.do_tasks"><a class="viewcode-back" href="../../api/pywws.Tasks.html#pywws.Tasks.RegularTasks.do_tasks">[docs]</a>    <span class="k">def</span> <span class="nf">do_tasks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">sections</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;logged&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">unset</span><span class="p">(</span><span class="s">&#39;logged&#39;</span><span class="p">,</span> <span class="s">&#39;last update&#39;</span><span class="p">)</span>
+        <span class="n">now</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="o">.</span><span class="n">before</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">max</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">now</span><span class="p">:</span>
+            <span class="n">now</span> <span class="o">+=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="p">[</span><span class="n">now</span><span class="p">][</span><span class="s">&#39;delay&#39;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+        <span class="n">threshold</span> <span class="o">=</span> <span class="n">now</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">last_update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get_datetime</span><span class="p">(</span><span class="s">&#39;hourly&#39;</span><span class="p">,</span> <span class="s">&#39;last update&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">last_update</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">unset</span><span class="p">(</span><span class="s">&#39;hourly&#39;</span><span class="p">,</span> <span class="s">&#39;last update&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;last update&#39;</span><span class="p">,</span> <span class="s">&#39;hourly&#39;</span><span class="p">,</span> <span class="n">last_update</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">))</span>
+        <span class="n">last_update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">get_datetime</span><span class="p">(</span><span class="s">&#39;last update&#39;</span><span class="p">,</span> <span class="s">&#39;hourly&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">last_update</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">last_update</span> <span class="o">&lt;</span> <span class="n">threshold</span><span class="p">):</span>
+            <span class="c"># time to do hourly tasks</span>
+            <span class="n">sections</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;hourly&#39;</span><span class="p">)</span>
+            <span class="c"># set 12 hourly threshold</span>
+            <span class="n">threshold</span> <span class="o">-=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="p">(</span><span class="n">threshold</span><span class="o">.</span><span class="n">hour</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">day_end_hour</span><span class="p">)</span> <span class="o">%</span> <span class="mi">12</span><span class="p">)</span>
+            <span class="n">last_update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get_datetime</span><span class="p">(</span><span class="s">&#39;12 hourly&#39;</span><span class="p">,</span> <span class="s">&#39;last update&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">last_update</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">unset</span><span class="p">(</span><span class="s">&#39;12 hourly&#39;</span><span class="p">,</span> <span class="s">&#39;last update&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;last update&#39;</span><span class="p">,</span> <span class="s">&#39;12 hourly&#39;</span><span class="p">,</span> <span class="n">last_update</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">))</span>
+            <span class="n">last_update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">get_datetime</span><span class="p">(</span><span class="s">&#39;last update&#39;</span><span class="p">,</span> <span class="s">&#39;12 hourly&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">last_update</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">last_update</span> <span class="o">&lt;</span> <span class="n">threshold</span><span class="p">):</span>
+                <span class="c"># time to do 12 hourly tasks</span>
+                <span class="n">sections</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;12 hourly&#39;</span><span class="p">)</span>
+            <span class="c"># set daily threshold</span>
+            <span class="n">threshold</span> <span class="o">-=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="p">(</span><span class="n">threshold</span><span class="o">.</span><span class="n">hour</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">day_end_hour</span><span class="p">)</span> <span class="o">%</span> <span class="mi">24</span><span class="p">)</span>
+            <span class="n">last_update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get_datetime</span><span class="p">(</span><span class="s">&#39;daily&#39;</span><span class="p">,</span> <span class="s">&#39;last update&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">last_update</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">unset</span><span class="p">(</span><span class="s">&#39;daily&#39;</span><span class="p">,</span> <span class="s">&#39;last update&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;last update&#39;</span><span class="p">,</span> <span class="s">&#39;daily&#39;</span><span class="p">,</span> <span class="n">last_update</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">))</span>
+            <span class="n">last_update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">get_datetime</span><span class="p">(</span><span class="s">&#39;last update&#39;</span><span class="p">,</span> <span class="s">&#39;daily&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">last_update</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">last_update</span> <span class="o">&lt;</span> <span class="n">threshold</span><span class="p">):</span>
+                <span class="c"># time to do daily tasks</span>
+                <span class="n">sections</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;daily&#39;</span><span class="p">)</span>
+        <span class="n">OK</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_common</span><span class="p">(</span><span class="n">sections</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">OK</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s">&#39;last update&#39;</span><span class="p">,</span> <span class="n">section</span><span class="p">,</span> <span class="n">now</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="s">&#39;hourly&#39;</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">:</span>
+            <span class="c"># save any unsaved data</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">raw_data</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">daily_data</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">monthly_data</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">OK</span>
+</div>
+    <span class="k">def</span> <span class="nf">_do_uploads</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">uploads</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uploads_directory</span><span class="p">):</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uploads_directory</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+                <span class="n">uploads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">uploads</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="n">OK</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uploader</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">uploads</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">uploader</span><span class="o">.</span><span class="n">upload_file</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">OK</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uploader</span><span class="o">.</span><span class="n">disconnect</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">OK</span>
+
+    <span class="k">def</span> <span class="nf">_do_service</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">live_data</span><span class="p">):</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">services</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">asynch</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">service</span><span class="o">.</span><span class="n">next_data</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">service_start</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">live_data</span><span class="p">):</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">service_queued</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">50</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="n">coded_data</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">encode_data</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">coded_data</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">to_thread</span><span class="o">.</span><span class="n">put</span><span class="p">((</span><span class="s">&#39;service&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">],</span> <span class="n">coded_data</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">service_start</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">FIFTY_SECS</span>
+                <span class="n">parent</span> <span class="o">=</span> <span class="n">service</span><span class="o">.</span><span class="n">parent</span>
+                <span class="k">if</span> <span class="n">parent</span><span class="p">:</span>
+                    <span class="n">last_update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">get_datetime</span><span class="p">(</span>
+                        <span class="s">&#39;last update&#39;</span><span class="p">,</span> <span class="n">parent</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">last_update</span> <span class="ow">and</span> <span class="n">last_update</span> <span class="o">&gt;=</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">FIVE_MINS</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">service_start</span><span class="p">[</span><span class="n">parent</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">FIFTY_SECS</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">service_queued</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">service</span><span class="o">.</span><span class="n">Upload</span><span class="p">(</span><span class="n">live_data</span><span class="o">=</span><span class="n">live_data</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RegularTasks.do_twitter"><a class="viewcode-back" href="../../api/pywws.Tasks.html#pywws.Tasks.RegularTasks.do_twitter">[docs]</a>    <span class="k">def</span> <span class="nf">do_twitter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">twitter</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">ToTwitter</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">twitter</span> <span class="o">=</span> <span class="n">ToTwitter</span><span class="o">.</span><span class="n">ToTwitter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Templating </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+        <span class="n">input_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">template_dir</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+        <span class="n">tweet</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">templater</span><span class="o">.</span><span class="n">make_text</span><span class="p">(</span><span class="n">input_file</span><span class="p">,</span> <span class="n">live_data</span><span class="o">=</span><span class="n">data</span><span class="p">)[:</span><span class="mi">140</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">asynch</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">to_thread</span><span class="o">.</span><span class="n">put</span><span class="p">((</span><span class="s">&#39;twitter&#39;</span><span class="p">,</span> <span class="n">tweet</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Tweeting&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">twitter</span><span class="o">.</span><span class="n">Upload</span><span class="p">(</span><span class="n">tweet</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="RegularTasks.do_plot"><a class="viewcode-back" href="../../api/pywws.Tasks.html#pywws.Tasks.RegularTasks.do_plot">[docs]</a>    <span class="k">def</span> <span class="nf">do_plot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Graphing </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+        <span class="n">input_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph_template_dir</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+        <span class="n">output_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">template</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">DoPlot</span><span class="p">(</span><span class="n">input_file</span><span class="p">,</span> <span class="n">output_file</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">output_file</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">roseplotter</span><span class="o">.</span><span class="n">DoPlot</span><span class="p">(</span><span class="n">input_file</span><span class="p">,</span> <span class="n">output_file</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">output_file</span>
+        <span class="k">return</span> <span class="bp">None</span>
+</div>
+<div class="viewcode-block" id="RegularTasks.do_template"><a class="viewcode-back" href="../../api/pywws.Tasks.html#pywws.Tasks.RegularTasks.do_template">[docs]</a>    <span class="k">def</span> <span class="nf">do_template</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&quot;Templating </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+        <span class="n">input_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">template_dir</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+        <span class="n">output_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span><span class="p">,</span> <span class="n">template</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">templater</span><span class="o">.</span><span class="n">make_file</span><span class="p">(</span><span class="n">input_file</span><span class="p">,</span> <span class="n">output_file</span><span class="p">,</span> <span class="n">live_data</span><span class="o">=</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">output_file</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../../index.html">
+              <img class="logo" src="../../_static/pywws_logo.png" alt="Logo"/>
+            </a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pywws 14.03.dev1177 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2008-14, Jim Easterbrook.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

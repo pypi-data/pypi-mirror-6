@@ -1,0 +1,963 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pywws.Plot &mdash; pywws 14.03.dev1177 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '14.03.dev1177',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../../_static/pywws_logo.ico"/>
+    <link rel="top" title="pywws 14.03.dev1177 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pywws 14.03.dev1177 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pywws.Plot</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="c"># pywws - Python software for USB Wireless Weather Stations</span>
+<span class="c"># http://github.com/jim-easterbrook/pywws</span>
+<span class="c"># Copyright (C) 2008-13  Jim Easterbrook  jim@jim-easterbrook.me.uk</span>
+
+<span class="c"># This program is free software; you can redistribute it and/or</span>
+<span class="c"># modify it under the terms of the GNU General Public License</span>
+<span class="c"># as published by the Free Software Foundation; either version 2</span>
+<span class="c"># of the License, or (at your option) any later version.</span>
+
+<span class="c"># This program is distributed in the hope that it will be useful,</span>
+<span class="c"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c"># GNU General Public License for more details.</span>
+
+<span class="c"># You should have received a copy of the GNU General Public License</span>
+<span class="c"># along with this program; if not, write to the Free Software</span>
+<span class="c"># Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.</span>
+
+<span class="sd">&quot;&quot;&quot;Plot graphs of weather data according to an XML recipe</span>
+<span class="sd">::</span>
+
+<span class="sd">%s</span>
+
+<span class="sd">Introduction</span>
+<span class="sd">------------</span>
+
+<span class="sd">Like Template.py this is one of the more difficult to use modules in</span>
+<span class="sd">the weather station software collection. It plots a graph (or set of</span>
+<span class="sd">graphs) of weather data. Almost everything about the graph is</span>
+<span class="sd">controlled by an XML file. I refer to these files as templates, but</span>
+<span class="sd">they aren&#39;t templates in the same sense as Template.py uses to create</span>
+<span class="sd">text files.</span>
+
+<span class="sd">Before writing your own graph template files, it might be useful to</span>
+<span class="sd">look at some of the examples in the example_graph_templates directory.</span>
+<span class="sd">If (like I was) you are unfamiliar with XML, I suggest reading the W3</span>
+<span class="sd">Schools XML tutorial.</span>
+
+<span class="sd">XML graph file syntax</span>
+<span class="sd">^^^^^^^^^^^^^^^^^^^^^</span>
+
+<span class="sd">Here is the simplest useful graph template. It plots the external</span>
+<span class="sd">temperature for the last 24 hours. ::</span>
+
+<span class="sd">  &lt;?xml version=&quot;1.0&quot; encoding=&quot;ISO-8859-1&quot;?&gt;</span>
+<span class="sd">  &lt;graph&gt;</span>
+<span class="sd">    &lt;plot&gt;</span>
+<span class="sd">      &lt;subplot&gt;</span>
+<span class="sd">        &lt;title&gt;Temperature (°C)&lt;/title&gt;</span>
+<span class="sd">        &lt;ycalc&gt;data[&#39;temp_out&#39;]&lt;/ycalc&gt;</span>
+<span class="sd">      &lt;/subplot&gt;</span>
+<span class="sd">    &lt;/plot&gt;</span>
+<span class="sd">  &lt;/graph&gt;</span>
+
+<span class="sd">In this example, the root element graph has one plot element, which</span>
+<span class="sd">has one subplot element. The subplot element contains a title element</span>
+<span class="sd">and a ycalc element. To plot more data on the same set of axes (for</span>
+<span class="sd">example dew point and temperature), we can add more subplot elements.</span>
+<span class="sd">To plot more than one set of axes (for example wind speed is measured</span>
+<span class="sd">in different units from temperature) in the same file we can add more</span>
+<span class="sd">plot elements.</span>
+
+<span class="sd">The complete element hierarchy is shown below. ::</span>
+
+<span class="sd">    graph</span>
+<span class="sd">        plot</span>
+<span class="sd">            subplot</span>
+<span class="sd">                xcalc</span>
+<span class="sd">                ycalc</span>
+<span class="sd">                axes</span>
+<span class="sd">                style</span>
+<span class="sd">                colour</span>
+<span class="sd">                title</span>
+<span class="sd">            bmargin</span>
+<span class="sd">            yrange</span>
+<span class="sd">            y2range</span>
+<span class="sd">            ytics</span>
+<span class="sd">            y2tics</span>
+<span class="sd">            ylabel</span>
+<span class="sd">            ylabelangle</span>
+<span class="sd">            y2label</span>
+<span class="sd">            y2labelangle</span>
+<span class="sd">            grid</span>
+<span class="sd">            source</span>
+<span class="sd">            boxwidth</span>
+<span class="sd">            title</span>
+<span class="sd">            command</span>
+<span class="sd">        start</span>
+<span class="sd">        stop</span>
+<span class="sd">        duration</span>
+<span class="sd">        layout</span>
+<span class="sd">        size</span>
+<span class="sd">        fileformat</span>
+<span class="sd">        terminal</span>
+<span class="sd">        lmargin</span>
+<span class="sd">        rmargin</span>
+<span class="sd">        xformat</span>
+<span class="sd">        xlabel</span>
+<span class="sd">        dateformat</span>
+<span class="sd">        xtics</span>
+<span class="sd">        title</span>
+
+<span class="sd">graph</span>
+<span class="sd">^^^^^</span>
+
+<span class="sd">This is the root element of the graph XML file. It does not have to be</span>
+<span class="sd">called &quot;graph&quot;, but there must be exactly one root element.</span>
+
+<span class="sd">plot</span>
+<span class="sd">^^^^</span>
+
+<span class="sd">Every graph element should contain at least one plot element. A</span>
+<span class="sd">separate graph is drawn for each plot element, but all share the same</span>
+<span class="sd">X axis.</span>
+
+<span class="sd">start</span>
+<span class="sd">^^^^^</span>
+
+<span class="sd">This element sets the date &amp; time of the start of the X axis. It is</span>
+<span class="sd">used in the constructor of a Python datetime object. For example, to</span>
+<span class="sd">start the graph at noon (local time) on Christmas day 2008:</span>
+<span class="sd">``&lt;start&gt;year=2008, month=12, day=25, hour=12&lt;/start&gt;``. The default</span>
+<span class="sd">value is (stop - duration).</span>
+
+<span class="sd">stop</span>
+<span class="sd">^^^^</span>
+
+<span class="sd">This element sets the date &amp; time of the end of the X axis. It is used</span>
+<span class="sd">in the constructor of a Python datetime object. For example, to end</span>
+<span class="sd">the graph at 10 am (local time) on new year&#39;s day: ``&lt;stop&gt;year=2009,</span>
+<span class="sd">month=1, day=1, hour=10&lt;/stop&gt;``. The default value is (start +</span>
+<span class="sd">duration), unless start is not defined in which case the timestamp of</span>
+<span class="sd">the latest weather station hourly reading is used.</span>
+
+<span class="sd">duration</span>
+<span class="sd">^^^^^^^^</span>
+
+<span class="sd">This element sets the extent of the X axis of the graph, unless both</span>
+<span class="sd">start and stop are defined. It is used in the constructor of a Python</span>
+<span class="sd">timedelta object. For example, to plot one week:</span>
+<span class="sd">``&lt;duration&gt;weeks=1&lt;/duration&gt;``. The default value is hours=24.</span>
+
+<span class="sd">layout</span>
+<span class="sd">^^^^^^</span>
+
+<span class="sd">Controls the layout of the plots. Default is a single column. The</span>
+<span class="sd">layout element specifies rows and columns. For example: ``&lt;layout&gt;4,</span>
+<span class="sd">2&lt;/layout&gt;`` will use a grid of 4 rows and 2 columns.</span>
+
+<span class="sd">size</span>
+<span class="sd">^^^^</span>
+
+<span class="sd">Sets the overall dimensions of the image file containing the graph.</span>
+<span class="sd">Default (in a single column layout) is a width of 600 pixels and</span>
+<span class="sd">height of 200 pixels for each plot, so a graph with four plot elements</span>
+<span class="sd">would be 600 x 800 pixels. Any size element must include both width</span>
+<span class="sd">and height. For example: ``&lt;size&gt;800, 600&lt;/size&gt;`` will produce an</span>
+<span class="sd">image 800 pixels wide and 600 pixels high.</span>
+
+<span class="sd">fileformat</span>
+<span class="sd">^^^^^^^^^^</span>
+
+<span class="sd">Sets the image format of the file containing the graph. Default is</span>
+<span class="sd">png. Any string recognised by your installation of gnuplot should do.</span>
+<span class="sd">For example: ``&lt;fileformat&gt;gif&lt;/fileformat&gt;`` will produce a GIF</span>
+<span class="sd">image.</span>
+
+<span class="sd">terminal</span>
+<span class="sd">^^^^^^^^</span>
+
+<span class="sd">Allows complete control of gnuplot&#39;s &#39;terminal&#39; settings. You may want</span>
+<span class="sd">to use this if you are plotting to an unusual image format. Any string</span>
+<span class="sd">recognised by your installation of gnuplot&#39;s &#39;set terminal&#39; command</span>
+<span class="sd">should do. For example: ``&lt;terminal&gt;svg enhanced font &quot;arial,9&quot; size</span>
+<span class="sd">600,800 dynamic rounded&lt;/terminal&gt;``. This setting overwrites both</span>
+<span class="sd">size and fileformat.</span>
+
+<span class="sd">lmargin</span>
+<span class="sd">^^^^^^^</span>
+
+<span class="sd">Sets the left margin of the plots, i.e. the distance from the left</span>
+<span class="sd">hand axis to the left hand edge of the image area. According to the</span>
+<span class="sd">gnuplot documentation the units of lmargin are character widths. The</span>
+<span class="sd">default value is 5, which should look OK in most circumstances.</span>
+
+<span class="sd">rmargin</span>
+<span class="sd">^^^^^^^</span>
+
+<span class="sd">Sets the right margin of the plots, i.e. the distance from the right</span>
+<span class="sd">hand axis to the right hand edge of the image area. According to the</span>
+<span class="sd">gnuplot documentation the units of rmargin are character widths. The</span>
+<span class="sd">default value is -1, which sets automatic adjustment.</span>
+
+<span class="sd">xformat</span>
+<span class="sd">^^^^^^^</span>
+
+<span class="sd">Sets the format of the time / date xtic labels. The value is a</span>
+<span class="sd">strftime style format string. Default depends on the graph duration:</span>
+<span class="sd">24 hours or less is &quot;%%H%%M&quot;, 24 hours to 7 days is &quot;%%a %%d&quot; and 7</span>
+<span class="sd">days or more is &quot;%%Y/%%m/%%d&quot;.</span>
+
+<span class="sd">xlabel</span>
+<span class="sd">^^^^^^</span>
+
+<span class="sd">Sets the X axis label. The value is a strftime style format string.</span>
+<span class="sd">Default depends on the graph duration: 24 hours or less is &quot;Time</span>
+<span class="sd">(%%Z)&quot;, 24 hours to 7 days is &quot;Day&quot; and 7 days or more is &quot;Date&quot;. The</span>
+<span class="sd">datetime used to compute this is start, which may produce unexpected</span>
+<span class="sd">results when a graph spans DST start or end.</span>
+
+<span class="sd">dateformat</span>
+<span class="sd">^^^^^^^^^^</span>
+
+<span class="sd">Sets the format of the date labels at each end of X axis. The value is</span>
+<span class="sd">a strftime style format string. Default is &quot;%%Y/%%m/%%d&quot;. The right</span>
+<span class="sd">hand label is only drawn if it differs from the left. To have no</span>
+<span class="sd">labels, set an empty format: ``&lt;dateformat&gt;&lt;/dateformat&gt;``</span>
+
+<span class="sd">xtics</span>
+<span class="sd">^^^^^</span>
+
+<span class="sd">Sets the spacing of the &quot;tic&quot; marks on the X axis. The value is an</span>
+<span class="sd">integer number of hours. The default is to allow gnuplot to set an</span>
+<span class="sd">appropriate interval.</span>
+
+<span class="sd">title</span>
+<span class="sd">^^^^^</span>
+
+<span class="sd">Sets the title of the graph. A single line of text, for example:</span>
+<span class="sd">``&lt;title&gt;Today&#39;s weather&lt;/title&gt;``. This title appears at the very top</span>
+<span class="sd">of the graph, outside any plot area.</span>
+
+<span class="sd">subplot</span>
+<span class="sd">^^^^^^^</span>
+
+<span class="sd">Every plot element should contain at least one subplot element. A</span>
+<span class="sd">separate trace is drawn for each subplot element, but all share the</span>
+<span class="sd">same X and Y axes.</span>
+
+<span class="sd">bmargin</span>
+<span class="sd">^^^^^^^</span>
+
+<span class="sd">Sets the bottom margin, i.e. the spacing between the lower X axis and</span>
+<span class="sd">the edge of the graph (or the next plot). The default is to let</span>
+<span class="sd">gnuplot adjust this automatically, which works OK most of the time but</span>
+<span class="sd">you may wish to fine tune the value to suit your installation.</span>
+
+<span class="sd">The permitted value is any non-negative real number. On my setup 0.9</span>
+<span class="sd">is a good value, set as follows: ``&lt;bmargin&gt;0.9&lt;/bmargin&gt;``.</span>
+
+<span class="sd">yrange</span>
+<span class="sd">^^^^^^</span>
+
+<span class="sd">Sets the lower and upper limits of the (left hand) Y axis. The value</span>
+<span class="sd">is anything understood by gnuplot, typically a pair of numbers. The</span>
+<span class="sd">default is to allow gnuplot to set appropriate values, which is</span>
+<span class="sd">unlikely to be what you want. For example, to plot typical UK</span>
+<span class="sd">temperatures with no value going off the graph: ``&lt;yrange&gt;-10,</span>
+<span class="sd">30&lt;/yrange&gt;``. Note that commas are converted to colons, so</span>
+<span class="sd">``&lt;yrange&gt;-10:30&lt;/yrange&gt;`` would be equivalent.</span>
+
+<span class="sd">You can use an asterisk to have gnuplot choose a suitable value. For</span>
+<span class="sd">example, to have the upper value auto scale whilst fixing the lower</span>
+<span class="sd">value at zero, use ``&lt;yrange&gt;0:*&lt;/yrange&gt;``.</span>
+
+<span class="sd">y2range</span>
+<span class="sd">^^^^^^^</span>
+
+<span class="sd">Sets the lower and upper limits of the right hand Y axis. Default is</span>
+<span class="sd">for the right hand Y axis to be the same as the left, but setting a</span>
+<span class="sd">different range is useful in dual axis plotting.</span>
+
+<span class="sd">ytics</span>
+<span class="sd">^^^^^</span>
+
+<span class="sd">Controls the &quot;tic&quot; marks on the left hand Y axis. The value can be</span>
+<span class="sd">anything that&#39;s understood by gnuplot. For example, to set the tic</span>
+<span class="sd">spacing to 45 use ``&lt;ytics&gt;45&lt;/ytics&gt;``. More complex things are also</span>
+<span class="sd">possible, e.g. to label a wind direction graph with compass points,</span>
+<span class="sd">use ``&lt;y2tics&gt;(&#39;N&#39; 0, &#39;E&#39; 90, &#39;S&#39; 180, &#39;W&#39; 270, &#39;N&#39; 360)&lt;/y2tics&gt;``.</span>
+
+<span class="sd">y2tics</span>
+<span class="sd">^^^^^^</span>
+
+<span class="sd">Controls the &quot;tic&quot; marks on the right hand axis. The format is the</span>
+<span class="sd">same as that for ytics. Default behaviour is to copy the left hand tic</span>
+<span class="sd">marks, but without labels.</span>
+
+<span class="sd">ylabel</span>
+<span class="sd">^^^^^^</span>
+
+<span class="sd">Adds a label to the (left hand) Y axis. For example, when plotting</span>
+<span class="sd">temperature: ``&lt;ylabel&gt;°C&lt;/ylabel&gt;``. If you use ylabel you will</span>
+<span class="sd">probably want to adjust lmargin.</span>
+
+<span class="sd">ylabelangle</span>
+<span class="sd">^^^^^^^^^^^</span>
+
+<span class="sd">Adjust the angle of the (left hand) Y axis label, if your version of</span>
+<span class="sd">gnuplot supports it. For example, to write the label horizontally:</span>
+<span class="sd">``&lt;ylabelangle&gt;90&lt;/ylabelangle&gt;``.</span>
+
+<span class="sd">y2label</span>
+<span class="sd">^^^^^^^</span>
+
+<span class="sd">Adds a label to the right hand Y axis. For example, when plotting</span>
+<span class="sd">humidity: ``&lt;y2label&gt;%%&lt;/y2label&gt;``. This is mostly used when plotting</span>
+<span class="sd">dual axis graphs. If you use y2label you will probably want to adjust</span>
+<span class="sd">rmargin.</span>
+
+<span class="sd">y2labelangle</span>
+<span class="sd">^^^^^^^^^^^^</span>
+
+<span class="sd">Adjust the angle of the right hand Y axis label, if your version of</span>
+<span class="sd">gnuplot supports it. For example, to write the label horizontally:</span>
+<span class="sd">``&lt;y2labelangle&gt;90&lt;/y2labelangle&gt;``.</span>
+
+<span class="sd">grid</span>
+<span class="sd">^^^^</span>
+
+<span class="sd">Adds a grid to the plot. In most situations gnuplot&#39;s default grid is</span>
+<span class="sd">suitable, so no value is needed: ``&lt;grid&gt;&lt;/grid&gt;``. More control is</span>
+<span class="sd">possible using any of the options understood by gnuplot&#39;s set grid</span>
+<span class="sd">command. For example, to have horizontal grid lines only:</span>
+<span class="sd">``&lt;grid&gt;ytics&lt;/grid&gt;``.</span>
+
+<span class="sd">source</span>
+<span class="sd">^^^^^^</span>
+
+<span class="sd">Select the weather data to be plotted. Permitted values are</span>
+<span class="sd">``&lt;source&gt;raw&lt;/source&gt;``, ``&lt;source&gt;hourly&lt;/source&gt;``,</span>
+<span class="sd">``&lt;source&gt;daily&lt;/source&gt;`` and ``&lt;source&gt;monthly&lt;/source&gt;``. Default</span>
+<span class="sd">is raw. Note that the different sources have different data</span>
+<span class="sd">dictionaries, so this choice affects ycalc.</span>
+
+<span class="sd">boxwidth</span>
+<span class="sd">^^^^^^^^</span>
+
+<span class="sd">Sets the width of the &quot;boxes&quot; used when drawing bar graphs. The value</span>
+<span class="sd">is an integer expression yielding a number of seconds. Default depends</span>
+<span class="sd">on source: raw is 240, hourly is 2800 and daily is 2800 * 24.</span>
+
+<span class="sd">title</span>
+<span class="sd">^^^^^</span>
+
+<span class="sd">Sets the title of the plot. A single line of text, for example:</span>
+<span class="sd">``&lt;title&gt;Temperature (°C)&lt;/title&gt;``. This title appears within the</span>
+<span class="sd">plot area, above any subplot titles.</span>
+
+<span class="sd">command</span>
+<span class="sd">^^^^^^^</span>
+
+<span class="sd">Execute any gnuplot command, just before the main &quot;plot&quot; command. This</span>
+<span class="sd">option allows advanced users to have greater control over the graph</span>
+<span class="sd">appearance. The value is any valid gnuplot command, typically</span>
+<span class="sd">beginning with the word set. For example: ``&lt;command&gt;set key tmargin</span>
+<span class="sd">center horizontal width 1 noreverse enhanced autotitles box linetype</span>
+<span class="sd">-1 linewidth 1&lt;/command&gt;``. (Don&#39;t ask me what this example does — I&#39;m</span>
+<span class="sd">not an advanced user).</span>
+
+<span class="sd">xcalc</span>
+<span class="sd">^^^^^</span>
+
+<span class="sd">Controls the X axis positioning of plotted data values. The default</span>
+<span class="sd">value of data[&#39;idx&#39;] is correct for most data, but there are some</span>
+<span class="sd">exceptions. For example, when plotting bar charts of hourly rainfall,</span>
+<span class="sd">it&#39;s nice to centre the bars on 30 minutes past the hour:</span>
+<span class="sd">``&lt;xcalc&gt;data[&#39;idx&#39;].replace(minute=30, second=0)&lt;/xcalc&gt;``.</span>
+
+<span class="sd">ycalc</span>
+<span class="sd">^^^^^</span>
+
+<span class="sd">Selects the data to be plotted. Any one line Python expression that</span>
+<span class="sd">returns a single float value can be used. At its simplest this just</span>
+<span class="sd">selects one value from the &quot;data&quot; dictionary, for example:</span>
+<span class="sd">``&lt;ycalc&gt;data[&#39;temp_out&#39;]&lt;/ycalc&gt;`` plots the external temperature.</span>
+<span class="sd">More complex expressions are possible, and some helper functions are</span>
+<span class="sd">provided. For example: ``&lt;ycalc&gt;dew_point(data[&#39;temp_out&#39;],</span>
+<span class="sd">data[&#39;hum_out&#39;])&lt;/ycalc&gt;`` plots the external dew point, and</span>
+<span class="sd">``&lt;ycalc&gt;wind_mph(data[&#39;wind_ave&#39;])&lt;/ycalc&gt;`` plots the average wind</span>
+<span class="sd">speed in miles per hour.</span>
+
+<span class="sd">Cumulative plots are also possible. The result of each ycalc</span>
+<span class="sd">computation is stored and made available to the next computation in</span>
+<span class="sd">the variable last_ycalc. This can be used with any data, but is most</span>
+<span class="sd">useful with rainfall: ``&lt;ycalc&gt;data[&#39;rain&#39;] + last_ycalc&lt;/ycalc&gt;``.</span>
+
+<span class="sd">axes</span>
+<span class="sd">^^^^</span>
+
+<span class="sd">Selects which Y axis the data is plotted against. Default is the left</span>
+<span class="sd">hand axis, but the right hand axis can be chosen with:</span>
+<span class="sd">``&lt;axes&gt;x1y2&lt;/axes&gt;``. This can be used in conjunction with y2range to</span>
+<span class="sd">plot two unrelated quantities on one graph, for example temperature</span>
+<span class="sd">and humidity.</span>
+
+<span class="sd">style</span>
+<span class="sd">^^^^^</span>
+
+<span class="sd">Sets the line style for the graph. Default is a smooth continuous</span>
+<span class="sd">line, thickness 1. To select a bar graph use: ``&lt;style&gt;box&lt;/style&gt;``.</span>
+<span class="sd">To select points without a connecting line use: ``&lt;style&gt;+&lt;/style&gt;``</span>
+<span class="sd">or ``&lt;style&gt;x&lt;/style&gt;``. To select a line thickness 3 (for example)</span>
+<span class="sd">use: ``&lt;style&gt;line 3&lt;/style&gt;``. The thickness of points can be set in</span>
+<span class="sd">a similar fashion. For complete control (for advanced users) a full</span>
+<span class="sd">gnuplot style can be set: ``&lt;style&gt;smooth unique lc 5 lw 3&lt;/style&gt;``.</span>
+
+<span class="sd">colour</span>
+<span class="sd">^^^^^^</span>
+
+<span class="sd">Sets the colour of the subplot line or boxes. Any integer value is</span>
+<span class="sd">accepted. The mapping of colours to numbers is set by gnuplot. Default</span>
+<span class="sd">value is the previous colour plus one.</span>
+
+<span class="sd">title</span>
+<span class="sd">^^^^^</span>
+
+<span class="sd">Sets the title of the subplot. A single line of text, for example:</span>
+<span class="sd">``&lt;title&gt;Temperature (°C)&lt;/title&gt;``. This title appears within the</span>
+<span class="sd">plot area, next to a short segment of the line colour used for the</span>
+<span class="sd">subplot.</span>
+
+<span class="sd">Detailed API</span>
+<span class="sd">------------</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="n">__docformat__</span> <span class="o">=</span> <span class="s">&quot;restructuredtext en&quot;</span>
+<span class="n">__usage__</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s"> usage: python -m pywws.Plot [options] data_dir temp_dir xml_file output_file</span>
+<span class="s"> options are:</span>
+<span class="s">  -h or --help    display this help</span>
+<span class="s"> data_dir is the root directory of the weather data</span>
+<span class="s"> temp_dir is a workspace for temporary files e.g. /tmp</span>
+<span class="s"> xml_file is the name of the source file that describes the plot</span>
+<span class="s"> output_file is the name of the image file to be created e.g. 24hrs.png</span>
+<span class="s">&quot;&quot;&quot;</span>
+<span class="n">__doc__</span> <span class="o">%=</span> <span class="n">__usage__</span>
+<span class="n">__usage__</span> <span class="o">=</span> <span class="n">__doc__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">__usage__</span>
+
+<span class="kn">import</span> <span class="nn">codecs</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+<span class="kn">import</span> <span class="nn">getopt</span>
+<span class="kn">import</span> <span class="nn">locale</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">xml.dom.minidom</span>
+
+<span class="kn">from</span> <span class="nn">pywws.conversions</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">DataStore</span>
+<span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">Localisation</span>
+<span class="kn">from</span> <span class="nn">pywws.Logger</span> <span class="kn">import</span> <span class="n">ApplicationLogger</span>
+<span class="kn">from</span> <span class="nn">pywws.TimeZone</span> <span class="kn">import</span> <span class="n">Local</span>
+
+<div class="viewcode-block" id="BasePlotter"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.BasePlotter">[docs]</a><span class="k">class</span> <span class="nc">BasePlotter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span> <span class="n">raw_data</span><span class="p">,</span> <span class="n">hourly_data</span><span class="p">,</span>
+                 <span class="n">daily_data</span><span class="p">,</span> <span class="n">monthly_data</span><span class="p">,</span> <span class="n">work_dir</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;pywws.</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">raw_data</span> <span class="o">=</span> <span class="n">raw_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span> <span class="o">=</span> <span class="n">hourly_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">daily_data</span> <span class="o">=</span> <span class="n">daily_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">monthly_data</span> <span class="o">=</span> <span class="n">monthly_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span> <span class="o">=</span> <span class="n">work_dir</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pressure_offset</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;config&#39;</span><span class="p">,</span> <span class="s">&#39;pressure offset&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gnuplot_version</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;config&#39;</span><span class="p">,</span> <span class="s">&#39;gnuplot version&#39;</span><span class="p">,</span> <span class="s">&#39;4.2&#39;</span><span class="p">))</span>
+        <span class="c"># set language related stuff</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">encoding</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;config&#39;</span><span class="p">,</span> <span class="s">&#39;gnuplot encoding&#39;</span><span class="p">,</span> <span class="s">&#39;iso_8859_1&#39;</span><span class="p">)</span>
+        <span class="c"># create work directory</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BasePlotter.DoPlot"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.BasePlotter.DoPlot">[docs]</a>    <span class="k">def</span> <span class="nf">DoPlot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_file</span><span class="p">,</span> <span class="n">output_file</span><span class="p">):</span>
+        <span class="c"># read XML graph description</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">doc</span> <span class="o">=</span> <span class="n">xml</span><span class="o">.</span><span class="n">dom</span><span class="o">.</span><span class="n">minidom</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">input_file</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetChildren</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">doc</span><span class="p">,</span> <span class="s">&#39;graph&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> has no graph node&#39;</span> <span class="o">%</span> <span class="n">input_file</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">doc</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+            <span class="k">return</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="c"># get list of plots</span>
+        <span class="n">plot_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetPlotList</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">plot_list</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot_count</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="c"># nothing to plot</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> has no plot nodes&#39;</span> <span class="o">%</span> <span class="n">input_file</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">doc</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+            <span class="k">return</span> <span class="mi">1</span>
+        <span class="c"># get start and end datetimes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;start&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;stop&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;duration&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="mi">24</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="s">&#39;timedelta(</span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="s">&#39;datetime(</span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="s">&#39;datetime(</span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="s">&#39;datetime(</span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span><span class="o">.</span><span class="n">before</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">max</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>    <span class="c"># only if no hourly data</span>
+            <span class="c"># set end of graph to start of the next hour after last item</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">55</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">+</span> <span class="n">Local</span><span class="o">.</span><span class="n">utcoffset</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">utcoffset</span> <span class="o">=</span> <span class="n">Local</span><span class="o">.</span><span class="n">utcoffset</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span><span class="p">)</span>
+        <span class="c"># open gnuplot command file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tmp_files</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">cmd_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span><span class="p">,</span> <span class="s">&#39;plot.cmd&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tmp_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cmd_file</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">of</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">cmd_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">of</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">cmd_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+        <span class="c"># write gnuplot set up</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetDefaultRows</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cols</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plot_count</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">rows</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">rows</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cols</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;layout&#39;</span><span class="p">,</span> <span class="s">&#39;</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cols</span><span class="p">)))</span>
+        <span class="n">w</span><span class="p">,</span> <span class="n">h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetDefaultPlotSize</span><span class="p">()</span>
+        <span class="n">w</span> <span class="o">=</span> <span class="n">w</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">cols</span>
+        <span class="n">h</span> <span class="o">=</span> <span class="n">h</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">rows</span>
+        <span class="n">w</span><span class="p">,</span> <span class="n">h</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;size&#39;</span><span class="p">,</span> <span class="s">&#39;(</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">)))</span>
+        <span class="n">fileformat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;fileformat&#39;</span><span class="p">,</span> <span class="s">&#39;png&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">fileformat</span> <span class="o">==</span> <span class="s">&#39;svg&#39;</span><span class="p">:</span>
+            <span class="n">terminal</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s"> enhanced font &quot;arial,9&quot; size </span><span class="si">%d</span><span class="s">,</span><span class="si">%d</span><span class="s"> dynamic rounded&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">fileformat</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">terminal</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s"> large size </span><span class="si">%d</span><span class="s">,</span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">fileformat</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">h</span><span class="p">)</span>
+        <span class="n">terminal</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;terminal&#39;</span><span class="p">,</span> <span class="n">terminal</span><span class="p">)</span>
+        <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;set encoding </span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">))</span>
+        <span class="n">lcl</span> <span class="o">=</span> <span class="n">locale</span><span class="o">.</span><span class="n">getlocale</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">lcl</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+            <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;set locale &quot;</span><span class="si">%s</span><span class="s">.</span><span class="si">%s</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">lcl</span><span class="p">)</span>
+        <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;set terminal </span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">terminal</span><span class="p">))</span>
+        <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;set output &quot;</span><span class="si">%s</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">output_file</span><span class="p">))</span>
+        <span class="c"># set overall title</span>
+        <span class="n">title</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;title&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">title</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="n">title</span> <span class="o">=</span> <span class="n">title</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+            <span class="n">title</span> <span class="o">=</span> <span class="s">&#39;title &quot;</span><span class="si">%s</span><span class="s">&quot;&#39;</span> <span class="o">%</span> <span class="n">title</span>
+        <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;set multiplot layout </span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s"> </span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">cols</span><span class="p">,</span> <span class="n">title</span><span class="p">))</span>
+        <span class="c"># do actual plots</span>
+        <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">GetPreamble</span><span class="p">())</span>
+        <span class="k">for</span> <span class="n">plot_no</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plot_count</span><span class="p">):</span>
+            <span class="n">plot</span> <span class="o">=</span> <span class="n">plot_list</span><span class="p">[</span><span class="n">plot_no</span><span class="p">]</span>
+            <span class="c"># set key / title location</span>
+            <span class="n">title</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;title&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="n">title</span> <span class="o">=</span> <span class="n">title</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+            <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;set key horizontal title &quot;</span><span class="si">%s</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">title</span><span class="p">)</span>
+            <span class="c"># optional yaxis labels</span>
+            <span class="n">ylabel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;ylabel&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ylabel</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="n">ylabel</span> <span class="o">=</span> <span class="n">ylabel</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+                <span class="n">ylabelangle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;ylabelangle&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">ylabelangle</span><span class="p">:</span>
+                    <span class="n">ylabelangle</span> <span class="o">=</span> <span class="s">&#39; rotate by </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">ylabelangle</span><span class="p">)</span>
+                <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;set ylabel &quot;</span><span class="si">%s</span><span class="s">&quot;</span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">ylabel</span><span class="p">,</span> <span class="n">ylabelangle</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;set ylabel</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+            <span class="n">y2label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;y2label&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">y2label</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="n">y2label</span> <span class="o">=</span> <span class="n">y2label</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+                <span class="n">y2labelangle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;y2labelangle&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">y2labelangle</span><span class="p">:</span>
+                    <span class="n">y2labelangle</span> <span class="o">=</span> <span class="s">&#39; rotate by </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">y2labelangle</span><span class="p">)</span>
+                <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;set y2label &quot;</span><span class="si">%s</span><span class="s">&quot;</span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">y2label</span><span class="p">,</span> <span class="n">y2labelangle</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;set y2label</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+            <span class="c"># set data source</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;source&#39;</span><span class="p">,</span> <span class="s">&#39;raw&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">source</span> <span class="o">==</span> <span class="s">&#39;raw&#39;</span><span class="p">:</span>
+                <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">raw_data</span>
+            <span class="k">elif</span> <span class="n">source</span> <span class="o">==</span> <span class="s">&#39;hourly&#39;</span><span class="p">:</span>
+                <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span>
+            <span class="k">elif</span> <span class="n">source</span> <span class="o">==</span> <span class="s">&#39;monthly&#39;</span><span class="p">:</span>
+                <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">monthly_data</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">daily_data</span>
+            <span class="c"># do the plot</span>
+            <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">PlotData</span><span class="p">(</span><span class="n">plot_no</span><span class="p">,</span> <span class="n">plot</span><span class="p">,</span> <span class="n">source</span><span class="p">))</span>
+        <span class="n">of</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">doc</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+        <span class="c"># run gnuplot on file</span>
+        <span class="n">subprocess</span><span class="o">.</span><span class="n">check_call</span><span class="p">([</span><span class="s">&#39;gnuplot&#39;</span><span class="p">,</span> <span class="n">cmd_file</span><span class="p">])</span>
+        <span class="k">for</span> <span class="nb">file</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tmp_files</span><span class="p">:</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="nb">file</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mi">0</span>
+</div>
+<div class="viewcode-block" id="BasePlotter.GetChildren"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.BasePlotter.GetChildren">[docs]</a>    <span class="k">def</span> <span class="nf">GetChildren</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">childNodes</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">child</span><span class="o">.</span><span class="n">localName</span> <span class="o">==</span> <span class="n">name</span><span class="p">:</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">child</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span>
+</div>
+<div class="viewcode-block" id="BasePlotter.GetValue"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.BasePlotter.GetValue">[docs]</a>    <span class="k">def</span> <span class="nf">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">childNodes</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">child</span><span class="o">.</span><span class="n">localName</span> <span class="o">==</span> <span class="n">name</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">child</span><span class="o">.</span><span class="n">childNodes</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">child</span><span class="o">.</span><span class="n">childNodes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="s">&#39;&#39;</span>
+        <span class="k">return</span> <span class="n">default</span>
+</div></div>
+<div class="viewcode-block" id="Record"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.Record">[docs]</a><span class="k">class</span> <span class="nc">Record</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="GraphPlotter"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.GraphPlotter">[docs]</a><span class="k">class</span> <span class="nc">GraphPlotter</span><span class="p">(</span><span class="n">BasePlotter</span><span class="p">):</span>
+<div class="viewcode-block" id="GraphPlotter.GetPlotList"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.GraphPlotter.GetPlotList">[docs]</a>    <span class="k">def</span> <span class="nf">GetPlotList</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetChildren</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;plot&#39;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="GraphPlotter.GetDefaultRows"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.GraphPlotter.GetDefaultRows">[docs]</a>    <span class="k">def</span> <span class="nf">GetDefaultRows</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot_count</span>
+</div>
+<div class="viewcode-block" id="GraphPlotter.GetDefaultPlotSize"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.GraphPlotter.GetDefaultPlotSize">[docs]</a>    <span class="k">def</span> <span class="nf">GetDefaultPlotSize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="mi">200</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">cols</span><span class="p">,</span> <span class="mi">600</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">cols</span>
+</div>
+<div class="viewcode-block" id="GraphPlotter.GetPreamble"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.GraphPlotter.GetPreamble">[docs]</a>    <span class="k">def</span> <span class="nf">GetPreamble</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;set style fill solid</span>
+<span class="s">set xdata time</span>
+<span class="s">set timefmt &quot;%Y-%m-</span><span class="si">%d</span><span class="s">T%H:%M:%S&quot;</span>
+<span class="s">&quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set xrange [&quot;</span><span class="si">%s</span><span class="s">&quot;:&quot;</span><span class="si">%s</span><span class="s">&quot;]</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span><span class="o">.</span><span class="n">isoformat</span><span class="p">())</span>
+        <span class="n">lmargin</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;lmargin&#39;</span><span class="p">,</span> <span class="s">&#39;5&#39;</span><span class="p">))</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set lmargin </span><span class="si">%g</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lmargin</span><span class="p">)</span>
+        <span class="n">rmargin</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;rmargin&#39;</span><span class="p">,</span> <span class="s">&#39;-1&#39;</span><span class="p">))</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set rmargin </span><span class="si">%g</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">rmargin</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">&lt;=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="mi">24</span><span class="p">):</span>
+            <span class="n">xformat</span> <span class="o">=</span> <span class="s">&#39;%H%M&#39;</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">&lt;=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">7</span><span class="p">):</span>
+            <span class="n">xformat</span> <span class="o">=</span> <span class="s">&#39;%a </span><span class="si">%d</span><span class="s">&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">xformat</span> <span class="o">=</span> <span class="s">&#39;%Y/%m/</span><span class="si">%d</span><span class="s">&#39;</span>
+        <span class="n">xformat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;xformat&#39;</span><span class="p">,</span> <span class="n">xformat</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set format x &quot;</span><span class="si">%s</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">xformat</span>
+        <span class="n">xtics</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;xtics&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">xtics</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set xtics </span><span class="si">%d</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">eval</span><span class="p">(</span><span class="n">xtics</span><span class="p">)</span> <span class="o">*</span> <span class="mi">3600</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span>
+</div>
+<div class="viewcode-block" id="GraphPlotter.PlotData"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.GraphPlotter.PlotData">[docs]</a>    <span class="k">def</span> <span class="nf">PlotData</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plot_no</span><span class="p">,</span> <span class="n">plot</span><span class="p">,</span> <span class="n">source</span><span class="p">):</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">Localisation</span><span class="o">.</span><span class="n">translation</span><span class="o">.</span><span class="n">ugettext</span>
+        <span class="n">subplot_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetChildren</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;subplot&#39;</span><span class="p">)</span>
+        <span class="n">subplot_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">subplot_list</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">subplot_count</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s">&#39;&#39;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="n">pressure_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pressure_offset</span>
+        <span class="c"># label x axis of last plot</span>
+        <span class="k">if</span> <span class="n">plot_no</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot_count</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">&lt;=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="mi">24</span><span class="p">):</span>
+                <span class="n">xlabel</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">&#39;Time (%Z)&#39;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span> <span class="o">&lt;=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">7</span><span class="p">):</span>
+                <span class="n">xlabel</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">&#39;Day&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">xlabel</span> <span class="o">=</span> <span class="n">_</span><span class="p">(</span><span class="s">&#39;Date&#39;</span><span class="p">)</span>
+            <span class="n">xlabel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;xlabel&#39;</span><span class="p">,</span> <span class="n">xlabel</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="n">xlabel</span> <span class="o">=</span> <span class="n">xlabel</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set xlabel &quot;</span><span class="si">%s</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="n">Local</span><span class="p">)</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">xlabel</span><span class="p">))</span>
+            <span class="n">dateformat</span> <span class="o">=</span> <span class="s">&#39;%Y/%m/</span><span class="si">%d</span><span class="s">&#39;</span>
+            <span class="n">dateformat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="s">&#39;dateformat&#39;</span><span class="p">,</span> <span class="n">dateformat</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="n">dateformat</span> <span class="o">=</span> <span class="n">dateformat</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+            <span class="n">ldat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="n">Local</span><span class="p">)</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">dateformat</span><span class="p">)</span>
+            <span class="n">rdat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="n">Local</span><span class="p">)</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">dateformat</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ldat</span> <span class="o">!=</span> <span class="s">&#39;&#39;</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set label &quot;</span><span class="si">%s</span><span class="s">&quot; at &quot;</span><span class="si">%s</span><span class="s">&quot;, graph -0.3 left</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">ldat</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span><span class="o">.</span><span class="n">isoformat</span><span class="p">())</span>
+            <span class="k">if</span> <span class="n">rdat</span> <span class="o">!=</span> <span class="n">ldat</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set label &quot;</span><span class="si">%s</span><span class="s">&quot; at &quot;</span><span class="si">%s</span><span class="s">&quot;, graph -0.3 right</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">rdat</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span><span class="o">.</span><span class="n">isoformat</span><span class="p">())</span>
+        <span class="c"># set bottom margin</span>
+        <span class="n">bmargin</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;bmargin&#39;</span><span class="p">,</span> <span class="s">&#39;-1&#39;</span><span class="p">))</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set bmargin </span><span class="si">%g</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">bmargin</span><span class="p">)</span>
+        <span class="c"># set y ranges and tics</span>
+        <span class="n">yrange</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;yrange&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">y2range</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;y2range&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">ytics</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;ytics&#39;</span><span class="p">,</span> <span class="s">&#39;autofreq&#39;</span><span class="p">)</span>
+        <span class="n">y2tics</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;y2tics&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">y2tics</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">y2range</span><span class="p">:</span>
+            <span class="n">y2range</span> <span class="o">=</span> <span class="n">yrange</span>
+        <span class="k">elif</span> <span class="n">y2range</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">y2tics</span><span class="p">:</span>
+            <span class="n">y2tics</span> <span class="o">=</span> <span class="s">&#39;autofreq&#39;</span>
+        <span class="k">if</span> <span class="n">yrange</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set yrange [</span><span class="si">%s</span><span class="s">]</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">yrange</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="s">&#39;:&#39;</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set yrange [*:*]</span><span class="se">\n</span><span class="s">&#39;</span>
+        <span class="k">if</span> <span class="n">y2range</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set y2range [</span><span class="si">%s</span><span class="s">]</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">y2range</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">,</span> <span class="s">&#39;:&#39;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">y2tics</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set ytics nomirror </span><span class="si">%s</span><span class="s">; set y2tics </span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">ytics</span><span class="p">,</span> <span class="n">y2tics</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;unset y2tics; set ytics mirror </span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">ytics</span><span class="p">)</span>
+        <span class="c"># set grid</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;unset grid</span><span class="se">\n</span><span class="s">&#39;</span>
+        <span class="n">grid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;grid&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">grid</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set grid </span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">grid</span>
+        <span class="c"># x_lo &amp; x_hi are in local time, data is indexed in UTC</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_lo</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">utcoffset</span>
+        <span class="n">stop</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">utcoffset</span>
+        <span class="n">cumu_start</span> <span class="o">=</span> <span class="n">start</span>
+        <span class="k">if</span> <span class="n">source</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">raw_data</span><span class="p">:</span>
+            <span class="n">boxwidth</span> <span class="o">=</span> <span class="mi">240</span>      <span class="c"># assume 5 minute data interval</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">before</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">source</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span><span class="p">:</span>
+            <span class="n">boxwidth</span> <span class="o">=</span> <span class="mi">2800</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">before</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+            <span class="n">interval</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">90</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">source</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">monthly_data</span><span class="p">:</span>
+            <span class="n">boxwidth</span> <span class="o">=</span> <span class="mi">2800</span> <span class="o">*</span> <span class="mi">24</span> <span class="o">*</span> <span class="mi">30</span>
+            <span class="n">interval</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">46</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">interval</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="mi">36</span><span class="p">)</span>
+            <span class="n">boxwidth</span> <span class="o">=</span> <span class="mi">2800</span> <span class="o">*</span> <span class="mi">24</span>
+        <span class="n">boxwidth</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;boxwidth&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">boxwidth</span><span class="p">)))</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;set boxwidth </span><span class="si">%d</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">boxwidth</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">plot</span><span class="p">,</span> <span class="s">&#39;command&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">command</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">command</span>
+        <span class="n">stop</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">after</span><span class="p">(</span><span class="n">stop</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">stop</span><span class="p">:</span>
+            <span class="n">stop</span> <span class="o">=</span> <span class="n">stop</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c"># write data files</span>
+        <span class="n">subplots</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">subplot_no</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">subplot_count</span><span class="p">):</span>
+            <span class="n">subplot</span> <span class="o">=</span> <span class="n">Record</span><span class="p">()</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">subplot</span> <span class="o">=</span> <span class="n">subplot_list</span><span class="p">[</span><span class="n">subplot_no</span><span class="p">]</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">dat_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">work_dir</span><span class="p">,</span> <span class="s">&#39;plot_</span><span class="si">%d</span><span class="s">_</span><span class="si">%d</span><span class="s">.dat&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">plot_no</span><span class="p">,</span> <span class="n">subplot_no</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tmp_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">dat_file</span><span class="p">)</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">dat</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">dat_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">xcalc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">subplot</span><span class="p">,</span> <span class="s">&#39;xcalc&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">ycalc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">subplot</span><span class="p">,</span> <span class="s">&#39;ycalc&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">cummulative</span> <span class="o">=</span> <span class="s">&#39;last_ycalc&#39;</span> <span class="ow">in</span> <span class="n">subplot</span><span class="o">.</span><span class="n">ycalc</span>
+            <span class="k">if</span> <span class="n">subplot</span><span class="o">.</span><span class="n">xcalc</span><span class="p">:</span>
+                <span class="n">subplot</span><span class="o">.</span><span class="n">xcalc</span> <span class="o">=</span> <span class="nb">compile</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">xcalc</span><span class="p">,</span> <span class="s">&#39;&lt;string&gt;&#39;</span><span class="p">,</span> <span class="s">&#39;eval&#39;</span><span class="p">)</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">ycalc</span> <span class="o">=</span> <span class="nb">compile</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">ycalc</span><span class="p">,</span> <span class="s">&#39;&lt;string&gt;&#39;</span><span class="p">,</span> <span class="s">&#39;eval&#39;</span><span class="p">)</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">last_ycalcs</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">last_idx</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="n">subplots</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">subplot</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">source</span><span class="p">[</span><span class="n">start</span><span class="p">:</span><span class="n">stop</span><span class="p">]:</span>
+            <span class="k">for</span> <span class="n">subplot</span> <span class="ow">in</span> <span class="n">subplots</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">subplot</span><span class="o">.</span><span class="n">xcalc</span><span class="p">:</span>
+                    <span class="n">idx</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">xcalc</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">idx</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">idx</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">]</span>
+                <span class="n">idx</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">utcoffset</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">subplot</span><span class="o">.</span><span class="n">cummulative</span> <span class="ow">and</span> <span class="n">subplot</span><span class="o">.</span><span class="n">last_idx</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">source</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">raw_data</span><span class="p">:</span>
+                        <span class="n">interval</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="p">((</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;delay&#39;</span><span class="p">]</span><span class="o">*</span><span class="mi">3</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">idx</span> <span class="o">-</span> <span class="n">subplot</span><span class="o">.</span><span class="n">last_idx</span> <span class="o">&gt;</span> <span class="n">interval</span><span class="p">:</span>
+                        <span class="c"># missing data</span>
+                        <span class="n">subplot</span><span class="o">.</span><span class="n">dat</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> ?</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">idx</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()))</span>
+                <span class="n">subplot</span><span class="o">.</span><span class="n">last_idx</span> <span class="o">=</span> <span class="n">idx</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">subplot</span><span class="o">.</span><span class="n">cummulative</span> <span class="ow">and</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">cumu_start</span><span class="p">:</span>
+                        <span class="n">value</span> <span class="o">=</span> <span class="mf">0.0</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">last_ycalc</span> <span class="o">=</span> <span class="n">subplot</span><span class="o">.</span><span class="n">last_ycalcs</span>
+                        <span class="n">value</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">ycalc</span><span class="p">)</span>
+                    <span class="n">subplot</span><span class="o">.</span><span class="n">dat</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> </span><span class="si">%g</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">idx</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(),</span> <span class="n">value</span><span class="p">))</span>
+                    <span class="n">subplot</span><span class="o">.</span><span class="n">last_ycalcs</span> <span class="o">=</span> <span class="n">value</span>
+                <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">subplot</span><span class="o">.</span><span class="n">cummulative</span><span class="p">:</span>
+                        <span class="n">subplot</span><span class="o">.</span><span class="n">dat</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> ?</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">idx</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()))</span>
+                    <span class="n">subplot</span><span class="o">.</span><span class="n">last_ycalcs</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="k">for</span> <span class="n">subplot</span> <span class="ow">in</span> <span class="n">subplots</span><span class="p">:</span>
+            <span class="c"># ensure the data file isn&#39;t empty</span>
+            <span class="n">idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x_hi</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">duration</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">dat</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%s</span><span class="s"> ?</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">idx</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()))</span>
+            <span class="n">subplot</span><span class="o">.</span><span class="n">dat</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="c"># plot data</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;plot &#39;</span>
+        <span class="n">colour</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">subplot_no</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">subplot_count</span><span class="p">):</span>
+            <span class="n">subplot</span> <span class="o">=</span> <span class="n">subplots</span><span class="p">[</span><span class="n">subplot_no</span><span class="p">]</span>
+            <span class="n">colour</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">subplot</span><span class="p">,</span> <span class="s">&#39;colour&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">colour</span><span class="o">+</span><span class="mi">1</span><span class="p">)))</span>
+            <span class="n">style</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span>
+                <span class="n">subplot</span><span class="o">.</span><span class="n">subplot</span><span class="p">,</span> <span class="s">&#39;style&#39;</span><span class="p">,</span> <span class="s">&#39;smooth unique lc </span><span class="si">%d</span><span class="s"> lw 1&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">colour</span><span class="p">))</span>
+            <span class="n">words</span> <span class="o">=</span> <span class="n">style</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">words</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">words</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span><span class="s">&#39;+&#39;</span><span class="p">,</span> <span class="s">&#39;x&#39;</span><span class="p">,</span> <span class="s">&#39;line&#39;</span><span class="p">):</span>
+                <span class="n">width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">words</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">width</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="n">style</span> <span class="o">==</span> <span class="s">&#39;box&#39;</span><span class="p">:</span>
+                <span class="n">style</span> <span class="o">=</span> <span class="s">&#39;lc </span><span class="si">%d</span><span class="s"> lw 0 with boxes&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">colour</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">words</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;+&#39;</span><span class="p">:</span>
+                <span class="n">style</span> <span class="o">=</span> <span class="s">&#39;lc </span><span class="si">%d</span><span class="s"> lw </span><span class="si">%d</span><span class="s"> pt 1 with points&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">colour</span><span class="p">,</span> <span class="n">width</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">words</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;x&#39;</span><span class="p">:</span>
+                <span class="n">style</span> <span class="o">=</span> <span class="s">&#39;lc </span><span class="si">%d</span><span class="s"> lw </span><span class="si">%d</span><span class="s"> pt 2 with points&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">colour</span><span class="p">,</span> <span class="n">width</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">words</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;line&#39;</span><span class="p">:</span>
+                <span class="n">style</span> <span class="o">=</span> <span class="s">&#39;smooth unique lc </span><span class="si">%d</span><span class="s"> lw </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">colour</span><span class="p">,</span> <span class="n">width</span><span class="p">)</span>
+            <span class="n">axes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">subplot</span><span class="p">,</span> <span class="s">&#39;axes&#39;</span><span class="p">,</span> <span class="s">&#39;x1y1&#39;</span><span class="p">)</span>
+            <span class="n">title</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GetValue</span><span class="p">(</span><span class="n">subplot</span><span class="o">.</span><span class="n">subplot</span><span class="p">,</span> <span class="s">&#39;title&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39; &quot;</span><span class="si">%s</span><span class="s">&quot; using 1:($2) axes </span><span class="si">%s</span><span class="s"> title &quot;</span><span class="si">%s</span><span class="s">&quot; </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">subplot</span><span class="o">.</span><span class="n">dat_file</span><span class="p">,</span> <span class="n">axes</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">style</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">subplot_no</span> <span class="o">!=</span> <span class="n">subplot_count</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;, </span><span class="se">\\</span><span class="s">&#39;</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span>
+        <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span>
+</div></div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../api/pywws.Plot.html#pywws.Plot.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">argv</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">argv</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">argv</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">opts</span><span class="p">,</span> <span class="n">args</span> <span class="o">=</span> <span class="n">getopt</span><span class="o">.</span><span class="n">getopt</span><span class="p">(</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="s">&quot;h&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;help&#39;</span><span class="p">])</span>
+    <span class="k">except</span> <span class="n">getopt</span><span class="o">.</span><span class="n">error</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span>
+        <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&#39;Error: </span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">msg</span>
+        <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="n">__usage__</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="c"># process options</span>
+    <span class="k">for</span> <span class="n">o</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">opts</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">o</span> <span class="o">==</span> <span class="s">&#39;-h&#39;</span> <span class="ow">or</span> <span class="n">o</span> <span class="o">==</span> <span class="s">&#39;--help&#39;</span><span class="p">:</span>
+            <span class="k">print</span> <span class="n">__usage__</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">return</span> <span class="mi">0</span>
+    <span class="c"># check arguments</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&#39;Error: 4 arguments required</span><span class="se">\n</span><span class="s">&#39;</span>
+        <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="n">__usage__</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">return</span> <span class="mi">2</span>
+    <span class="n">logger</span> <span class="o">=</span> <span class="n">ApplicationLogger</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="n">DataStore</span><span class="o">.</span><span class="n">params</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">DataStore</span><span class="o">.</span><span class="n">status</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">Localisation</span><span class="o">.</span><span class="n">SetApplicationLanguage</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">GraphPlotter</span><span class="p">(</span>
+        <span class="n">params</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span>
+        <span class="n">DataStore</span><span class="o">.</span><span class="n">calib_store</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">DataStore</span><span class="o">.</span><span class="n">hourly_store</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+        <span class="n">DataStore</span><span class="o">.</span><span class="n">daily_store</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">DataStore</span><span class="o">.</span><span class="n">monthly_store</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+        <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">DoPlot</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../../index.html">
+              <img class="logo" src="../../_static/pywws_logo.png" alt="Logo"/>
+            </a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pywws 14.03.dev1177 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2008-14, Jim Easterbrook.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

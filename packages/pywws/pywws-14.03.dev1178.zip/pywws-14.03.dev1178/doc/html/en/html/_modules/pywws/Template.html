@@ -1,0 +1,637 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pywws.Template &mdash; pywws 14.03.dev1177 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '14.03.dev1177',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="shortcut icon" href="../../_static/pywws_logo.ico"/>
+    <link rel="top" title="pywws 14.03.dev1177 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pywws 14.03.dev1177 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pywws.Template</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="c"># pywws - Python software for USB Wireless Weather Stations</span>
+<span class="c"># http://github.com/jim-easterbrook/pywws</span>
+<span class="c"># Copyright (C) 2008-13  Jim Easterbrook  jim@jim-easterbrook.me.uk</span>
+
+<span class="c"># This program is free software; you can redistribute it and/or</span>
+<span class="c"># modify it under the terms of the GNU General Public License</span>
+<span class="c"># as published by the Free Software Foundation; either version 2</span>
+<span class="c"># of the License, or (at your option) any later version.</span>
+
+<span class="c"># This program is distributed in the hope that it will be useful,</span>
+<span class="c"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c"># GNU General Public License for more details.</span>
+
+<span class="c"># You should have received a copy of the GNU General Public License</span>
+<span class="c"># along with this program; if not, write to the Free Software</span>
+<span class="c"># Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.</span>
+
+<span class="sd">&quot;&quot;&quot;Create text data file based on a template</span>
+<span class="sd">::</span>
+
+<span class="sd">%s</span>
+
+<span class="sd">Introduction</span>
+<span class="sd">------------</span>
+
+<span class="sd">This is probably the most difficult to use module in the weather</span>
+<span class="sd">station software collection. It generates text files based on a</span>
+<span class="sd">&quot;template&quot; file plus the raw, hourly, daily &amp; monthly weather station</span>
+<span class="sd">data. The template processing goes beyond simple substitution of</span>
+<span class="sd">values to include loops, jumps forwards or backwards in the data,</span>
+<span class="sd">processing of the data and substitution of missing values.</span>
+
+<span class="sd">A template file can be any sort of text file (plain text, xml, html,</span>
+<span class="sd">etc.) to which &quot;processing instructions&quot; have been added. These</span>
+<span class="sd">processing instructions are delimited by hash (&#39;#&#39;) characters. They</span>
+<span class="sd">are not copied to the output, but cause something else to happen:</span>
+<span class="sd">either a data value is inserted or one of a limited number of other</span>
+<span class="sd">actions is carried out.</span>
+
+<span class="sd">Before writing your own template files, it might be useful to look at</span>
+<span class="sd">some of the examples in the example_templates directory.</span>
+
+<span class="sd">Processing instructions</span>
+<span class="sd">-----------------------</span>
+
+<span class="sd">Note that if the closing &#39;#&#39; of a processing instruction is the last</span>
+<span class="sd">character on a line then the following line break is not outputted.</span>
+<span class="sd">This makes templates easier to edit as you can have a separate line</span>
+<span class="sd">for each processing instruction and still produce output with no line</span>
+<span class="sd">breaks. If you want to output a line break after a processing</span>
+<span class="sd">instruction, put a blank line immediately after it.</span>
+
+<span class="sd">``##``</span>
+<span class="sd">^^^^^^</span>
+
+<span class="sd">output a single &#39;#&#39; character.</span>
+
+<span class="sd">``#! comment text#``</span>
+<span class="sd">^^^^^^^^^^^^^^^^^^^^</span>
+
+<span class="sd">a comment, no output generated. ``comment text`` can be any text</span>
+<span class="sd">without a line break.</span>
+
+<span class="sd">``#monthly#``</span>
+<span class="sd">^^^^^^^^^^^^^</span>
+
+<span class="sd">switch to &quot;monthly&quot; summary data. The index is reset to the most</span>
+<span class="sd">recent value.</span>
+
+<span class="sd">``#daily#``</span>
+<span class="sd">^^^^^^^^^^^</span>
+
+<span class="sd">switch to &quot;daily&quot; summary data. The index is reset to the most recent</span>
+<span class="sd">value.</span>
+
+<span class="sd">``#hourly#``</span>
+<span class="sd">^^^^^^^^^^^^</span>
+
+<span class="sd">switch to &quot;hourly&quot; summary data. The index is reset to the most recent</span>
+<span class="sd">value.</span>
+
+<span class="sd">``#raw#``</span>
+<span class="sd">^^^^^^^^^</span>
+
+<span class="sd">switch to &quot;raw&quot; data. The index is reset to the most recent value.</span>
+
+<span class="sd">.. versionchanged:: 11.09</span>
+<span class="sd">   This now selects &quot;calibrated&quot; data. The directive name remains</span>
+<span class="sd">   unchanged for backwards compatibility.</span>
+
+<span class="sd">``#timezone name#``</span>
+<span class="sd">^^^^^^^^^^^^^^^^^^^</span>
+
+<span class="sd">convert all datetime values to time zone ``name`` before output.</span>
+<span class="sd">Permitted values for name are ``utc`` or ``local``.</span>
+
+<span class="sd">``#locale expr#``</span>
+<span class="sd">^^^^^^^^^^^^^^^^^</span>
+
+<span class="sd">switch use of &#39;locale&#39; on or off, according to ``expr``. When locale</span>
+<span class="sd">is on floating point numbers may use a comma as the decimal separator</span>
+<span class="sd">instead of a point, depending on your localisation settings. Use</span>
+<span class="sd">``&quot;True&quot;`` or ``&quot;False&quot;`` for expr.</span>
+
+<span class="sd">``#roundtime expr#``</span>
+<span class="sd">^^^^^^^^^^^^^^^^^^^^</span>
+
+<span class="sd">switch time rounding on or off, according to ``expr``. When time</span>
+<span class="sd">rounding is on, 30 seconds is added to each time value used. This is</span>
+<span class="sd">useful if you are only printing out hours and minutes, e.g. with a</span>
+<span class="sd">&quot;%%H:%%M&quot; format, and want time values such as 10:23:58 to appear as</span>
+<span class="sd">&quot;10:24&quot;. Use ``&quot;True&quot;`` or ``&quot;False&quot;`` for expr.</span>
+
+<span class="sd">``#jump count#``</span>
+<span class="sd">^^^^^^^^^^^^^^^^</span>
+
+<span class="sd">jump ``count`` values. The data index is adjusted by ``count`` hours</span>
+<span class="sd">or days. Negative values jump back in time.</span>
+
+<span class="sd">It is a good idea to put jumps within a loop at the end, just before</span>
+<span class="sd">the ``#endloop#`` instruction. The loop can then terminate cleanly if</span>
+<span class="sd">it has run out of data.</span>
+
+<span class="sd">``#goto date-time#``</span>
+<span class="sd">^^^^^^^^^^^^^^^^^^^^</span>
+
+<span class="sd">go to ``date-time``. The data index is adjusted to the record</span>
+<span class="sd">immediately after ``date-time``. This can be in UTC or your local time</span>
+<span class="sd">zone, according to the setting of ``timezone``, and must exactly match</span>
+<span class="sd">the ISO date format, for example ``&quot;2010-11-01 12:00:00&quot;`` is noon on</span>
+<span class="sd">1st November 2010.</span>
+
+<span class="sd">Parts of ``date-time`` can be replaced with strftime style %% format</span>
+<span class="sd">characters to specify the current loop index. For example,</span>
+<span class="sd">``&quot;%%Y-%%m-01 12:00:00&quot;`` is noon on 1st of this month.</span>
+
+<span class="sd">``#loop count#``</span>
+<span class="sd">^^^^^^^^^^^^^^^^</span>
+
+<span class="sd">start a loop that will repeat ``count`` times. ``count`` must be one</span>
+<span class="sd">or more.</span>
+
+<span class="sd">``#endloop#``</span>
+<span class="sd">^^^^^^^^^^^^^</span>
+
+<span class="sd">end a loop started by ``#loop count#``. The template processing will</span>
+<span class="sd">go back to the line containing the ``#loop count#`` instruction. Don&#39;t</span>
+<span class="sd">try to nest loops.</span>
+
+<span class="sd">``#key fmt_string no_value_string conversion#``</span>
+<span class="sd">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>
+
+<span class="sd">output a data value. ``key`` is the data key, e.g. ``temp_out`` for</span>
+<span class="sd">outdoor temperature. ``fmt_string`` is a printf-like format string</span>
+<span class="sd">(actually Python&#39;s %% operator) except for datetime values, when it is</span>
+<span class="sd">input to datetime&#39;s ``strftime()`` method. ``no_value_string`` is</span>
+<span class="sd">output instead of ``fmt_string`` when the data value is absent, e.g.</span>
+<span class="sd">if the station lost contact with the outside sensor. ``conversion`` is</span>
+<span class="sd">a Python expression to convert the data, e.g. to convert wind speed</span>
+<span class="sd">from m/s to mph you could use ``&quot;x * 3.6 / 1.609344&quot;``, or the more</span>
+<span class="sd">convenient provided function ``&quot;wind_mph(x)&quot;``.</span>
+
+<span class="sd">All these values need double quotes &quot; if they contain spaces or other</span>
+<span class="sd">potentially difficult characters. All except ``key`` are optional, but</span>
+<span class="sd">note that if you want to specify a conversion, you also need to</span>
+<span class="sd">specify ``fmt_string`` and ``no_value_string``.</span>
+
+<span class="sd">``#calc expression fmt_string no_value_string conversion#``</span>
+<span class="sd">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>
+
+<span class="sd">output a value computed from one or more data items. ``expression`` is</span>
+<span class="sd">any valid Python expression, e.g. ``&quot;dew_point(data[&#39;temp_out&#39;],</span>
+<span class="sd">data[&#39;hum_out&#39;])&quot;`` to compute the outdoor dew point. ``fmt_string``,</span>
+<span class="sd">``no_value_string`` and ``conversion`` are as described above. Note</span>
+<span class="sd">that it is probably more efficient to incorporate any conversion into</span>
+<span class="sd">expression.</span>
+
+<span class="sd">Example</span>
+<span class="sd">-------</span>
+
+<span class="sd">Here is an example snippet showing basic and advanced use of the</span>
+<span class="sd">template features. It is part of the 6hrs.txt example template file,</span>
+<span class="sd">which generates an HTML table of 7 hourly readings (which should span</span>
+<span class="sd">6 hours). ::</span>
+
+<span class="sd">  #hourly#</span>
+<span class="sd">  #jump -6#</span>
+<span class="sd">  #loop 7#</span>
+<span class="sd">    &lt;tr&gt;</span>
+<span class="sd">      &lt;td&gt;#idx &quot;%%Y/%%m/%%d&quot; &quot;&quot; &quot;[None, x][x.hour == 0 or loop_count == 7]&quot;#&lt;/td&gt;</span>
+<span class="sd">      &lt;td&gt;#idx &quot;%%H%%M %%Z&quot;#&lt;/td&gt;</span>
+<span class="sd">      &lt;td&gt;#temp_out &quot;%%.1f °C&quot;#&lt;/td&gt;</span>
+<span class="sd">      &lt;td&gt;#hum_out &quot;%%d%%%%&quot;#&lt;/td&gt;</span>
+<span class="sd">      &lt;td&gt;#wind_dir &quot;%%s&quot; &quot;-&quot; &quot;winddir_text(x)&quot;#&lt;/td&gt;</span>
+<span class="sd">      &lt;td&gt;#wind_ave &quot;%%.0f mph&quot; &quot;&quot; &quot;wind_mph(x)&quot;#&lt;/td&gt;</span>
+<span class="sd">      &lt;td&gt;#wind_gust &quot;%%.0f mph&quot; &quot;&quot; &quot;wind_mph(x)&quot;#&lt;/td&gt;</span>
+<span class="sd">      &lt;td&gt;#rain &quot;%%0.1f mm&quot;#&lt;/td&gt;</span>
+<span class="sd">      &lt;td&gt;#rel_pressure &quot;%%.0f hPa&quot;#, #pressure_trend &quot;%%s&quot; &quot;&quot; &quot;pressure_trend_text(x)&quot;#&lt;/td&gt;</span>
+<span class="sd">    &lt;/tr&gt;</span>
+<span class="sd">  #jump 1#</span>
+<span class="sd">  #endloop#</span>
+
+<span class="sd">The first three lines of this snippet do the following: select hourly</span>
+<span class="sd">data, jump back 6 hours, start a loop with a count of 7. A jump</span>
+<span class="sd">forward of one hour appears just before the end of the repeated</span>
+<span class="sd">segment. As this last jump (of one hour) happens each time round the</span>
+<span class="sd">loop, a sequence of 7 data readings will be output. The last line</span>
+<span class="sd">marks the end of the loop — everything between the ``#loop 7#`` and</span>
+<span class="sd">``#endloop#`` lines is output 7 times.</span>
+
+<span class="sd">The ``#temp_out ...#``, ``#hum_out ...#``, ``#rain ...#`` and</span>
+<span class="sd">``#rel_pressure ...#`` instructions show basic data output. They each</span>
+<span class="sd">use a ``fmt_string`` to format the data appropriately. The ``#wind_ave</span>
+<span class="sd">...#`` and ``#wind_gust ...#`` instructions show how to use a</span>
+<span class="sd">conversion expression to convert m/s to mph.</span>
+
+<span class="sd">The ``#wind_dir ...#`` and ``#pressure_trend ...#`` instructions show</span>
+<span class="sd">use of the built-in functions ``winddir_text`` and</span>
+<span class="sd">``pressure_trend_text`` to convert numerical values into text.</span>
+
+<span class="sd">Finally we get to datetime values. The ``#idx &quot;%%H%%M&quot;#`` instruction</span>
+<span class="sd">simply outputs the time (in HHMM format) of the data&#39;s index. The</span>
+<span class="sd">``#idx &quot;%%Y/%%m/%%d&quot; &quot;&quot; &quot;[None, x][x.hour == 0 or loop_count == 7]&quot;#``</span>
+<span class="sd">instruction is a bit more complicated. It outputs the date, but only</span>
+<span class="sd">on the first line or if the date has changed. It does this by indexing</span>
+<span class="sd">the array ``[None, x]`` with a boolean expression that is true when</span>
+<span class="sd">``loop_count`` is 7 (i.e. on the first pass through the loop) or</span>
+<span class="sd">``x.hour`` is zero (i.e. this is the first hour of the day).</span>
+
+<span class="sd">Detailed API</span>
+<span class="sd">------------</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="n">__docformat__</span> <span class="o">=</span> <span class="s">&quot;restructuredtext en&quot;</span>
+<span class="n">__usage__</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s"> usage: python -m pywws.Template [options] data_dir template_file output_file</span>
+<span class="s"> options are:</span>
+<span class="s">  --help    display this help</span>
+<span class="s"> data_dir is the root directory of the weather data</span>
+<span class="s"> template_file is the template text source file</span>
+<span class="s"> output_file is the name of the text file to be created</span>
+<span class="s">&quot;&quot;&quot;</span>
+<span class="n">__doc__</span> <span class="o">%=</span> <span class="n">__usage__</span>
+<span class="n">__usage__</span> <span class="o">=</span> <span class="n">__doc__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">__usage__</span>
+
+<span class="kn">import</span> <span class="nn">codecs</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+<span class="kn">import</span> <span class="nn">getopt</span>
+<span class="kn">import</span> <span class="nn">locale</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">shlex</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">conversions</span>
+<span class="kn">from</span> <span class="nn">conversions</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">DataStore</span>
+<span class="kn">from</span> <span class="nn">pywws.Forecast</span> <span class="kn">import</span> <span class="n">Zambretti</span><span class="p">,</span> <span class="n">ZambrettiCode</span>
+<span class="kn">from</span> <span class="nn">pywws</span> <span class="kn">import</span> <span class="n">Localisation</span>
+<span class="kn">from</span> <span class="nn">pywws.Logger</span> <span class="kn">import</span> <span class="n">ApplicationLogger</span>
+<span class="kn">from</span> <span class="nn">pywws.TimeZone</span> <span class="kn">import</span> <span class="n">Local</span><span class="p">,</span> <span class="n">utc</span>
+
+<span class="n">SECOND</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">HOUR</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">DAY</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="mi">24</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Template"><a class="viewcode-back" href="../../api/pywws.Template.html#pywws.Template.Template">[docs]</a><span class="k">class</span> <span class="nc">Template</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span>
+                 <span class="n">calib_data</span><span class="p">,</span> <span class="n">hourly_data</span><span class="p">,</span> <span class="n">daily_data</span><span class="p">,</span> <span class="n">monthly_data</span><span class="p">,</span>
+                 <span class="n">use_locale</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s">&#39;pywws.Template&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">status</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span> <span class="o">=</span> <span class="n">calib_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span> <span class="o">=</span> <span class="n">hourly_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">daily_data</span> <span class="o">=</span> <span class="n">daily_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">monthly_data</span> <span class="o">=</span> <span class="n">monthly_data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_locale</span> <span class="o">=</span> <span class="n">use_locale</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">midnight</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rain_midnight</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c"># get character encoding of template input &amp; output</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">encoding</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;config&#39;</span><span class="p">,</span> <span class="s">&#39;template encoding&#39;</span><span class="p">,</span> <span class="s">&#39;iso-8859-1&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Template.process"><a class="viewcode-back" href="../../api/pywws.Template.html#pywws.Template.Template.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">live_data</span><span class="p">,</span> <span class="n">template_file</span><span class="p">):</span>
+        <span class="k">def</span> <span class="nf">jump</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">count</span><span class="p">):</span>
+            <span class="k">while</span> <span class="n">count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">new_idx</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">after</span><span class="p">(</span><span class="n">idx</span> <span class="o">+</span> <span class="n">SECOND</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">new_idx</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="n">idx</span> <span class="o">=</span> <span class="n">new_idx</span>
+                <span class="n">count</span> <span class="o">-=</span> <span class="mi">1</span>
+            <span class="k">while</span> <span class="n">count</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">new_idx</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">before</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">new_idx</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="n">idx</span> <span class="o">=</span> <span class="n">new_idx</span>
+                <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">return</span> <span class="n">idx</span><span class="p">,</span> <span class="n">count</span> <span class="o">==</span> <span class="mi">0</span>
+
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">live_data</span><span class="p">:</span>
+            <span class="n">idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="o">.</span><span class="n">before</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">max</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">idx</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;No calib data - run Process.py first&quot;</span><span class="p">)</span>
+                <span class="k">return</span>
+            <span class="n">live_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+        <span class="c"># get conversions module to create its &#39;private&#39; wind dir text</span>
+        <span class="c"># array, then copy it to deprecated wind_dir_text variable</span>
+        <span class="n">winddir_text</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">wind_dir_text</span> <span class="o">=</span> <span class="n">conversions</span><span class="o">.</span><span class="n">_winddir_text_array</span>
+        <span class="n">hour_diff</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_hour_diff</span>
+        <span class="n">rain_hour</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rain_hour</span>
+        <span class="n">rain_day</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rain_day</span>
+        <span class="n">pressure_offset</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;config&#39;</span><span class="p">,</span> <span class="s">&#39;pressure offset&#39;</span><span class="p">))</span>
+        <span class="n">fixed_block</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&#39;fixed&#39;</span><span class="p">,</span> <span class="s">&#39;fixed block&#39;</span><span class="p">))</span>
+        <span class="c"># start off with no time rounding</span>
+        <span class="n">round_time</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="c"># start off in hourly data mode</span>
+        <span class="n">data_set</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span>
+        <span class="c"># start off in utc</span>
+        <span class="n">time_zone</span> <span class="o">=</span> <span class="n">utc</span>
+        <span class="c"># start off with default use_locale setting</span>
+        <span class="n">use_locale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_locale</span>
+        <span class="c"># jump to last item</span>
+        <span class="n">idx</span><span class="p">,</span> <span class="n">valid_data</span> <span class="o">=</span> <span class="n">jump</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">max</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">valid_data</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;No summary data - run Process.py first&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">data_set</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+        <span class="c"># open template file file</span>
+        <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">tmplt</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">template_file</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">tmplt</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">template_file</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span>
+        <span class="c"># do the text processing</span>
+        <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="n">line</span> <span class="o">=</span> <span class="n">tmplt</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">line</span> <span class="o">==</span> <span class="s">&#39;&#39;</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">parts</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;#&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="c"># not a processing directive</span>
+                    <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">parts</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">:</span>
+                        <span class="k">yield</span> <span class="n">parts</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">parts</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">and</span> <span class="n">parts</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;!&#39;</span><span class="p">:</span>
+                    <span class="c"># comment</span>
+                    <span class="k">continue</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="n">shlex</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">command</span> <span class="o">==</span> <span class="p">[]:</span>
+                    <span class="c"># empty command == print a single &#39;#&#39;</span>
+                    <span class="k">yield</span> <span class="s">&#39;#&#39;</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="o">+</span> <span class="p">[</span><span class="s">&#39;calc&#39;</span><span class="p">]:</span>
+                    <span class="c"># output a value</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">valid_data</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="c"># format is: key fmt_string no_value_string conversion</span>
+                    <span class="c"># get value</span>
+                    <span class="k">if</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;calc&#39;</span><span class="p">:</span>
+                        <span class="n">x</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                        <span class="k">del</span> <span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">x</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+                    <span class="c"># adjust time</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">datetime</span><span class="p">):</span>
+                        <span class="k">if</span> <span class="n">round_time</span><span class="p">:</span>
+                            <span class="n">x</span> <span class="o">+=</span> <span class="n">round_time</span>
+                        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="n">utc</span><span class="p">)</span>
+                        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">astimezone</span><span class="p">(</span><span class="n">time_zone</span><span class="p">)</span>
+                    <span class="c"># convert data</span>
+                    <span class="k">if</span> <span class="n">x</span> <span class="o">!=</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">command</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">3</span><span class="p">:</span>
+                        <span class="n">x</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">command</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+                    <span class="c"># get format</span>
+                    <span class="n">fmt</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">&#39;</span>
+                    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">command</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                        <span class="n">fmt</span> <span class="o">=</span> <span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="c"># write output</span>
+                    <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">command</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+                            <span class="k">yield</span> <span class="n">command</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+                    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">datetime</span><span class="p">):</span>
+                        <span class="k">yield</span> <span class="n">x</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">fmt</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="ow">not</span> <span class="n">use_locale</span><span class="p">:</span>
+                        <span class="k">yield</span> <span class="n">fmt</span> <span class="o">%</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span> <span class="ow">or</span> <span class="s">&#39;</span><span class="si">%%</span><span class="s">&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">fmt</span><span class="p">:</span>
+                        <span class="k">yield</span> <span class="n">locale</span><span class="o">.</span><span class="n">format_string</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">yield</span> <span class="n">locale</span><span class="o">.</span><span class="n">format_string</span><span class="p">(</span>
+                            <span class="n">fmt</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;</span><span class="si">%%</span><span class="s">&#39;</span><span class="p">,</span> <span class="s">&#39;##&#39;</span><span class="p">),</span> <span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;##&#39;</span><span class="p">,</span> <span class="s">&#39;%&#39;</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;monthly&#39;</span><span class="p">:</span>
+                    <span class="n">data_set</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">monthly_data</span>
+                    <span class="n">idx</span><span class="p">,</span> <span class="n">valid_data</span> <span class="o">=</span> <span class="n">jump</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">max</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">data</span> <span class="o">=</span> <span class="n">data_set</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;daily&#39;</span><span class="p">:</span>
+                    <span class="n">data_set</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">daily_data</span>
+                    <span class="n">idx</span><span class="p">,</span> <span class="n">valid_data</span> <span class="o">=</span> <span class="n">jump</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">max</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">data</span> <span class="o">=</span> <span class="n">data_set</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;hourly&#39;</span><span class="p">:</span>
+                    <span class="n">data_set</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hourly_data</span>
+                    <span class="n">idx</span><span class="p">,</span> <span class="n">valid_data</span> <span class="o">=</span> <span class="n">jump</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">max</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">data</span> <span class="o">=</span> <span class="n">data_set</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;raw&#39;</span><span class="p">:</span>
+                    <span class="n">data_set</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span>
+                    <span class="n">idx</span><span class="p">,</span> <span class="n">valid_data</span> <span class="o">=</span> <span class="n">jump</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">max</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">data</span> <span class="o">=</span> <span class="n">data_set</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;live&#39;</span><span class="p">:</span>
+                    <span class="n">data_set</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span>
+                    <span class="n">idx</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">max</span>
+                    <span class="n">valid_data</span> <span class="o">=</span> <span class="bp">True</span>
+                    <span class="n">data</span> <span class="o">=</span> <span class="n">live_data</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;timezone&#39;</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;utc&#39;</span><span class="p">:</span>
+                        <span class="n">time_zone</span> <span class="o">=</span> <span class="n">utc</span>
+                    <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;local&#39;</span><span class="p">:</span>
+                        <span class="n">time_zone</span> <span class="o">=</span> <span class="n">Local</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Unknown time zone: </span><span class="si">%s</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                        <span class="k">return</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;locale&#39;</span><span class="p">:</span>
+                    <span class="n">use_locale</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;roundtime&#39;</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">eval</span><span class="p">(</span><span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                        <span class="n">round_time</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">round_time</span> <span class="o">=</span> <span class="bp">None</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;jump&#39;</span><span class="p">:</span>
+                    <span class="n">prevdata</span> <span class="o">=</span> <span class="n">data</span>
+                    <span class="n">idx</span><span class="p">,</span> <span class="n">valid_data</span> <span class="o">=</span> <span class="n">jump</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+                    <span class="n">data</span> <span class="o">=</span> <span class="n">data_set</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;goto&#39;</span><span class="p">:</span>
+                    <span class="n">prevdata</span> <span class="o">=</span> <span class="n">data</span>
+                    <span class="n">time_str</span> <span class="o">=</span> <span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="s">&#39;%&#39;</span> <span class="ow">in</span> <span class="n">time_str</span><span class="p">:</span>
+                        <span class="n">lcl</span> <span class="o">=</span> <span class="n">idx</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">astimezone</span><span class="p">(</span><span class="n">time_zone</span><span class="p">)</span>
+                        <span class="n">time_str</span> <span class="o">=</span> <span class="n">lcl</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="n">time_str</span><span class="p">)</span>
+                    <span class="n">new_idx</span> <span class="o">=</span> <span class="n">DataStore</span><span class="o">.</span><span class="n">safestrptime</span><span class="p">(</span><span class="n">time_str</span><span class="p">)</span>
+                    <span class="n">new_idx</span> <span class="o">=</span> <span class="n">new_idx</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="n">time_zone</span><span class="p">)</span><span class="o">.</span><span class="n">astimezone</span><span class="p">(</span><span class="n">utc</span><span class="p">)</span>
+                    <span class="n">new_idx</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">after</span><span class="p">(</span><span class="n">new_idx</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="bp">None</span><span class="p">))</span>
+                    <span class="k">if</span> <span class="n">new_idx</span><span class="p">:</span>
+                        <span class="n">idx</span> <span class="o">=</span> <span class="n">new_idx</span>
+                        <span class="n">data</span> <span class="o">=</span> <span class="n">data_set</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+                        <span class="n">valid_data</span> <span class="o">=</span> <span class="bp">True</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">valid_data</span> <span class="o">=</span> <span class="bp">False</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;loop&#39;</span><span class="p">:</span>
+                    <span class="n">loop_count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">command</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                    <span class="n">loop_start</span> <span class="o">=</span> <span class="n">tmplt</span><span class="o">.</span><span class="n">tell</span><span class="p">()</span>
+                <span class="k">elif</span> <span class="n">command</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;endloop&#39;</span><span class="p">:</span>
+                    <span class="n">loop_count</span> <span class="o">-=</span> <span class="mi">1</span>
+                    <span class="k">if</span> <span class="n">valid_data</span> <span class="ow">and</span> <span class="n">loop_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="n">tmplt</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="n">loop_start</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s">&quot;Unknown processing directive: #</span><span class="si">%s</span><span class="s">#&quot;</span><span class="p">,</span> <span class="n">parts</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                    <span class="k">return</span>
+        <span class="n">tmplt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">return</span>
+</div>
+<div class="viewcode-block" id="Template.make_text"><a class="viewcode-back" href="../../api/pywws.Template.html#pywws.Template.Template.make_text">[docs]</a>    <span class="k">def</span> <span class="nf">make_text</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template_file</span><span class="p">,</span> <span class="n">live_data</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">live_data</span><span class="p">,</span> <span class="n">template_file</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="nb">unicode</span><span class="p">):</span>
+                <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+            <span class="n">result</span> <span class="o">+=</span> <span class="n">text</span>
+        <span class="k">return</span> <span class="n">result</span>
+</div>
+<div class="viewcode-block" id="Template.make_file"><a class="viewcode-back" href="../../api/pywws.Template.html#pywws.Template.Template.make_file">[docs]</a>    <span class="k">def</span> <span class="nf">make_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template_file</span><span class="p">,</span> <span class="n">output_file</span><span class="p">,</span> <span class="n">live_data</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">of</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">of</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">live_data</span><span class="p">,</span> <span class="n">template_file</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="nb">unicode</span><span class="p">):</span>
+                <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encoding</span><span class="p">)</span>
+            <span class="n">of</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+        <span class="n">of</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">return</span> <span class="mi">0</span>
+</div>
+    <span class="k">def</span> <span class="nf">_hour_diff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="n">hour_ago</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="o">.</span><span class="n">nearest</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">HOUR</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="n">data</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">-</span> <span class="n">hour_ago</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_rain_hour</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="n">rain_hour</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="o">.</span><span class="n">nearest</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">HOUR</span><span class="p">)][</span><span class="s">&#39;rain&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;rain&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">rain_hour</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_rain_day</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">midnight</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">midnight</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">astimezone</span><span class="p">(</span>
+                <span class="n">Local</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">hour</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astimezone</span><span class="p">(</span>
+                    <span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">midnight</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">midnight</span> <span class="o">-=</span> <span class="n">DAY</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rain_midnight</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">while</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;idx&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">midnight</span> <span class="o">+</span> <span class="n">DAY</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">midnight</span> <span class="o">+=</span> <span class="n">DAY</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rain_midnight</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">rain_midnight</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">rain_midnight</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="p">[</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">calib_data</span><span class="o">.</span><span class="n">nearest</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">midnight</span><span class="p">)][</span><span class="s">&#39;rain&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="s">&#39;rain&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">rain_midnight</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../api/pywws.Template.html#pywws.Template.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">argv</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">argv</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">argv</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">opts</span><span class="p">,</span> <span class="n">args</span> <span class="o">=</span> <span class="n">getopt</span><span class="o">.</span><span class="n">getopt</span><span class="p">(</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;help&#39;</span><span class="p">])</span>
+    <span class="k">except</span> <span class="n">getopt</span><span class="o">.</span><span class="n">error</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span>
+        <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&#39;Error: </span><span class="si">%s</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">msg</span>
+        <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="n">__usage__</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="c"># check arguments</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&#39;Error: 3 arguments required</span><span class="se">\n</span><span class="s">&#39;</span>
+        <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="n">__usage__</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">return</span> <span class="mi">2</span>
+    <span class="c"># process options</span>
+    <span class="k">for</span> <span class="n">o</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">opts</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">o</span> <span class="o">==</span> <span class="s">&#39;--help&#39;</span><span class="p">:</span>
+            <span class="k">print</span> <span class="n">__usage__</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">return</span> <span class="mi">0</span>
+    <span class="n">logger</span> <span class="o">=</span> <span class="n">ApplicationLogger</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="n">DataStore</span><span class="o">.</span><span class="n">params</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">DataStore</span><span class="o">.</span><span class="n">status</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">Localisation</span><span class="o">.</span><span class="n">SetApplicationLanguage</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Template</span><span class="p">(</span>
+        <span class="n">params</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span>
+        <span class="n">DataStore</span><span class="o">.</span><span class="n">calib_store</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">DataStore</span><span class="o">.</span><span class="n">hourly_store</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+        <span class="n">DataStore</span><span class="o">.</span><span class="n">daily_store</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">DataStore</span><span class="o">.</span><span class="n">monthly_store</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">make_file</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+            <p class="logo"><a href="../../index.html">
+              <img class="logo" src="../../_static/pywws_logo.png" alt="Logo"/>
+            </a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pywws 14.03.dev1177 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2008-14, Jim Easterbrook.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
