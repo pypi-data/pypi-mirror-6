@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+
+# Title: Proverbs
+# Summary: A simple program to display a proverb from the Douay-Rheims Bible
+# Copyright (c) 2014 Michael Thomas
+# See the file license.txt for copying permission.
+# Released under the MIT License 
+
+import random
+import time
+import os
+
+os.system('clear') 
+
+# Intro
+print("Welcome to Proverbs.")
+print("This program will give you one of 30 proverbs covering various subjects.")
+print("The text of the proverbs is from the Douay-Rheims Bible.")
+print()
+time.sleep(1.5)          
+
+
+# Go on to proverb generation
+input( '\nPlease press <Enter> to see the proverb for today.' )
+time.sleep(1)
+
+
+# Proverb Generation
+proverb = random.randint(1,30)
+print("")
+if proverb == 1:
+    print("10:28. The expectation of the just is joy...")
+if proverb == 2:     
+    print("1:7. The fear of the Lord is the beginning of wisdom.")
+if proverb == 3:
+    print("10:29. The strength of the upright is the way of the Lord...")
+if proverb == 4:
+    print("4:6. Forsake her (wisdom) not, and she shall keep thee...")        
+if proverb == 5:
+    print("14:21. He that believeth in the Lord, loveth mercy.")
+if proverb == 6:
+    print("11:12. He that despiseth his friend, is mean of heart...")
+if proverb == 7:
+    print("15:27. By mercy and faith sins are purged away...")
+if proverb == 8:
+    print("14:26. In the fear of the Lord is confidence of strength...")
+if proverb == 9:
+    print("10:12. Hatred stirreth up strifes: and charity covereth all sins.")
+if proverb == 10:
+    print("12:2. He that is good, shall draw grace from the Lord...")
+if proverb == 11:
+    print("15:29. The Lord is far from the wicked: and he will hear the prayers of the just.")
+if proverb == 12:
+    print("17:22. A joyful mind maketh age flourishing: a sorrowful spirit drieth up the bones.")
+if proverb == 13:
+    print("3:17. Her (wisdom's) ways are beautiful ways, and all her paths are peaceable.")
+if proverb == 14:
+    print("15:6. The house of the just is very much strength...")
+if proverb == 15:
+    print("12:1. He that loveth correction, loveth knowledge...")
+if proverb == 16:
+    print("3:3. Let not mercy and truth leave thee...")
+if proverb == 17:
+    print("17:28. Even a fool, if he will hold his peace, shall be counted wise...")
+if proverb == 18:
+    print("28:20. A faithful man shall be much praised...")
+if proverb == 19:
+    print("14:32. The wicked man shall be driven out in his wickedness...")
+if proverb == 20:
+    print("4:9. She (wisdom) shall give to thy head increase of graces...")
+if proverb == 21:
+    print("3:13. Blessed is the man that findeth wisdom, and is rich in prudence.")
+if proverb == 22:
+    print("28:12. In the joy of the just there is great glory...")
+if proverb == 23:
+    print("29:3. A man that loveth wisdom, rejoiceth his father...")
+if proverb == 24:
+    print("1:22. ...fools covet those things which are hurtful to themselves...")
+if proverb == 25:
+    print("28:13. He that hideth his sins, shall not prosper...")
+if proverb == 26:
+    print("11:18. ...to him that soweth justice, there is a faithful reward")
+if proverb == 27:
+    print("24:10. If thou lose hope ... thy strength shall be diminished.")
+if proverb == 28:
+    print("14:9. A fool will laugh at sin, but among the just grace shall abide.")
+if proverb == 29:
+    print("13:10. ...they that do all things with counsel, are ruled by wisdom.")
+if proverb == 30:
+    print("1:10. My son, if sinners shall entice thee, consent not to them.")
+time.sleep(2)
+
+
+# End
+print("")
+print("Thank you for using Proverbs.")
+print("Have a blessed day.")
+print("Goodbye.")
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+ 
+        
+
+
