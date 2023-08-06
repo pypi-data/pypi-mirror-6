@@ -1,0 +1,44 @@
+#!/bin/sh
+
+# Warning:
+# This script assumes that file names do not contain whitespace characters.
+#
+
+# ###########################################################################
+# Customisation...
+#
+# If ~/.podrecast_mp3gain exists and is executable, then it is sourced.
+# This provides an opportunity for customisation, such as renaming,
+# deleting or moving files.
+#
+
+rc="$HOME/.podrecast_mp3gain"
+
+if [ -f $rc ] && [ -s $rc ] && [ -x $rc ]
+then
+   echo "source: $rc"
+   . $rc
+fi
+
+# ###########################################################################
+# Do mp3gain...
+
+if ! which mp3gain > /dev/null
+then
+   echo "error: could not find mp3gain executable" >&2
+   exit 1
+fi
+
+gain=6
+
+for file in `podrecast --downloaded`
+do
+   (
+      if flock -x -n 9
+      then
+         nice nice mp3gain -r -c -p -t -m $gain $file \
+            && podrecast --ready $file
+      fi
+   ) 9< $file
+done
+
