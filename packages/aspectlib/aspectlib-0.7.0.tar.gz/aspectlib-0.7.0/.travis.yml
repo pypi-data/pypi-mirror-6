@@ -1,0 +1,59 @@
+language: python
+os:
+  - linux
+  - osx
+python: 2.7
+env:
+  global:
+    PYTHONPATH=src:tests
+    PYTHONUNBUFFERED=yes
+  matrix:
+    - TOXENV=2.6 WITH_COVERAGE=no
+    - TOXENV=2.6 WITH_COVERAGE=yes
+    - TOXENV=2.7 WITH_COVERAGE=no
+    - TOXENV=2.7 WITH_COVERAGE=yes
+    - TOXENV=3.3 WITH_COVERAGE=no
+    - TOXENV=3.3 WITH_COVERAGE=yes
+    - TOXENV=3.4 WITH_COVERAGE=no
+    - TOXENV=3.4 WITH_COVERAGE=yes
+    - TOXENV=pypy WITH_COVERAGE=no
+    - TOXENV=pypy WITH_COVERAGE=yes
+before_install:
+  - |
+    if [[ $TOXENV = pypy ]]; then
+      deactivate
+      sudo apt-add-repository --yes ppa:pypy/ppa
+      sudo apt-get update
+      sudo apt-get install pypy
+      source ~/virtualenv/pypy/bin/activate
+    fi
+    if [[ $TOXENV = 3.4 ]]; then
+      sudo apt-get update
+      sudo apt-get install python3.4-dev
+      source ~/virtualenv/python3.4
+      virtualenv ~/virtualenv/python3.4 --python=$(which python3.4)
+      source ~/virtualenv/python3.4/bin/activate
+    fi
+    python --version
+    uname -a
+    lsb_release -a
+install:
+  - pip install tox
+script:
+  - |
+    if [[ $WITH_COVERAGE == yes ]]; then
+      tox -v 
+    else
+      tox -v -- py.test
+    fi
+after_success:
+  - |
+    if [[ $WITH_COVERAGE == yes ]]; then
+      .tox/$TOXENV/bin/coverage combine
+      .tox/$TOXENV/bin/coverage report
+      .tox/$TOXENV/bin/coveralls
+    fi
+notifications:
+  email:
+    on_success: never
+    on_failure: always
