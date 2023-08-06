@@ -1,0 +1,53 @@
+TimerMiddleware Call Count
+==========================
+
+To use the callcount script you will need to define your own runnable
+Python script. In that script will setup your callables.
+
+Command Line Options
+--------------------
+tm\_callcount includes a default\_args that you will need to use for your Python
+script. You can see the options by running `--help`.
+
+Creating CountCases
+-------------------
+This example assumes you have defined a custom TimerMiddleware for your
+application and that you have set a stats.sample\_rate config value.
+See: http://pythonhosted.org/TimerMiddleware/quickstart.html
+
+We do our extra setup outside of our `count_` methods. This ensures
+that any setup we do is not included in the counts.
+
+    from myapp import db
+    from myapp.tests import TestController
+
+    from twm_callcount import (
+        default_args,
+        CountRunner,
+        CountCase,
+        )
+
+    class CountAppURL(CountCase):
+        def setUp(self):
+            self.test = TestController()
+            self.create_test_data()
+
+        def tearDown(self):
+            self.test.tearDown()
+
+        def create_test_data(self):
+            db.add_page('Test Wiki', 'content')
+            db.add_ticket('Test Ticket', 'content')
+
+        def count_wiki_page(self):
+            self.test.app.get('wiki', extra_environ=self.environ)
+
+        def count_ticket_page(self):
+            self.test.app.get('ticket', extra_environ=self.environ)
+
+    def main(args):
+        runner = CountRunner(args)
+        runner([CountAppURL])
+
+    if __name__ == '__main__':
+       main(default_args())
