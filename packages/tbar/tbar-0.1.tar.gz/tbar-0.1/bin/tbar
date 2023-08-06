@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+
+import sys
+
+def add_path():
+    from os.path import normpath, join, exists, dirname, abspath, realpath
+    libdir = normpath(join(dirname(realpath(__file__)), ".."))
+    if exists(join(libdir, "tbar")):
+        sys.path.insert(0, libdir)
+    # sys.argv[0] = os.path.abspath(__file__)
+    return
+
+def main(argv):
+    import argparse as ap
+
+    import tbar
+
+    _epilog = """\
+Specifying Field to Show:
+
+When extracting data from input line, there are two ways: cut-like options and
+regular expression.
+Using cut-like options is an easy way. For example, when input lines are
+
+    # sample data
+    a 80
+    bcdef 40
+    ghi 20
+    jk 90
+
+then you can use the first field as key (name) and the second as value by
+specifying the options like
+
+    --sep " " --field 1,2
+
+(Actually this options are set by default so you do not need these options for
+this simple case)
+If you want to deal with rather complicated input, you can use regular
+expression with symbolic groups instead. For example, specifying
+
+    --regexp '^(?P<key>[^ ]*) *(?P<value>[^ ]*)'
+
+means the same thing as previous example by cut-like options.
+"""
+
+    parser = ap.ArgumentParser("tbar",
+                               description="Visualize values with ascii characters in terminal",
+                               formatter_class=ap.
+                               RawDescriptionHelpFormatter,
+                               epilog=_epilog)
+    parser.add_argument("filename",
+                        help="filename for input. If omitted read from stdin",
+                        nargs="?", default=None)
+
+    # TODO: add arguments for reader
+    parser.add_argument("-r", "--regexp",
+                        help="regular expression to extract key and value. \
+                        When this option is given, -s and -f options are \
+                        ignored",
+                        default=None)
+    parser.add_argument("-c", "--comment",
+                        help="string that leading commnent strings, defaults \
+                        to \"#\"",
+                        default="#", metavar="COMMENT_START")
+    parser.add_argument("-s", "--sep",
+                        help="separator of field",
+                        default=" ")
+    parser.add_argument("-f", "--field",
+                        help="numbers of field to use as key and value, \
+                        defaults to 1,2",
+                        default="1,2", metavar="NUM,NUM")
+
+    parser.add_argument("-m", "--max", help="value for max",
+                        type=float, default=0)
+    parser.add_argument("-l", "--length", help="length of bars, defaults to 50",
+                        type=int, default=50)
+    parser.add_argument("-v", "--vertical", help="print bars vertically",
+                        action="store_true", default=False)
+
+    args = parser.parse_args(argv[1:])
+
+    main_args = dict()
+    for a in "comment", "sep", "max", "length", "regexp", "vertical":
+        main_args[a] = getattr(args, a)
+
+    main_args["field"] = tuple(int(n) for n in args.field.split(","))
+
+    if args.filename:
+        with open(args.filename) as f:
+            tbar.main(infile=f, **main_args)
+    else:
+        tbar.main(infile=sys.stdin, **main_args)
+
+    return
+
+if __name__ == "__main__":
+    add_path()
+    main(sys.argv)
