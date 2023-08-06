@@ -1,0 +1,10 @@
+__version__ = "0.2.8"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.2.8)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '7cdd6196cdaf37b8bf0f910fdd8563166cf7e9f2'
+__git_head_subject__ = 'STORAGEMODEL-261 rescan_scsi_bus: split the rescanning to subprocess per target'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
