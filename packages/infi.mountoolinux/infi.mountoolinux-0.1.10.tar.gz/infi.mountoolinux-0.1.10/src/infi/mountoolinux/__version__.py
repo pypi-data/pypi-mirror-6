@@ -1,0 +1,10 @@
+__version__ = "0.1.10"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.1.10)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '32d4b125edbf7eb7f3d9562fbc507ec114b02f5f'
+__git_head_subject__ = 'buildout.cfg: changed isolated python version to v2.7.5.5'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
