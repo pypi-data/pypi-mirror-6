@@ -1,0 +1,10 @@
+__version__ = "0.0.8"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = 'develop'
+__git_remote_tracking_branch__ = 'origin/develop'
+__git_remote_url__ = 'git@infinigit.infinidat.com:/host/infi-recipe-close-application.git'
+__git_head_hash__ = 'ac559c264970b25eec655848010216157c10058e'
+__git_head_subject__ = 'Finished release v0.0.8.'
+__git_head_message__ = '* release/v0.0.8:\n  Adapting to interface changes in psutil-2.0\n  TRIVIAL updated checkout instructions in README.md\n  TRIVIAL gitignore\n  TRIVIAL gitignore\n  TRIVIAL gitignore\n  adding a test'
+__git_dirty_diff__ = ''
