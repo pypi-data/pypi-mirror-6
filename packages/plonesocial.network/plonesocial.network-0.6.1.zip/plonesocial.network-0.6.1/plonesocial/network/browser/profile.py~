@@ -1,0 +1,94 @@
+from zope.interface import implements, directlyProvides
+from zope.app.component.hooks import getSite
+from Products.CMFCore.utils import getToolByName
+
+from atopia.types_aes import AesMessageFactory as _
+from atopia.types_aes.interfaces import IMemberProfile
+
+
+class MemberProfile(object):
+    """Flyweight Facade to centralize all Member access logic.
+    Provides a unified API to access Member properties,
+    Member-managed content objects, portal_membership tool etc.
+    """
+    implements(IMemberProfile)
+    
+    def __init__(self, context):
+        """Connect to the membership tool and the MemberArea."""
+        self.id = context.getOwner().getId()
+        self.member = self.mtool().getMemberById(self.id)
+
+    def isMine(self):
+        """Is this my own profile, or somebody else's?"""
+        return self.id == self.mtool().getAuthenticatedMember().getId()
+
+    def isAnonymous(self):
+        """Is this the anonymous profile?"""
+        return not self.id
+
+    def mtool(self):
+        return getToolByName(getSite(), 'portal_membership')
+
+    def _search(self, specs, brainsonly=False, sort_index=None, reverse=0, limit=None):        
+        ctool = getToolByName(getSite(), 'portal_catalog')
+        res = ctool.search(specs, sort_index, reverse, limit)
+        if brainsonly:
+            return res
+        else:
+            return [ x.getObject() for x in res ]                        
+
+    def getMemberArea(self):
+        """Member home folder."""
+        return self.mtool().getHomeFolder(self.id)
+
+    def getMemberInfo(self, key=None):
+        """Personal info attributes (dict)."""
+        infodict = self.mtool().getMemberInfo(self.id)
+        infodict['profession'] = self.member.getProperty('profession','')
+        if infodict['fullname'] != '': 
+            infodict['fullname_or_id'] = infodict['fullname']
+        else:
+            infodict['fullname_or_id'] = self.id
+        if not key:
+            return infodict
+        else: 
+            return infodict[key]
+
+    def getPersonalPortrait(self):
+        """Mugshot."""
+        return self.mtool().getPersonalPortrait(self.id)
+
+    def getCasuses(self, brainsonly=False):
+        """Casuses created by this Member."""
+        return self._search({'portal_type':'Casus',
+                             'Creator':self.id},
+                            brainsonly)
+
+    def getDocuments(self, brainsonly=False):
+        """Documents created by this Member."""
+        return self._search({'portal_type':'Document',
+                             'Creator':self.id},
+                            brainsonly)
+
+    def getNotes(self, brainsonly=False):
+        """Notes created by this Member."""
+        return self._search({'portal_type':'Note',
+                             'Creator':self.id},
+                            brainsonly)
+
+    def getReactions(self, brainsonly=False):
+        """Reactions attached by this Member
+        to Notes of (other) Members."""
+        return self._search({'portal_type':'Reaction',
+                             'Creator':self.id},
+                            brainsonly)
+
+    def getContributions(self, brainsonly=False, limit=None):
+        """Notes and Reactions by this Member, sorted on date reversed."""
+        return self._search({'portal_type':['Note','Reaction'],
+                             'Creator':self.id
+                             },
+                            brainsonly=brainsonly,
+                            sort_index='created',
+                            reverse=1,
+                            limit=limit)
