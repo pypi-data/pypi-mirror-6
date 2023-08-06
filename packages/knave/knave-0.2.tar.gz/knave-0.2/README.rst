@@ -1,0 +1,206 @@
+Knave: a library for authorization in WSGI apps
+===============================================
+
+
+Knave is similar in design and scope to repoze.what.
+
+Knave does not depend on any particular authentication package (it works well
+with `repoze.who`_, but should work equally well with any authentication
+mechanism)
+
+
+Configuration
+-------------
+
+To start using knave, you need to define roles and permissions::
+
+    from knave.acl import Role, Permission, ACL
+    from knave.roles import StaticRoleProvider
+
+    class Permissions:
+
+        #: Can manage user accounts
+        USER_MANAGE = Permission('user_manage')
+
+        #: Can author articles
+        ARTICLE_CREATE = Permission('article_create')
+
+        #: Can publish articles
+        ARTICLE_PUBLISH = Permission('article_publish')
+
+    class Roles:
+
+        ADMINS = Role('admins')
+        EDITORS = Role('editors')
+
+Then you can map permissions to the roles that should be authorized for them::
+
+    role_permssions = {
+        Permissions.USER_MANAGE: {Roles.ADMINS},
+        Permissions.ARTICLE_CREATE: {Roles.ADMINS, Roles.EDITORS},
+        Permissions.ARTICLE_PUBLISH: {Roles.ADMINS, Roles.EDITORS},
+    }
+
+
+Finally, you need to tell knave which users belong to which roles. The
+demonstration purposes we've used a static mapping of user names to roles::
+
+    role_provider = StaticRoleProvider({
+        'spike': {Roles.ADMINS},
+        'harry': {Roles.EDITORS}
+    })
+
+You can subclass ``knave.roles.RoleProvider`` to look up role membership from
+a dynamic source such as a database.
+
+With everything defined, you can link all this together in an ACL::
+
+    acl = ACL([role_provider], role_permssions)
+
+You should use ``knave.middleware.KnaveMiddleware``
+to link the ACL into your WSGI application::
+
+    from knave import KnaveMiddleware
+
+    app = KnaveMiddleware(app, acl)
+
+This middleware makes it possible
+for your app to access the ACL
+from within a WSGI request, eg::
+
+    def wsgi_app(environ, start_response):
+        ...
+
+        Permissions('user_manage').check(environ)
+
+
+The middleware also takes care of
+catching any ``knave.predicates.Unauthorized`` exceptions
+and returning an HTTP 401 response instead.
+
+Integrating with an authentication system
+-----------------------------------------
+
+By default knave looks at the WSGI environ ``REMOTE_USER`` key to retrieve the
+identity of the current user.
+
+You can change this behaviour
+by supplying a different ``identity_adapter``
+when configuring your ACL.
+
+If you are using `repoze.who`_,
+there is a built in adapter for this::
+
+    import knave.identity
+    acl = ACL(..., identity_adapter=knave.identity.RepozeWhoIdentityAdapter())
+
+If you have a custom authentication layer,
+you may need to write your own IdentityAdapter.
+Here's an example for an authentication system
+where the user id is saved in the session (using beaker_ sessions)::
+
+    from knave.identity import IdentityAdapter
+
+    class SessionIdentityAdapter(IdentityAdapter):
+        """
+        Extract the user identity from the current session
+        """
+        def __call__(self, environ):
+            return environ['beaker.session'].get('current_user')
+
+    ...
+
+    acl = ACL(..., identity_adapter=SessionIdentityAdapter())
+
+Checking permissions
+--------------------
+
+From your WSGI application you can call ``permission(environ)``
+to test a permission::
+
+    if not Permissions.user_manage(environ):
+        start_response('401 Unauthorized', [('Content-Type', 'text/html')]
+        return ['<h1>Sorry, you're not authorized to view this page</h1>']
+
+Or you can call ``permission.check(environ)`` to test the permission and
+raise an unauthorized exception if it isn't met:
+
+    Permissions.user_manage.check(environ)
+
+``knave.middleware.KnaveMiddleware`` will trap this exception and
+return the appropriate WSGI response.
+
+Contextual roles and fancy permissions checks
+`````````````````````````````````````````````
+
+All checks support an optional ``context`` argument. You can use this to add
+roles dynamically.
+
+For example, suppose you have a blogging application that creates ``BlogEntry``
+objects, which have an ``author`` attribute.
+
+You can define a owner role and have it set dynamically so that only the
+BlogEntry author has the role::
+
+    class Permissions:
+        ARTICLE_EDIT = Permission('article_edit')
+
+    class Roles:
+        OWNER = Role('owner')
+        ADMIN = Role('admin')
+
+    role_permssions = {
+        Permissions.ARTICLE_EDIT: {Roles.ADMIN, Roles.OWNER},
+    }
+    role_provider = StaticRoleProvider({
+        'spike': {Roles.ADMIN}
+    })
+
+    class OwnerRoleProvider(RoleProvider):
+        "A role provider to tell the ACL when the user has the owner role"
+
+        def member_subset(self, roles, identity, environ, context=None):
+
+            if context is None or Roles.OWNER not in roles:
+                return set()
+
+            if getattr(context, 'author', None) == identity:
+                return set(Roles.OWNER)
+
+            return set()
+
+    acl = ACL([StaticRoleProvider, OwnerRoleProvider], role_permssions)
+
+Your application code would then need to pass the article object to the
+permissions check::
+
+    blogentry = store.get(BlogEntry, id=request.get('id'))
+    Permissions.ARTICLE_EDIT.check(environ, context=blogentry)
+
+
+Custom unauthorized responses
+-----------------------------
+
+By default ``KnaveMiddleware`` returns a minimal HTTP
+``401 Not Authorized`` response when encountering an Unauthorized exception.
+
+You can change what action to take
+when an by supplying an ``unauthorized_response`` argument
+to ``KnaveMiddleware``. This must be a WSGI app,
+and as such can return any suitable response
+(for example, redirecting to a login page)::
+
+    def redirect_on_unauthorized(environ, start_response):
+
+        start_response('302 Found',
+                       [('Location', '/login'), ('Content-Type', 'text/html')])
+        return ['<html><body><a href="/login">Login</a></body></html>']
+
+
+    app = KnaveMiddleware(app,
+                          acl,
+                          unauthorized_response=redirect_on_unauthorized)
+
+
+.. _repoze.who: http://docs.repoze.org/who/
+.. _beaker: http://beaker.readthedocs.org/
