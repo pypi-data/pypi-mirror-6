@@ -1,0 +1,119 @@
+************************************************************************
+Mopidy-InternetArchive
+************************************************************************
+
+`Mopidy <http://www.mopidy.com/>`_ extension for playing music and
+audio from the `Internet Archive <http://archive.org>`_.
+
+
+Installation
+========================================================================
+
+Install by running::
+
+    pip install Mopidy-InternetArchive
+
+You can also download and install Debian/Ubuntu packages for
+Mopidy-InternetArchive `releases
+<https://github.com/tkem/mopidy-internetarchive/releases>`_.
+
+
+Configuration
+========================================================================
+
+Configuration items are still subject to change at this point, so be
+warned before trying any of these::
+
+    [internetarchive]
+    enabled = true
+
+    # archive.org base URL
+    base_url = http://archive.org
+
+    # collections for searching/browsing
+    collections =
+        audio
+        audio_bookspoetry
+        audio_foreign
+        audio_music
+        audio_news
+        audio_podcast
+        audio_religion
+        audio_tech
+        etree
+        netlabels
+        opensource_audio
+        radioprograms
+
+    # media types for searching/browsing
+    mediatypes = audio, etree
+
+    # user names for bookmark browsing
+    bookmarks =
+
+    # streaming file formats, in order of preference
+    formats = VBR MP3, MP3
+
+    # query sort order: <fieldname> (asc|desc), where <fieldname>
+    # is one of: avg_rating, creatorSorter, date, downloads, month,
+    # publicdate, stars, titleSorter, week, year
+    sort_order = downloads desc
+
+    # maximum number of search results
+    search_limit = 100
+
+    # maximum number of browse results
+    browse_limit = 100
+
+    # top-level directory name for browsing
+    browse_label = Internet Archive
+
+    # bookmark directory names for browsing; {0} is user name
+    bookmarks_label = {0}'s Bookmarks
+
+    # number of items and query results to cache
+    cache_size = 128
+
+    # cache time-to-live in seconds
+    cache_ttl = 86400
+
+    # request timeout in seconds
+    timeout = 10
+
+
+Project resources
+========================================================================
+
+- `Source code <https://github.com/tkem/mopidy-internetarchive>`_
+- `Issue tracker <https://github.com/tkem/mopidy-internetarchive/issues>`_
+
+
+Changelog
+========================================================================
+
+v0.3.1 (2014-02-21)
+------------------------------------------------------------------------
+
+- Fix default configuration.
+
+
+v0.3.0 (2014-02-21)
+------------------------------------------------------------------------
+
+- Add bookmark browsing support.
+- Better filtering of search results.
+- Stability and performance improvements.
+
+
+v0.2.0 (2014-01-31)
+------------------------------------------------------------------------
+
+- Add library browsing support.
+- Cache search results and metadata.
+- Properly quote/encode query terms.
+
+
+v0.1.0 (2014-01-24)
+------------------------------------------------------------------------
+
+- Initial release.
