@@ -1,0 +1,268 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+'''
+Copyright (C) 2012-2013 Karsten-Kai König <kkoenig@posteo.de>
+
+This file is part of keepassc.
+
+keepassc is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or at your
+option) any later version.
+
+keepassc is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License along
+with keepassc.  If not, see <http://www.gnu.org/licenses/>.
+'''
+
+import argparse
+import logging
+import socket
+from curses import wrapper
+from getpass import getpass
+from os import chdir, geteuid
+from os.path import expanduser, realpath, splitext, join
+from sys import exit, stdout
+
+from kppy.database import KPDBv1
+from kppy.exceptions import KPError
+
+from keepassc.conn import *
+from keepassc.client import Client
+from keepassc.control import Control
+
+
+__doc__ = '''This program gives you access to your KeePass 1.x or
+          KeePassX databases through a nice curses interface.
+
+          It is completely controllable with the keyboard.
+
+         '''
+
+
+def arg_parse():
+    "Parse the command line arguments"
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--asroot', action='store_true', default=False,
+                        help='parse option to execute keepassc as root user')
+    parser.add_argument('-d', '--database', default=None,
+                        help='Path to database file.')
+    parser.add_argument('-k', '--keyfile', default=None,
+                        help='Path to keyfile.')
+    parser.add_argument('-c', '--curses', action='store_true', default=False,
+                        help='Use curses interface while using a remote '
+                             'connection.')
+    parser.add_argument('-as', '--address_server', default='localhost',
+                        help='Server address (not required if using agent)',
+                        type=str)
+    parser.add_argument('-ps', '--port_server', default=50000,
+                        help='Server port (not required if using agent)',
+                        type=int)
+    parser.add_argument('-pa', '--port_agent', default=50001,
+                        help='Agent port', type=int)
+    parser.add_argument('-a', '--agent', action='store_true', default=False,
+                        help='Use agent for remote connection')
+    parser.add_argument('-dc', '--direct_conn', action='store_true', 
+                        default=False, help='Connect directly to server')
+    parser.add_argument('-s', '--ssl', action='store_true', default=False,
+                        help='Use SSL/TLS')
+    parser.add_argument('-e', '--entry', help='Print entry with parsed '
+                        'title\nYou will see a password prompt; leave it '
+                        'blank if you only want to use a key-file\nJust '
+                        'type a part of the entry title lower-case, '
+                        'it\'s case-insensitive and will search for '
+                        'matching string parts\n\n'
+                        'WARNING: Your passwords will be displayed '
+                        'directly on your command line!')
+    parser.add_argument('-l', '--log_level', default = False,
+                        help='Set logging level for network use. '
+                             'Default is ERROR but for '
+                             'analyzing network flow INFO could be useful. '
+                             'Set it with keepassc [...] -l [...] to '
+                             'INFO', action='store_true')
+    return parser.parse_args()
+
+
+def parse_entry(entry, database, password, keyfile):
+    """Given the --entry command line option, parse the database and
+    return a matching entry.
+
+    Args:
+        entry:      the search string
+        database:   path to the database file
+        password:   password result from getpass()
+        keyfile:    path to the keyfile
+
+    """
+
+    try:
+        db = KPDBv1(database, password, keyfile)
+        db.load()
+    except KPError as err:
+        print(err)
+        exit()
+    for i in db.entries:
+        if entry.lower() in i.title.lower():
+            print('Title: ' + i.title)
+            if i.url is not None:
+                stdout.write('URL: ' + i.url + '\n')
+            if i.username is not None:
+                stdout.write('Username: ' + i.username + '\n')
+            if i.password is not None:
+                stdout.write('Password: ' + i.password + '\n')
+            if i.creation is not None:
+                stdout.write('Creation: ' + i.creation.__str__() + '\n')
+            if i.last_access is not None:
+                stdout.write('Access: ' + i.last_access.__str__() + '\n')
+            if i.last_mod is not None:
+                stdout.write('Modification: ' + i.last_mod.__str__() + '\n')
+            if i.expire is not None:
+                stdout.write('Expiration: ' + i.expire.__str__() + '\n')
+            if i.comment is not None:
+                stdout.write('Comment: ' + i.comment + '\n\n')
+            stdout.flush()
+
+def direct_connection():
+    '''Direct connection to a KeePassC-server.
+
+    Establish a direct connection to a KeePassC-server and find
+    entries.
+
+    '''
+
+    # Get password
+    print("Leave blank if you use a keyfile only")
+    password = getpass()
+    if password == '' and args.keyfile is None:
+        print('A password or keyfile is needed!')
+        exit(0)
+    elif password == '':
+        password = None
+
+
+    if args.keyfile is not None:
+        keyfile = realpath(expanduser(args.keyfile))
+    else:
+        keyfile = args.keyfile
+
+    if args.ssl is True:
+        try:
+            datapath = realpath(expanduser(getenv('XDG_DATA_HOME')))
+        except:
+            datapath = realpath(expanduser('~/.local/share'))
+        finally:
+            tls_dir = join(datapath, 'keepassc')
+    else:
+        tls_dir = None
+
+    chdir("/var/empty")
+
+    # Get entry title
+    if args.entry:
+        entry = args.entry.encode()
+    else:
+        entry = input('Part of title: ').encode()
+
+    if args.log_level is True:
+        loglevel = logging.INFO
+    else:
+        loglevel = logging.ERROR
+
+    # Establish connection and find entry
+    client = Client(loglevel, 'client.log', args.address_server,
+                    args.port_server, password, args.keyfile,
+                    args.ssl, tls_dir)
+
+    data = client.find(entry)
+    if data[:4] == 'FAIL':
+        print(data)
+        exit(0)
+
+    data = data.split('\n')
+    for i in data:
+        stdout.write(i + '\n')
+    stdout.flush()
+
+def use_agent():
+    '''Use the KeePassC-agent to find entries on a server.'''
+
+    try:
+        logdir = realpath(expanduser(getenv('XDG_DATA_HOME')))
+    except:
+        logdir = realpath(expanduser('~/.local/share'))
+    finally:
+        logfile = join(logdir, 'keepassc', 'client.log')
+
+    if args.log_level is True:
+        loglevel = logging.INFO
+    else:
+        loglevel = logging.ERROR
+
+    logging.basicConfig(format='[%(levelname)s] in %(filename)s:'
+                               '%(funcName)s at %(asctime)s\n%(message)s',
+                        level=loglevel, filename=logfile,
+                        filemode='a')
+
+    # Get entry title
+    if args.entry:
+        entry = args.entry.encode()
+    else:
+        entry = input('Part of title: ').encode()
+        
+    # Establish connect to agent
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(60)
+    try:
+        sock.connect(('localhost', args.port_agent))
+        # Init sequence
+        sendmsg(sock, build_message((b'FIND', entry)))
+    except OSError as err:
+        print(err.__str__())
+        exit(0)
+
+    answer = receive(sock).decode()
+    if answer[:4] == 'FAIL':
+        print(answer)
+        exit(0)
+
+    answer = answer.split('\n')
+    for i in answer:
+        stdout.write(i + '\n')
+    stdout.flush()
+
+if __name__ == '__main__':
+    args = arg_parse()
+    if geteuid() == 0 and args.asroot is False:
+        print('If you really want to execute this program as root user type '
+              '\'keepassc --asroot\'')
+        print('Warning: This will annul a security concept of keepassc')
+    else:
+        if args.direct_conn is True:
+            direct_connection()
+        elif args.agent is True:
+            use_agent()
+        elif args.entry:
+            password = getpass()
+            if password == '':
+                password = None
+            db = realpath(expanduser(args.database))
+            if args.keyfile is not None:
+                keyfile = realpath(expanduser(args.keyfile))
+            else:
+                keyfile = args.keyfile
+            chdir("/var/empty")
+            parse_entry(args.entry, db, password, keyfile)
+        elif args.curses:
+            app = Control()
+            wrapper(app.main_loop(remote=True))
+        elif args.database and splitext(args.database)[-1] == '.kdb':
+            filepath = realpath(expanduser(args.database))
+            app = Control()
+            wrapper(app.main_loop(filepath))
+        else:
+            app = Control()
+            wrapper(app.main_loop())

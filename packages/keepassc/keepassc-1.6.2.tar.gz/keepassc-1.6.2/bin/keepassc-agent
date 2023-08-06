@@ -1,0 +1,89 @@
+#!/usr/bin/env python
+'''
+Copyright (C) 2012-2013 Karsten-Kai König <kkoenig@posteo.de>
+
+This file is part of keepassc.
+
+keepassc is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or at your
+option) any later version.
+
+keepassc is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License along
+with keepassc.  If not, see <http://www.gnu.org/licenses/>.
+'''
+
+import argparse
+import logging
+from getpass import getpass
+from os import getenv, geteuid
+from os.path import expanduser, realpath, join
+
+from keepassc.daemon import Daemon
+from keepassc.agent import Agent
+
+def arg_parse():
+    "Parse the command line arguments"
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-k', '--keyfile', default=None,
+                        help='Path to keyfile.', type=str)
+    parser.add_argument('-as', '--address', default='localhost',
+                        help='Address for the server.', type=str)
+    parser.add_argument('-ps', '--port', default=50000,
+                        help='Port for the server.', type=int)
+    parser.add_argument('-pc', '--port_agent', default=50001,
+                        help='Port for the agent.', type=int)
+    parser.add_argument('-l', '--log_level', default = False,
+                        help='Set logging level. Default is ERROR but for'
+                             'analyzing network flow INFO could be useful. '
+                             'Set it with keepassc-agent [...] -l [...] to '
+                             'INFO', action='store_true')
+    parser.add_argument('-s', '--ssl', default=False,
+                        help='Use SSL/TLS.', action='store_true')
+    parser.add_argument('cmd', default=None,
+                        help='Daemon command: start|stop|restart', type=str)
+    return parser.parse_args()
+
+if __name__ == '__main__':
+    args = arg_parse()
+    if geteuid() == 0 and args.asroot is False:
+        print('If you really want to execute this program as root user type '
+              '\'keepassc --asroot\'')
+        print('Warning: This will annul a security concept of keepassc')
+    else:
+        try:
+            datapath = realpath(expanduser(getenv('XDG_DATA_HOME')))
+        except:
+            datapath = realpath(expanduser('~/.local/share'))
+        finally:
+            pidfile = join(datapath, 'keepassc', 'agent.pid')
+            if args.ssl is True:
+                tls_dir = join(datapath, 'keepassc')
+            else:
+                tls_dir = None
+
+        if args.cmd == 'start':
+            if args.log_level is True:
+                loglevel = logging.INFO
+            else:
+                loglevel = logging.ERROR
+
+            print("Leave blank if you use a keyfile only")
+            password = getpass()
+            if password == '':
+                password = None
+
+            agent = Agent(pidfile, loglevel, 'agent.log', args.address, args.port,
+                          args.port_agent, password, args.keyfile, args.ssl, 
+                          tls_dir)
+            agent.start()
+        elif args.cmd == 'stop':
+            daemon = Daemon(pidfile)
+            daemon.stop()
+
