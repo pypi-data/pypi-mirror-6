@@ -1,0 +1,105 @@
+#!/usr/bin/python
+
+import os
+import os.path
+import sys
+import getopt
+import pyzor
+import pyzor.server
+import ConfigParser
+
+_author__   = pyzor.__author__
+__version__  = pyzor.__version__
+__revision__ = "$Id: pyzord,v 1.23 2002-10-09 00:33:44 ftobin Exp $"
+progname = 'pyzord'
+
+default_anonymous_allows = map(pyzor.Opname, ['check', 'report', 'ping',
+                                              'info'])
+
+
+def usage():
+    sys.stderr.write("usage: %s [-d] [--homedir dir]\n" % progname)
+    sys.exit(1)
+
+
+def load_access_file(access_fn, server):
+    server.acl = pyzor.server.ACL()
+    if os.path.exists(access_fn):
+        pyzor.server.AccessFile(open(access_fn)).feed_into(server.acl)
+    else:
+        output.warn("%s does not exist; using default ACL: allowing anonymous to do %s"
+                    % (access_fn, default_anonymous_allows))
+        for op in default_anonymous_allows:
+            server.acl.add_entry(pyzor.server.ACLEntry((pyzor.anonymous_user,
+                                                        op,
+                                                        True)))
+
+
+def load_passwd_file(access_fn, server):
+    server.passwd = pyzor.server.Passwd()
+    if os.path.exists(passwd_fn):
+        for user, key in pyzor.server.PasswdFile(open(passwd_fn)):
+            server.passwd[user] = key
+
+
+########################################################################
+# functions above, run below
+
+# set umask
+os.umask(0077)
+
+debug = 0
+(options, args) = getopt.getopt(sys.argv[1:], 'dh:', ['homedir='])
+if len(args) != 0:
+    usage()
+
+specified_homedir = None
+
+for (o, v) in options:
+    if o == '-d':
+        debug = 1
+    elif o == '-h':
+        usage()
+    elif o == '--homedir':
+        specified_homedir = v
+
+homedir = pyzor.get_homedir(specified_homedir)
+
+if not os.path.exists(homedir):
+    os.mkdir(homedir)
+
+defaults = {'port':          '24441',
+            'listenaddress': '0.0.0.0',
+            'digestdb':      'pyzord.db',
+            'passwdfile':    'pyzord.passwd',
+            'accessfile':    'pyzord.access',
+            'CleanupAge':    "%d" % pyzor.server.DBHandle.max_age,
+            }
+
+config = pyzor.Config(homedir)
+config.add_section('server')
+
+for k, v in defaults.items():
+    config.set('server', k, v)
+
+config.read(os.path.join(homedir, 'config'))
+
+port       = config.getint('server', 'port')
+listen_adr = config.get('server', 'ListenAddress')
+
+dbfile    = config.get_filename('server', 'DigestDB')
+passwd_fn = config.get_filename('server', 'passwdfile')
+access_fn = config.get_filename('server', 'accessfile')
+pyzor.server.DBHandle.max_age = config.getint('server', 'CleanupAge')
+
+output = pyzor.Output(debug=debug)
+
+pyzor.server.DBHandle.initialize(dbfile, 'c')
+server = pyzor.server.Server((listen_adr, port),
+                             pyzor.server.Log(sys.stdout))
+
+
+load_passwd_file(passwd_fn, server)
+load_access_file(access_fn, server)
+
+server.serve_forever()
