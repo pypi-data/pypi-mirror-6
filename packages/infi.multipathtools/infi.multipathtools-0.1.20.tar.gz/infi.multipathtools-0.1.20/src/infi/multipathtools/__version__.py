@@ -1,0 +1,10 @@
+__version__ = "0.1.20"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.1.20)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'ee5e0d632c8a5b63d8990d0ce77e85a1962328ee'
+__git_head_subject__ = 'HOSTDEV-1467 replacing bunch with munch'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
