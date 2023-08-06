@@ -1,0 +1,70 @@
+---
+- hosts: all
+
+  sudo: yes
+
+  tasks:
+
+    # Bootstrap repositories installed with RPMs.  Based on an "a-ha!"
+    # moment from <http://stackoverflow.com/a/14155303/722332>.
+
+    - name: bootstrap asterisknow-version install
+      copy: src=ansible-bootstrap-asterisk-current.repo
+            dest=/etc/yum.repos.d/
+            owner=root group=root mode=0644
+
+    - name: asterisknow-version install
+      yum: name=asterisknow-version
+           enablerepo=ansible-bootstrap-asterisk-current
+           state=present
+
+    # The standard asterisk-11 repository is now present; permanently
+    # enable it and install Asterisk.
+
+    - name: asterisk-11 repository enable
+      ini_file: dest=/etc/yum.repos.d/centos-asterisk-11.repo
+                section=asterisk-11
+                option=enabled
+                value=1
+
+    - name: asterisk installation
+      yum: name=asterisk state=present
+
+    # Try to link /etc/asterisk to our /vagrant share…
+
+    - name: link asterisk config directory 
+      file: src=/vagrant/etc/asterisk dest=/etc/asterisk state=link force=yes
+      register: link_asterisk_config
+      ignore_errors: yes
+      notify: restart asterisk
+
+    # …which fails first time, so remove it and readd it when that
+    # happens.
+
+    - name: remove asterisk config directory
+      file: name=/etc/asterisk state=absent
+      when: link_asterisk_config|failed
+
+    - name: link asterisk config directory again
+      file: src=/vagrant/etc/asterisk dest=/etc/asterisk state=link
+      when: link_asterisk_config|failed
+      notify: restart asterisk
+
+    # Enable Asterisk, and set it to be restarted when /vagrant is
+    # mounted.
+
+    - name: enable asterisk
+      service: name=asterisk enabled=yes
+
+    - name: disable/stop iptables
+      service: name=iptables enabled=no state=stopped
+
+    - name: install /vagrant mount udev rule
+      copy: src=50-vagrant-mount.rules dest=/etc/udev/rules.d/
+            owner=root group=root mode=0644
+
+  handlers:
+
+    - name: restart asterisk
+      service: name=asterisk state=restarted
+
