@@ -1,0 +1,123 @@
+Releasing individual packages
+DRAFT 2014-01-06
+--
+
+check out stsci_python
+
+	svn checkout https://svn.stsci.edu/svn/ssb/stsci_python/stsci_python/trunk stsci_python
+	cd stsci_python
+	new_install/stp_list | new_install/stp_checkout
+	new_install/stp_list | python cfgdep.py -i -order > order
+
+	set path = ( `pwd`/release_tools $path )
+
+for each package you are interested in, in the order listed in ./order :
+	make the branch
+
+for each package you are interested in, in the order listed in ./order :
+	make the sdist
+
+install a private Ureka on a test machine
+
+for each package you are interested in, in the order listed in ./order :
+	pip install -i http://ssb.stsci.edu/draft_pypi/ --upgrade packagename
+
+cd /.../rt
+
+ur_setup
+setenv PDK_TESTRUN ...
+run rt.csh
+
+for each machine we test binaries on:
+	purge the packages we are distributing
+
+for each machine we build binaries on:
+	for each package you are interested in:
+		purge the package
+
+for each machine we test binaries on:
+	for each package you are interested in:
+		install the package
+
+
+make the branch
+--
+
+check out the trunk of the package
+
+cd packagename
+
+run script "stsci_release"
+	shows current version in cfg file
+	suggests new version
+	accept or enter a new one
+	-> creates branch for the release
+	-> commits trunk, with version 0.0.1 higher
+	-> tells you the checkout command to get a fresh checkout
+	   from the release tag
+
+cd ..
+rm -rf the package (the old trunk)
+
+check out the branch
+	svn checkout ...
+	note the version number of the release
+	cd ...
+
+
+RETURN
+
+
+make the sdist
+--
+
+cd to the checked out branch
+
+run script "make_sdist"
+	creates the sdist
+	installs it to local draft pypi
+		http://ssb.stsci.edu/draft_pypi/
+		/eng/ssb/websites/ssbpublic/draft_pypi/
+
+
+make the binary dists
+--
+
+for each machine we do binary distributions for:
+	rm -rf t
+	mkdir t
+	cd t
+
+	# get the sdist from the draft release local pypi
+	pip install --no-deps --download . -i http://ssb.stsci.edu/draft_pypi/ stsci.samplepackage
+
+	# 
+	tar xf *
+	cd <tab>
+
+	### on windows
+
+	c:
+	cd \mark
+	compiler.bat
+
+	# 
+	python setup.py bdist_egg
+
+	### back on mac
+
+	# copy the egg to the draft pypi server
+	pypi=/eng/ssb/websites/ssbpublic/draft_pypi/
+
+	cp dist/*.egg /eng/ssb/websites/ssbpublic/draft_pypi/.data
+
+	basketweaver2  $pypi
+
+## bug: d2to1 should have separate options for windows and linux
+## not all compilers are gcc
+
+
+install the binary dists
+--
+
+easy_install --update -i http://ssb.stsci.edu/draft_pypi/    name
