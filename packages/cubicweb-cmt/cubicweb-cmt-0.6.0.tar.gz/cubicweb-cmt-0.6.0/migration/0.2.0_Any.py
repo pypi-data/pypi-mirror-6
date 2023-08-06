@@ -1,0 +1,5 @@
+add_cube('cmcicpay')
+add_cube('openidrelay')
+add_relation_definition('ShoppingCart', 'book_conf', 'Conference', ask_confirm=True)
+add_relation_definition('Conference', 'has_shoppingitemtype', 'ShoppingItemType', ask_confirm=True)
+sync_schema_props_perms('quantity')
