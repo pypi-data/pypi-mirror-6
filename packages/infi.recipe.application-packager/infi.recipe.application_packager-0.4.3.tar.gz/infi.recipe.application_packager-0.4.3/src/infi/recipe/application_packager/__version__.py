@@ -1,0 +1,10 @@
+__version__ = "0.4.3"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.4.3)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = '375d614c7b208791dddbf2c4900a30d7531fe3e7'
+__git_head_subject__ = 'Finished release v0.4.3.'
+__git_head_message__ = '* release/v0.4.3:\n  HOSTDEV-1478 fixing previous commit\n  HOSTDEV-1478 rpm.Recipe: handling centos/redhat distribution\n  buildout.cfg: changed isolated python version to v2.7.5.5\n  TRIVIAL gitignore\n  TRIVIAL gitignore\n  TRIVIAL gitignore'
+__git_dirty_diff__ = ''
