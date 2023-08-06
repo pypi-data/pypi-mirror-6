@@ -1,0 +1,366 @@
+Metadata-Version: 1.1
+Name: collective.weather
+Version: 1.0a4
+Summary: A Plone package to display the current weather at selected locations inside a portlet or viewlet.
+Home-page: https://github.com/collective/collective.weather
+Author: OpenMultimedia
+Author-email: contacto@openmultimedia.biz
+License: GPLv2
+Description: ******************
+        collective.weather
+        ******************
+        
+        .. contents:: Table of Contents
+        
+        Life, the Universe, and Everything
+        ----------------------------------
+        
+        A Plone package to display the current weather at selected locations inside a
+        portlet or viewlet.
+        
+        Mostly Harmless
+        ---------------
+        
+        .. image:: https://secure.travis-ci.org/collective/collective.weather.png?branch=master
+            :target: http://travis-ci.org/collective/collective.weather
+        
+        .. image:: https://coveralls.io/repos/collective/collective.weather/badge.png?branch=master
+            :target: https://coveralls.io/r/collective/collective.weather
+        
+        Got an idea? Found a bug? Let us know by `opening a support ticket`_.
+        
+        Don't Panic
+        -----------
+        
+        Installation
+        ^^^^^^^^^^^^
+        
+        To enable this package on a buildout-based installation:
+        
+        #. Edit your buildout.cfg and add ``collective.weather`` to the list of eggs
+           to install::
+        
+            [buildout]
+            ...
+            eggs =
+                collective.weather
+        
+        #. If you are using Plone 4.1, you may need to extend a Dexterity known good
+           set (KGS) to make sure that you get the right versions of the packages that
+           make up Dexterity::
+        
+            [buildout]
+            ...
+            extends =
+                https://good-py.appspot.com/release/dexterity/1.2.1?plone=4.1.6
+        
+        After updating the configuration you need to run ''bin/buildout'', which will
+        take care of updating your system.
+        
+        Go to the 'Site Setup' page in a Plone site and click on the 'Add-ons' link.
+        
+        Check the box next to ''collective.weather'' and click the 'Activate' button.
+        
+        .. Note::
+            You may have to empty your browser cache and save your resource registries
+            in order to see the effects of the product installation.
+        
+        Usage
+        ^^^^^
+        
+        Go to Site Setup and select 'Weather'.
+        
+        Enter the list of locations that are going to be available on the site in the
+        following format::
+        
+            location_id|name
+        
+        Where *location_id* should be a unique value and not repeated among any of the
+        locations; *name* is the name to be shown in the drop down (this doesn't need
+        to be unique). Some examples could be::
+        
+            455827|São Paulo (for Yahoo! Weather)
+            -23.548871,-46.638814|São Paulo (for Forecast.io and Weather Underground)
+        
+        Select the sistem of units: Metric or Imperial. Metric system uses degrees
+        Celsius. Imperial system uses degrees Fahrenheit.
+        
+        Finding locations
+        ^^^^^^^^^^^^^^^^^
+        
+        Different weather service providers need different location ids to get
+        weather conditions.
+        
+        You'll have to change the **Available locations** setting depending on your
+        selection. Please, refer to providers documentation for more information:
+        
+        - `Yahoo Weather`_ needs a `WOEID`_. There's a convenient `online tool to
+          get WOEID`_.
+        - `Forecast.io API`_ just needs a ``latitude, longitude`` coordinate.
+        - `Weather Underground`_ accepts many options (check the ``query`` option).
+        
+        Portlet
+        ^^^^^^^
+        
+        The package includes a portlet that you can add in your site.
+        
+        - Open the 'Manage portlets' screen and select 'Weather portlet'
+        - Set the title of the portlet
+        - Select a city from the list
+        
+        .. image:: https://raw.github.com/collective/collective.weather/master/portlet.png
+            :align: center
+            :alt: The Weather portlet
+        
+        Viewlet
+        ^^^^^^^
+        
+        .. Warning::
+            The weather viewlet, as originaly planned, has proven to be pretty complex
+            to implement. Current implementation is still buggy. Use it at your own
+            risk.
+        
+        The package also includes a viewlet that will display the weather in one of
+        the locations defined in the settings. The viewlet will be displayed on top of
+        the site inside the IPortalHeader viewlet manager.
+        
+        To use the viewlet you need to activate it: go to Site Setup and select
+        'Weather' again. Select the 'Show weather viewlet?' box.
+        
+        The user will be able to select from one of the locations (this information
+        will be stored inside a cookie to show this location the next time the user
+        visits the site).
+        
+        The current weather condition of the selected location will be displayed at
+        the viewlet.
+        
+        .. image:: https://raw.github.com/collective/collective.weather/master/viewlet.png
+            :align: center
+            :alt: The Weather viewlet
+        
+        Internals
+        +++++++++
+        
+        .. Note::
+            This section could be outdated.
+        
+        The weather viewlet uses Javascript in order to change cities, so this will
+        only work for Javascript enabled browsers.
+        
+        To render the city weather, there is a "current-weather" view that will
+        render the latest info it has on weather conditions for a given city.
+        A cookie is used to get the latest chosen city, and you can override it
+        by passing a "city" argument to the view.
+        
+        To update the city weather, there is a "update-weather", that, when called
+        without parameters, it will update all cities from the list.
+        You can pass a "city" argument to the view, to only update the given city.
+        
+        There's an internal cache for each city (30 minutes), that if not enough
+        time has passed, then it will assume the current weather is updated, and
+        it will not do anything.
+        
+        The Javascript that changes the city, will call this "update-weather" for
+        the chosen city to update it first. Thanks to this internal cache, this
+        view will return fast, if not enough time has passed.
+        
+        In order to make it really fast for visitors of your site, you can set-up
+        a clockserver job to call this "update-weather" view with no params, once
+        every 30 minutes, so weather information for all your cities are ready for
+        when the visitor changes it from the drop-down.
+        
+        Extending the package with new weather providers
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        
+        In case you want to contribute with new weather providers for this package or
+        if you want to add a new one in a custom package for your site you'll just
+        need to create a new named utility that should implement
+        ``collective.weather.interfaces.IWeatherInfo``.
+        
+        **Weather** control panel will automatically learn about the new utility and
+        it will be listed as an option in the provider's drop-down.
+        
+        This package already comes with some utilities you can check to get a quick
+        idea of how to create yours:
+        
+        - `yahoo <https://github.com/collective/collective.weather/blob/master/src/collective/weather/utilities/yahoo.py>`_
+        - `forecast.io <https://github.com/collective/collective.weather/blob/master/src/collective/weather/utilities/forecastio.py>`_
+        - `wunderground <https://github.com/collective/collective.weather/blob/master/src/collective/weather/utilities/wunderground.pyweather>`_
+        
+        `The API for this utility`_ is very simple.
+        
+        In case your utility needs `an API key you can pass it on initialization`_.
+        
+        Here's and example you can copy and paste to start your custom utility::
+        
+            """Example of a named utility for IWeatherInfo.
+            """
+            from collective.weather.interfaces import IWeatherInfo
+            from zope.interface import implements
+        
+        
+            class DummyProvider(object):
+                """Dummy weather implementation of IWeatherInfo
+                """
+                implements(IWeatherInfo)
+        
+                def __init__(self, key=None):
+                    self.key = key
+        
+                def getWeatherInfo(self, location, units='metric', lang='en'):
+                    """Dummy implementation of getWeatherInfo as an example
+                    """
+                    return {
+                        'summary': u'What a lovely day!',
+                        'temperature': 20,
+                        'icon': u'lovely-day-icon.png',
+                    }
+        
+        Not entirely unlike
+        -------------------
+        
+        `Weather Forecast`_
+            A very old an unmaintained product, Weather Forecast is a portlet that
+            will display the observation of the weather. Compatible with Plone 2.5.
+        
+        .. _`Forecast.io API`: https://developer.forecast.io/docs/v2
+        .. _`online tool to get WOEID`: http://woeid.rosselliot.co.nz/lookup
+        .. _`opening a support ticket`: https://github.com/collective/collective.weather/issues
+        .. _`Weather Forecast`: http://plone.org/products/ploneweatherforecast
+        .. _`Yahoo Weather`: http://developer.yahoo.com/weather/
+        .. _`Yahoo! Weather`: http://weather.yahoo.com/
+        .. _an API key you can pass it on initialization: https://github.com/collective/collective.weather/blob/master/src/collective/weather/utilities/forecastio.py#L114
+        .. _The API for this utility: https://github.com/collective/collective.weather/blob/master/src/collective/weather/interfaces.py#L21
+        .. _Weather Underground: http://www.wunderground.com/weather/api/d/docs?d=data/index&MR=1
+        .. _WOEID: http://developer.yahoo.com/geo/geoplanet/guide/concepts.html#woeids
+        
+        Share and Enjoy
+        ---------------
+        
+        ``collective.weather`` would not have been possible without the contribution
+        of the following people:
+        
+        - Franco Pellegrini (original author)
+        - Marcos F. Romero
+        - Héctor Velarde
+        - Silvestre Huens
+        - Gonzalo Almeida
+        - `Tango Desktop Project`_ (icon)
+        - `Adam Whitcroft's Climacons`_ (icon set)
+        
+        Development sponsored by `OpenMultimedia`_.
+        
+        .. _`OpenMultimedia`: http://www.openmultimedia.biz/
+        .. _`Tango Desktop Project`: http://tango.freedesktop.org/
+        .. _`Adam Whitcroft's Climacons`: http://adamwhitcroft.com/climacons/
+        
+        Changelog
+        ---------
+        
+        There's a frood who really knows where his towel is.
+        
+        1.0a4 (2014-04-11)
+        ^^^^^^^^^^^^^^^^^^
+        
+        .. Warning::
+            This release includes many changes in the package structure and is not
+            backwards compatible.
+        
+        - Update package documentation.
+          [marcosfromero, hvelarde]
+        
+        - Weather viewlet is disabled as it is too buggy and is causing a lot of
+          weird issues.
+          [hvelarde]
+        
+        - Refactor weather_utility to use location_id as key. (closes `#36`_).
+          [marcosfromero]
+        
+        - Depend on plone.api and remove dependency on pywapi.
+          [hvelarde]
+        
+        - New named utilities for Forecast.io and Weather Underground (closes `#18`_).
+          [marcosfromero]
+        
+        - New API for named utilities and Yahoo! Weather implementation.
+          [marcosfromero]
+        
+        - The weather portlet is now configurable.
+          [marcosfromero]
+        
+        
+        1.0a3 (2013-10-29)
+        ^^^^^^^^^^^^^^^^^^
+        
+        .. Warning::
+            This release includes many changes in the package structure and is not
+            backwards compatible.
+        
+        - Spanish and Brazilian Portuguese translations were updated. [hvelarde]
+        
+        - Package documentation was updated. [hvelarde]
+        
+        - A new option to define whether or not the weather viewlet is visible was
+          added; by default the viewlet is hidden (closes `#14`_). [hvelarde]
+        
+        - Control panel configlet was simplified; now all package settings are defined
+          in one screen (closes `#19`_). [hvelarde]
+        
+        - WeatherUtility is now registered as a global utility as we have no data to
+          persist on it (closes `#7`_). If you're still stock with a
+          ``TypeError: ('object.new(WeatherUtility) is not safe...``
+          error, keep calm an read the section dedicated to **componentregistry.xml**
+          on `How to make your Plone add-on products uninstall cleanly`_. May the
+          Force be with you. [hvelarde]
+        
+        - Add weather portlet that displays weather conditions of current city
+          (closes `#9`_). [marcosfromero]
+        
+        - Remove all Google Weather related code. [marcosfromero]
+        
+        - Weather conditions moved to title tag. [flecox]
+        
+        
+        1.0a2 (2012-09-14)
+        ^^^^^^^^^^^^^^^^^^
+        
+        - Made the code to be more resistent to invalid data from the weather server.
+          [frapell]
+        
+        - Major refactoring to allow updates and city changes through AJAX calls
+          (fixes `#6`_). [frapell]
+        
+        - Implemented Yahoo! Weather. [frapell]
+        
+        
+        1.0a1 (2012-08-01)
+        ^^^^^^^^^^^^^^^^^^
+        
+        - Initial release.
+        
+        .. _`#6`: https://github.com/collective/collective.weather/issues/6
+        .. _`#7`: https://github.com/collective/collective.weather/issues/7
+        .. _`#9`: https://github.com/collective/collective.weather/issues/9
+        .. _`#11`: https://github.com/collective/collective.weather/issues/11
+        .. _`#14`: https://github.com/collective/collective.weather/issues/14
+        .. _`#18`: https://github.com/collective/collective.weather/issues/18
+        .. _`#19`: https://github.com/collective/collective.weather/issues/19
+        .. _`#36`: https://github.com/collective/collective.weather/issues/36
+        .. _`How to make your Plone add-on products uninstall cleanly`: http://blog.keul.it/2013/05/how-to-make-your-plone-add-on-products.html
+        
+Keywords: api google noaa plone weather yahoo
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Web Environment
+Classifier: Framework :: Plone
+Classifier: Framework :: Plone :: 4.1
+Classifier: Framework :: Plone :: 4.2
+Classifier: Framework :: Plone :: 4.3
+Classifier: Intended Audience :: System Administrators
+Classifier: License :: OSI Approved :: GNU General Public License v2 (GPLv2)
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: JavaScript
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
