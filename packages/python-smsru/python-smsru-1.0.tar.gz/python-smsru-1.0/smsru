@@ -1,0 +1,122 @@
+#!/usr/bin/env python
+# encoding=utf-8
+
+import sys
+
+import smsru
+
+
+USAGE = """Command Line Interface for sms.ru
+Usage: {0} balance                  -- show current balance
+       {0} cost number nessage      -- show message cost
+       {0} limit                    -- show remaining daily message limit
+       {0} token                    -- print a token
+       {0} send message numbers...  -- send a message to recipients
+       {0} status msgid...          -- show status of individual messages
+"""
+
+
+class UsageError(RuntimeError):
+    pass
+
+
+def cmd_balance(*args):
+    if args:
+        raise UsageError
+
+    balance = smsru.Client().balance()
+    print "Balance: %.2f RUB" % balance
+    return True
+
+
+def cmd_cost(number=None, message=None, *args):
+    """Display message count and cost."""
+    if number is None or message is None or args:
+        raise UsageError
+
+    res = smsru.Client().cost(number, message.decode("utf-8"))
+    print "Status=%s (%s), cost=%s, length=%s" % res
+
+    return True
+
+
+def cmd_limit(*args):
+    if len(args):
+        raise UsageError
+
+    limit = smsru.Client().limit()
+    print "You can send %u more messages today." % limit
+
+    return True
+
+
+def cmd_token(*args):
+    if len(args):
+        raise UsageError
+
+    token = smsru.Client().token()
+    print token
+
+    return True
+
+
+def cmd_send(message=None, *numbers):
+    if message is None or not numbers:
+        raise UsageError
+
+    res = smsru.Client().send_multiple(
+        message.decode("utf-8"), numbers)
+    return res
+
+
+def cmd_senders(*args):
+    """Show available senders"""
+    if args:
+        raise UsageError
+
+    res = smsru.Client().senders()
+    print "Available senders: %s." % ", ".join(res)
+
+    return True
+
+
+def cmd_status(*msgids):
+    if not msgids:
+        raise UsageError
+
+    cli = smsru.Client()
+    for msgid in msgids:
+        status = cli.status(msgid)
+        print "%s = %s" % (msgid, status)
+
+    return True
+
+
+def main(program, action=None, *args):
+    if action == "balance":
+        return cmd_balance(*args)
+    elif action == "cost":
+        return cmd_cost(*args)
+    elif action == "limit":
+        return cmd_limit(*args)
+    elif action == "token":
+        return cmd_token(*args)
+    elif action == "send":
+        return cmd_send(*args)
+    elif action == "senders":
+        return cmd_senders(*args)
+    elif action == "status":
+        return cmd_status(*args)
+    else:
+        raise UsageError
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(0 if main(*sys.argv) else 1)
+    except UsageError:
+        print >> sys.stderr, USAGE.format(sys.argv[0]).rstrip()
+        sys.exit(1)
+    except smsru.Error, e:
+        print >> sys.stderr, e
+        sys.exit(1)
