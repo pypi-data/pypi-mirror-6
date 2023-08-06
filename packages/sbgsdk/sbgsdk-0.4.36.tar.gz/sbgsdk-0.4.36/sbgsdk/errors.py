@@ -1,0 +1,20 @@
+## Mapping of exceptions to integer error codes.
+## make sure all values are DISTINCT integers in range (32..127]
+
+NOT_A_JOB_ERROR = 33
+
+JOB_ERROR = 34
+
+NO_WRAPPER_ID_ERROR = 36
+
+INPUTS_VALIDATION_ERROR = 37
+
+PARAMS_VALIDATION_ERROR = 38
+
+EXIT_CODE_MAPPING_ERROR = 39
+
+NO_SUCH_METHOD_ERROR = 40
+
+NO_RESOURCES_ERROR = 41
+
+INTERNAL_ERROR = 101
