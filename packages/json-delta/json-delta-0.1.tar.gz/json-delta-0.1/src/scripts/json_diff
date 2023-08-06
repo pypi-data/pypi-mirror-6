@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+import json, sys, argparse, time, os, itertools
+from contextlib import closing
+
+import json_delta
+
+def udiff_headers(left, right):
+    time_format = '%Y-%m-%d %H:%m:%S %Z'
+    if left is None:
+        assert right is sys.stdin
+        for line in ('--- <stdin>[0]', '+++ <stdin>[1]'):
+            yield line
+    else:
+        for flo, sigil in ((left, '---'), (right, '+++')):
+            if hasattr(flo, 'name'):
+                name = flo.name
+                try:
+                    mtime = os.stat(name).st_mtime
+                    dateline = time.strftime(time_format, time.localtime(mtime))
+                except OSError:
+                    dateline = ''
+            else:
+                name = '????'
+            yield '%(sigil)s %(name)s\t%(dateline)s' % locals()
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=
+        '''Produces deltas between JSON-serialized data structures.
+        If no arguments are specified, stdin will be expected to be a
+        JSON structure [left, right], and the output will be written
+        to stdout.
+        ''',
+        )
+    parser.add_argument('left', nargs='?', type=argparse.FileType('r'),
+                        help='Starting point for the comparison.')
+    parser.add_argument(
+        'right', nargs='?', type=argparse.FileType('r'),
+        help='Result for the comparison.  Standard input is the default.',
+        default=sys.stdin
+        )
+    parser.add_argument(
+        '--output', '-o', type=argparse.FileType('w'), metavar='FILE',
+        help='Filename to output the diff to.  Standard output is the default.',
+        default=sys.stdout
+        )
+    parser.add_argument('--verbose', '-v', 
+                        help='Print compression statistics on stderr',
+                        action='store_true')
+    parser.add_argument(
+        '--unified', '-u',
+        help='Outputs a more legible diff, in a format inspired by diff -u',
+        action='store_true'
+        )
+    version = '''%%(prog)s - part of json-delta %s
+Copyright 2012-2014 Philip J. Roberts <himself@phil-roberts.name>. 
+BSD License applies; see http://opensource.org/licenses/BSD-2-Clause
+''' % json_delta.__VERSION__
+    parser.add_argument(
+        '--version', action='version', version=version
+        )
+
+    ns = parser.parse_args()
+    if ns.left is None:
+        assert ns.right is sys.stdin
+        left, right = json.load(sys.stdin)
+    else:
+        with closing(ns.left) as left_f, closing(ns.right) as right_f:
+            left = json.load(left_f)
+            right = json.load(right_f)
+    with closing(ns.output) as out_f:
+        diff = json_delta.diff(left, right)
+        if ns.unified:
+            for line in udiff_headers(ns.left, ns.right):
+                print >> out_f, line
+            for line in json_delta.udiff(left, right, diff, entry=True):
+                print >> out_f, line
+        else:
+            json.dump(diff, out_f, indent=None, separators=(',', ':'))
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())

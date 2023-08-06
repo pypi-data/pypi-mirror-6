@@ -1,0 +1,386 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>JSON-delta: a diff/patch pair for JSON-serialized data structures &mdash; JSON-delta 0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/pyramid.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="JSON-delta 0.1 documentation" href="#" />
+    <link rel="next" title="json_delta.py" href="json_delta.html" />
+<link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Neuton&amp;subset=latin" type="text/css" media="screen" charset="utf-8" />
+<link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Nobile:regular,italic,bold,bolditalic&amp;subset=latin" type="text/css" media="screen" charset="utf-8" />
+<!--[if lte IE 6]>
+<link rel="stylesheet" href="_static/ie6.css" type="text/css" media="screen" charset="utf-8" />
+<![endif]-->
+
+  </head>
+  <body>
+
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="json_delta.html" title="json_delta.py"
+             accesskey="N">next</a> |</li>
+        <li><a href="#">JSON-delta 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="json-delta-a-diff-patch-pair-for-json-serialized-data-structures">
+<h1>JSON-delta: a diff/patch pair for JSON-serialized data structures<a class="headerlink" href="#json-delta-a-diff-patch-pair-for-json-serialized-data-structures" title="Permalink to this headline">¶</a></h1>
+<p>JSON-delta is a multi-language software suite for computing deltas
+between JSON-serialized data structures, and applying those deltas as
+patches.  It enables separate programs at either end of a
+communications channel (e.g. client and server over HTTP, or two
+processes talking to one another using bidirectional IPC) to
+manipulate a data structure while minimizing communications overhead.</p>
+<div class="section" id="by-example">
+<h2>By example:<a class="headerlink" href="#by-example" title="Permalink to this headline">¶</a></h2>
+<p>Consider the example JSON-LD entry for John Lennon
+from <a class="reference external" href="http://json-ld.org/">http://json-ld.org/</a>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">{</span>
+ <span class="s">&quot;@context&quot;</span><span class="p">:</span> <span class="s">&quot;http://json-ld.org/contexts/person.jsonld&quot;</span><span class="p">,</span>
+ <span class="s">&quot;@id&quot;</span><span class="p">:</span> <span class="s">&quot;http://dbpedia.org/resource/John_Lennon&quot;</span><span class="p">,</span>
+ <span class="s">&quot;name&quot;</span><span class="p">:</span> <span class="s">&quot;John Lennon&quot;</span><span class="p">,</span>
+ <span class="s">&quot;born&quot;</span><span class="p">:</span> <span class="s">&quot;1940-10-09&quot;</span><span class="p">,</span>
+ <span class="s">&quot;spouse&quot;</span><span class="p">:</span> <span class="s">&quot;http://dbpedia.org/resource/Cynthia_Lennon&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Suppose we have a piece of software that updates this record to
+show his date of death, like so:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">{</span>
+ <span class="s">&quot;@context&quot;</span><span class="p">:</span> <span class="s">&quot;http://json-ld.org/contexts/person.jsonld&quot;</span><span class="p">,</span>
+ <span class="s">&quot;@id&quot;</span><span class="p">:</span> <span class="s">&quot;http://dbpedia.org/resource/John_Lennon&quot;</span><span class="p">,</span>
+ <span class="s">&quot;name&quot;</span><span class="p">:</span> <span class="s">&quot;John Lennon&quot;</span><span class="p">,</span>
+ <span class="s">&quot;born&quot;</span><span class="p">:</span> <span class="s">&quot;1940-10-09&quot;</span><span class="p">,</span>
+
+ <span class="s">&quot;died&quot;</span><span class="p">:</span> <span class="s">&quot;1980-12-07&quot;</span><span class="p">,</span>
+
+ <span class="s">&quot;spouse&quot;</span><span class="p">:</span> <span class="s">&quot;http://dbpedia.org/resource/Cynthia_Lennon&quot;</span>
+ <span class="p">}</span>
+</pre></div>
+</div>
+<p>Further suppose that we wish to communicate this update to another
+piece of software whose only job is to store information about John
+Lennon in JSON-LD format.  (Yes, I know this is getting unlikely, but
+stay with me.)  If this Lennon-record-keeper accepts updates in
+json-delta format, all you have to do is send the following over the
+wire:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">[[[</span><span class="s">&quot;died&quot;</span><span class="p">],</span> <span class="s">&quot;1980-12-07&quot;</span><span class="p">]]</span>
+</pre></div>
+</div>
+<p>This is a complete diff in json-delta format.  It is itself a
+JSON-serializable data structure: specifically, it is a sequence of
+what I refer to as <strong>diff stanzas</strong> for some reason.  The
+format for a diff stanza is <tt class="docutils literal"><span class="pre">[&lt;key</span> <span class="pre">path&gt;,</span> <span class="pre">(&lt;update&gt;)]</span></tt> (The
+parentheses mean that the <tt class="docutils literal"><span class="pre">&lt;update&gt;</span></tt> part is optional.  I&#8217;ll get
+to that in a minute).  A key path is a sequence of keys specifying
+where in the data structure the node you want to alter is found, much
+like those emitted by <a class="reference external" href="https://github.com/dominictarr/JSON.sh">JSON.sh</a>.  The stanza may be thought of as an
+instruction to update the node found at that path so that its content
+is equal to <tt class="docutils literal"><span class="pre">&lt;update&gt;</span></tt>.</p>
+<p>Now, let&#8217;s do some more supposing.  Suppose the software we&#8217;re
+communicating with is dedicated to storing information about the
+Beatles in general.  Also, suppose we&#8217;ve remembered that it was
+actually on the 8th of December 1980 that John Lennon died, not the
+7th.  Finally, suppose we live in an Orwellian dystopia, and Cynthia
+Lennon has been declared a non-person who must be expunged from all
+records.  Unfortunately, json-delta is incapable of overthrowing
+corrupt and despotic governments, so let&#8217;s make one last supposition,
+that what we&#8217;re interested in is updating the record kept by the
+software on the other end of the wire, which looks like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">[</span>
+ <span class="p">{</span>
+  <span class="s">&quot;@context&quot;</span><span class="p">:</span> <span class="s">&quot;http://json-ld.org/contexts/person.jsonld&quot;</span><span class="p">,</span>
+  <span class="s">&quot;@id&quot;</span><span class="p">:</span> <span class="s">&quot;http://dbpedia.org/resource/John_Lennon&quot;</span><span class="p">,</span>
+  <span class="s">&quot;name&quot;</span><span class="p">:</span> <span class="s">&quot;John Lennon&quot;</span><span class="p">,</span>
+  <span class="s">&quot;born&quot;</span><span class="p">:</span> <span class="s">&quot;1940-10-09&quot;</span><span class="p">,</span>
+
+  <span class="s">&quot;died&quot;</span><span class="p">:</span> <span class="s">&quot;1980-12-07&quot;</span><span class="p">,</span>
+
+  <span class="s">&quot;spouse&quot;</span><span class="p">:</span> <span class="s">&quot;http://dbpedia.org/resource/Cynthia_Lennon&quot;</span>
+ <span class="p">},</span>
+ <span class="p">{</span><span class="s">&quot;name&quot;</span><span class="p">:</span> <span class="s">&quot;Paul McCartney&quot;</span><span class="p">},</span>
+ <span class="p">{</span><span class="s">&quot;name&quot;</span><span class="p">:</span> <span class="s">&quot;George Harrison&quot;</span><span class="p">},</span>
+ <span class="p">{</span><span class="s">&quot;name&quot;</span><span class="p">:</span> <span class="s">&quot;Ringo Starr&quot;</span><span class="p">}</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>(Allegations of bias in favor of specific Beatles on the part of
+the maintainer of this record are punished by the aforementioned
+despotic government.  <a class="reference external" href="http://papersplea.se/">All glory to
+Arstotzka!</a>)</p>
+<p>To make the changes we’ve decided on (correcting John&#8217;s date of death,
+and expunging Cynthia Lennon from the record), we need to send the
+following sequence:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">[</span>
+ <span class="p">[[</span><span class="mi">0</span><span class="p">,</span> <span class="s">&quot;died&quot;</span><span class="p">],</span> <span class="s">&quot;1980-12-08&quot;</span><span class="p">],</span>
+ <span class="p">[[</span><span class="mi">0</span><span class="p">,</span> <span class="s">&quot;spouse&quot;</span><span class="p">]]</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>Now, of course, you see what I meant when I said I’d tell you why
+<tt class="docutils literal"><span class="pre">&lt;update&gt;</span></tt> is optional later.  If a stanza includes no update material,
+it is interpreted as an instruction to delete the node the key-path
+points to.</p>
+<p>Note also that there is no difference between a stanza that adds a
+node, and one that changes one.</p>
+<p>The intention is to save as much communications bandwidth as possible
+without sacrificing the ability to communicate arbitrary modifications
+to the data structure (this format can be used to describe a change
+from any JSON-serialized object into any other).  The worst-case
+scenario, where there is no commonality between the two structures, is
+that the protocol adds seven octets of overhead, because a diff can
+always be expressed as <tt class="docutils literal"><span class="pre">[[[],&lt;target&gt;]]</span></tt>, meaning “substitute
+<tt class="docutils literal"><span class="pre">&lt;target&gt;</span></tt> for the data structure that is to be modified”.</p>
+</div>
+<div class="section" id="implementations">
+<h2>Implementations<a class="headerlink" href="#implementations" title="Permalink to this headline">¶</a></h2>
+<p>JSON-delta is my language learning project: whenever I decide to learn
+a new programming language, I do so by implementing JSON-delta in it.
+As such, there are five implementations, of varying degrees of
+fullness, available:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="23%" />
+<col width="21%" />
+<col width="9%" />
+<col width="16%" />
+<col width="16%" />
+<col width="14%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Language</th>
+<th class="head">Patch</th>
+<th class="head">Diff</th>
+<th class="head">Compact</th>
+<th class="head">U-patch</th>
+<th class="head">U-diff</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>Python 2</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+</tr>
+<tr class="row-odd"><td>Python 3</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+</tr>
+<tr class="row-even"><td>Javascript</td>
+<td>✓</td>
+<td>✓</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr class="row-odd"><td>Racket</td>
+<td>✓</td>
+<td>✓</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr class="row-even"><td>Perl</td>
+<td>(sort of)</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+</tbody>
+</table>
+<p>As you may be able to guess, I’m most comfortable programming in
+Python… Anyway, here’s what those enigmatic column headers mean:</p>
+<dl class="docutils">
+<dt>Patch</dt>
+<dd>The implementation can manipulate data structures according to
+a diff in the format specified above.</dd>
+<dt>Diff</dt>
+<dd>The implementation can calculate deltas between two data
+structures in the format specified above.</dd>
+<dt>Compact</dt>
+<dd>Diffs produced by the implementation are as small as I can
+possibly make them, using Needleman-Wunsch sequence alignment to
+optimize stanzas modifying JSON arrays.</dd>
+<dt>U-diff</dt>
+<dd>The implementation is capable of emitting diffs in a format
+reminiscent of the output of <tt class="docutils literal"><span class="pre">diff</span> <span class="pre">-u</span></tt>, which is designed to be
+more human-readable than the JSON format, to facilitate debugging.</dd>
+<dt>U-diff</dt>
+<dd>The implementation can apply U-format patches.</dd>
+</dl>
+<hr class="docutils" />
+<p>I initially developed JSON-delta to work with a <a class="reference external" href="https://www.djangoproject.com/">Django</a> web-app, allowing client-side
+Javascript to manipulate a data structure exposed by the server, so
+the Javascript and Python implementations are the most robust.</p>
+<p>Development of the Perl version stalled when I discovered that, due to
+Perl not having as ramified a type ontology as Javascript, <a class="reference external" href="http://search.cpan.org/~makamaka/JSON-2.53/lib/JSON.pm#MAPPING">numeric
+values do not round-trip cleanly</a>.
+This meant that there was nothing I could do to make my test suite
+pass.  This made me sad.</p>
+</div>
+<div class="section" id="downloads">
+<h2>Downloads<a class="headerlink" href="#downloads" title="Permalink to this headline">¶</a></h2>
+<p>The <a class="reference external" href="https://pypi.python.org/pypi/json-delta/">Python implementation</a> (compatible with version
+2.7 and later, including 3) are available from PyPI.</p>
+<p>You can download the Javascript versions here (
+<a class="reference external" href="http://phil-roberts.name/json_delta/json_delta_0.1.js">full</a>,
+<a class="reference external" href="http://phil-roberts.name/json_delta/json_delta_minified_0.1.js">minified</a>)</p>
+<p>(Please, for the sake of my bandwidth bills, serve your own copy
+rather than hot-linking mine!)</p>
+<p>The racket and perl implementations are very alpha (remember, they
+were written by a beginner!)  If you want to check them out, I
+recommend looking at the source repo (no pun intended.): development
+of json-delta takes place against <a class="reference external" href="https://pikacode.com/phijaro/json_delta/">a master repository</a> containing all
+implementations.</p>
+</div>
+</div>
+<div class="section" id="further-reading">
+<h1>Further Reading<a class="headerlink" href="#further-reading" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="json_delta.html">json_delta.py</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="json_delta.html#main-entry-points">Main entry points</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_delta.html#utility-functions">Utility functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_delta.html#functions-for-computing-normal-diffs">Functions for computing normal diffs.</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_delta.html#functions-for-applying-normal-patches">Functions for applying normal patches</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_delta.html#functions-for-computing-udiffs">Functions for computing udiffs.</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_delta.html#functions-for-applying-udiffs-as-patches">Functions for applying udiffs as patches.</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_delta.html#basic-script-functionality">Basic script functionality</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="json_diff.1.html">json_diff</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="json_diff.1.html#synopsis">Synopsis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_diff.1.html#description">Description</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_diff.1.html#options">Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_diff.1.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="json_patch.1.html">json_patch</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="json_patch.1.html#synopsis">Synopsis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_patch.1.html#description">Description</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_patch.1.html#options">Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_patch.1.html#udiff-format">Udiff Format</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="json_cat.1.html">json_cat</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="json_cat.1.html#synopsis">Synopsis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_cat.1.html#description">Description</a></li>
+<li class="toctree-l2"><a class="reference internal" href="json_cat.1.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">Licenses</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="license.html#source">Source</a></li>
+<li class="toctree-l2"><a class="reference internal" href="license.html#this-documentation">This documentation</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><em>Index</em></a></li>
+<li><a class="reference internal" href="search.html"><em>Search Page</em></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">JSON-delta: a diff/patch pair for JSON-serialized data structures</a><ul>
+<li><a class="reference internal" href="#by-example">By example:</a></li>
+<li><a class="reference internal" href="#implementations">Implementations</a></li>
+<li><a class="reference internal" href="#downloads">Downloads</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#further-reading">Further Reading</a><ul>
+</ul>
+</li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+
+  <h4>Next topic</h4>
+  <p class="topless"><a href="json_delta.html"
+                        title="next chapter">json_delta.py</a></p>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="json_delta.html" title="json_delta.py"
+             >next</a> |</li>
+        <li><a href="#">JSON-delta 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Philip J. Roberts.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
