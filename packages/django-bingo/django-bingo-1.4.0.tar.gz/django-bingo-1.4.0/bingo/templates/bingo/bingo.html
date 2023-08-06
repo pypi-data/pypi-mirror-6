@@ -1,0 +1,128 @@
+{% extends 'bingo/base.html' %}
+{% load i18n %}
+{% load staticfiles %}
+{% block title %}{% trans "Board" %} #{{ board.board_id }}{% endblock %}
+{% block extra_style %}
+    {{ block.super }}
+    td.bingofield.active, li.word.active {
+        background-color: {{ board.color }};
+    }
+{% endblock %}
+{% block extra_head %}
+{{ block.super }}
+<script>
+var vote_url = "{% url 'bingo.views.vote' ajax=False %}";
+var ajax_vote_url = "{% url 'bingo.views.vote' ajax=True %}";
+var bingo_board = "{{ board.id }}";
+var my_board = "{{ my_board.id }}";
+</script>
+{% if not board.game.is_expired %}
+<script src="{% static 'bingo/js/bingo.js' %}"></script>
+{% endif %}
+{% endblock %}
+
+{% block headline %}{% trans "Board" %} #{{ board.board_id }}{% endblock %}
+
+{% block content %}
+{% trans "Images:" %}
+<a href="{% url 'bingo.views.image' board_id=board.board_id %}">{% trans "empty" %}</a>
+<a href="{% url 'bingo.views.image' marked=True board_id=board.board_id %}">{% trans "marked" %}</a>
+<a href="{% url 'bingo.views.image' voted=True board_id=board.board_id %}">{% trans "voted" %}</a>
+
+<p></p>
+
+<table id="num_users_table">
+    {% if board.game.is_expired %}
+    <tr>
+        <th>{% trans 'Created:' %}</th>
+        <td id="created">{{ board.created}}</td>
+    </tr>
+    <tr>
+        <th>{% trans 'Last Used:' %}</th>
+        <td id="last_used">{{ board.last_used }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+        <th>{% trans 'Total Users:' %}</th>
+        <td id="num_users">{{ board.game.num_users }}</td>
+    </tr>
+    {% if not board.game.is_expired %}
+    <tr>
+        <th>{% trans 'Active Users:' %}</th>
+        <td id="num_active_users">{{ board.game.num_active_users }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+        {% if board.game.is_expired %}
+            <th style="vertical-align: top">{% trans 'Show Rating:' %}</th>
+        {% else %}
+            <th style="vertical-align: top">{% trans 'Rate the Show:' %}</th>
+        {% endif %}
+        <td>
+            <span class="ratings">
+            {% for star in "12345" %}
+            <span class="rating" data-rating="{{ star }}" data-active="{% if board.rating >= star|add:0 %}true{% else%}false{% endif %}">
+                {% if board.rating >= star|add:0 %}
+                    &#9733;
+                {% else %}
+                    &#9734;
+                {% endif %}
+            </span>
+            {% endfor %}
+            {% if my_board == board %}
+            <span class="clearrating" data-rating="None" style="display: none">
+                &#10007;
+            </span>
+            {% endif %}
+            </span>
+            {% if my_board == board %}
+            <form action="{% url "bingo.views.rate_game" %}" method="post" id="rate_form">
+                {% csrf_token %}
+                {{ rate_form.rating }}
+                <input type="submit" value="rate" />
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+</table>
+
+<table class="bingoboard" id="bingoboard">
+    <tr>
+    {% for field in fields_on_board %}
+    <td class="bingofield{% if field.is_middle %} middle{% endif %}{% if field.vote == True %} active{% elif field.vote == False %} veto{% endif %}" data-field-id="{{ field.id }}">
+        {% if not field.is_middle %}{% include 'bingo/vote_form.html' %}{% endif %}
+        <div class="bingofield{% if field.is_middle %} middle{% endif %}"{% if field.word.description %} title="{{ field.word.description }}"{% endif %}>
+            {% comment %} for vertical alignment with the middle field, which has 3 lines {% endcomment %}
+            {% if 11 <= field.position and not field.is_middle and field.position <= 15 %}
+                <br />
+            {% endif %}
+        {{ field.word.word }}
+        {% if field.is_middle %}
+            <br />
+            {{ field.board.get_created }}<br />
+            Bingo #{{ board.board_id }}
+        {% else %}
+            (<span class="votes">{{ field.num_votes }}</span>)
+        {% endif %}
+        </div>
+    </td>
+    {% if forloop.last%}
+    </tr>
+    {% elif forloop.counter|divisibleby:5 %}
+    </tr>
+    <tr>
+    {% endif %}
+    {% endfor %}
+</table>
+
+<ul class="words">
+    {% for field in all_word_fields %}
+    <li class="word{% if field.vote == True %} active{% elif field.vote == False %} veto{% endif %}" data-field-id="{{ field.id }}"{% if field.word.description %} title="{{ field.word.description }}"{% endif %}>
+        <div class="word">
+            {{ field.word.word }} (<span class="votes">{{ field.num_votes }}</span>)
+        </div>
+        {% include 'bingo/vote_form.html' %}
+    </li>
+    {% endfor %}
+</ul>
+{% endblock %}
