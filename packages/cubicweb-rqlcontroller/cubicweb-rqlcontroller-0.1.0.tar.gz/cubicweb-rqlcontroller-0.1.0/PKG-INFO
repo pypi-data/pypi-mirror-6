@@ -1,0 +1,71 @@
+Metadata-Version: 1.0
+Name: cubicweb-rqlcontroller
+Version: 0.1.0
+Summary: restfull rql edition capabilities
+Home-page: http://www.cubicweb.org/project/cubicweb-rqlcontroller
+Author: LOGILAB S.A. (Paris, FRANCE)
+Author-email: contact@logilab.fr
+License: LGPL
+Description: Summary
+        -------
+        
+        Controller that gives users rql read/ write capabilities.
+        
+        
+        Sample usage
+        ------------
+        
+        Users of this service must perform a HTTP POST request to its endpoint,
+        that is the base url of the CubicWeb application instance appended with
+        the "rqlio/1.0" url path.
+        
+        The posted data must use the application/json MIME type, and contain a list of
+        pairs of the form `(rql_string, rql_arguments)`, where:
+        
+        * `rql_string` is any valid RQL query that may contain mapping keys with
+          their usual form
+        
+        * `rql_args` is a dictionary, whose keys are the mapping keys from
+          `rql_string`, and the values can be:
+        
+          - actual values
+        
+          - string references to a previous RQL query's result, with the
+            assumption that the referenced RQL query returns a single line and
+            single column rset; under such conditions, a string reference
+            must be "__rXXX" where `XXX` is the (0-based) index of the RQL query in
+            the json-encoded list of queries.
+        
+        The HTTP request's response (in case where there is no error), is a
+        json-encoded list.  Its length is the number of RQL queries in the request,
+        and each element contains the json-encoded result set rows from the
+        corresponding query.
+        
+        In case of an error, a json object with a `reason` key will explain the
+        problem.
+        
+        Python client example using python-requests::
+        
+            import requests
+            import json
+        
+            arg = [('INSERT CWUser U: U login %(l)s, U upassword %(p)s',
+                    {'l': 'Babar', 'p': 'cubicweb rulez & 42'}),
+        
+                   ('INSERT CWGroup G: G name "pachyderms"', {}),
+        
+                   ('SET U in_group G WHERE U eid %(u)s, G eid %(g)s',
+                    {'u': '__r0', 'g': '__r1'})
+                   ]
+        
+            resp = requests.post('https://myinstance.example.com/rqlio/1.0'),
+                                 data=json.dumps(args),
+                                 headers={'Content-Type': 'application/json'})
+            assert resp.status_code == 200
+        
+        
+Platform: UNKNOWN
+Classifier: Environment :: Web Environment
+Classifier: Framework :: CubicWeb
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: JavaScript
