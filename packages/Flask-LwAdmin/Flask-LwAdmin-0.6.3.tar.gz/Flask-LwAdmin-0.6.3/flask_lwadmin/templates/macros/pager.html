@@ -1,0 +1,90 @@
+{% import 'macros/actions.html' as actions_macros %}
+{% import 'macros/batch_actions.html' as batch_actions_macros %}
+
+{% macro get_list_page(configuration, pager) -%}
+{% if pager.get_nb_results() == 0 or pager.get_results() == None %}
+<p>{{ gettext('No result') }}</p>
+{% else %}
+{{ get_table(pager) }}
+{% if pager.have_to_paginate() %}{% set list_action_el =pager.get_list_action() %}{{ get_pager(pager=pager, page=page, url=list_action_el['url']) }}{% endif %}
+{% if pager.is_batch() %}{{ batch_actions_macros.batch_script(id='lw_admin_list_batch_checkbox', class='lw_admin_batch_checkbox') }}{%  endif %}
+{% endif %}
+{%- endmacro %}
+
+{% macro get_table(pager) -%}
+{% set pk = pager.get_pk() %}
+{% set elements = pager.get_list_display() %}
+{% set cols = elements|count + 2 if pager.is_batch() else elements|count + 1 %}
+<table class="table table-hover table-striped table-active">
+    <thead>
+    <tr>
+        {% if pager.is_batch() %}{{ batch_actions_macros.batch_head_row(id='lw_admin_list_batch_checkbox') }}{% endif %}
+        {% for element in elements %}
+        <th>{% if element['icon']  %}<i class="{{ element['icon'] }}"></i>{% if not element['only_icon'] %}&nbsp;{% endif %}{% endif %}{% if element['label'] and not element['only_icon'] %}{{ element['label'] }}{% endif %}</th>
+        {% endfor %}
+        {% if pager.is_list_object_actions() %}<th><i class="icon-cogs"></i> Actions</th>{% endif %}
+    </tr>
+    </thead>
+    <tfoot>
+    <tr>
+        <th colspan="{{ cols }}">{{ get_footer(pager) }}</th>
+    </tr>
+    </tfoot>
+    <tbody>
+    {% for item in pager.get_results() %}
+    <tr>
+        {% if pager.is_batch() %}
+        {{ batch_actions_macros.batch_body_row(class='lw_admin_batch_checkbox', value=item[pk])}}
+        {% endif %}
+        {% for element in elements %}
+        <td>{% if element['type'] == 'bool' %}{% if item[element['key']] == True or item[element['key']] == 1 %}<i class="icon-check"></i>{% else %}<i class="icon-minus"></i>{% endif %}{% else %}{{ item[element['key']] }}{% endif %}</td>
+        {% endfor %}
+        {% if pager.is_list_object_actions() %}
+        <td>
+            <div class="btn-group pull-right">
+                {% for action_element in pager.get_list_object_actions(item) %}
+                    {% if action_element['visable'] == True %}
+                        {% if action_element['confirm'] == True %}
+                            {{ actions_macros.confirm_action(action_element=action_element) }}
+                        {% else %}
+                            {{ actions_macros.action(action_element=action_element) }}
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </td>
+        {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{%- endmacro %}
+
+{% macro get_pager(pager, page, url) -%}
+<div class="pagination pagination-centered">
+    <ul>
+        <li><a href="{{ url }}?page=1" title="{{ gettext('First page') }}"><i class="icon-fast-backward"></i></a></li>
+        <li><a href="{{ url }}?page={{ pager.get_previous_page() }}" title="{{ gettext('Previous page') }}"><i class="icon-backward"></i></a></li>
+        {% for page in pager.get_links() %}
+            {% if page == pager.get_page() %}
+        <li class="active disabled"><a href="#">{{ page }}</a></li>
+            {% else %}
+        <li><a href="{{ url }}?page={{ page }}">{{ page }}</a></li>
+            {% endif %}
+        {% endfor %}
+        <li><a href="{{ url }}?page={{ pager.get_next_page() }}" title="{{ gettext('Next page') }}"><i class="icon-forward"></i></a></li>
+        <li><a href="{{ url }}?page={{ pager.get_last_page() }}" title="{{ gettext('Last page') }}"><i class="icon-fast-forward"></i></a></li>
+    </ul>
+</div>
+{%- endmacro %}
+
+{% macro get_footer(pager) -%}
+{% if pager.get_nb_results() == 0 %}
+{{ gettext('no result') }}
+{% else %}
+{{ ngettext('result: %(num)d', 'results: %(num)d', pager.get_nb_results())|format(num=pager.get_nb_results()) }}
+{% endif %}
+{% if pager.have_to_paginate() %}
+    {{ gettext('page %(page)s/%(nb_pages)s', page=pager.get_page(), nb_pages=pager.get_last_page()) }}
+{% endif %}
+{%- endmacro %}
