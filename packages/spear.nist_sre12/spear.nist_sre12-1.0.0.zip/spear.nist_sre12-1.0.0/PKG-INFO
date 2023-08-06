@@ -1,0 +1,176 @@
+Metadata-Version: 1.1
+Name: spear.nist_sre12
+Version: 1.0.0
+Summary: Speaker recognition toolchain for NIST SRE 2012
+Home-page: http://pypi.python.org/pypi/spear.nist_sre12
+Author: Elie Khoury
+Author-email: Elie.Khoury@idiap.ch
+License: GPLv3
+Description: Toolchain for speaker recognition evaluation on NIST SRE 2012
+        =============================================================
+        
+        This package contains scripts that show how to use Idiap speaker recognition tool
+        to reproduce Idiap results for NIST SRE 2012.
+        
+        If you use this package and/or its results, please cite the following
+        publications:
+        
+        1. The Spear paper published at ICASSP 2014::
+        
+            @inproceedings{spear,
+              author = {Khoury, E. and El Shafey, L. and Marcel, S.},
+              title = {Spear: An open source toolbox for speaker recognition based on {B}ob},
+              booktitle = {IEEE Intl. Conf. on Acoustics, Speech and Signal Processing (ICASSP)},
+              year = {2014},
+            }
+        
+        
+        2. The paper that describes the development set used by the I4U consortium::
+        
+            @inproceedings{Saedi_INTERSPEECH_2013,
+               author = {Saeidi, Rahim and others},
+               month = {aug},
+               title = {I4U Submission to NIST SRE 2012: a large-scale collaborative effort for noise-robust speaker verification},
+               booktitle = {INTERSPEECH},
+               year = {2013},
+               location = {Lyon, France},
+               pdf = {http://publications.idiap.ch/downloads/papers/2013/Saedi_INTERSPEECH_2013.pdf}
+            }
+        
+            
+        3. Bob as the core framework used to run the experiments::
+        
+            @inproceedings{Anjos_ACMMM_2012,
+              author = {A. Anjos and L. El Shafey and R. Wallace and M. G\"unther and C. McCool and S. Marcel},
+              title = {Bob: a free signal processing and machine learning toolbox for researchers},
+              year = {2012},
+              month = oct,
+              booktitle = {20th ACM Conference on Multimedia Systems (ACMMM), Nara, Japan},
+              publisher = {ACM Press},
+              url = {http://publications.idiap.ch/downloads/papers/2012/Anjos_Bob_ACMMM12.pdf},
+            }
+        
+        
+        
+        Installation
+        ------------
+        
+        Just download this package and decompress it locally::
+        
+          $ wget http://pypi.python.org/packages/source/x/spear.nist_sre12/spear.nist_sre12-1.0.0.zip
+          $ unzip spear.nist_sre12-1.0.0.zip
+          $ cd spear.nist_sre12-1.0.0.zip
+        
+        Use buildout to bootstrap and have a working environment ready for
+        experiments::
+        
+          $ python bootstrap
+          $ ./bin/buildout
+        
+        This also requires that bob (>= 1.2.0) is installed.
+        
+        
+        Reproducing NIST-SRE 2012 experiments
+        -------------------------------------
+        
+        Getting the data
+        ~~~~~~~~~~~~~~~~
+        
+        You first need to order the NIST SRE databases (Fisher, Switchboard, MIXER)::
+        
+          http://www.ldc.upenn.edu/Catalog/CatalogEntry.jsp?catalogId=LDC2013S03
+        
+        Please follow the instructions and the evaluation plan given by NIST::
+        
+          http://www.nist.gov/itl/iad/mig/sre12.cfm
+        
+        Getting the file lists
+        ~~~~~~~~~~~~~~~~~~~~~~
+        
+        The file lists of the development and evaluation sets are automatically downloaded from this pypi package::
+        
+          https://pypi.python.org/pypi/xbob.db.nist_sre12
+          
+        The file list of the development set were prepared by the I4U consortium. Special thanks to Rahim Saeidi for the good work (original link of the lists: http://cls.ru.nl/~saeidi/file_library/I4U.tgz). The file names were then normalized following the PRISM definition. Please follow the instructions in `xbob.db.nist_sre12`_
+        
+        Setting the database configuration file
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        
+        Once the sphere data are preprocessed, and possibly downsampled to 8KHz, you should set the paths in the configuration file to the data according to your own environment for both **Male** and **Female**::
+        
+          - config/database/nist_sre12/male.py
+          - config/database/nist_sre12/female.py
+        
+        
+        Running the experiments
+        ~~~~~~~~~~~~~~~~~~~~~~~
+        
+        The following command is intended to run the entire experiment on both the development and the evaluation sets using ISV (Inter-Session Variability Modeling) and for both Male and Female::
+        
+          $  bin/spkverif_isv.py -d config/database/nist_sre12/male.py -T PATH/TO/TEMP_DIR/  -U PATH/TO/RESULTS_DIR/ -p config/preprocessing/energy.py -f config/features/mfcc_60.py -t config/tools/isv/isv_512g_u200.py -b male
+        
+          $  bin/spkverif_isv.py -d config/database/nist_sre12/female.py -T PATH/TO/TEMP_DIR/  -U PATH/TO/RESULTS_DIR/ -p config/preprocessing/energy.py -f config/features/mfcc_60.py -t config/tools/isv/isv_512g_u200.py -b female
+          
+        For more details and options, please type::
+        
+          $ bin/spkverif_isv.py --help
+        
+        You may want to change the parameters in the configuration files for VAD (Energy, 4Hz Modulation energy), Features (MFCC, LFCC), and Tools (UBM-GMM, ISV, I-Vector). Please look to the different configuration settings in::
+        
+          - src/spkrec/config/
+          
+        Running on the grid
+        ~~~~~~~~~~~~~~~~~~~
+        
+        In order to run the experiment on the grid, you need to have gridtk installed on your local network. Details can be found here::
+        
+          https://pypi.python.org/pypi/gridtk
+        
+        
+        Evaluation on the Development set
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        
+        The EER on the Development sets can be obtained using the evaluation script from the bob library.
+        
+        For Male, without any score normalization::
+        
+          $ ./bin/bob_compute_perf.py -d PATH/TO/RESULTS_DIR/male/scores/nonorm/scores-dev -t PATH/TO/RESULTS_DIR/male/scores/nonorm/scores-dev -x
+        
+        * ``EER = 4.68%``
+          
+        For Male, with ZT score normalization::
+        
+          $ ./bin/bob_compute_perf.py -d PATH/TO/RESULTS_DIR/male/scores/ztnorm/scores-dev -t PATH/TO/RESULTS_DIR/male/scores/ztnorm/scores-dev -x
+        
+        * ``EER = 3.98%``
+        
+        For Female, without any score normalization::
+        
+          $ ./bin/bob_compute_perf.py -d PATH/TO/RESULTS_DIR/female/scores/nonorm/scores-dev -t PATH/TO/RESULTS_DIR/female/scores/nonorm/scores-dev -x
+        
+        * ``EER = 6.28%``  
+        
+        For Female, with ZT score normalization::
+        
+          $ ./bin/bob_compute_perf.py -d PATH/TO/RESULTS_DIR/female/scores/ztnorm/scores-dev -t PATH/TO/RESULTS_DIR/female/scores/ztnorm/scores-dev -x
+        
+        * ``EER = 5.16%``  
+        
+        Notice that there are different implementations for EER. For example, the default one in Bob is different from the implementation in Bosaris.
+        
+        Please check the NIST evaluation guidlines to see how to evaluate on SRE 2012 Evaluation set. 
+        Further, the simple scores should be converted to compound scores. Please find more details given by Niko Brummer on the webpage of Bosaris toolkit::
+        
+          https://sites.google.com/site/bosaristoolkit/sre12
+        
+        .. _xbob.db.nist_sre12: https://pypi.python.org/pypi/xbob.db.nist_sre12
+        
+Keywords: bob,xbob,xbob.db,speaker recognition
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
