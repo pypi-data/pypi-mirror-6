@@ -1,0 +1,48 @@
+{% extends "djhcup_staging_object_detail.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block details %}
+
+<h1>Batch {{ batch.id }}</h1>
+
+<h2 class="batch_status_{{ batch.status }}">Status: {{ batch.status|capfirst }}</h2>
+
+<ul>
+    <li>Destination: {{ batch.destination }}</li>
+    <li>Associated DataSource definition: <a href="{{ batch.destination.source.get_absolute_url }}">{{ batch.destination.source }}</a></li>
+    {% if eta %}
+    <li>Estimated runtime: {{ eta|floatformat:1 }} hours</li>
+    {% endif %}
+    {% if batch.start %}
+    <li>Started: {{ batch.hr_start }}</li>
+    {% else %}
+    <li><a href="{% url 'djhcup_staging.views.batch_import' batch_id=batch.id %}">Start processing this batch</a></li>
+    {% endif %}
+    {% if batch.complete %}
+    <li>Completed: {{ batch.hr_complete }}</li>
+    <li>Actual runtime {{ batch.hr_runtime|floatformat:1 }} hours</li>
+    {% endif %}
+    <li>Total files in batch: {{ enqueued_files|length }}</li>
+    <li><a href="/admin/djhcup_staging/importbatch/{{ batch.id }}/">See this batch in the Django admin&rarr;</a></li>
+</ul>
+
+{% if enqueued_files|length > 0 %}
+    <h2>Files in this batch</h2>
+    <table class="batch_items">
+    <tr><th>Filename</th><th>Size on Disk (MB)</th><th>Estimated Runtime<br />(hours, SID CORE files)</th><th>Status</th><th>Started</th><th>Completed</th><th>Actual Runtime</th></tr>
+    {% for f in enqueued_files %}
+        <tr>
+            <td>{{ f.file.filename }}</td>
+            <td>{{ f.file.hr_size }}</td>
+            <td>{{ f.est_runtime|floatformat:1 }}</td>
+            <td class="import_status_{{ f.status }}">{{ f.status }}</td>
+            <td>{{ f.hr_start }}</td>
+            <td>{{ f.hr_complete }}</td>
+            <td>{{ f.hr_runtime|floatformat:1 }}</td>
+        </tr>
+    {% endfor %}
+    </table>
+{% endif %}
+
+{% endblock %}
