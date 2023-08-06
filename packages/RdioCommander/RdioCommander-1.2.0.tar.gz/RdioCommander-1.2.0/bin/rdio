@@ -1,0 +1,221 @@
+#!/usr/bin/python
+
+# Imports
+import sys, argparse, datetime
+import urwid
+from subprocess import Popen, PIPE
+
+# The brains
+class Rdio:
+	lightPallet = [
+			('banner', 'black', 'light gray'),
+			('paused', 'black', 'dark red'),
+			('playing', 'black', 'dark green'),
+			('bg', 'black', 'dark blue'),
+			('controls', 'black', 'dark blue'),]
+	darkPallet = [
+			('banner', 'light gray', 'black'),
+			('paused', 'light gray', 'dark red'),
+			('playing', 'black', 'light gray'),
+			('bg', 'dark blue', 'dark gray'),
+			('controls', 'black', 'dark gray'),]
+	def __init__(self, delay, color):
+		self.delay = delay
+		
+		if color == 1:
+			self.palette = self.lightPallet
+		else:
+			self.palette = self.darkPallet
+
+		placeholder = urwid.SolidFill()
+		self.loop = urwid.MainLoop(placeholder, self.palette, unhandled_input=self.controls)
+		self.loop.widget = urwid.AttrMap(placeholder, 'bg')
+		self.loop.widget.original_widget = urwid.Pile([])
+
+		pile = self.loop.widget.base_widget
+		widgets = []
+
+		# create and add title to pile
+		self.title = urwid.Text(u"RDIO COMMANDER", align='center')
+		self.titleMap = urwid.AttrMap(self.title, 'banner')
+		pile.contents.append((self.titleMap, pile.options('pack')))
+		pile.contents.append((urwid.SolidFill(), pile.options()))
+
+		# create status message
+		self.status = urwid.Text(u"PLAYING NOTHING ON RDIO", align='center')
+		self.statusMap = urwid.AttrMap(self.status, 'paused')
+
+		# create and add song / atrist to the screen
+		self.details = urwid.Text(u"Why not find some punk?", align='center')
+
+		pile.contents.append((self.details, pile.options('pack')))
+		pile.contents.append((urwid.SolidFill(), pile.options()))
+
+		# controls 
+		self.controls = urwid.Text(u"p - pause | n - next track | l - last track | a - add to collection | r - remove from collection | q - quit\n", align='center')
+		self.controlsMap = urwid.AttrMap(self.controls, 'controls')
+
+		pile.contents.append((self.controlsMap, pile.options('pack')))
+
+		# add status message
+		pile.contents.append((self.statusMap, pile.options('pack')))
+
+		self.nowPlaying(self.loop)
+		self.loop.run()
+	
+	def controls(self, key):
+		if key in ('q', 'Q'):
+			raise urwid.ExitMainLoop()
+		elif key in ('p', 'P'):
+			self.controlRdio('pause')
+		elif key in ('n', 'N'):
+			self.controlRdio('next')
+		elif key in ('l', 'L'):
+			self.controlRdio('previous')
+		elif key in ('a', 'A'):
+			self.controlRdio('add')
+		elif key in ('r', 'R'):
+			self.controlRdio('remove')
+
+	def controlRdio(self, req):
+		scpt = ""
+
+		if req == 'status':
+			scpt = '''
+			tell application "rdio"
+				set playStatus to (get player state)
+				return (playStatus) as text
+			end tell'''
+		elif req == 'artist':
+			scpt = '''
+			tell application "rdio"
+				if player state is playing then
+					set artistName to (get artist of current track)
+					return (artistName) as text
+				end if
+			end tell'''
+		elif req == 'song':
+			scpt = '''
+			tell application "rdio"
+				if player state is playing then
+					set trackname to (get name of current track)
+					return (trackname) as text
+				end if
+			end tell'''
+		elif req == 'pause':
+			scpt = '''
+			tell application "rdio"
+				playpause
+			end tell'''
+		elif req == 'next':
+			scpt = '''
+			tell application "rdio"
+				next track
+			end tell'''
+		elif req == 'previous':
+			scpt = '''
+			tell application "rdio"
+				previous track
+			end tell'''
+		elif req == 'add':
+			scpt = '''
+			tell application "rdio"
+				add to collection
+			end tell'''
+		elif req == 'remove':
+			scpt = '''
+			tell application "rdio"
+				remove from collection
+			end tell'''
+		elif req == 'duration':
+			scpt = '''
+			tell application "rdio"
+				if player state is playing then
+					set dur to (get duration of current track)
+					return (dur) as text
+				end if
+			end tell'''
+		elif req == 'position':
+			scpt = '''
+			tell application "rdio"
+				if player state is playing then
+					set pos to player position
+					return (pos) as text
+				end if
+			end tell'''
+
+		stdout = ""
+
+		if scpt != "":
+			p = Popen(['osascript', '-'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+			stdout, stderr = p.communicate(scpt)
+
+		return stdout
+
+	def nowPlaying(self, loop, user_data = None):
+		status = str(self.controlRdio('status'))
+
+		if "play" in status:
+			self.song = self.controlRdio('song').rstrip()
+			self.artist = self.controlRdio('artist').rstrip()
+
+			duration = float(self.controlRdio('duration'))
+			position = float(self.controlRdio('position'))
+
+			position = int(duration * position) / 100
+
+			duration = str(datetime.timedelta(seconds = duration))
+			position = str(datetime.timedelta(seconds = position))
+
+			self.duration = position[3:] + " / " + duration[3:]
+
+			self.status.set_text(u"NOW PLAYING ON RDIO")
+			self.statusMap.set_attr_map({None: 'playing'})
+		elif "pause" in status:
+			self.status.set_text(u"PAUSED ON RDIO")
+			self.statusMap.set_attr_map({None: 'paused'})
+		else:
+			self.status.set_text(u"PLAYING NOTHING ON RDIO")
+			self.statusMap.set_attr_map({None: 'paused'})
+
+		if hasattr(self, 'artist') and hasattr(self, 'song'):
+			self.details.set_text(self.artist + " - " + self.song + " \n" + self.duration)
+		else:
+			self.status.set_text(u"PLAYING NOTHING ON RDIO")
+			self.statusMap.set_attr_map({None: 'paused'})
+
+		self.loop.set_alarm_in(self.delay, self.nowPlaying)
+
+
+# The main class to handle threads, and inputs
+class Main:
+	# Setup some default varialbes
+	delay = 1
+	color = 2
+	version = "1.2.0"
+
+	def __init__(self, argv):
+		print 'RDIO COMMANDER ' + self.version
+		print 'https://github.com/obihann/RdioCommander/'
+		print 'This tool is protected by the GNU General Public License v2.'
+		print 'Copyright Jeffrey Hann 2014'
+		print '------------------------------------------------------------'
+		parser = argparse.ArgumentParser()
+		parser.add_argument("-r", "--refresh", type=float, help="Adjust the number of seconds the app refreshes the screen")
+		parser.add_argument("-c", "--color", type=str, help="Specify a light or dark color scheme")
+
+		args = parser.parse_args()
+		if args.refresh:
+			self.delay = args.refresh
+		if args.color:
+			if args.color == "light":
+				self.color = 1
+
+		try:
+			self.rdio = Rdio(self.delay, self.color)
+		except KeyboardInterrupt:
+			sys.exit()
+
+
+if __name__ == "__main__":
+	main = Main(sys.argv[1:])
