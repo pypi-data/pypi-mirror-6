@@ -1,0 +1,445 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Testing &mdash; Tangelo Web Framework 0.6 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.6',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="shortcut icon" href="_static/tangelo.ico"/>
+    <link rel="top" title="Tangelo Web Framework 0.6 documentation" href="index.html" />
+    <link rel="prev" title="Developing Visualizations" href="developing-visualizations.html" />
+<link rel=stylesheet type=text/css href=_static/tangelo-sphinx.css />
+
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="developing-visualizations.html" title="Developing Visualizations"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Tangelo Web Framework 0.6 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="testing">
+<h1>Testing<a class="headerlink" href="#testing" title="Permalink to this headline">¶</a></h1>
+<p>Tangelo includes an extensive test suite meant to stress several parts of the
+system from different angles.  All testing is driven by CTest, and the test
+suite build can be enabled by setting the <tt class="docutils literal"><span class="pre">BUILD_TESTING</span></tt> option to <tt class="docutils literal"><span class="pre">ON</span></tt> in
+the CMake configuration step.  To run the test suite, build Tangelo by running
+<tt class="docutils literal"><span class="pre">make</span></tt> or <tt class="docutils literal"><span class="pre">ninja</span></tt> as discussed above, then run the <tt class="docutils literal"><span class="pre">ctest</span></tt> program in the
+build directory.  The test suite will run, and a report on passes/failures will
+be printed at the end.</p>
+<div class="section" id="test-types">
+<h2>Test Types<a class="headerlink" href="#test-types" title="Permalink to this headline">¶</a></h2>
+<p>Because Tangelo brings together multiple technologies into one place, there are
+several types of tests that run on different platforms to test the various
+components.  Tangelo is built up from Python components, forming the server
+infrastructure, and Javascript components, forming the clientside support
+libraries.  The standard testing philosophy prescribes <em>unit tests</em> for both
+halves, to continuously confirm that low-level pieces (e.g., at the level of
+individual functions) are behaving as expected.</p>
+<p>However, because Python and Javascript are both designed to afford maximum
+programming flexibility - sometimes at the cost of enforced code quality -
+<em>style tests</em> also form an integral part of our testing strategy.  These tests
+use static analysis to enforce certain coding conventions designed to prevent
+programming errors that are technically allowed by the languages, but are not
+desirable in production code.</p>
+<p>While unit and style tests stress the components in isolation, the real work of
+Tangelo occurs when the two halves interact to enable rich web applications.
+Therefore, the test suite also includes <em>web content tests</em>, which work by
+loading a web page in PhantomJS, then e.g. examining the page&#8217;s DOM to confirm
+that the appliation has behaved correctly.  This can take the form of extracting
+an image and comparing it to a baseline, or examining the status code of the
+HTTP request that delivered the page, etc.</p>
+<p>Finally, to confirm that our tests are far-reaching enough, we also perform
+<em>coverage tests</em> for both the Python and Javascript code.  These tests simply
+measure how much of each code base is &#8220;touched&#8221; by the unit and web content
+tests.  Python coverage testing happens via the Coverage program, while
+Blanket.js performs Javascript coverage testing.</p>
+<div class="section" id="javascript-unit-tests">
+<h3>Javascript Unit Tests<a class="headerlink" href="#javascript-unit-tests" title="Permalink to this headline">¶</a></h3>
+<p>The directory <tt class="docutils literal"><span class="pre">testing/js-unit-tests</span></tt> contains several Javascript files
+containing Jasmine tests.  Each file has a single call to the <tt class="docutils literal"><span class="pre">describe()</span></tt>
+function, which declares a test suite.  The second argument is itself a function
+that will run to drive the suite - this function contains calls to the <tt class="docutils literal"><span class="pre">it()</span></tt>
+function, each of which implements one test.</p>
+<p>The CMake infrastructure takes the code from each file and places it into a
+scaffold template (found at <tt class="docutils literal"><span class="pre">testing/scaffolding/jasmine-scaffold.html.in</span></tt>)
+forming a web page which, when loaded, runs the Jasmine test and displays the
+result.  This page will be placed in the <tt class="docutils literal"><span class="pre">tangelo/web/tests/js-unit-tests</span></tt>
+directory within the build directory.  You can view the files directly to see
+the Jasmine report, but CTest will run each of these tests by loading the page
+in PhantomJS, then extracting the pass/fail information from the report.  This
+way, you can run the tests from the command line using the <tt class="docutils literal"><span class="pre">ctest</span></tt> program.</p>
+</div>
+<div class="section" id="python-unit-tests">
+<h3>Python Unit Tests<a class="headerlink" href="#python-unit-tests" title="Permalink to this headline">¶</a></h3>
+<p>Python unit testing is carried out using the <tt class="docutils literal"><span class="pre">unittest</span></tt> module, which comes
+with the Python standard library.  The tests are found in the
+<tt class="docutils literal"><span class="pre">testing/py-unit-tests</span></tt> directory.  Each file declares a class named
+<tt class="docutils literal"><span class="pre">Tester</span></tt>, which inherits from <tt class="docutils literal"><span class="pre">unittest.TestCase</span></tt>, and represents a single
+test suite.  The methods of this class correspond to individual tests in the
+suite; each such test&#8217;s method name begins with <tt class="docutils literal"><span class="pre">test_</span></tt>.  The <a class="reference external" href="http://docs.python.org/2/library/unittest.html">unittest
+documentation</a> has more
+information on how to write the actual tests; you may also want to consult the
+existing tests to see how they work.</p>
+<p>Each of the testing files ends with this snippet of Python code:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">unittest</span><span class="o">.</span><span class="n">main</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>This turns the file into a standalone script that automatically runs the test
+suite declared therein.  CMake can therefore run this script directly to perform
+the unit test.</p>
+</div>
+<div class="section" id="javascript-style-tests">
+<h3>Javascript Style Tests<a class="headerlink" href="#javascript-style-tests" title="Permalink to this headline">¶</a></h3>
+<p>JSLint is a static analyzer for Javascript that catches many slips of the
+fingers and other bad practices that are allowed by the language but are
+commonly believed to lead to poor, error-prone, debug-resistant code.  It also
+prescribes a strict coding style standard which has been adopted by the Tangelo
+project (see <a class="reference internal" href="coding-style-guide.html"><em>Coding Style Guidelines</em></a>).</p>
+<p>The Javascript style tests work by running JSLint on each Javascript source
+file.  Keeping new code up to the JSLint standard by making these tests pass
+helps to inspire confidence in the quality of our code.</p>
+</div>
+<div class="section" id="python-style-tests">
+<h3>Python Style Tests<a class="headerlink" href="#python-style-tests" title="Permalink to this headline">¶</a></h3>
+<p>Similarly to JSLint for Javascript, Pep8 is a Python program that enforces the
+<a class="reference external" href="http://legacy.python.org/dev/peps/pep-0008/">PEP8 standard</a> for Python code.
+These tests keep the Python code in line with common Python programming idioms,
+and are an easy way to &#8220;standardize&#8221; code against strange bugs that might
+otherwise creep in.  The one warning we suppress in these tests is that of line
+length:  PEP8 recommends all lines of code be capped at 79 characters to keep
+code readable.  However, Tangelo includes some lines that are longer than this
+limit and are burdensome to shoehorn into multiple, shorter lines.  In some
+cases, doing so may even reduce the clarity of the code, or possibly even cause
+bugs to be introduced.  The project policy is therefore not to worry about long
+lines.</p>
+<p>Pylint is a different program that peforms heavier static analysis on Python
+code.  It is purposefully zealous in its reported warnings, knowingly reporting
+features of code that may be correct as they stand, but that can in a general
+sense indicate a problem with the code.  Therefore, these tests are disabled by
+default, but it is a good idea to run them occasionally in case they uncover
+actual bugs.</p>
+</div>
+<div class="section" id="web-content-tests">
+<h3>Web Content Tests<a class="headerlink" href="#web-content-tests" title="Permalink to this headline">¶</a></h3>
+<p>Web content tests work by retrieving a URL and loading it into PhantomJS, then
+running a user-specified test function on the resulting DOM.  A simple example
+would read as follows:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="nx">declareTest</span><span class="p">({</span>
+    <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;200 - existing page should return a 200 OK message&quot;</span><span class="p">,</span>
+    <span class="nx">url</span><span class="o">:</span> <span class="s2">&quot;/&quot;</span><span class="p">,</span>
+    <span class="nx">test</span><span class="o">:</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">page</span><span class="p">,</span> <span class="nx">info</span><span class="p">)</span> <span class="p">{</span>
+        <span class="s2">&quot;use strict&quot;</span><span class="p">;</span>
+
+        <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;expected status code: 200&quot;</span><span class="p">);</span>
+        <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;received status code: &quot;</span> <span class="o">+</span> <span class="nx">info</span><span class="p">.</span><span class="nx">status</span><span class="p">);</span>
+
+        <span class="k">return</span> <span class="nx">info</span><span class="p">.</span><span class="nx">status</span> <span class="o">===</span> <span class="mi">200</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">});</span>
+</pre></div>
+</div>
+<p>This test loads <a class="reference external" href="http://localhost:8080/">http://localhost:8080/</a>, then invokes the <tt class="docutils literal"><span class="pre">test()</span></tt> function,
+passing it a PhantomJS <tt class="docutils literal"><span class="pre">page</span></tt> object, and an <tt class="docutils literal"><span class="pre">info</span></tt> object containing some
+metadata about the URL retrieval.  In this case, the test simply verifies that
+the status code on loading the URL is 200, indicating that the server is
+generally delivering webpages upon request.  It is possible to compute various
+values from the DOM using the <tt class="docutils literal"><span class="pre">page.evaluate()</span></tt> function, which takes a
+function of no arguments which will be run in the context of the DOM (as though
+it were executing in, e.g., and actual web browser).  For more information, see
+the PhantomJS documentation.</p>
+<p>The <tt class="docutils literal"><span class="pre">declareTest()</span></tt> function can be called with a variety of arguments to
+create different types of tests:</p>
+<dl class="function">
+<dt id="declareTest">
+<tt class="descname">declareTest</tt><big>(</big><em>cfg</em><big>)</big><a class="headerlink" href="#declareTest" title="Permalink to this definition">¶</a></dt>
+<dd><p>Declares a web content test, according to the information carried in <cite>cfg</cite>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Arguments:</th><td class="field-body"><ul class="first last simple">
+<li><strong>cfg</strong> (<em>object</em>) &#8211; A configration object, with contents as specified below.</li>
+<li><strong>cfg.name</strong> (<em>string</em>) &#8211; A descriptive name for the test.</li>
+<li><strong>cfg.url</strong> (<em>string</em>) &#8211; The URL to load in order to carry out the test.</li>
+<li><strong>cfg.method</strong> (<em>string</em>) &#8211; The HTTP method to use to retrieve the URL.  This
+can be useful for testing, e.g., REST services.</li>
+<li><strong>cfg.data</strong> (<em>object-or-string</em>) &#8211; A JavaScript object of key-value pairs, or
+a string, to send as the request data for, e.g., POST requests.</li>
+<li><strong>cfg.size</strong> (<em>list-of-number</em>) &#8211; The size that PhantomJS should use for its
+virtual window.</li>
+<li><strong>cfg.imageFile</strong> (<em>string</em>) &#8211; An image file to use for image-based comparison
+tests.</li>
+<li><strong>cfg.threshold</strong> (<em>number</em>) &#8211; A number representing the error threshold for
+image-based comparison tests.</li>
+<li><strong>cfg.test</strong> (<em>function(page,info)</em>) &#8211; A function that implements the test
+itself.  This function will be invoked with two arguments: the PhantomJS
+page object, and an <a class="reference internal" href="#info" title="info"><tt class="xref js js-data docutils literal"><span class="pre">info</span></tt></a> object.  The function should return
+either a boolean value to indicate passing or failure, or a
+<a class="reference internal" href="#Promise" title="Promise"><tt class="xref js js-class docutils literal"><span class="pre">Promise()</span></tt></a> object that does the same.  Promises should be used when
+asynchronous activity is involved: since the asynchronous callback cannot
+simply <tt class="docutils literal"><span class="pre">return</span></tt> the boolean value, it must be sent back via promise, but
+the test scaffolding is built to seamlessly handle this case.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="toImageData">
+<tt class="descname">toImageData</tt><big>(</big><em>pngData</em><big>)</big><a class="headerlink" href="#toImageData" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>Returns a promise that delivers an array of pixel data as converted from the PNG
+data blob passed in as the argument.</p>
+<p>The function works by converting the PNG data to base64, then creating a
+JavaScript <tt class="docutils literal"><span class="pre">Image</span></tt> object using the base64-encoded PNG data, and finally using
+a Canvas element to extract the pixel data.  As such, the return value is in the
+format returned by a Canvas 2D context.</p>
+<p><tt class="docutils literal"><span class="pre">toImageData()</span></tt> returns a promise because the process of converting to pixel
+data via a Canvas object requires asynchronously waiting for the <tt class="docutils literal"><span class="pre">Image</span></tt>
+object to be constructed.</p>
+<dl class="function">
+<dt id="compareImages">
+<tt class="descname">compareImages</tt><big>(</big><em>pngData1</em>, <em>pngData2</em>, <em>comparator</em><big>)</big><a class="headerlink" href="#compareImages" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>A convenience function for comparing two PNG binary blobs.  <tt class="docutils literal"><span class="pre">compareImages()</span></tt>
+works by first converting the PNG data blobs to pixel data arrays (using
+<a class="reference internal" href="#toImageData" title="toImageData"><tt class="xref js js-func docutils literal"><span class="pre">toImageData()</span></tt></a> internally), then invokes the <tt class="docutils literal"><span class="pre">comparator</span></tt> argument -
+a function of two arguments - on the two arrays.  The result is a promise that
+delivers the return value of <tt class="docutils literal"><span class="pre">comparator</span></tt>, which should be a boolean.</p>
+<p>If <tt class="docutils literal"><span class="pre">comparator</span></tt> is not specified, a default comparator is invoked which
+returns false if the image dimensions do not match, true if they do match and
+the L2 difference between the pixel arrays falls below the threshold value
+(<cite>cfg.threshold</cite> in the <tt class="xref js js-func docutils literal"><span class="pre">declaretest()</span></tt>), and false otherwise.</p>
+<p>This default function may not be appropriate for most comparison tasks, but it
+is the simplest possible reasonable function for image comparison.  In general,
+you may want to specify your own.</p>
+<dl class="function">
+<dt id="dumpImage">
+<tt class="descname">dumpImage</tt><big>(</big><em>imgData</em>, <em>filename</em><big>)</big><a class="headerlink" href="#dumpImage" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>A debugging function that takes a pixel array <cite>imgData</cite> (as returned by, e.g.,
+<a class="reference internal" href="#toImageData" title="toImageData"><tt class="xref js js-func docutils literal"><span class="pre">toImageData()</span></tt></a>) and writes out a PNG file <cite>filename</cite>.  It is possible
+that this function will fail, e.g., if the user that is running Tangelo does not
+have write permission in the directory where this function is invoked.</p>
+<dl class="data">
+<dt id="info">
+<tt class="descname">info</tt><a class="headerlink" href="#info" title="Permalink to this definition">¶</a></dt>
+<dd><p>The info object contains metadata about the test and the loading of the URL.
+Its contents are as follows:</p>
+<ul class="simple">
+<li><cite>info.testName</cite>, <cite>info.url</cite>, <cite>info.imageFile</cite>, <cite>info.method</cite>, <cite>info.data</cite>,
+<cite>info.size</cite>, <cite>info.threshold</cite> - these are copies of the properties of the
+same names passed to <cite>declareTest()</cite>.</li>
+<li><cite>info.imageData</cite> - The data from <cite>info.imageFile</cite> encoded as base64.</li>
+<li><cite>info.status</cite> - The HTTP status code associated with retrieving the test&#8217;s
+URL, as an integer.</li>
+<li><cite>info.statusText</cite> - A string associated to the status code.</li>
+</ul>
+</dd></dl>
+
+<dl class="class">
+<dt id="Promise">
+<em class="property">class </em><tt class="descname">Promise</tt><big>(</big><em>callback</em><big>)</big><a class="headerlink" href="#Promise" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>A promise is a general programming notion of <em>deferring the delivery of
+computational results</em> to a later time when they are fully available.  In a web
+programming environment, promises are necessary to generalize the notion of
+&#8220;function return value&#8221; to asynchonrous contexts.</p>
+<p>In particular, if a web content test needs to perform asynchronous actions, it
+cannot simply issue a <tt class="docutils literal"><span class="pre">return</span></tt> from within the asynchronous callback, as the
+testing function itself will have already finished running, and will need to
+return some value besides the desired return value from the callback.</p>
+<p>The solution is to return a promise from the testing function that wraps the
+the callback, capturing its eventual return value.  The testing system can distinguish
+between bare return values of boolean type, and promises, and will take the
+appropriate action to maintain the abstraction that a simple <em>true</em> or <em>false</em>
+value always comes back from the test.</p>
+<p>The <cite>callback</cite> argument is a function of one argument, named <cite>deliver</cite>.
+<cite>callback</cite> should contain any asynchonous actions that are necessary to
+computing the test result.  However, in place of using a return statement, the
+callback should invoke <cite>deliver</cite> on the result.  An example will make this
+clear:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="kd">function</span> <span class="nx">testFunc</span><span class="p">(</span><span class="nx">page</span><span class="p">,</span> <span class="nx">info</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="k">new</span> <span class="nx">Promise</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">deliver</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nx">asyncAction</span><span class="p">(</span><span class="nx">page</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">result</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">if</span> <span class="p">(</span><span class="nx">resultIsGood</span><span class="p">(</span><span class="nx">result</span><span class="p">))</span> <span class="p">{</span>
+                <span class="nx">deliver</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span>
+            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                <span class="nx">deliver</span><span class="p">(</span><span class="kc">false</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+    <span class="p">});</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Ordinarily, <cite>testFunc()</cite> would directly call <cite>asyncAction()</cite>, and it would have
+no way to &#8220;return&#8221; true or false from it&#8217;s if-then statement.  However, using a
+<tt class="docutils literal"><span class="pre">Promise</span></tt>, the <cite>deliver()</cite> argument takes the place of the return statement.</p>
+<p>The <tt class="docutils literal"><span class="pre">Promise</span></tt> object constructed this way does not execute its <cite>callback</cite>
+argument immediately.  Instead, it contains a single method named <cite>then()</cite>,
+which is called with a <cite>deliver</cite> argument.  When it is called, it simply invokes
+<cite>callback</cite> with <cite>deliver</cite> as the argument.</p>
+<p>In the web content test scaffolding, if the test function returns a <tt class="docutils literal"><span class="pre">Promise</span></tt>,
+the test driver knows to invoke its <cite>then()</cite> method to capture the result of the
+asynchonous action, and deliver a pass/fail signal to CTest.  In other words, if
+possible, a test function should return <cite>true</cite> or <cite>false</cite> directly; otherwise,
+it should return a <tt class="docutils literal"><span class="pre">Promise</span></tt> as in the example above.  From the point of view
+of CTest, both styles seem to deliver a boolean value describing the test run.</p>
+</div>
+<div class="section" id="coverage-tests">
+<h3>Coverage Tests<a class="headerlink" href="#coverage-tests" title="Permalink to this headline">¶</a></h3>
+<p>Coverage tests measure how much of the total mass executable instructions has
+been run by a test suite.  This &#8220;meta test&#8221; is important in designing test
+suites, since, at a bare minimum, every line in the code base should be stressed
+by one test.</p>
+<p>The Python unit tests can be run by the <tt class="docutils literal"><span class="pre">coverage</span></tt> program, which maintains a
+report on disk of what Python lines have been run so far.  When the test suite
+is run as a whole, each Python unit test will be dependent on a special
+&#8220;coverage clearing&#8221; test the removes the on-disk cache from the last run.
+Another special test, which generates an HTML coverage report, depends in turn
+on each unit test.  This report can be found in the
+<tt class="docutils literal"><span class="pre">tangelo/web/tests/python-coverage</span></tt> directory within the build directory.</p>
+<p>The Javascript unit tests are collected into a single, overarching test suite,
+which is run under the supervision of Blanket.js, which generates an HTML
+coverage report, similarly to the Python <tt class="docutils literal"><span class="pre">coverage</span></tt> program.  This report can
+be found at <tt class="docutils literal"><span class="pre">tangelo/web/tests/js-unit-tests/tangelojs-coverage.html</span></tt> in the
+build directory.</p>
+<p>While achieving 100% coverage is difficult or may even be impossible, striving
+to increase the percent coverage of the entire codebase is an important testing
+strategy.  To this end, one general development policy is to always ship a test
+covering new functionality, or demonstrating bug fixes in action, etc.  For
+instance, if a pull request is submitted that includes a new behavior but no
+tests, the requester may be asked to add test before submitting again.</p>
+</div>
+</div>
+<div class="section" id="writing-tests">
+<h2>Writing Tests<a class="headerlink" href="#writing-tests" title="Permalink to this headline">¶</a></h2>
+<p>When creating new functionality for Tangelo, or fixing bugs, it is important to
+include a test that demonstrates the desired behavior.  For example, if a pull
+request is made against some feature of Tangelo, but has no tests, the author
+may be requested to add a test before it can be accepted.</p>
+<p>The goal of writing a test is to isolate the behavior under observation, and
+provide a minimal amount of code to bring about that behavior.  If the test is a
+unit test, it is possible to include several individual test functions (with
+<tt class="docutils literal"><span class="pre">test_*</span></tt> methods under Python&#8217;s <tt class="docutils literal"><span class="pre">unittest</span></tt> module, or the <tt class="docutils literal"><span class="pre">it()</span></tt> function
+in Jasmine) in a single test suite.  For an example, see
+<tt class="docutils literal"><span class="pre">testing/js-unit-tests/accessor.js</span></tt>.</p>
+<p>If it is a web content test, the testing infrastructure is somewhat more
+restrictive, as only a single test function is allowed per test.  However, since
+web content tests are less based on testing a single aspect of the code base,
+this may be more appropriate.  In these cases, you can use PhantomJS to perform
+arbitrary computations on the web page DOM under examination, or use the
+metadata delivered to the test function to examine the status code, etc.  Here
+too it is important to test a specific behavior of the web page.  For an
+example, see <tt class="docutils literal"><span class="pre">testing/web-content-tests/dynamic-control-panel.js</span></tt>.  That
+example loads a page, simulates mouse interaction, waits for a reasonable delay,
+then examines the resulting DOM, looking for a particular expected property to
+be satisfied.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Testing</a><ul>
+<li><a class="reference internal" href="#test-types">Test Types</a><ul>
+<li><a class="reference internal" href="#javascript-unit-tests">Javascript Unit Tests</a></li>
+<li><a class="reference internal" href="#python-unit-tests">Python Unit Tests</a></li>
+<li><a class="reference internal" href="#javascript-style-tests">Javascript Style Tests</a></li>
+<li><a class="reference internal" href="#python-style-tests">Python Style Tests</a></li>
+<li><a class="reference internal" href="#web-content-tests">Web Content Tests</a></li>
+<li><a class="reference internal" href="#coverage-tests">Coverage Tests</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#writing-tests">Writing Tests</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="developing-visualizations.html"
+                        title="previous chapter">Developing Visualizations</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/testing.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="developing-visualizations.html" title="Developing Visualizations"
+             >previous</a> |</li>
+        <li><a href="index.html">Tangelo Web Framework 0.6 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Kitware, Inc..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,317 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Advanced Usage &mdash; Tangelo Web Framework 0.6 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.6',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="shortcut icon" href="_static/tangelo.ico"/>
+    <link rel="top" title="Tangelo Web Framework 0.6 documentation" href="index.html" />
+    <link rel="next" title="tangelo" href="tangelo-manpage.html" />
+    <link rel="prev" title="Tangelo Web Services" href="python-services.html" />
+<link rel=stylesheet type=text/css href=_static/tangelo-sphinx.css />
+
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="tangelo-manpage.html" title="tangelo"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="python-services.html" title="Tangelo Web Services"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Tangelo Web Framework 0.6 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="advanced-usage">
+<h1>Advanced Usage<a class="headerlink" href="#advanced-usage" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="streaming">
+<span id="id1"></span><h2>Streaming<a class="headerlink" href="#streaming" title="Permalink to this headline">¶</a></h2>
+<p>It may be necessary to return an immense (or even <a class="reference external" href="http://localhost:8080/examples/primes/">infinite</a>) amount of data from a web service to
+the client.  However, this may take up so much time and memory that dealing with
+it becomes intractable.  In such situations, Tangelo&#8217;s <em>Streaming API</em> may be
+able to help.</p>
+<div class="section" id="generators-in-python">
+<h3>Generators in Python<a class="headerlink" href="#generators-in-python" title="Permalink to this headline">¶</a></h3>
+<p>Essentially, Tangelo&#8217;s streaming capability works by exposing Python&#8217;s
+abstraction of <a class="reference external" href="http://docs.python.org/2/reference/expressions.html#yield-expressions">generators</a>
+through Tangelo&#8217;s service API.  If a service function uses the <tt class="docutils literal"><span class="pre">yield</span></tt> keyword
+instead of <tt class="docutils literal"><span class="pre">return</span></tt>, thus marking it as a generator function, then Tangelo
+behaves differently when the resulting service is invoked.  Here is an example
+of such a service, in a hypothetical file named <tt class="docutils literal"><span class="pre">prime-factors.py</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">tangelo</span>
+
+<span class="k">def</span> <span class="nf">prime</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">num</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">))):</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="o">%</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+    <span class="k">return</span> <span class="bp">True</span>
+
+<span class="nd">@tangelo.types</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">filter</span><span class="p">(</span><span class="n">prime</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">num</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">)))):</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="o">%</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span>
+            <span class="k">yield</span> <span class="n">i</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">run()</span></tt> method returns a <em>generator object</em> - an object that returns a
+prime divisor of its argument once for each call to its <tt class="docutils literal"><span class="pre">next()</span></tt> method.  When
+the code reaches its &#8220;end&#8221; (i.e., there are no more values to <tt class="docutils literal"><span class="pre">yield</span></tt>), the
+<tt class="docutils literal"><span class="pre">next()</span></tt> method raises a <tt class="docutils literal"><span class="pre">StopIteration</span></tt> exception.</p>
+<p>In Python this object, and others that behave the same way, are known as
+<em>iterables</em>.  Generators are valuable in particular because they generate values
+as they are requested, unlike e.g. a list, which always retains all of its
+values and therefore has a larger memory footprint.  In essence, a generator
+trades space for time, then amortizes the time over multiple calls to
+<tt class="docutils literal"><span class="pre">next()</span></tt>.</p>
+<p>Tangelo leverages this idea to create <em>streaming services</em>.  When a service
+returns a generator object from its <tt class="docutils literal"><span class="pre">run()</span></tt> or RESTful methods, Tangelo
+responds to a request to that service by logging the generator object in a
+table, associating a hexadecimal key to it, and sending the key as the response.
+For example, an ajax request to the <tt class="docutils literal"><span class="pre">prime-factors</span></tt> service above might yield
+the following response:</p>
+<div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span><span class="s2">&quot;key&quot;</span><span class="o">:</span> <span class="s2">&quot;3dffee9e03cef2322a2961266ebff104&quot;</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>From this point on, values can be retrieved from the newly created generator
+object by engaging the <em>streaming API</em>.</p>
+</div>
+<div class="section" id="the-streaming-rest-api">
+<h3>The Streaming REST API<a class="headerlink" href="#the-streaming-rest-api" title="Permalink to this headline">¶</a></h3>
+<p>The streaming API is found at <a class="reference external" href="http://localhost:8080/stream">http://localhost:8080/stream</a>.  The API is RESTful
+and uses the following verbs:</p>
+<ul>
+<li><p class="first"><tt class="docutils literal"><span class="pre">GET</span> <span class="pre">/stream</span></tt> returns a list of all active stream keys.</p>
+</li>
+<li><p class="first"><tt class="docutils literal"><span class="pre">GET</span> <span class="pre">/stream/&lt;stream-key&gt;</span></tt> calls <tt class="docutils literal"><span class="pre">next()</span></tt> on the associated generator and
+returns a JSON object with the following form:</p>
+<blockquote>
+<div><div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span>
+    <span class="s2">&quot;finished&quot;</span><span class="o">:</span> <span class="kc">false</span><span class="p">,</span>
+    <span class="s2">&quot;data&quot;</span><span class="o">:</span> <span class="o">&lt;</span><span class="nx">value</span><span class="o">&gt;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>The <tt class="docutils literal"><span class="pre">finished</span></tt> field indicates whether <tt class="docutils literal"><span class="pre">StopIteration</span></tt> was thrown, while
+the <tt class="docutils literal"><span class="pre">data</span></tt> field contains the value <tt class="docutils literal"><span class="pre">yield</span></tt>ed from the generator object.
+If <tt class="docutils literal"><span class="pre">finished</span></tt> is <tt class="docutils literal"><span class="pre">true</span></tt>, there will be no <tt class="docutils literal"><span class="pre">data</span></tt> field, and the stream
+key for that stream will become invalid.</p>
+</li>
+<li><p class="first"><tt class="docutils literal"><span class="pre">DELETE</span> <span class="pre">/stream/&lt;stream-key&gt;</span></tt> makes the stream key invalid, removes the
+generator object from the stream table, and returns a response showing which
+key was removed:</p>
+<blockquote>
+<div><div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span><span class="s2">&quot;key&quot;</span><span class="o">:</span> <span class="s2">&quot;3dffee9e03cef2322a2961266ebff104&quot;</span><span class="p">}</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>This is meant to inform the client of which stream was deleted in the case
+where multiple deletions are in flight at once.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="javascript-support-for-streaming">
+<h3>JavaScript Support for Streaming<a class="headerlink" href="#javascript-support-for-streaming" title="Permalink to this headline">¶</a></h3>
+<p>The <tt class="docutils literal"><span class="pre">tangelo.stream</span></tt> namespace of functions in <em>tangelo.js</em> offers a clean,
+callback-based JavaScript API to the streaming REST service.  See
+<a class="reference internal" href="tangelo-js.html#streaming-js"><em>Streaming API</em></a> for more information.</p>
+</div>
+</div>
+<div class="section" id="vtk-web">
+<span id="vtkweb"></span><h2>VTK Web<a class="headerlink" href="#vtk-web" title="Permalink to this headline">¶</a></h2>
+<p>Tangelo is able to run VTK Web programs through the VTK Web REST API.  The
+interface is somewhat experimental at the moment and only supports running the
+program and interacting with it via the mouse.  In a later version, the ability
+to call functions and otherwise interact with VTK Web in a programmatic way will
+be added.</p>
+<p>In order to enable this funcationality, Tangelo must be launched with the
+<tt class="docutils literal"><span class="pre">vtkpython</span></tt> option in the configuration file (see <a class="reference internal" href="setup.html#config-options"><em>Configuration Options</em></a>) set
+to the full path to a <tt class="docutils literal"><span class="pre">vtkpython</span></tt> executable in a build of VTK (or,
+alternatively, with the <tt class="docutils literal"><span class="pre">--vtkpython</span></tt> option set on the command line).</p>
+<div class="section" id="the-vtk-web-rest-api">
+<h3>The VTK Web REST API<a class="headerlink" href="#the-vtk-web-rest-api" title="Permalink to this headline">¶</a></h3>
+<p>The VTK Web API is found at <a class="reference external" href="http://localhost:8080/vtkweb">http://localhost:8080/vtkweb</a>.  The API is RESTful
+and uses the following verbs:</p>
+<ul>
+<li><p class="first"><tt class="docutils literal"><span class="pre">POST</span> <span class="pre">/vtkweb/full/path/to/vtkweb/script.py</span></tt> launches the named script
+(which must be given as an absolute path) and returns a JSON object similar to
+the following:</p>
+<blockquote>
+<div><div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span>
+    <span class="s2">&quot;status&quot;</span><span class="o">:</span> <span class="s2">&quot;complete&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;url&quot;</span><span class="o">:</span> <span class="s2">&quot;ws://localhost:8080/d74a945ca7e3fe39629aa623149126bf/ws&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;key&quot;</span><span class="o">:</span> <span class="s2">&quot;d74a945ca7e3fe39629aa623149126bf&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>The <tt class="docutils literal"><span class="pre">url</span></tt> field contains a websocket endpoint that can be used to
+communicate with the VTK web process.  There is a <em>vtkweb.js</em> file (included
+in the Tangelo installation) that can use this information to hook up an HTML
+viewport to interact with the program, though for use with Tangelo, it is much
+simpler to use the JavaScript VTK Web library functions to abstract these
+details away.  The <tt class="docutils literal"><span class="pre">key</span></tt> field is, similarly to the streaming API, a
+hexadecimal string that identifies the process within Tangelo.</p>
+<p>In any case, receiving a response with a <tt class="docutils literal"><span class="pre">status</span></tt> field reading &#8220;complete&#8221;
+means that the process has started successfully.</p>
+</li>
+<li><p class="first"><tt class="docutils literal"><span class="pre">GET</span> <span class="pre">/vtkweb</span></tt> returns a list of keys for all active VTK Web processes.</p>
+</li>
+<li><p class="first"><tt class="docutils literal"><span class="pre">GET</span> <span class="pre">/vtkweb/&lt;key&gt;</span></tt> returns information about a particular VTK Web process.
+For example:</p>
+<blockquote>
+<div><div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span>
+    <span class="s2">&quot;status&quot;</span><span class="o">:</span> <span class="s2">&quot;complete&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;process&quot;</span><span class="o">:</span> <span class="s2">&quot;running&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;port&quot;</span><span class="o">:</span> <span class="mi">52446</span><span class="p">,</span>
+    <span class="s2">&quot;stderr&quot;</span><span class="o">:</span> <span class="p">[],</span>
+    <span class="s2">&quot;stdout&quot;</span><span class="o">:</span> <span class="p">[</span>
+        <span class="s2">&quot;2014-02-26 10:00:34-0500 [-] Starting factory &lt;vtk.web.wamp.ReapingWampServerFactory instance at 0x272b2d8&gt;\n&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;2014-02-26 10:00:34-0500 [-] ReapingWampServerFactory starting on 52446\n&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;2014-02-26 10:00:34-0500 [-] Log opened.\n&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;2014-02-26 10:00:34-0500 [VTKWebApp,0,127.0.0.1] Client has reconnected, cancelling reaper\n&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;2014-02-26 10:00:34-0500 [VTKWebApp,0,127.0.0.1] on_connect: connection count = 1\n&quot;</span>
+    <span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>The <tt class="docutils literal"><span class="pre">status</span></tt> field indicates that the request for information was
+successful, while the remaining fields give information about the running
+process.  In particular, the <tt class="docutils literal"><span class="pre">stderr</span></tt> and <tt class="docutils literal"><span class="pre">stdout</span></tt> streams are queried for
+any lines of text they contain, and these are delivered as well.  These can be
+useful for debugging purposes.</p>
+<p>If a process has ended, the <tt class="docutils literal"><span class="pre">process</span></tt> field will read <tt class="docutils literal"><span class="pre">terminated</span></tt> and
+there will be an additional field <tt class="docutils literal"><span class="pre">returncode</span></tt> containing the exit code of
+the process.</p>
+</li>
+<li><p class="first"><tt class="docutils literal"><span class="pre">DELETE</span> <span class="pre">/vtkweb/&lt;key&gt;</span></tt> terminates the associated VTK process and returns a
+response containing the key:</p>
+<blockquote>
+<div><div class="highlight-javascript"><div class="highlight"><pre><span class="p">{</span>
+    <span class="s2">&quot;status&quot;</span><span class="o">:</span> <span class="s2">&quot;complete&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;key&quot;</span><span class="o">:</span> <span class="s2">&quot;d74a945ca7e3fe39629aa623149126bf&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>As with the streaming <tt class="docutils literal"><span class="pre">DELETE</span></tt> action, the key is returned to help
+differentiate which deletion has completed, in case multiple <tt class="docutils literal"><span class="pre">DELETE</span></tt>
+requests are in flight at the same time.</p>
+</li>
+</ul>
+</div>
+<div class="section" id="javascript-support-for-vtk-web">
+<h3>JavaScript Support for VTK Web<a class="headerlink" href="#javascript-support-for-vtk-web" title="Permalink to this headline">¶</a></h3>
+<p>As with the streaming JavaScript functions, the <tt class="docutils literal"><span class="pre">tangelo.vtkweb</span></tt> contains
+JavaScript functions providing a clean, callback-based interface to the
+low-level REST API.  See <a class="reference internal" href="tangelo-js.html#vtkweb-js"><em>VTK Web API</em></a> for full details.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Advanced Usage</a><ul>
+<li><a class="reference internal" href="#streaming">Streaming</a><ul>
+<li><a class="reference internal" href="#generators-in-python">Generators in Python</a></li>
+<li><a class="reference internal" href="#the-streaming-rest-api">The Streaming REST API</a></li>
+<li><a class="reference internal" href="#javascript-support-for-streaming">JavaScript Support for Streaming</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#vtk-web">VTK Web</a><ul>
+<li><a class="reference internal" href="#the-vtk-web-rest-api">The VTK Web REST API</a></li>
+<li><a class="reference internal" href="#javascript-support-for-vtk-web">JavaScript Support for VTK Web</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="python-services.html"
+                        title="previous chapter">Tangelo Web Services</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="tangelo-manpage.html"
+                        title="next chapter"><tt class="docutils literal"><span class="pre">tangelo</span></tt></a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/advanced-usage.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="tangelo-manpage.html" title="tangelo"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="python-services.html" title="Tangelo Web Services"
+             >previous</a> |</li>
+        <li><a href="index.html">Tangelo Web Framework 0.6 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Kitware, Inc..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
