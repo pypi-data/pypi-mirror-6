@@ -1,0 +1,10 @@
+__version__ = "0.6.20"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = '(detached from v0.6.20)'
+__git_remote_tracking_branch__ = '(No remote tracking)'
+__git_remote_url__ = '(Not remote tracking)'
+__git_head_hash__ = 'a90c251764e497ed2ef51646e5f0c9e65edbeea2'
+__git_head_subject__ = 'Finished release v0.6.20.'
+__git_head_message__ = '* release/v0.6.20:\n  HOSTDEV-1559 bootstrap update: tell ez_setup to download setuptools using urlopen and not with the external command-line utilities\n  fixing test\n  fixing previous test\n  setuptools-2.2 does not have zip file on pypi, 3.0.1 which does\n  fixing test\n  fetching ez_setup.py from python.infinidat.com as bitbucket now has rate limiting which sucks behind nat\n  removing console_scritps from the skeleton buildout.cfg'
+__git_dirty_diff__ = ''
