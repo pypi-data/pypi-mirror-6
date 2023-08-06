@@ -1,0 +1,275 @@
+Metadata-Version: 1.1
+Name: gse
+Version: 0.1.9
+Summary: extract metadata and dataset from GEO Series Matrix format data
+Home-page: http://pypi.python.org/pypi/gse/
+Author: Nick Seidenman
+Author-email: seidenman@wehi.edu.au
+License: UNKNOWN
+Description: ===================================================================
+        GSE -- Python module for processing Geo Series Expression Datasets
+        ===================================================================
+        
+        GEO Datasets
+        ============
+        
+        The National Center for Biotechnology Information makes microarray datasets available for free download
+        that are used by researchers world-wide.  This module was written to facilite processing of these
+        datasets from within applications written in python.
+        
+        1. File Structure
+        =================
+        
+        Files containing data for this dataset are organized into TAB-separated
+        columns of data.   All files contain a certain amount of metadata encoded in the 
+        beginning lines of the file.   Metadata records begin with a descriptive record label 
+        that begins with "!", ``!Series_title``, for example.
+        
+        The actual expression data may be found in this same file, or in separeate files, one per sample, 
+        the names of which can be found in the associated metadata.   For purposes of simplicity,
+        it is assumed that the expression data follows the metadata in this same file, between
+        the descriptor labels::
+        
+            !series_matrix_table_begin 
+        
+        and::
+        
+            !series_matrix_table_end
+        
+        1.1 gse (script)
+        ----------------
+        
+        A command-line script, called *gse* is provided that uses the classes defined in this module
+        to render data, both to the console and into files, depending on the switches used in the 
+        command line.   The output tacitly includes a file with the same name as the input, but with the
+        extension changed to a '.P' to denote python *pickled* contents.   This will contain the pickled
+        *GEOSeries* object, which can be unpickled using the *cPickle.load* function, later.
+        
+        *gse* will try to interpret the input file as a pickled *GEOSeries* instance.  Failing that, it will
+        then try to create a new instance from what will be assumed to be a ``GSE_series_matrix.txt`` file. 
+        The upshot is that if you've already have a pickled instance, you can use this for subsequent operations
+        (show-levels, for instance) without having to process the original input all over again, thereby 
+        saving a bit of time.
+        
+        2. Metadata
+        ===========
+        
+        There are two kinds of metadata in the GSE series matrix: *series* metadata and *sample* metadata. 
+        Series metadata generally have two fields or columns, separated by a tab.  The first column is the
+        metadata descriptor and always begins with ``!Series_``, and the second column is the associated value.   
+        For instance::
+        
+             !Series_title <TAB> "Reconstruction of the dynamic regulatory ..."
+        
+        Note that sometimes the value, which is of type *string* may be enclosed in quotation marks.   
+        This isn't entirely consistent, but seems to be the case more often than not.
+        
+        Sample metadata is of rougly similar format, with the first column being the descriptor,
+        which always begins with ``!Sample_``.   There will be as many columns after this first one as there
+        are samples in the dataset, and are supposed to appear in the same order as the expression data
+        columns (i.e. samples) in the dataset proper.   However, to be certain that the metadata are correctly
+        associated with the corresponding sample, one of the sample metadata rows contains the sample ID as found in
+        the dataset proper, so an association of all other sample metadata with corresponding sample
+        should be done, indirectly, through this *sample_id* metadata row.
+        
+        2.1 Displaying Metadata
+        -----------------------
+        
+        The ``--show-metadata`` switch will cause series and sample metadata to be emitted to *stdout*.  There
+        are three formats: *pretty*, *json*, and *html*, with *pretty* being the default format.  Format is selected
+        with the ``--metadata-format=`` switch.
+        
+        3. Dataset Output
+        =================
+        
+        If no output file is specified, no expression data will be emitted at all.  Usin the ``--output=`` or ``-o`` 
+        switch to specify output destination.  If you want output to go to *stdout*, use ``--output=-`` or ``-i -``
+        (i.e., use a hyphen for the filename.)
+        
+        3.1 Raw vs Log Expressioin values
+        ---------------------------------
+        
+        Some datasets contain "raw" data (or read counts.)  Typically, we want expression values to be given
+        as *log2* values.  The ``--log2`` flag will cause expression data to be thusly converted.
+        
+        
+        3.1 Grouping Sample Output
+        --------------------------
+        
+        If there are multiple *levels* of metadata, these can be used to group the samples, aggregating them
+        by taking the arithmetic mean of the column values for samples that are in the same group.  Say, for instance
+        that you have ten samples and that are actually two groups of five replicates each.   There will be
+        *sample metadata* that defines these groups.   The putput will then be two columns (plus the index column,
+        which is typically is typically the probe ID for each row) the values of which being the mean of the group of
+        values in each of the two groups.
+        
+        The available sample metadata levels can be displayed using the ``--list-levels`` switch, which prints out
+        an enumerated list starting at 0.  The zeroth level is just the individual samples, ungrouped.  
+        
+        Grouping the samples is requested with the ``--group-by=``*level* or ``-g`` *level* switch.   If not specified, this
+        obviously defaults to zero.   The level may be specified either with a non-negative integer or the metadata descriptor.
+        If using the descriptor, remember to enclose it in quotes if there are embedded spaces in the descriptor label.
+        
+        4. GSE Classes
+        ==============
+        
+        There are three classes defined in this module, two of which act as containsers for the others.
+        
+        4.1 GSESeries
+        -------------
+        
+        This is the top-level class that contains both the data and metadata for specified dataset.   It is passed
+        a file-like object from which it reads and parses the (expected) GSE series matrix.   The resulting instance
+        offers several methods for displaying the metadata or emiting TSV files containing the dataset as a table
+        in which the columns are, perhaps, grouped according to column index metadata.
+        
+        4.2 GSESeriesMetadata
+        ---------------------
+        
+        The metadata for the series matrix is accessed throught the ``metadata`` attribute of the *GSESeries* instance.  Attributes
+        can be listed using the ``attribute`` property.  These can and will, of course, vary with each particular dataset.
+        
+        4.3 GSESampleMetadata
+        ---------------------
+        
+        The metadata for each sample in the series matrix can be accessed through the ``samples`` attribute of the *GSESeries*
+        instance.   This is actually a property that returns a generator that can be used to iterate through the samples in
+        "sample order", that is, the order in which they appear in the matrix.   To obtain a specific sample from its
+        index, use the generator to create a list, then index that list.  For example::
+        
+            fifth_sample = list(series_instance.samples)[4]
+        
+        5. MAGMA2
+        =========
+        
+        The older web applications, called *Guide* (see below) used an in-house-designed SQL database schema called *MAGMA*.
+        (It was an acronym, but, just think of it as the molten aglomeration of a bunch of stuff swirling around
+        in a great maelstrom, throwing off lots of heat and causing tremors now and then.)   MAGMA was completely re-designed
+        for *Guide*'s successor, *HaemoSphere*, and is called *MAGMA2*.
+        
+        5.1 gse-magma (script)
+        ----------------------
+        
+        The command-line script *gse-magma* takes the pickled `GEOSeries` object produced by `gse` and
+        emits the DDL that will enter the datasets metadata into MAGMA2.
+        
+        The output filename will also include a version that can be set using the ``--version`` switch (default: 1.0).
+        
+        The file containing the DDL for rows to add to the *MAGMA2* dataset metadata will be found in::
+         
+             <handle>.<version>_DDL.sql
+         
+        
+        5.2 gse-magma (advanced configuration)
+        --------------------------------------
+        
+        Creating the DDL is particularly tricky since not all GSE files will contain the same kinds of metadata,
+        nor will we always want to use the same metadata for any given dataset.  It is therefore possible to 
+        specify configuration options, encoded as python objects, using the ``--magma2-config=`` switch.
+        
+        This file can contain customised settings for callable objects that will take a GEOSeries instance as an argument
+        and return a string.   For example, the ``dataset_handle`` object might look like this::
+        
+            dataset_handle = lambda gseObj: gseObj.accession
+        
+        There are also ``dataset_version`` and ``dataset_description`` objects that can be defined as well.
+        
+        Sample metadata are referecned somewhat the same -- as callable python objects -- but the argument passed 
+        is the GSESampleMetadata instance.   This will be called in a loop that iterates through each of the samples
+        so metadata pertaining to each is available to these callable objects.  For instance::
+        
+            sample_metadata_description = lambda samp_inst: samp_inst.title
+        
+        returns the descriptive text for the given sample ``samp_inst``.
+        
+        These callable objects can be full-blown functions, not just anonymous *lambda* functions. Other, scaffolding
+        or supporting code can also be included in this configuration file.  Care should be taken in naming 
+        variables that should NOT be treated as configuration variables:  their names should always begin with an
+        underscore (_).  See the documentation for the *cfgparse* module for further information.
+        
+        A template configuration file can be generated by using the ``--template`` switch.  This simply
+        prints out the default configuration, in which all valus are set to empty strings or zeros.
+        
+        6. GUIDE
+        ========
+        
+        WEHI had an internally-developed web application called *Guide* that was a sort of genome browser
+        married to a collection of datasets commonly used by our scientists.  This module was written 
+        first and foremost to support and facilitate the addition of new datasets to this *Guide* collection.
+        
+        *Guide* has now been superceded by *HaemoSphere* which uses an updated version of *MAGMA* called, appropriately
+        enough, *MAGMA2*.   This section is included ONLY for historical purposes.  As of 1/1/2014, Guide is no longer
+        supported in GSE.
+        
+        6.1 gse-guide (script)
+        ----------------------
+        
+        The command-line script *gse-guide* takes the pickled `GEOSeries` object produced by `gse` and
+        emits three files that will then be incorporated into the Guide application's database.
+        Guide expects to see two files containing a picked object called a *matricks* which is a bit like a *pandas* `DataFrame`.
+        (Newer versions of guide will deprecate *matricks* in favor of *pandas*.)  
+        
+        Using the ``--handle=`` switch
+        will cause these two files to be created.  Originally, these contained the raw (i.e. unaggregated) samples and
+        the samples aggregated according to the celltype from which they were extracted.   Here, "celltype" may be a misnomer
+        but it is still used for historical reasons.   The celltype grouping is specified by the ``--group-by=`` switch, defaulting to the
+        second (``--group-by=1``) metadata level value.
+        
+        The output filenames will also include a version that can be set using the ``--version`` switch (default: 1.0).
+        
+        The result will be two files named::
+        
+            SampleSignalProfiles.<handle>.<version>.pickled
+        
+        and::
+        
+            CelltypeSignalProfiles.<handle>.<version>.pickled
+        
+        Also, a file containing the DDL for rows to add to the *guide* databaset tables will be found in::
+        
+            <handle>.<version>_DDL.sql
+        
+        
+        6.2 gse-guide (advanced configuration)
+        --------------------------------------
+        
+        Creating the DDL is particularly tricky since not all GSE files will contain the same kinds of metadata,
+        nor will we always want to use the same metadata for any given dataset.  It is therefore possible to 
+        specify configuration options, encoded as python objects, using the ``--guide-config=`` switch.
+        
+        This file can contain customised settings for callable objects that will take a GEOSeries instance as an argument
+        and return a string.   For example, the ``dataset_handle`` object might look like this::
+        
+            dataset_handle = lambda gseObj: gseObj.accession
+        
+        There are also ``dataset_version`` and ``dataset_description`` objects that can be defined as well.
+        
+        Sample metadata are referecned somewhat the same -- as callable python objects -- but the argument passed 
+        is the GSESampleMetadata instance.   This will be called in a loop that iterates through each of the samples
+        so metadata pertaining to each is available to these callable objects.  For instance::
+        
+            sample_description = lambda samp_inst: samp_inst.title
+        
+        returns the descriptive text for the given sample ``samp_inst``.
+        
+        These callable objects can be full-blown functions, not just anonymous *lambda* functions. Other, scaffolding
+        or supporting code can also be included in this configuration file.  Care should be taken in naming 
+        variables that should NOT be treated as configuration variables:  their names should always begin with an
+        underscore (_).  See the documentation for the *cfgparse* module for further information.
+        
+        A template configuration file can be generated by using the ``--template`` switch.  This simply
+        prints out the default configuration, in which all valus are set to empty strings or zeros.
+        
+        
+        
+        
+        
+        
+        
+Keywords: dataset extraction metadata GSE bioinformatics
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Classifier: Topic :: Scientific/Engineering :: Information Analysis
+Classifier: License :: OSI Approved :: BSD License
