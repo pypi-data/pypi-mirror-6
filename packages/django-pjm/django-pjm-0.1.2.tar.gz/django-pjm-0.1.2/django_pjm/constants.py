@@ -1,0 +1,17 @@
+ZONE = 'ZONE'
+HUB = 'HUB'
+AGGREGATE = 'AGGREGATE'
+EHV = 'EHV'
+LOAD = 'LOAD'
+GEN = 'GEN'
+
+TYPES = (
+    ZONE,
+    HUB,
+    AGGREGATE,
+    EHV,
+    LOAD,
+    GEN,
+)
+
+LMPDA = 'LMPDA'
