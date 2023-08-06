@@ -1,0 +1,1157 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>ZCML directives &mdash; zope.configuration 4.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="zope.configuration 4.0 documentation" href="index.html" />
+    <link rel="next" title="Package configuration" href="configure.html" />
+    <link rel="prev" title="Persistent Component Management" href="persistentregistry.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="configure.html" title="Package configuration"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="persistentregistry.html" title="Persistent Component Management"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">zope.configuration 4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="zcml-directives">
+<h1>ZCML directives<a class="headerlink" href="#zcml-directives" title="Permalink to this headline">¶</a></h1>
+<p>Components may be registered using the registration API exposed by
+<tt class="docutils literal"><span class="pre">zope.component</span></tt> (provideAdapter, provideUtility, etc.).  They may
+also be registered using configuration files.  The common way to do
+that is by using ZCML (Zope Configuration Markup Language), an XML
+spelling of component registration.</p>
+<p>In ZCML, each XML element is a <em>directive</em>.  There are different
+top-level directives that let us register components.  We will
+introduce them one by one here.</p>
+<p>This helper will let us easily execute ZCML snippets:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">cStringIO</span> <span class="kn">import</span> <span class="n">StringIO</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.xmlconfig</span> <span class="kn">import</span> <span class="n">xmlconfig</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">runSnippet</span><span class="p">(</span><span class="n">snippet</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">template</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span><span class="se">\</span>
+<span class="gp">... </span><span class="s">    &lt;configure xmlns=&#39;http://namespaces.zope.org/zope&#39;</span>
+<span class="gp">... </span><span class="s">               i18n_domain=&quot;zope&quot;&gt;</span>
+<span class="gp">... </span><span class="s">    </span><span class="si">%s</span><span class="s"></span>
+<span class="gp">... </span><span class="s">    &lt;/configure&gt;&quot;&quot;&quot;</span>
+<span class="gp">... </span>    <span class="n">xmlconfig</span><span class="p">(</span><span class="n">StringIO</span><span class="p">(</span><span class="n">template</span> <span class="o">%</span> <span class="n">snippet</span><span class="p">))</span>
+</pre></div>
+</div>
+<div class="section" id="adapter">
+<h2>adapter<a class="headerlink" href="#adapter" title="Permalink to this headline">¶</a></h2>
+<p>Adapters play a key role in the Component Architecture.  In ZCML, they
+are registered with the &lt;adapter /&gt; directive.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.testfiles.adapter</span> <span class="kn">import</span> <span class="n">A1</span><span class="p">,</span> <span class="n">A2</span><span class="p">,</span> <span class="n">A3</span><span class="p">,</span> <span class="n">Handler</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.testfiles.adapter</span> <span class="kn">import</span> <span class="n">I1</span><span class="p">,</span> <span class="n">I2</span><span class="p">,</span> <span class="n">I3</span><span class="p">,</span> <span class="n">IS</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.testfiles.components</span> <span class="kn">import</span> <span class="n">IContent</span><span class="p">,</span> <span class="n">Content</span><span class="p">,</span> <span class="n">Comp</span><span class="p">,</span> <span class="n">comp</span>
+</pre></div>
+</div>
+<p>Before we register the first test adapter, we can verify that adapter
+lookup doesn&#8217;t work yet:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.tests.examples</span> <span class="kn">import</span> <span class="n">clearZCML</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.testfiles.components</span> <span class="kn">import</span> <span class="n">IApp</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IApp</span><span class="p">(</span><span class="n">Content</span><span class="p">(),</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Then we register the adapter and see that the lookup works:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.components.Comp&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IApp</span><span class="p">(</span><span class="n">Content</span><span class="p">())</span><span class="o">.</span><span class="n">__class__</span>
+<span class="go">&lt;class &#39;zope.component.testfiles.components.Comp&#39;&gt;</span>
+</pre></div>
+</div>
+<p>It is also possible to give adapters names.  Then the combination of
+required interface, provided interface and name makes the adapter
+lookup unique.  The name is supplied using the <tt class="docutils literal"><span class="pre">name</span></tt> argument to
+the &lt;adapter /&gt; directive:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.tests.examples</span> <span class="kn">import</span> <span class="n">clearZCML</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">zope.component</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryAdapter</span><span class="p">(</span><span class="n">Content</span><span class="p">(),</span> <span class="n">IApp</span><span class="p">,</span> <span class="s">&#39;test&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.components.Comp&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      name=&quot;test&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getAdapter</span><span class="p">(</span><span class="n">Content</span><span class="p">(),</span> <span class="n">IApp</span><span class="p">,</span> <span class="s">&#39;test&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">__class__</span>
+<span class="go">&lt;class &#39;zope.component.testfiles.components.Comp&#39;&gt;</span>
+</pre></div>
+</div>
+<div class="section" id="adapter-factories">
+<h3>Adapter factories<a class="headerlink" href="#adapter-factories" title="Permalink to this headline">¶</a></h3>
+<p>It is possible to supply more than one adapter factory.  In this case,
+during adapter lookup each factory will be called and the return value
+will be given to the next factory.  The return value of the last
+factory is returned as the result of the adapter lookup.  For examle:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A1</span>
+<span class="gp">... </span><span class="s">               zope.component.testfiles.adapter.A2</span>
+<span class="gp">... </span><span class="s">               zope.component.testfiles.adapter.A3&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The resulting adapter is an A3, around an A2, around an A1, around the
+adapted object:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">content</span> <span class="o">=</span> <span class="n">Content</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">IApp</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a2</span> <span class="o">=</span> <span class="n">a3</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a2</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A2</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a1</span> <span class="o">=</span> <span class="n">a2</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a1</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A1</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a1</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="n">content</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Of course, if no factory is provided at all, we will get an error:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ZopeXMLConfigurationError</span>: <span class="n">File &quot;&lt;string&gt;&quot;, line 4.2-8.8</span>
+<span class="go">      ValueError: No factory specified</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="declaring-for-and-provides-in-python">
+<h3>Declaring <tt class="docutils literal"><span class="pre">for</span></tt> and <tt class="docutils literal"><span class="pre">provides</span></tt> in Python<a class="headerlink" href="#declaring-for-and-provides-in-python" title="Permalink to this headline">¶</a></h3>
+<p>The &lt;adapter /&gt; directive can figure out from the in-line Python
+declaration (using <tt class="docutils literal"><span class="pre">zope.component.adapts()</span></tt> or
+<tt class="docutils literal"><span class="pre">zope.component.adapter()</span></tt> as well as <tt class="docutils literal"><span class="pre">zope.interface.implements</span></tt>)
+what the adapter should be registered for and what it provides:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IApp</span><span class="p">(</span><span class="n">Content</span><span class="p">(),</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter factory=&quot;zope.component.testfiles.components.Comp&quot; /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IApp</span><span class="p">(</span><span class="n">Content</span><span class="p">())</span><span class="o">.</span><span class="n">__class__</span>
+<span class="go">&lt;class &#39;zope.component.testfiles.components.Comp&#39;&gt;</span>
+</pre></div>
+</div>
+<p>Of course, if the adapter has no <tt class="docutils literal"><span class="pre">implements()</span></tt> declaration, ZCML
+can&#8217;t figure out what it provides:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A4&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ZopeXMLConfigurationError</span>: <span class="n">File &quot;&lt;string&gt;&quot;, line 4.2-7.8</span>
+<span class="go">      TypeError: Missing &#39;provides&#39; attribute</span>
+</pre></div>
+</div>
+<p>On the other hand, if the factory implements more than one interface,
+ZCML can&#8217;t figure out what it should provide either:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A5&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ZopeXMLConfigurationError</span>: <span class="n">File &quot;&lt;string&gt;&quot;, line 4.2-7.8</span>
+<span class="go">      TypeError: Missing &#39;provides&#39; attribute</span>
+</pre></div>
+</div>
+<p>A not so common edge case is registering adapters directly for
+classes, not for interfaces.  For example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.Content&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A1&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">content</span> <span class="o">=</span> <span class="n">Content</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a1</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getAdapter</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">I1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">isinstance</span><span class="p">(</span><span class="n">a1</span><span class="p">,</span> <span class="n">A1</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>This time, any object providing <tt class="docutils literal"><span class="pre">IContent</span></tt> won&#8217;t work if it&#8217;s not an
+instance of the <tt class="docutils literal"><span class="pre">Content</span></tt> class:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">zope.interface</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">MyContent</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">zope</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">implements</span><span class="p">(</span><span class="n">IContent</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getAdapter</span><span class="p">(</span><span class="n">MyContent</span><span class="p">(),</span> <span class="n">I1</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>  
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ComponentLookupError</span>: <span class="n">...</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="multi-adapters">
+<h3>Multi-adapters<a class="headerlink" href="#multi-adapters" title="Permalink to this headline">¶</a></h3>
+<p>Conventional adapters adapt one object to provide another interface.
+Multi-adapters adapt several objects at once:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I1</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I2&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.I3&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A3&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">content</span> <span class="o">=</span> <span class="n">Content</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a1</span> <span class="o">=</span> <span class="n">A1</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a2</span> <span class="o">=</span> <span class="n">A2</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryMultiAdapter</span><span class="p">((</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">),</span> <span class="n">I3</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">context</span> <span class="o">==</span> <span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>You can even adapt an empty list of objects (we call this a
+null-adapter):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      for=&quot;&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.I3&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A3&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryMultiAdapter</span><span class="p">((),</span> <span class="n">I3</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">context</span> <span class="o">==</span> <span class="p">()</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Even with multi-adapters, ZCML can figure out the <tt class="docutils literal"><span class="pre">for</span></tt> and
+<tt class="docutils literal"><span class="pre">provides</span></tt> parameters from the Python declarations:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter factory=&quot;zope.component.testfiles.adapter.A3&quot; /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryMultiAdapter</span><span class="p">((</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">),</span> <span class="n">I3</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">context</span> <span class="o">==</span> <span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Chained factories are not supported for multi-adapters, though:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I1</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I2&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A1</span>
+<span class="gp">... </span><span class="s">               zope.component.testfiles.adapter.A2&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ZopeXMLConfigurationError</span>: <span class="n">File &quot;&lt;string&gt;&quot;, line 4.2-11.8</span>
+<span class="go">      ValueError: Can&#39;t use multiple factories and multiple for</span>
+</pre></div>
+</div>
+<p>And neither for null-adapters:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      for=&quot;&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A1</span>
+<span class="gp">... </span><span class="s">               zope.component.testfiles.adapter.A2&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ZopeXMLConfigurationError</span>: <span class="n">File &quot;&lt;string&gt;&quot;, line 4.2-9.8</span>
+<span class="go">      ValueError: Can&#39;t use multiple factories and multiple for</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="protected-adapters">
+<h3>Protected adapters<a class="headerlink" href="#protected-adapters" title="Permalink to this headline">¶</a></h3>
+<p>Adapters can be protected with a permission.  First we have to define
+a permission for which we&#8217;ll have to register the &lt;permission /&gt;
+directive:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IApp</span><span class="p">(</span><span class="n">Content</span><span class="p">(),</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">zope.security</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.configuration.xmlconfig</span> <span class="kn">import</span> <span class="n">XMLConfig</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">XMLConfig</span><span class="p">(</span><span class="s">&#39;meta.zcml&#39;</span><span class="p">,</span> <span class="n">zope</span><span class="o">.</span><span class="n">security</span><span class="p">)()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;permission</span>
+<span class="gp">... </span><span class="s">      id=&quot;y.x&quot;</span>
+<span class="gp">... </span><span class="s">      title=&quot;XY&quot;</span>
+<span class="gp">... </span><span class="s">      description=&quot;Allow XY.&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.components.Comp&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      permission=&quot;y.x&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We see that the adapter is a location proxy now so that the
+appropriate permissions can be found from the context:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">IApp</span><span class="p">(</span><span class="n">Content</span><span class="p">())</span><span class="o">.</span><span class="n">__class__</span>
+<span class="go">&lt;class &#39;zope.component.testfiles.components.Comp&#39;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">IApp</span><span class="p">(</span><span class="n">Content</span><span class="p">()))</span>
+<span class="go">&lt;class &#39;zope.location.location.LocationProxy&#39;&gt;</span>
+</pre></div>
+</div>
+<p>We can also go about it a different way.  Let&#8217;s make a public adapter
+and wrap the adapter in a security proxy.  That often happens when
+an adapter is turned over to untrusted code:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IApp</span><span class="p">(</span><span class="n">Content</span><span class="p">(),</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.components.Comp&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      permission=&quot;zope.Public&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.security.checker</span> <span class="kn">import</span> <span class="n">ProxyFactory</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">adapter</span> <span class="o">=</span> <span class="n">ProxyFactory</span><span class="p">(</span><span class="n">IApp</span><span class="p">(</span><span class="n">Content</span><span class="p">()))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.security.proxy</span> <span class="kn">import</span> <span class="n">getTestProxyItems</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">items</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">getTestProxyItems</span><span class="p">(</span><span class="n">adapter</span><span class="p">)]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">items</span>
+<span class="go">[&#39;a&#39;, &#39;f&#39;]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.security.proxy</span> <span class="kn">import</span> <span class="n">removeSecurityProxy</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">adapter</span><span class="p">)</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">Comp</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Of course, this still works when we let the ZCML directive handler
+figure out <tt class="docutils literal"><span class="pre">for</span></tt> and <tt class="docutils literal"><span class="pre">provides</span></tt> from the Python declarations:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.components.Comp&quot;</span>
+<span class="gp">... </span><span class="s">      permission=&quot;zope.Public&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">adapter</span> <span class="o">=</span> <span class="n">ProxyFactory</span><span class="p">(</span><span class="n">IApp</span><span class="p">(</span><span class="n">Content</span><span class="p">()))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">getTestProxyItems</span><span class="p">(</span><span class="n">adapter</span><span class="p">)]</span>
+<span class="go">[&#39;a&#39;, &#39;f&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">adapter</span><span class="p">)</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">Comp</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>It also works with multi adapters:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A3&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.I3&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I1</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I2&quot;</span>
+<span class="gp">... </span><span class="s">      permission=&quot;zope.Public&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">content</span> <span class="o">=</span> <span class="n">Content</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a1</span> <span class="o">=</span> <span class="n">A1</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a2</span> <span class="o">=</span> <span class="n">A2</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">ProxyFactory</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryMultiAdapter</span><span class="p">((</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">),</span> <span class="n">I3</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">__class__</span> <span class="o">==</span> <span class="n">A3</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">getTestProxyItems</span><span class="p">(</span><span class="n">a3</span><span class="p">)]</span>
+<span class="go">[&#39;f1&#39;, &#39;f2&#39;, &#39;f3&#39;]</span>
+</pre></div>
+</div>
+<p>It&#8217;s probably not worth mentioning, but when we try to protect an
+adapter with a permission that doesn&#8217;t exist, we&#8217;ll obviously get an
+error:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.components.Comp&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      permission=&quot;zope.UndefinedPermission&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ConfigurationExecutionError</span>: <span class="n">exceptions.ValueError: (&#39;Undefined permission id&#39;, &#39;zope.UndefinedPermission&#39;)</span>
+<span class="go">   in:</span>
+<span class="go">   File &quot;&lt;string&gt;&quot;, line 4.2-9.8</span>
+<span class="go">   Could not read source.</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="trusted-adapters">
+<h3>Trusted adapters<a class="headerlink" href="#trusted-adapters" title="Permalink to this headline">¶</a></h3>
+<p>Trusted adapters are adapters that are trusted to do anything with the
+objects they are given so that these objects are not security-proxied.
+They are registered using the <tt class="docutils literal"><span class="pre">trusted</span></tt> argument to the &lt;adapter /&gt;
+directive:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A1&quot;</span>
+<span class="gp">... </span><span class="s">      trusted=&quot;yes&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>With an unproxied object, it&#8217;s business as usual:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">ob</span> <span class="o">=</span> <span class="n">Content</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">I1</span><span class="p">(</span><span class="n">ob</span><span class="p">))</span> <span class="ow">is</span> <span class="n">A1</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>With a security-proxied object, however, we get a security-proxied
+adapter:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="n">ProxyFactory</span><span class="p">(</span><span class="n">ob</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">I1</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="go">&lt;type &#39;zope.security._proxy._Proxy&#39;&gt;</span>
+</pre></div>
+</div>
+<p>While the adapter is security-proxied, the object it adapts is now
+proxy-free.  The adapter has umlimited access to it:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">is</span> <span class="n">A1</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="n">ob</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>We can also protect the trusted adapter with a permission:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">XMLConfig</span><span class="p">(</span><span class="s">&#39;meta.zcml&#39;</span><span class="p">,</span> <span class="n">zope</span><span class="o">.</span><span class="n">security</span><span class="p">)()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;permission</span>
+<span class="gp">... </span><span class="s">      id=&quot;y.x&quot;</span>
+<span class="gp">... </span><span class="s">      title=&quot;XY&quot;</span>
+<span class="gp">... </span><span class="s">      description=&quot;Allow XY.&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A1&quot;</span>
+<span class="gp">... </span><span class="s">      permission=&quot;y.x&quot;</span>
+<span class="gp">... </span><span class="s">      trusted=&quot;yes&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Again, with an unproxied object, it&#8217;s business as usual:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">ob</span> <span class="o">=</span> <span class="n">Content</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">I1</span><span class="p">(</span><span class="n">ob</span><span class="p">))</span> <span class="ow">is</span> <span class="n">A1</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>With a security-proxied object, we again get a security-proxied
+adapter:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="n">ProxyFactory</span><span class="p">(</span><span class="n">ob</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">I1</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="go">&lt;type &#39;zope.security._proxy._Proxy&#39;&gt;</span>
+</pre></div>
+</div>
+<p>Since we protected the adapter with a permission, we now encounter a
+location proxy behind the security proxy:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="go">&lt;class &#39;zope.location.location.LocationProxy&#39;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="n">ob</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>There&#8217;s one exception to all of this: When you use the public
+permission (<tt class="docutils literal"><span class="pre">zope.Public</span></tt>), there will be no location proxy:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A1&quot;</span>
+<span class="gp">... </span><span class="s">      permission=&quot;zope.Public&quot;</span>
+<span class="gp">... </span><span class="s">      trusted=&quot;yes&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ob</span> <span class="o">=</span> <span class="n">Content</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="n">ProxyFactory</span><span class="p">(</span><span class="n">ob</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">I1</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="go">&lt;type &#39;zope.security._proxy._Proxy&#39;&gt;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">is</span> <span class="n">A1</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>We can also explicitply pass the <tt class="docutils literal"><span class="pre">locate</span></tt> argument to make sure we
+get location proxies:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;adapter</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A1&quot;</span>
+<span class="gp">... </span><span class="s">      trusted=&quot;yes&quot;</span>
+<span class="gp">... </span><span class="s">      locate=&quot;yes&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ob</span> <span class="o">=</span> <span class="n">Content</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="n">ProxyFactory</span><span class="p">(</span><span class="n">ob</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">I1</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="go">&lt;type &#39;zope.security._proxy._Proxy&#39;&gt;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="go">&lt;class &#39;zope.location.location.LocationProxy&#39;&gt;</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="subscriber">
+<h2>subscriber<a class="headerlink" href="#subscriber" title="Permalink to this headline">¶</a></h2>
+<p>With the &lt;subscriber /&gt; directive you can register subscription
+adapters or event subscribers with the adapter registry.  Consider
+this very typical example of a &lt;subscriber /&gt; directive:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;subscriber</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.IS&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A3&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">content</span> <span class="o">=</span> <span class="n">Content</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a1</span> <span class="o">=</span> <span class="n">A1</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">subscribers</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">),</span> <span class="n">IS</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">subscribers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">context</span> <span class="o">==</span> <span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Note how ZCML provides some additional information when registering
+components, such as the ZCML filename and line numbers:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sm</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getSiteManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">doc</span> <span class="o">=</span> <span class="p">[</span><span class="n">reg</span><span class="o">.</span><span class="n">info</span> <span class="k">for</span> <span class="n">reg</span> <span class="ow">in</span> <span class="n">sm</span><span class="o">.</span><span class="n">registeredSubscriptionAdapters</span><span class="p">()</span>
+<span class="gp">... </span>       <span class="k">if</span> <span class="n">reg</span><span class="o">.</span><span class="n">provided</span> <span class="ow">is</span> <span class="n">IS</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">print</span> <span class="n">doc</span>
+<span class="go">File &quot;&lt;string&gt;&quot;, line 4.2-9.8</span>
+<span class="go">  Could not read source.</span>
+</pre></div>
+</div>
+<p>The &#8220;fun&#8221; behind subscription adapters/subscribers is that when
+several ones are declared for the same for/provides, they are all
+found.  With regular adapters, the most specific one (and in doubt the
+one registered last) wins.  Consider these two subscribers:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;subscriber</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.IS&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A3&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;</span>
+<span class="gp">... </span><span class="s">  &lt;subscriber</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.IS&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A2&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">subscribers</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">),</span> <span class="n">IS</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">subscribers</span><span class="p">)</span>
+<span class="go">2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">sorted</span><span class="p">([</span><span class="n">a</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">subscribers</span><span class="p">])</span>
+<span class="go">[&#39;A2&#39;, &#39;A3&#39;]</span>
+</pre></div>
+</div>
+<div class="section" id="id1">
+<h3>Declaring <tt class="docutils literal"><span class="pre">for</span></tt> and <tt class="docutils literal"><span class="pre">provides</span></tt> in Python<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h3>
+<p>Like the &lt;adapter /&gt; directive, the &lt;subscriber /&gt; directive can
+figure out from the in-line Python declaration (using
+<tt class="docutils literal"><span class="pre">zope.component.adapts()</span></tt> or <tt class="docutils literal"><span class="pre">zope.component.adapter()</span></tt>) what the
+subscriber should be registered for:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;subscriber</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.IS&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A3&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">content</span> <span class="o">=</span> <span class="n">Content</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a2</span> <span class="o">=</span> <span class="n">A2</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">subscribers</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">),</span> <span class="n">IS</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">subscribers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">context</span> <span class="o">==</span> <span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>In the same way the directive can figure out what a subscriber
+provides:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;subscriber handler=&quot;zope.component.testfiles.adapter.A3&quot; /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sm</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getSiteManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">sm</span><span class="o">.</span><span class="n">adapters</span><span class="o">.</span><span class="n">subscriptions</span><span class="p">((</span><span class="n">IContent</span><span class="p">,</span> <span class="n">I1</span><span class="p">,</span> <span class="n">I2</span><span class="p">),</span> <span class="bp">None</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>A not so common edge case is declaring subscribers directly for
+classes, not for interfaces.  For example:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;subscriber</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.Content&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A1&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">subs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">Content</span><span class="p">(),),</span> <span class="n">I1</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">isinstance</span><span class="p">(</span><span class="n">subs</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">A1</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>This time, any object providing <tt class="docutils literal"><span class="pre">IContent</span></tt> won&#8217;t work if it&#8217;s not an
+instance of the <tt class="docutils literal"><span class="pre">Content</span></tt> class:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">MyContent</span><span class="p">(),),</span> <span class="n">I1</span><span class="p">))</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="protected-subscribers">
+<h3>Protected subscribers<a class="headerlink" href="#protected-subscribers" title="Permalink to this headline">¶</a></h3>
+<p>Subscribers can also be protected with a permission.  First we have to
+define a permission for which we&#8217;ll have to register the &lt;permission /&gt;
+directive:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">XMLConfig</span><span class="p">(</span><span class="s">&#39;meta.zcml&#39;</span><span class="p">,</span> <span class="n">zope</span><span class="o">.</span><span class="n">security</span><span class="p">)()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;permission</span>
+<span class="gp">... </span><span class="s">      id=&quot;y.x&quot;</span>
+<span class="gp">... </span><span class="s">      title=&quot;XY&quot;</span>
+<span class="gp">... </span><span class="s">      description=&quot;Allow XY.&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;</span>
+<span class="gp">... </span><span class="s">  &lt;subscriber</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.IS&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A3&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      permission=&quot;y.x&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">subscribers</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">),</span> <span class="n">IS</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">subscribers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a3</span><span class="p">)</span>
+<span class="go">&lt;class &#39;zope.location.location.LocationProxy&#39;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">context</span> <span class="o">==</span> <span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="trusted-subscribers">
+<h3>Trusted subscribers<a class="headerlink" href="#trusted-subscribers" title="Permalink to this headline">¶</a></h3>
+<p>Like trusted adapters, trusted subscribers are subscribers that are
+trusted to do anything with the objects they are given so that these
+objects are not security-proxied.  In analogy to the &lt;adapter /&gt;
+directive, they are registered using the <tt class="docutils literal"><span class="pre">trusted</span></tt> argument to the
+&lt;subscriber /&gt; directive:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;subscriber</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.IS&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A3&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      trusted=&quot;yes&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>With an unproxied object, it&#8217;s business as usual:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">subscribers</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">),</span> <span class="n">IS</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">subscribers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">context</span> <span class="o">==</span> <span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a3</span><span class="p">)</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Now with a proxied object.  We will see that the subscriber has
+unproxied access to it, but the subscriber itself is proxied:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="n">ProxyFactory</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">p</span><span class="p">,</span> <span class="n">a1</span><span class="p">),</span> <span class="n">IS</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a3</span><span class="p">)</span>
+<span class="go">&lt;type &#39;zope.security._proxy._Proxy&#39;&gt;</span>
+</pre></div>
+</div>
+<p>There&#8217;s no location proxy behind the security proxy:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">a3</span><span class="p">)</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="n">content</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">a3</span><span class="p">))</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>If you want the trusted subscriber to be located, you&#8217;ll also have to
+use the <tt class="docutils literal"><span class="pre">locate</span></tt> argument:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;subscriber</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.adapter.IS&quot;</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.adapter.A3&quot;</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      trusted=&quot;yes&quot;</span>
+<span class="gp">... </span><span class="s">      locate=&quot;yes&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Again, it&#8217;s business as usual with an unproxied object:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">subscribers</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">),</span> <span class="n">IS</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">subscribers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span><span class="o">.</span><span class="n">context</span> <span class="o">==</span> <span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a3</span><span class="p">)</span> <span class="ow">is</span> <span class="n">A3</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>With a proxied object, we again get a security-proxied subscriber:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">p</span> <span class="o">=</span> <span class="n">ProxyFactory</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">a3</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">p</span><span class="p">,</span> <span class="n">a1</span><span class="p">),</span> <span class="n">IS</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">a3</span><span class="p">)</span>
+<span class="go">&lt;type &#39;zope.security._proxy._Proxy&#39;&gt;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">a3</span><span class="p">)</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="n">content</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>However, thanks to the <tt class="docutils literal"><span class="pre">locate</span></tt> argument, we now have a location
+proxy behind the security proxy:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">a3</span><span class="p">))</span>
+<span class="go">&lt;class &#39;zope.location.location.LocationProxy&#39;&gt;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="event-subscriber-handlers">
+<h3>Event subscriber (handlers)<a class="headerlink" href="#event-subscriber-handlers" title="Permalink to this headline">¶</a></h3>
+<p>Sometimes, subscribers don&#8217;t need to be adapters that actually provide
+anything.  It&#8217;s enough that a callable is called for a certain event.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;subscriber</span>
+<span class="gp">... </span><span class="s">      for=&quot;zope.component.testfiles.components.IContent</span>
+<span class="gp">... </span><span class="s">           zope.component.testfiles.adapter.I1&quot;</span>
+<span class="gp">... </span><span class="s">      handler=&quot;zope.component.testfiles.adapter.Handler&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In this case, simply getting the subscribers is enough to invoke them:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">list</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">content</span><span class="p">,</span> <span class="n">a1</span><span class="p">),</span> <span class="bp">None</span><span class="p">))</span>
+<span class="go">[]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">content</span><span class="o">.</span><span class="n">args</span> <span class="o">==</span> <span class="p">((</span><span class="n">a1</span><span class="p">,),)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="utility">
+<h2>utility<a class="headerlink" href="#utility" title="Permalink to this headline">¶</a></h2>
+<p>Apart from adapters (and subscription adapters), the Component
+Architecture knows a second kind of component: utilities.  They are
+registered using the &lt;utility /&gt; directive.</p>
+<p>Before we register the first test utility, we can verify that utility
+lookup doesn&#8217;t work yet:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryUtility</span><span class="p">(</span><span class="n">IApp</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Then we register the utility:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;utility</span>
+<span class="gp">... </span><span class="s">      component=&quot;zope.component.testfiles.components.comp&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtility</span><span class="p">(</span><span class="n">IApp</span><span class="p">)</span> <span class="ow">is</span> <span class="n">comp</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Like adapters, utilities can also have names.  There can be more than
+one utility registered for a certain interface, as long as they each
+have a different name.</p>
+<p>First, we make sure that there&#8217;s no utility yet:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryUtility</span><span class="p">(</span><span class="n">IApp</span><span class="p">,</span> <span class="s">&#39;test&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Then we register it:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;utility</span>
+<span class="gp">... </span><span class="s">      component=&quot;zope.component.testfiles.components.comp&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      name=&quot;test&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtility</span><span class="p">(</span><span class="n">IApp</span><span class="p">,</span> <span class="s">&#39;test&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="n">comp</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Utilities can also be registered from a factory.  In this case, the
+ZCML handler calls the factory (without any arguments) and registers
+the returned value as a utility.  Typically, you&#8217;d pass a class for
+the factory:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryUtility</span><span class="p">(</span><span class="n">IApp</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;utility</span>
+<span class="gp">... </span><span class="s">      factory=&quot;zope.component.testfiles.components.Comp&quot;</span>
+<span class="gp">... </span><span class="s">      provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="gp">... </span><span class="s">      /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtility</span><span class="p">(</span><span class="n">IApp</span><span class="p">)</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">Comp</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<div class="section" id="declaring-provides-in-python">
+<h3>Declaring <tt class="docutils literal"><span class="pre">provides</span></tt> in Python<a class="headerlink" href="#declaring-provides-in-python" title="Permalink to this headline">¶</a></h3>
+<p>Like other directives, &lt;utility /&gt; can also figure out which interface
+a utility provides from the Python declaration:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryUtility</span><span class="p">(</span><span class="n">IApp</span><span class="p">)</span> <span class="ow">is</span> <span class="bp">None</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;utility component=&quot;zope.component.testfiles.components.comp&quot; /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtility</span><span class="p">(</span><span class="n">IApp</span><span class="p">)</span> <span class="ow">is</span> <span class="n">comp</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>It won&#8217;t work if the component that is to be registered doesn&#8217;t
+provide anything:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;utility component=&quot;zope.component.testfiles.adapter.a4&quot; /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ZopeXMLConfigurationError</span>: <span class="n">File &quot;&lt;string&gt;&quot;, line 4.2-4.61</span>
+<span class="go">      TypeError: Missing &#39;provides&#39; attribute</span>
+</pre></div>
+</div>
+<p>Or if more than one interface is provided (then the ZCML directive
+handler doesn&#8217;t know under which the utility should be registered):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;utility component=&quot;zope.component.testfiles.adapter.a5&quot; /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ZopeXMLConfigurationError</span>: <span class="n">File &quot;&lt;string&gt;&quot;, line 4.2-4.61</span>
+<span class="go">      TypeError: Missing &#39;provides&#39; attribute</span>
+</pre></div>
+</div>
+<p>We can repeat the same drill for utility factories:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;utility factory=&quot;zope.component.testfiles.components.Comp&quot; /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtility</span><span class="p">(</span><span class="n">IApp</span><span class="p">)</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">Comp</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;utility factory=&quot;zope.component.testfiles.adapter.A4&quot; /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ZopeXMLConfigurationError</span>: <span class="n">File &quot;&lt;string&gt;&quot;, line 4.2-4.59</span>
+<span class="go">      TypeError: Missing &#39;provides&#39; attribute</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">clearZCML</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">runSnippet</span><span class="p">(</span><span class="s">&#39;&#39;&#39;</span>
+<span class="gp">... </span><span class="s">  &lt;utility factory=&quot;zope.component.testfiles.adapter.A5&quot; /&gt;&#39;&#39;&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+   <span class="c">...</span>
+<span class="gr">ZopeXMLConfigurationError</span>: <span class="n">File &quot;&lt;string&gt;&quot;, line 4.2-4.59</span>
+<span class="go">      TypeError: Missing &#39;provides&#39; attribute</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="protected-utilities">
+<h3>Protected utilities<a class="headerlink" href="#protected-utilities" title="Permalink to this headline">¶</a></h3>
+<p>TODO:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">testProtectedUtility</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Test that we can protect a utility.</span>
+
+<span class="sd">    Also:</span>
+<span class="sd">    Check that multiple configurations for the same utility and</span>
+<span class="sd">    don&#39;t interfere.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryUtility</span><span class="p">(</span><span class="n">IV</span><span class="p">),</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="n">xmlconfig</span><span class="p">(</span><span class="n">StringIO</span><span class="p">(</span><span class="n">template</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        &lt;permission id=&quot;tell.everyone&quot; title=&quot;Yay&quot; /&gt;</span>
+<span class="sd">        &lt;utility</span>
+<span class="sd">          component=&quot;zope.component.testfiles.components.comp&quot;</span>
+<span class="sd">          provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="sd">          permission=&quot;tell.everyone&quot;</span>
+<span class="sd">          /&gt;</span>
+<span class="sd">        &lt;permission id=&quot;top.secret&quot; title=&quot;shhhh&quot; /&gt;</span>
+<span class="sd">        &lt;utility</span>
+<span class="sd">          component=&quot;zope.component.testfiles.components.comp&quot;</span>
+<span class="sd">          provides=&quot;zope.component.testfiles.components.IAppb&quot;</span>
+<span class="sd">          permission=&quot;top.secret&quot;</span>
+<span class="sd">          /&gt;</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="p">)))</span>
+
+    <span class="n">utility</span> <span class="o">=</span> <span class="n">ProxyFactory</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtility</span><span class="p">(</span><span class="n">IApp</span><span class="p">))</span>
+    <span class="n">items</span> <span class="o">=</span> <span class="n">getTestProxyItems</span><span class="p">(</span><span class="n">utility</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">items</span><span class="p">,</span> <span class="p">[(</span><span class="s">&#39;a&#39;</span><span class="p">,</span> <span class="s">&#39;tell.everyone&#39;</span><span class="p">),</span>
+                             <span class="p">(</span><span class="s">&#39;f&#39;</span><span class="p">,</span> <span class="s">&#39;tell.everyone&#39;</span><span class="p">)</span>
+                             <span class="p">])</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">removeSecurityProxy</span><span class="p">(</span><span class="n">utility</span><span class="p">),</span> <span class="n">comp</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">testUtilityUndefinedPermission</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="n">StringIO</span><span class="p">(</span><span class="n">template</span> <span class="o">%</span> <span class="p">(</span>
+         <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">         &lt;utility</span>
+<span class="sd">          component=&quot;zope.component.testfiles.components.comp&quot;</span>
+<span class="sd">          provides=&quot;zope.component.testfiles.components.IApp&quot;</span>
+<span class="sd">          permission=&quot;zope.UndefinedPermission&quot;</span>
+<span class="sd">          /&gt;</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="p">))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">assertRaises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">xmlconfig</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span>
+                      <span class="n">testing</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="interface">
+<h2>interface<a class="headerlink" href="#interface" title="Permalink to this headline">¶</a></h2>
+<p>The &lt;interface /&gt; directive lets us register an interface.  Interfaces
+are registered as named utilities.  We therefore needn&#8217;t go though all
+the lookup details again, it is sufficient to see whether the
+directive handler emits the right actions.</p>
+<p>First we provide a stub configuration context:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">re</span><span class="o">,</span> <span class="nn">pprint</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">atre</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">&#39; at [0-9a-fA-Fx]+&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Context</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>   <span class="n">actions</span> <span class="o">=</span> <span class="p">()</span>
+<span class="gp">... </span>   <span class="k">def</span> <span class="nf">action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">discriminator</span><span class="p">,</span> <span class="nb">callable</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+<span class="gp">... </span>       <span class="bp">self</span><span class="o">.</span><span class="n">actions</span> <span class="o">+=</span> <span class="p">((</span><span class="n">discriminator</span><span class="p">,</span> <span class="nb">callable</span><span class="p">,</span> <span class="n">args</span><span class="p">),</span> <span class="p">)</span>
+<span class="gp">... </span>   <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="gp">... </span>       <span class="n">stream</span> <span class="o">=</span> <span class="n">StringIO</span><span class="p">()</span>
+<span class="gp">... </span>       <span class="n">pprinter</span> <span class="o">=</span> <span class="n">pprint</span><span class="o">.</span><span class="n">PrettyPrinter</span><span class="p">(</span><span class="n">stream</span><span class="o">=</span><span class="n">stream</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>
+<span class="gp">... </span>       <span class="n">pprinter</span><span class="o">.</span><span class="n">pprint</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">actions</span><span class="p">)</span>
+<span class="gp">... </span>       <span class="n">r</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+<span class="gp">... </span>       <span class="k">return</span> <span class="p">(</span><span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">atre</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">r</span><span class="p">)))</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">context</span> <span class="o">=</span> <span class="n">Context</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Then we provide a test interface that we&#8217;d like to register:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">Interface</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">I</span><span class="p">(</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>It doesn&#8217;t yet provide <tt class="docutils literal"><span class="pre">ITestType</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.tests.examples</span> <span class="kn">import</span> <span class="n">ITestType</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ITestType</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">I</span><span class="p">)</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+<p>However, after calling the directive handler...</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.zcml</span> <span class="kn">import</span> <span class="n">interface</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">interface</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">ITestType</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">context</span>
+<span class="go">((None,</span>
+<span class="go">  &lt;function provideInterface&gt;,</span>
+<span class="go">  (&#39;&#39;,</span>
+<span class="go">   &lt;InterfaceClass __builtin__.I&gt;,</span>
+<span class="go">   &lt;InterfaceClass zope.component.tests.examples.ITestType&gt;)),)</span>
+</pre></div>
+</div>
+<p>...it does provide <tt class="docutils literal"><span class="pre">ITestType</span></tt>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.interface.interfaces</span> <span class="kn">import</span> <span class="n">IInterface</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ITestType</span><span class="o">.</span><span class="n">extends</span><span class="p">(</span><span class="n">IInterface</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IInterface</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">I</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">ZCML directives</a><ul>
+<li><a class="reference internal" href="#adapter">adapter</a><ul>
+<li><a class="reference internal" href="#adapter-factories">Adapter factories</a></li>
+<li><a class="reference internal" href="#declaring-for-and-provides-in-python">Declaring <tt class="docutils literal"><span class="pre">for</span></tt> and <tt class="docutils literal"><span class="pre">provides</span></tt> in Python</a></li>
+<li><a class="reference internal" href="#multi-adapters">Multi-adapters</a></li>
+<li><a class="reference internal" href="#protected-adapters">Protected adapters</a></li>
+<li><a class="reference internal" href="#trusted-adapters">Trusted adapters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#subscriber">subscriber</a><ul>
+<li><a class="reference internal" href="#id1">Declaring <tt class="docutils literal"><span class="pre">for</span></tt> and <tt class="docutils literal"><span class="pre">provides</span></tt> in Python</a></li>
+<li><a class="reference internal" href="#protected-subscribers">Protected subscribers</a></li>
+<li><a class="reference internal" href="#trusted-subscribers">Trusted subscribers</a></li>
+<li><a class="reference internal" href="#event-subscriber-handlers">Event subscriber (handlers)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#utility">utility</a><ul>
+<li><a class="reference internal" href="#declaring-provides-in-python">Declaring <tt class="docutils literal"><span class="pre">provides</span></tt> in Python</a></li>
+<li><a class="reference internal" href="#protected-utilities">Protected utilities</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#interface">interface</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="persistentregistry.html"
+                        title="previous chapter">Persistent Component Management</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="configure.html"
+                        title="next chapter">Package configuration</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/zcml.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="configure.html" title="Package configuration"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="persistentregistry.html" title="Persistent Component Management"
+             >previous</a> |</li>
+        <li><a href="index.html">zope.configuration 4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

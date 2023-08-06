@@ -1,0 +1,704 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>The Zope 3 Component Architecture (Socket Example) &mdash; zope.configuration 4.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="zope.configuration 4.0 documentation" href="index.html" />
+    <link rel="next" title="Events" href="event.html" />
+    <link rel="prev" title="Zope Component Architecture" href="narr.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="event.html" title="Events"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="narr.html" title="Zope Component Architecture"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">zope.configuration 4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="the-zope-3-component-architecture-socket-example">
+<h1>The Zope 3 Component Architecture (Socket Example)<a class="headerlink" href="#the-zope-3-component-architecture-socket-example" title="Permalink to this headline">¶</a></h1>
+<p>The component architecture provides an application framework that provides its
+functionality through loosely-connected components. A <em>component</em> can be any
+Python object and has a particular purpose associated with it. Thus, in a
+component-based applications you have many small component in contrast to
+classical object-oriented development, where you have a few big objects.</p>
+<p>Components communicate via specific APIs, which are formally defined by
+interfaces, which are provided by the <cite>zope.interface</cite> package. <em>Interfaces</em>
+describe the methods and properties that a component is expected to
+provide. They are also used as a primary mean to provide developer-level
+documentation for the components. For more details about interfaces see
+<cite>zope/interface/README.txt</cite>.</p>
+<p>The two main types of components are <em>adapters</em> and <em>utilities</em>. They will be
+discussed in detail later in this document. Both component types are managed
+by the <em>site manager</em>, with which you can register and access these
+components. However, most of the site manager&#8217;s functionality is hidden behind
+the component architecture&#8217;s public API, which is documented in
+<cite>IComponentArchitecture</cite>.</p>
+<div class="section" id="adapters">
+<h2>Adapters<a class="headerlink" href="#adapters" title="Permalink to this headline">¶</a></h2>
+<p>Adapters are a well-established pattern. An <em>adapter</em> uses an object providing
+one interface to produce an object that provides another interface. Here an
+example: Imagine that you purchased an electric shaver in the US, and thus
+you require the US socket type. You are now traveling in Germany, where another
+socket style is used. You will need a device, an adapter, that converts from
+the German to the US socket style.</p>
+<p>The functionality of adapters is actually natively provided by the
+<cite>zope.interface</cite> package and is thus well documented there. The <cite>human.txt</cite>
+file provides a gentle introduction to adapters, whereby <cite>adapter.txt</cite> is
+aimed at providing a comprehensive insight into adapters, but is too abstract
+for many as an initial read. Thus, we will only explain adapters in the context
+of the component architecture&#8217;s API.</p>
+<p>So let&#8217;s say that we have a German socket:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">Interface</span><span class="p">,</span> <span class="n">implements</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IGermanSocket</span><span class="p">(</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Socket</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">return</span> <span class="s">&#39;&lt;instance of </span><span class="si">%s</span><span class="s">&gt;&#39;</span> <span class="o">%</span><span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">GermanSocket</span><span class="p">(</span><span class="n">Socket</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="sd">&quot;&quot;&quot;German wall socket.&quot;&quot;&quot;</span>
+<span class="gp">... </span>    <span class="n">implements</span><span class="p">(</span><span class="n">IGermanSocket</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>and we want to convert it to an US socket</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IUSSocket</span><span class="p">(</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>so that our shaver can be used in Germany. So we go to a German electronics
+store to look for an adapter that we can plug in the wall:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">GermanToUSSocketAdapter</span><span class="p">(</span><span class="n">Socket</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">implements</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">__used_for__</span> <span class="o">=</span> <span class="n">IGermanSocket</span>
+<span class="gp">...</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">socket</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">socket</span>
+</pre></div>
+</div>
+<p>Note that I could have called the passed in socket any way I like, but
+<cite>context</cite> is the standard name accepted.</p>
+<div class="section" id="single-adapters">
+<h3>Single Adapters<a class="headerlink" href="#single-adapters" title="Permalink to this headline">¶</a></h3>
+<p>Before we can use the adapter, we have to buy it and make it part of our
+inventory. In the component architecture we do this by registering the adapter
+with the framework, more specifically with the global site manager:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">zope.component</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getGlobalSiteManager</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerAdapter</span><span class="p">(</span><span class="n">GermanToUSSocketAdapter</span><span class="p">,</span> <span class="p">(</span><span class="n">IGermanSocket</span><span class="p">,),</span> <span class="n">IUSSocket</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><cite>zope.component</cite> is the component architecture API that is being
+presented by this file. You registered an adapter from <cite>IGermanSocket</cite>
+to <cite>IUSSocket</cite> having no name (thus the empty string).</p>
+<p>Anyways, you finally get back to your hotel room and shave, since you have not
+been able to shave in the plane. In the bathroom you discover a socket:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">bathroomDE</span> <span class="o">=</span> <span class="n">GermanSocket</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IGermanSocket</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">bathroomDE</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>You now insert the adapter in the German socket</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">bathroomUS</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getAdapter</span><span class="p">(</span><span class="n">bathroomDE</span><span class="p">,</span> <span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>so that the socket now provides the US version:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">IUSSocket</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">bathroomUS</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Now you can insert your shaver and get on with your day.</p>
+<p>After a week you travel for a couple of days to the Prague and you notice that
+the Czech have yet another socket type:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">ICzechSocket</span><span class="p">(</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">CzechSocket</span><span class="p">(</span><span class="n">Socket</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">implements</span><span class="p">(</span><span class="n">ICzechSocket</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">czech</span> <span class="o">=</span> <span class="n">CzechSocket</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>You try to find an adapter for your shaver in your bag, but you fail, since
+you do not have one:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getAdapter</span><span class="p">(</span><span class="n">czech</span><span class="p">,</span> <span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span> \
+<span class="gp">... </span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ComponentLookupError</span>: <span class="n">(&lt;instance of CzechSocket&gt;,</span>
+<span class="go">                        &lt;InterfaceClass __builtin__.IUSSocket&gt;,</span>
+<span class="go">                        &#39;&#39;)</span>
+</pre></div>
+</div>
+<p>or the more graceful way:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">marker</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryAdapter</span><span class="p">(</span><span class="n">czech</span><span class="p">,</span> <span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">marker</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span> <span class="ow">is</span> <span class="n">marker</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>In the component architecture API any <cite>get*</cite> method will fail with a specific
+exception, if a query failed, whereby methods starting with <cite>query*</cite> will
+always return a <cite>default</cite> value after a failure.</p>
+</div>
+<div class="section" id="named-adapters">
+<h3>Named Adapters<a class="headerlink" href="#named-adapters" title="Permalink to this headline">¶</a></h3>
+<p>You are finally back in Germany. You also brought your DVD player and a couple
+DVDs with you, which you would like to watch. Your shaver was able to convert
+automatically from 110 volts to 240 volts, but your DVD player cannot. So you
+have to buy another adapter that also handles converting the voltage and the
+frequency of the AC current:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">GermanToUSSocketAdapterAndTransformer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">implements</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">__used_for__</span> <span class="o">=</span> <span class="n">IGermanSocket</span>
+<span class="gp">...</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">socket</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">context</span> <span class="o">=</span> <span class="n">socket</span>
+</pre></div>
+</div>
+<p>Now, we need a way to keep the two adapters apart. Thus we register them with
+a name:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerAdapter</span><span class="p">(</span><span class="n">GermanToUSSocketAdapter</span><span class="p">,</span>
+<span class="gp">... </span>                    <span class="p">(</span><span class="n">IGermanSocket</span><span class="p">,),</span> <span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;shaver&#39;</span><span class="p">,)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerAdapter</span><span class="p">(</span><span class="n">GermanToUSSocketAdapterAndTransformer</span><span class="p">,</span>
+<span class="gp">... </span>                    <span class="p">(</span><span class="n">IGermanSocket</span><span class="p">,),</span> <span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;dvd&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now we simply look up the adapters using their labels (called <em>name</em>):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getAdapter</span><span class="p">(</span><span class="n">bathroomDE</span><span class="p">,</span> <span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;shaver&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">GermanToUSSocketAdapter</span>
+<span class="go">True</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getAdapter</span><span class="p">(</span><span class="n">bathroomDE</span><span class="p">,</span> <span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;dvd&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">GermanToUSSocketAdapterAndTransformer</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Clearly, we do not have an adapter for the MP3 player</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getAdapter</span><span class="p">(</span><span class="n">bathroomDE</span><span class="p">,</span> <span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;mp3&#39;</span><span class="p">)</span> \
+<span class="gp">... </span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ComponentLookupError</span>: <span class="n">(&lt;instance of GermanSocket&gt;,</span>
+<span class="go">                        &lt;InterfaceClass __builtin__.IUSSocket&gt;,</span>
+<span class="go">                        &#39;mp3&#39;)</span>
+</pre></div>
+</div>
+<p>but you could use the &#8216;dvd&#8217; adapter in this case of course. ;)</p>
+<p>Sometimes you want to know all adapters that are available. Let&#8217;s say you want
+to know about all the adapters that convert a German to a US socket type:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sockets</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getAdapters</span><span class="p">((</span><span class="n">bathroomDE</span><span class="p">,),</span> <span class="n">IUSSocket</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">len</span><span class="p">(</span><span class="n">sockets</span><span class="p">)</span>
+<span class="go">3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">socket</span> <span class="ow">in</span> <span class="n">sockets</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">names</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">names</span>
+<span class="go">[u&#39;&#39;, u&#39;dvd&#39;, u&#39;shaver&#39;]</span>
+</pre></div>
+</div>
+<p><cite>zope.component.getAdapters()</cite> returns a list of tuples. The first
+entry of the tuple is the name of the adapter and the second is the
+adapter itself.</p>
+</div>
+<div class="section" id="multi-adapters">
+<h3>Multi-Adapters<a class="headerlink" href="#multi-adapters" title="Permalink to this headline">¶</a></h3>
+<p>After watching all the DVDs you brought at least twice, you get tired of them
+and you want to listen to some music using your MP3 player. But darn, the MP3
+player plug has a ground pin and all the adapters you have do not support
+that:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IUSGroundedSocket</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>So you go out another time to buy an adapter. This time, however, you do not
+buy yet another adapter, but a piece that provides the grounding plug:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IGrounder</span><span class="p">(</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Grounder</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">implements</span><span class="p">(</span><span class="n">IGrounder</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">return</span> <span class="s">&#39;&lt;instance of Grounder&gt;&#39;</span>
+</pre></div>
+</div>
+<p>Then together they will provided a grounded us socket:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">GroundedGermanToUSSocketAdapter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">implements</span><span class="p">(</span><span class="n">IUSGroundedSocket</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">__used_for__</span> <span class="o">=</span> <span class="p">(</span><span class="n">IGermanSocket</span><span class="p">,</span> <span class="n">IGrounder</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">socket</span><span class="p">,</span> <span class="n">grounder</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grounder</span> <span class="o">=</span> <span class="n">socket</span><span class="p">,</span> <span class="n">grounder</span>
+</pre></div>
+</div>
+<p>You now register the combination, so that you know you can create a
+<cite>IUSGroundedSocket</cite>:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerAdapter</span><span class="p">(</span><span class="n">GroundedGermanToUSSocketAdapter</span><span class="p">,</span>
+<span class="gp">... </span>                <span class="p">(</span><span class="n">IGermanSocket</span><span class="p">,</span> <span class="n">IGrounder</span><span class="p">),</span> <span class="n">IUSGroundedSocket</span><span class="p">,</span> <span class="s">&#39;mp3&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Given the grounder</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">grounder</span> <span class="o">=</span> <span class="n">Grounder</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>and a German socket</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">livingroom</span> <span class="o">=</span> <span class="n">GermanSocket</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>we can now get a grounded US socket:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getMultiAdapter</span><span class="p">((</span><span class="n">livingroom</span><span class="p">,</span> <span class="n">grounder</span><span class="p">),</span>
+<span class="gp">... </span>                                        <span class="n">IUSGroundedSocket</span><span class="p">,</span> <span class="s">&#39;mp3&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">GroundedGermanToUSSocketAdapter</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span><span class="o">.</span><span class="n">socket</span> <span class="ow">is</span> <span class="n">livingroom</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span><span class="o">.</span><span class="n">grounder</span> <span class="ow">is</span> <span class="n">grounder</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Of course, you do not have a &#8216;dvd&#8217; grounded US socket available:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getMultiAdapter</span><span class="p">((</span><span class="n">livingroom</span><span class="p">,</span> <span class="n">grounder</span><span class="p">),</span>
+<span class="gp">... </span>                               <span class="n">IUSGroundedSocket</span><span class="p">,</span> <span class="s">&#39;dvd&#39;</span><span class="p">)</span> \
+<span class="gp">... </span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ComponentLookupError</span>: <span class="n">((&lt;instance of GermanSocket&gt;,</span>
+<span class="go">                        &lt;instance of Grounder&gt;),</span>
+<span class="go">                        &lt;InterfaceClass __builtin__.IUSGroundedSocket&gt;,</span>
+<span class="go">                        &#39;dvd&#39;)</span>
+</pre></div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryMultiAdapter</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="p">(</span><span class="n">livingroom</span><span class="p">,</span> <span class="n">grounder</span><span class="p">),</span> <span class="n">IUSGroundedSocket</span><span class="p">,</span> <span class="s">&#39;dvd&#39;</span><span class="p">,</span> <span class="n">marker</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">socket</span> <span class="ow">is</span> <span class="n">marker</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Again, you might want to read <cite>adapter.txt</cite> in <cite>zope.interface</cite> for a more
+comprehensive coverage of multi-adapters.</p>
+</div>
+</div>
+<div class="section" id="subscribers">
+<h2>Subscribers<a class="headerlink" href="#subscribers" title="Permalink to this headline">¶</a></h2>
+<p>While subscribers are directly supported by the adapter registry and are
+adapters for all theoretical purposes, practically it might be better to think
+of them as separate components. Subscribers are particularly useful for
+events.</p>
+<p>Let&#8217;s say one of our adapters overheated and caused a small fire:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IFire</span><span class="p">(</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Fire</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">implements</span><span class="p">(</span><span class="n">IFire</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">fire</span> <span class="o">=</span> <span class="n">Fire</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>We want to use all available objects to put out the fire:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">IFireExtinguisher</span><span class="p">(</span><span class="n">Interface</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">extinguish</span><span class="p">():</span>
+<span class="gp">... </span>        <span class="k">pass</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">FireExtinguisher</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fire</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">pass</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">extinguish</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="s">&quot;Place extinguish code here.&quot;</span>
+<span class="gp">... </span>        <span class="k">print</span> <span class="s">&#39;Used &#39;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span> <span class="o">+</span> <span class="s">&#39;.&#39;</span>
+</pre></div>
+</div>
+<p>Here some specific methods to put out the fire:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">PowderExtinguisher</span><span class="p">(</span><span class="n">FireExtinguisher</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerSubscriptionAdapter</span><span class="p">(</span><span class="n">PowderExtinguisher</span><span class="p">,</span>
+<span class="gp">... </span>                                <span class="p">(</span><span class="n">IFire</span><span class="p">,),</span> <span class="n">IFireExtinguisher</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Blanket</span><span class="p">(</span><span class="n">FireExtinguisher</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerSubscriptionAdapter</span><span class="p">(</span><span class="n">Blanket</span><span class="p">,</span> <span class="p">(</span><span class="n">IFire</span><span class="p">,),</span> <span class="n">IFireExtinguisher</span><span class="p">)</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">SprinklerSystem</span><span class="p">(</span><span class="n">FireExtinguisher</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">pass</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerSubscriptionAdapter</span><span class="p">(</span><span class="n">SprinklerSystem</span><span class="p">,</span>
+<span class="gp">... </span>                                <span class="p">(</span><span class="n">IFire</span><span class="p">,),</span> <span class="n">IFireExtinguisher</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now let use all these things to put out the fire:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">extinguishers</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="n">fire</span><span class="p">,),</span> <span class="n">IFireExtinguisher</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">extinguishers</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">extinguisher</span> <span class="ow">in</span> <span class="n">extinguishers</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">extinguisher</span><span class="o">.</span><span class="n">extinguish</span><span class="p">()</span>
+<span class="go">Used Blanket.</span>
+<span class="go">Used PowderExtinguisher.</span>
+<span class="go">Used SprinklerSystem.</span>
+</pre></div>
+</div>
+<p>If no subscribers are found for a particular object, then an empty list is
+returned:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">subscribers</span><span class="p">((</span><span class="nb">object</span><span class="p">(),),</span> <span class="n">IFireExtinguisher</span><span class="p">)</span>
+<span class="go">[]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="utilities">
+<h2>Utilities<a class="headerlink" href="#utilities" title="Permalink to this headline">¶</a></h2>
+<p>Utilities are the second type of component, the component architecture
+implements. <em>Utilities</em> are simply components that provide an interface. When
+you register an utility, you always register an instance (in contrast to a
+factory for adapters) since the initialization and setup process of a utility
+might be complex and is not well defined. In some ways a utility is much more
+fundamental than an adapter, because an adapter cannot be used without another
+component, but a utility is always self-contained. I like to think of
+utilities as the foundation of your application and adapters as components
+extending beyond this foundation.</p>
+<p>Back to our story...</p>
+<p>After your vacation is over you fly back home to Tampa, Florida. But it is
+August now, the middle of the Hurricane season. And, believe it or not, you are
+worried that you will not be able to shave when the power goes out for several
+days. (You just hate wet shavers.)</p>
+<p>So you decide to go to your favorite hardware store and by a Diesel-powered
+electric generator. The generator provides of course a US-style socket:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Generator</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">implements</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">return</span> <span class="s">&#39;&lt;instance of Generator&gt;&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">generator</span> <span class="o">=</span> <span class="n">Generator</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Like for adapters, we now have to add the newly-acquired generator to our
+inventory by registering it as a utility:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerUtility</span><span class="p">(</span><span class="n">generator</span><span class="p">,</span> <span class="n">IUSSocket</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We can now get the utility using</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">utility</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtility</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">utility</span> <span class="ow">is</span> <span class="n">generator</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>As you can see, it is very simple to register and retrieve utilities. If a
+utility does not exist for a particular interface, such as the German socket,
+then the lookup fails</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtility</span><span class="p">(</span><span class="n">IGermanSocket</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ComponentLookupError</span>: <span class="n">(&lt;InterfaceClass __builtin__.IGermanSocket&gt;, &#39;&#39;)</span>
+</pre></div>
+</div>
+<p>or more gracefully when specifying a default value:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">default</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">utility</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryUtility</span><span class="p">(</span><span class="n">IGermanSocket</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">default</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">utility</span> <span class="ow">is</span> <span class="n">default</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Note: The only difference between <cite>getUtility()</cite> and <cite>queryUtility()</cite> is the
+fact that you can specify a default value for the latter function, so that it
+will never cause a <cite>ComponentLookupError</cite>.</p>
+<div class="section" id="named-utilities">
+<h3>Named Utilities<a class="headerlink" href="#named-utilities" title="Permalink to this headline">¶</a></h3>
+<p>It is often desirable to have several utilities providing the same interface
+per site. This way you can implement any sort of registry using utilities. For
+this reason, utilities &#8211; like adapters &#8211; can be named.</p>
+<p>In the context of our story, we might want to do the following: You really do
+not trust gas stations either. What if the roads are blocked after a hurricane
+and the gas stations run out of oil. So you look for another renewable power
+source. Then you think about solar panels! After a storm there is usually very
+nice weather, so why not? Via the Web you order a set of 110V/120W solar
+panels that provide a regular US-style socket as output:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">SolarPanel</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="n">implements</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">return</span> <span class="s">&#39;&lt;instance of Solar Panel&gt;&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">panel</span> <span class="o">=</span> <span class="n">SolarPanel</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Once it arrives, we add it to our inventory:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerUtility</span><span class="p">(</span><span class="n">panel</span><span class="p">,</span> <span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;Solar Panel&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You can now access the solar panel using</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">utility</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtility</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;Solar Panel&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">utility</span> <span class="ow">is</span> <span class="n">panel</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Of course, if a utility is not available, then the lookup will simply fail</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtility</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;Wind Mill&#39;</span><span class="p">)</span>
+<span class="gt">Traceback (most recent call last):</span>
+<span class="c">...</span>
+<span class="gr">ComponentLookupError</span>: <span class="n">(&lt;InterfaceClass __builtin__.IUSSocket&gt;, &#39;Wind Mill&#39;)</span>
+</pre></div>
+</div>
+<p>or more gracefully when specifying a default value:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">default</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">utility</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">queryUtility</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">,</span> <span class="s">&#39;Wind Mill&#39;</span><span class="p">,</span>
+<span class="gp">... </span>                                      <span class="n">default</span><span class="o">=</span><span class="n">default</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">utility</span> <span class="ow">is</span> <span class="n">default</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Now you want to look at all the utilities you have for a particular kind. The
+following API function will return a list of name/utility pairs:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">utils</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getUtilitiesFor</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">utils</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">utils</span> 
+<span class="go">[(u&#39;&#39;, &lt;instance of Generator&gt;),</span>
+<span class="go">   (u&#39;Solar Panel&#39;, &lt;instance of Solar Panel&gt;)]</span>
+</pre></div>
+</div>
+<p>Another method of looking up all utilities is by using
+<cite>getAllUtilitiesRegisteredFor(iface)</cite>. This function will return an iterable
+of utilities (without names); however, it will also return overridden
+utilities. If you are not using multiple site managers, you will not actually
+need this method.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">utils</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getAllUtilitiesRegisteredFor</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">utils</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">utils</span>
+<span class="go">[&lt;instance of Generator&gt;, &lt;instance of Solar Panel&gt;]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="factories">
+<h3>Factories<a class="headerlink" href="#factories" title="Permalink to this headline">¶</a></h3>
+<p>A <em>factory</em> is a special kind of utility that exists to create other
+components. A factory is always identified by a name. It also provides a title
+and description and is able to tell the developer what interfaces the created
+object will provide. The advantage of using a factory to create an object
+instead of directly instantiating a class or executing any other callable is
+that we can refer to the factory by name. As long as the name stays fixed, the
+implementation of the callable can be renamed or moved without a breakage in
+code.</p>
+<p>Let&#8217;s say that our solar panel comes in parts and they have to be
+assembled. This assembly would be done by a factory, so let&#8217;s create one for
+the solar panel. To do this, we can use a standard implementation of the
+<cite>IFactory</cite> interface:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.factory</span> <span class="kn">import</span> <span class="n">Factory</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">factory</span> <span class="o">=</span> <span class="n">Factory</span><span class="p">(</span><span class="n">SolarPanel</span><span class="p">,</span>
+<span class="gp">... </span>                  <span class="s">&#39;Solar Panel&#39;</span><span class="p">,</span>
+<span class="gp">... </span>                  <span class="s">&#39;This factory creates a solar panel.&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Optionally, I could have also specified the interfaces that the created object
+will provide, but the factory class is smart enough to determine the
+implemented interface from the class. We now register the factory:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.interfaces</span> <span class="kn">import</span> <span class="n">IFactory</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerUtility</span><span class="p">(</span><span class="n">factory</span><span class="p">,</span> <span class="n">IFactory</span><span class="p">,</span> <span class="s">&#39;SolarPanel&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We can now get a list of interfaces the produced object will provide:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">ifaces</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getFactoryInterfaces</span><span class="p">(</span><span class="s">&#39;SolarPanel&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IUSSocket</span> <span class="ow">in</span> <span class="n">ifaces</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>By the way, this is equivalent to</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">ifaces2</span> <span class="o">=</span> <span class="n">factory</span><span class="o">.</span><span class="n">getInterfaces</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ifaces</span> <span class="ow">is</span> <span class="n">ifaces2</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Of course you can also just create an object:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">panel</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">createObject</span><span class="p">(</span><span class="s">&#39;SolarPanel&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">panel</span><span class="o">.</span><span class="n">__class__</span> <span class="ow">is</span> <span class="n">SolarPanel</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>Note: Ignore the first argument (<cite>None</cite>) for now; it is the context of the
+utility lookup, which is usually an optional argument, but cannot be in this
+case, since all other arguments beside the <cite>name</cite> are passed in as arguments
+to the specified callable.</p>
+<p>Once you register several factories</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span><span class="o">.</span><span class="n">registerUtility</span><span class="p">(</span><span class="n">Factory</span><span class="p">(</span><span class="n">Generator</span><span class="p">),</span> <span class="n">IFactory</span><span class="p">,</span> <span class="s">&#39;Generator&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>you can also determine, which available factories will create objects
+providing a certain interface:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">factories</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getFactoriesFor</span><span class="p">(</span><span class="n">IUSSocket</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">factories</span> <span class="o">=</span> <span class="p">[(</span><span class="n">name</span><span class="p">,</span> <span class="n">factory</span><span class="o">.</span><span class="n">__class__</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">factory</span> <span class="ow">in</span> <span class="n">factories</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">factories</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">factories</span> 
+<span class="go">[(u&#39;Generator&#39;, &lt;class &#39;zope.component.factory.Factory&#39;&gt;),</span>
+<span class="go">   (u&#39;SolarPanel&#39;, &lt;class &#39;zope.component.factory.Factory&#39;&gt;)]</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="site-managers">
+<h2>Site Managers<a class="headerlink" href="#site-managers" title="Permalink to this headline">¶</a></h2>
+<p>Why do we need site managers? Why is the component architecture API not
+sufficient? Some applications, including Zope 3, have a concept of
+locations. It is often desirable to have different configurations for these
+location; this can be done by overwriting existing or adding new component
+registrations. Site managers in locations below the root location, should be
+able to delegate requests to their parent locations. The root site manager is
+commonly known as <em>global site manager</em>, since it is always available. You can
+always get the global site manager using the API:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getGlobalSiteManager</span><span class="p">()</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component</span> <span class="kn">import</span> <span class="n">globalSiteManager</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">gsm</span> <span class="ow">is</span> <span class="n">globalSiteManager</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.interfaces</span> <span class="kn">import</span> <span class="n">IComponentLookup</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IComponentLookup</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">gsm</span><span class="p">)</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.interfaces</span> <span class="kn">import</span> <span class="n">IComponents</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">IComponents</span><span class="o">.</span><span class="n">providedBy</span><span class="p">(</span><span class="n">gsm</span><span class="p">)</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>You can also lookup at site manager in a given context. The only requirement
+is that the context can be adapted to a site manager. So let&#8217;s create a
+special site manager:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">zope.component.globalregistry</span> <span class="kn">import</span> <span class="n">BaseGlobalComponents</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sm</span> <span class="o">=</span> <span class="n">BaseGlobalComponents</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Now we create a context that adapts to the site manager via the <cite>__conform__</cite>
+method as specified in PEP 246.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="k">class</span> <span class="nc">Context</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sm</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="bp">self</span><span class="o">.</span><span class="n">sm</span> <span class="o">=</span> <span class="n">sm</span>
+<span class="gp">... </span>    <span class="k">def</span> <span class="nf">__conform__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">interface</span><span class="p">):</span>
+<span class="gp">... </span>        <span class="k">if</span> <span class="n">interface</span><span class="o">.</span><span class="n">isOrExtends</span><span class="p">(</span><span class="n">IComponentLookup</span><span class="p">):</span>
+<span class="gp">... </span>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sm</span>
+</pre></div>
+</div>
+<p>We now instantiate the <cite>Context</cite> with our special site manager:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">context</span> <span class="o">=</span> <span class="n">Context</span><span class="p">(</span><span class="n">sm</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">context</span><span class="o">.</span><span class="n">sm</span> <span class="ow">is</span> <span class="n">sm</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>We can now ask for the site manager of this context:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">lsm</span> <span class="o">=</span> <span class="n">zope</span><span class="o">.</span><span class="n">component</span><span class="o">.</span><span class="n">getSiteManager</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">lsm</span> <span class="ow">is</span> <span class="n">sm</span>
+<span class="go">True</span>
+</pre></div>
+</div>
+<p>The site manager instance <cite>lsm</cite> is formally known as a <em>local site manager</em> of
+<cite>context</cite>.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">The Zope 3 Component Architecture (Socket Example)</a><ul>
+<li><a class="reference internal" href="#adapters">Adapters</a><ul>
+<li><a class="reference internal" href="#single-adapters">Single Adapters</a></li>
+<li><a class="reference internal" href="#named-adapters">Named Adapters</a></li>
+<li><a class="reference internal" href="#multi-adapters">Multi-Adapters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#subscribers">Subscribers</a></li>
+<li><a class="reference internal" href="#utilities">Utilities</a><ul>
+<li><a class="reference internal" href="#named-utilities">Named Utilities</a></li>
+<li><a class="reference internal" href="#factories">Factories</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#site-managers">Site Managers</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="narr.html"
+                        title="previous chapter">Zope Component Architecture</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="event.html"
+                        title="next chapter">Events</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/socketexample.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="event.html" title="Events"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="narr.html" title="Zope Component Architecture"
+             >previous</a> |</li>
+        <li><a href="index.html">zope.configuration 4.0 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

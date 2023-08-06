@@ -1,0 +1,154 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>zope.component &mdash; zope.configuration 4.0 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '4.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="zope.configuration 4.0 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">zope.configuration 4.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for zope.component</h1><div class="highlight"><pre>
+<span class="c">##############################################################################</span>
+<span class="c">#</span>
+<span class="c"># Copyright (c) 2001, 2002 Zope Foundation and Contributors.</span>
+<span class="c"># All Rights Reserved.</span>
+<span class="c">#</span>
+<span class="c"># This software is subject to the provisions of the Zope Public License,</span>
+<span class="c"># Version 2.1 (ZPL).  A copy of the ZPL should accompany this distribution.</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED &quot;AS IS&quot; AND ANY AND ALL EXPRESS OR IMPLIED</span>
+<span class="c"># WARRANTIES ARE DISCLAIMED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED</span>
+<span class="c"># WARRANTIES OF TITLE, MERCHANTABILITY, AGAINST INFRINGEMENT, AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE.</span>
+<span class="c">#</span>
+<span class="c">##############################################################################</span>
+<span class="sd">&quot;&quot;&quot;Zope 3 Component Architecture</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">Interface</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">implementedBy</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">moduleProvides</span>
+<span class="kn">from</span> <span class="nn">zope.interface</span> <span class="kn">import</span> <span class="n">providedBy</span>
+
+<span class="kn">from</span> <span class="nn">zope.component.interfaces</span> <span class="kn">import</span> <span class="n">ComponentLookupError</span>
+<span class="kn">from</span> <span class="nn">zope.component.interfaces</span> <span class="kn">import</span> <span class="n">IComponentArchitecture</span>
+<span class="kn">from</span> <span class="nn">zope.component.interfaces</span> <span class="kn">import</span> <span class="n">IComponentLookup</span>
+<span class="kn">from</span> <span class="nn">zope.component.interfaces</span> <span class="kn">import</span> <span class="n">IComponentRegistrationConvenience</span>
+<span class="kn">from</span> <span class="nn">zope.component.interfaces</span> <span class="kn">import</span> <span class="n">IFactory</span>
+
+<span class="kn">from</span> <span class="nn">zope.component.globalregistry</span> <span class="kn">import</span> <span class="n">getGlobalSiteManager</span>
+<span class="kn">from</span> <span class="nn">zope.component.globalregistry</span> <span class="kn">import</span> <span class="n">globalSiteManager</span>
+<span class="kn">from</span> <span class="nn">zope.component.globalregistry</span> <span class="kn">import</span> <span class="n">provideAdapter</span>
+<span class="kn">from</span> <span class="nn">zope.component.globalregistry</span> <span class="kn">import</span> <span class="n">provideHandler</span>
+<span class="kn">from</span> <span class="nn">zope.component.globalregistry</span> <span class="kn">import</span> <span class="n">provideSubscriptionAdapter</span>
+<span class="kn">from</span> <span class="nn">zope.component.globalregistry</span> <span class="kn">import</span> <span class="n">provideUtility</span>
+
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">adapter_hook</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">createObject</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getAdapter</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getAdapterInContext</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getAdapters</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getAllUtilitiesRegisteredFor</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getFactoriesFor</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getFactoryInterfaces</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getMultiAdapter</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getSiteManager</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getUtilitiesFor</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getUtility</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">getNextUtility</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">handle</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">queryAdapter</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">queryAdapterInContext</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">queryMultiAdapter</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">queryUtility</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">queryNextUtility</span>
+<span class="kn">from</span> <span class="nn">zope.component._api</span> <span class="kn">import</span> <span class="n">subscribers</span>
+
+<span class="kn">from</span> <span class="nn">zope.component._declaration</span> <span class="kn">import</span> <span class="n">adaptedBy</span>
+<span class="kn">from</span> <span class="nn">zope.component._declaration</span> <span class="kn">import</span> <span class="n">adapter</span>
+<span class="kn">from</span> <span class="nn">zope.component._declaration</span> <span class="kn">import</span> <span class="n">adapts</span>
+
+<span class="n">moduleProvides</span><span class="p">(</span><span class="n">IComponentArchitecture</span><span class="p">,</span> <span class="n">IComponentRegistrationConvenience</span><span class="p">)</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">IComponentArchitecture</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">zope.configuration 4.0 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2012, Zope Foundation Contributors.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
