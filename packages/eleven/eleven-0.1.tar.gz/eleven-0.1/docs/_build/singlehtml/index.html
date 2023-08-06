@@ -1,0 +1,419 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>eleven 0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="None" href="index.html#document-index" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li><a href="index.html#document-index">eleven 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="eleven-rt-qpcr-normalization-in-python">
+<h1>eleven: RT-qPCR normalization in Python<a class="headerlink" href="#eleven-rt-qpcr-normalization-in-python" title="Permalink to this headline">¶</a></h1>
+<p>Tim D. Smith, <a class="reference external" href="https://twitter.com/biotimylated">&#64;biotimylated</a>.</p>
+<p>Eleven is a Python library for performing multi-gene RT-qPCR gene expression normalization. It is a free, open-source implementation of the <a class="reference external" href="http://dx.doi.org/10.1186/gb-2002-3-7-research0034">GeNorm algorithm</a> described by Vandesompele et al. in 2002.</p>
+<p>Eleven requires Python 2.7. Earlier versions will not be supported. Python 3.x support is on the roadmap. You will need a Scientific Python stack, including pandas and scipy. If you don&#8217;t have these, you can install the free version of the <a class="reference external" href="https://store.continuum.io/cshop/anaconda/">Anaconda environment</a>, which has everything you need.</p>
+<p>A sample analysis session looks like this:</p>
+<div class="highlight-python"><pre># Read PCR data into a pandas DataFrame. You want a data file where each
+# row corresponds to a separate well, with columns for the sample name,
+# target name, and Cq value. NTC wells should have the sample name set to
+# a value like 'NTC'.
+&gt;&gt; df = pd.read_csv('my_data.csv')
+
+# If your Sample, Target, and Cq columns are called other things, they
+# should be renamed to Sample, Target, and Cq.
+&gt;&gt; df = df.rename(columns={'Gene': 'Target', 'Ct': 'Cq'})
+
+# Drop the wells that are too close to the NTC for that target.
+&gt;&gt; censored = eleven.censor_background(df)
+
+# Rank your candidate reference genes.
+&gt;&gt; ranked = eleven.rank_targets(censored, ['Gapdh', 'Rn18s', 'Hprt',
+    'Ubc', 'Actb'], 'Control')
+
+# Normalize your data by your most stable genes and compute normalization
+# factors (NFs).
+&gt;&gt; nf = eleven.calculate_nf(censored, ranked.ix['Target', 0:3], 'Control')
+
+# Now, normalize all of your expression data.
+&gt;&gt; censored['RelExp'] = eleven.expression_nf(censored, nf, 'Control')</pre>
+</div>
+<p>Wasn&#8217;t that easy? This adds the relative expression of each well as a column of the data frame. Now you can use regular pandas tools for handling the data, so</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">censored</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s">&#39;Sample&#39;</span><span class="p">,</span> <span class="s">&#39;Target&#39;</span><span class="p">])[</span><span class="s">&#39;RelExp&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">aggregate</span><span class="p">([</span><span class="s">&#39;mean&#39;</span><span class="p">,</span> <span class="s">&#39;std&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>gives you a nice table of means and standard deviations for each target in each sample.</p>
+<div class="toctree-wrapper compound">
+<span id="document-eleven"></span><div class="section" id="eleven-package">
+<h2>eleven package<a class="headerlink" href="#eleven-package" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-eleven">
+<span id="module-contents"></span><h3>Module contents<a class="headerlink" href="#module-eleven" title="Permalink to this headline">¶</a></h3>
+<dl class="function">
+<dt id="eleven.average_cq">
+<tt class="descclassname">eleven.</tt><tt class="descname">average_cq</tt><big>(</big><em>seq</em>, <em>efficiency=1.0</em><big>)</big><a class="headerlink" href="#eleven.average_cq" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given a set of Cq values, return the Cq value that represents the
+average expression level of the input.</p>
+<p>The intent is to average the expression levels of the samples,
+since the average of Cq values is not biologically meaningful.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>seq</strong> (<em>iterable</em>) &#8211; A sequence (e.g. list, array, or Series) of Cq values.</li>
+<li><strong>efficiency</strong> (<em>float</em>) &#8211; The fractional efficiency of the PCR reaction; i.e.
+1.0 is 100% efficiency, producing 2 copies per amplicon per cycle.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">Cq value representing average expression level</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">float</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="eleven.calculate_all_nfs">
+<tt class="descclassname">eleven.</tt><tt class="descname">calculate_all_nfs</tt><big>(</big><em>sample_frame</em>, <em>ranked_targets</em>, <em>ref_sample</em><big>)</big><a class="headerlink" href="#eleven.calculate_all_nfs" title="Permalink to this definition">¶</a></dt>
+<dd><p>For a set of n ranked_genes, calculates normalization factors NF_1,
+NF_2, ..., NF_n. NF_i represents the normalization factor generated by
+considering the first i targets in ranked_targets.</p>
+<p>calculate_nf (which returns only NF_n) is probably more
+useful for routine analysis.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>sample_frame</strong> (<em>DataFrame</em>) &#8211; A sample data frame.</li>
+<li><strong>ranked_targets</strong> (<em>iterable</em>) &#8211; A list or Series of target names, in order
+of descending stability (ascending M).</li>
+<li><strong>ref_sample</strong> (<em>string</em>) &#8211; The name of the sample to normalize against.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">a DataFrame with columns 1, 2, ..., n containing normalization
+factors NF_1, ..., NF_n for each sample, indexed by sample name.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">DataFrame</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="eleven.calculate_nf">
+<tt class="descclassname">eleven.</tt><tt class="descname">calculate_nf</tt><big>(</big><em>sample_frame</em>, <em>ref_targets</em>, <em>ref_sample</em><big>)</big><a class="headerlink" href="#eleven.calculate_nf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates a normalization factor from the geometric mean of the
+expression of all ref_targets, normalized to a reference sample.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>sample_frame</strong> (<em>DataFrame</em>) &#8211; A sample data frame.</li>
+<li><strong>ref_targets</strong> (<em>iterable</em>) &#8211; A list or Series of target names.</li>
+<li><strong>ref_sample</strong> (<em>string</em>) &#8211; The name of the sample to normalize against.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">a Series indexed by sample name containing normalization factors
+for each sample.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="eleven.calculate_v">
+<tt class="descclassname">eleven.</tt><tt class="descname">calculate_v</tt><big>(</big><em>nfs</em><big>)</big><a class="headerlink" href="#eleven.calculate_v" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates V(n+1/n) values. Useful for establishing the quality of
+your normalization regime. See Vandesompele 2002 for advice on
+interpretation.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>nfs</strong> (<em>DataFrame</em>) &#8211; A matrix of all normalization factors, produced by
+<cite>calculate_all_nfs</cite>.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">a Series of values [V(2/1), V(3/2), V(4/3), ...].</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="eleven.censor_background">
+<tt class="descclassname">eleven.</tt><tt class="descname">censor_background</tt><big>(</big><em>sample_frame</em>, <em>ntc_samples</em>, <em>margin</em><big>)</big><a class="headerlink" href="#eleven.censor_background" title="Permalink to this definition">¶</a></dt>
+<dd><p>Selects rows from the sample data frame that fall <cite>margin</cite> or greater
+cycles earlier than the NTC for that target. NTC wells are recognized by
+string matching against the Sample column.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>sample_frame</strong> (<em>DataFrame</em>) &#8211; A sample data frame.</li>
+<li><strong>ntc_samples</strong> (<em>iterable</em>) &#8211; A sequence of strings giving the sample names of your NTC wells, i.e. [&#8216;NTC&#8217;]</li>
+<li><strong>margin</strong> (<em>float</em>) &#8211; The number of cycles earlier than the NTC for a &#8220;good&#8221; sample, i.e. log2(10)</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">a view of the sample data frame containing only non-background rows</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">DataFrame</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="eleven.collect_expression">
+<tt class="descclassname">eleven.</tt><tt class="descname">collect_expression</tt><big>(</big><em>sample_frame</em>, <em>ref_targets</em>, <em>ref_sample</em><big>)</big><a class="headerlink" href="#eleven.collect_expression" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the expression of all rows in the sample_frame relative to
+each of the ref_targets. Used in rank_targets.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>sample_frame</strong> (<em>DataFrame</em>) &#8211; A sample data frame.</li>
+<li><strong>ref_targets</strong> (<em>iterable</em>) &#8211; A sequence of targets from the Target column of
+the sample frame.</li>
+<li><strong>ref_sample</strong> (<em>string</em>) &#8211; The name of the sample to which expression should
+be referenced.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">a DataFrame of relative expression; rows represent rows of the
+sample_frame and columns represent each of the ref_targets.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">DataFrame</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="eleven.expression_ddcq">
+<tt class="descclassname">eleven.</tt><tt class="descname">expression_ddcq</tt><big>(</big><em>sample_frame, ref_target, ref_sample, ntc_samples=['NTC'], ntc_margin=3.3219280948873626</em><big>)</big><a class="headerlink" href="#eleven.expression_ddcq" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates expression of samples in a sample data frame relative to a
+single reference gene and reference sample using the ∆∆Cq method.</p>
+<p>For best results, the ref_sample should be defined for all targets and the
+ref_target should be defined for all samples, or else the series you get
+back will have lots of NaNs.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>sample_frame</strong> (<em>DataFrame</em>) &#8211; A sample data frame.</li>
+<li><strong>ref_target</strong> (<em>string</em>) &#8211; A string matching an entry of the Target column;
+the target to use as the reference target (e.g. &#8216;Gapdh&#8217;)</li>
+<li><strong>ref_sample</strong> (<em>string</em>) &#8211; A string matching an entry of the Sample column.</li>
+<li><strong>ntc_samples</strong> (<em>iterable</em>) &#8211; An iterable of strings giving names from the
+Sample column that should be treated as NTCs, e.g. [&#8216;NTC&#8217;]. Pass [] to
+disable background censoring.</li>
+<li><strong>ntc_margin</strong> (<em>float</em>) &#8211; How many cycles away from the NTC a sample must
+be to be included in expression calculations.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">a Series of expression values for each row of the sample data
+frame.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">Series</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="eleven.expression_nf">
+<tt class="descclassname">eleven.</tt><tt class="descname">expression_nf</tt><big>(</big><em>sample_frame, nf_n, ref_sample, ntc_samples=['NTC'], ntc_margin=3.3219280948873626</em><big>)</big><a class="headerlink" href="#eleven.expression_nf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates expression of samples in a sample data frame relative to
+pre-computed normalization factors.</p>
+<p>ref_sample should be defined for all targets or the result will contain
+many NaNs.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>sample_frame</strong> (<em>DataFrame</em>) &#8211; A sample data frame.</li>
+<li><strong>nf_n</strong> (<em>Series</em>) &#8211; A Series of normalization factors indexed by sample.
+You probably got this from <cite>compute_nf</cite>.</li>
+<li><strong>ref_sample</strong> (<em>string</em>) &#8211; The name of the sample to normalize against,
+which should match a value in the sample_frame Sample column.</li>
+<li><strong>ntc_samples</strong> (<em>iterable</em>) &#8211; An iterable of strings giving names from the
+Sample column that should be treated as NTCs, e.g. [&#8216;NTC&#8217;]. Pass [] to
+disable background censoring.</li>
+<li><strong>ntc_margin</strong> (<em>float</em>) &#8211; How many cycles away from the NTC a sample must
+be to be included in expression calculations.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">a Series of expression values for each row in the sample data
+frame.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">Series</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="eleven.log2">
+<tt class="descclassname">eleven.</tt><tt class="descname">log2</tt><big>(</big><em>x</em><big>)</big><a class="headerlink" href="#eleven.log2" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="eleven.rank_targets">
+<tt class="descclassname">eleven.</tt><tt class="descname">rank_targets</tt><big>(</big><em>sample_frame</em>, <em>ref_targets</em>, <em>ref_sample</em><big>)</big><a class="headerlink" href="#eleven.rank_targets" title="Permalink to this definition">¶</a></dt>
+<dd><p>Uses the geNorm algorithm to determine the most stably expressed
+genes from amongst ref_targets in your sample.</p>
+<p>See Vandesompele et al.&#8217;s 2002 Genome Biology paper for information about
+the algorithm: <a class="reference external" href="http://dx.doi.org/10.1186/gb-2002-3-7-research0034">http://dx.doi.org/10.1186/gb-2002-3-7-research0034</a></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>sample_frame</strong> (<em>DataFrame</em>) &#8211; A sample data frame.</li>
+<li><strong>ref_targets</strong> (<em>iterable</em>) &#8211; A sequence of targets from the Target column
+of sample_frame to consider for ranking.</li>
+<li><strong>ref_sample</strong> (<em>string</em>) &#8211; The name of a sample from the Sample
+column of sample_frame. It doesn&#8217;t really matter what it is but it
+should exist for every target.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">a sorted DataFrame with two columns, &#8216;Target&#8217; and &#8216;M&#8217; (the
+relative stability; lower means more stable).</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">DataFrame</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="eleven.validate_sample_frame">
+<tt class="descclassname">eleven.</tt><tt class="descname">validate_sample_frame</tt><big>(</big><em>sample_frame</em><big>)</big><a class="headerlink" href="#eleven.validate_sample_frame" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes sure that <cite>sample_frame</cite> has the columns we expect.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>sample_frame</strong> (<em>DataFrame</em>) &#8211; A sample data frame.</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">True (or raises an exception)</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raises:</th><td class="field-body"><ul class="first last simple">
+<li><strong>TypeError</strong> &#8211; if sample_frame is not a pandas DataFrame</li>
+<li><strong>ValueError</strong> &#8211; if columns are missing or the wrong type</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html#document-index">Table Of Contents</a></h3>
+  <ul>
+<li class="toctree-l1"><a class="reference internal" href="index.html#document-eleven">eleven package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#module-eleven">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li><a href="index.html#document-index">eleven 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Tim Smith.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.
+    </div>
+  </body>
+</html>
