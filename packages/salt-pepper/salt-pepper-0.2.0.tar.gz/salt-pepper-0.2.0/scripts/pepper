@@ -1,0 +1,195 @@
+#!/usr/bin/env python
+'''
+A CLI interface to a remote salt-api instance
+
+'''
+import json
+import logging
+import optparse
+import os
+import textwrap
+import ConfigParser
+import getpass
+
+import pepper
+
+try:
+    from logging import NullHandler
+except ImportError: # Python < 2.7
+    class NullHandler(logging.Handler):
+        def emit(self, record): pass
+
+logging.basicConfig(format='%(levelname)s %(asctime)s %(module)s: %(message)s')
+logger = logging.getLogger(__name__)
+logger.addHandler(NullHandler())
+
+def get_parser():
+    parser = optparse.OptionParser(
+        description=__doc__,
+        usage='%prog [opts]',
+        version=pepper.__version__)
+
+    parser.add_option('-c', dest='config',
+        default=os.environ.get('PEPPERRC',
+            os.path.join(os.path.expanduser('~'), '.pepperrc')),
+        help=textwrap.dedent('''\
+            Configuration file location. Default is a file path in the
+            "PEPPERRC" environment variable or ~/.pepperrc.'''))
+
+    parser.add_option('-v', dest='verbose', default=0, action='count',
+        help=textwrap.dedent('''\
+            Increment output verbosity; may be specified multiple times'''))
+
+    parser.add_option('-H', '--debug-http', dest='debug_http', default=False,
+        action='store_true', help=textwrap.dedent('''\
+        Output the HTTP request/response headers on stderr'''))
+
+    return parser
+
+def add_globalopts(parser):
+    '''
+    Misc global options
+    '''
+    optgroup = optparse.OptionGroup(parser, "Pepper ``salt`` Options",
+            "Mimic the ``salt`` CLI")
+
+    optgroup.add_option('-t', '--timeout', action='store_true',
+        help="Specify wait time before returning control to the shell")
+
+    optgroup.add_option('--out', '--output', dest='output',
+            help="Specify the output format for the command output")
+
+    optgroup.add_option('--return', default='', metavar='RETURNER',
+        help="Redirect the output from a command to a persistent data store")
+
+    parser.add_option_group(optgroup)
+
+def add_tgtopts(parser):
+    '''
+    Targeting
+    '''
+    optgroup = optparse.OptionGroup(parser, "Targeting Options",
+            "Target which minions to run commands on")
+
+    optgroup.add_option('-E', '--pcre', dest='expr_form',
+            action='store_const', const='pcre',
+        help="Target hostnames using PCRE regular expressions")
+
+    optgroup.add_option('-L', '--list', dest='expr_form',
+            action='store_const', const='list',
+        help="Specify a comma delimited list of hostnames")
+
+    optgroup.add_option('-G', '--grain', dest='expr_form',
+            action='store_const', const='grain',
+        help="Target based on system properties")
+
+    optgroup.add_option('--grain-pcre', dest='expr_form',
+            action='store_const', const='grain_pcre',
+        help="Target based on PCRE matches on system properties")
+
+    parser.set_defaults(expr_form='glob')
+    parser.add_option_group(optgroup)
+
+def add_authopts(parser):
+    '''
+    Authentication options
+    '''
+    optgroup = optparse.OptionGroup(parser, "Authentication Options",
+            textwrap.dedent("""\
+            Authentication credentials can optionally be supplied via the
+            environment variables:
+            SALTAPI_URL, SALTAPI_USER, SALTAPI_PASS, SALTAPI_EAUTH.
+            """))
+
+    optgroup.add_option('-a', '--auth', '--eauth', '--extended-auth',
+        dest='eauth', help=textwrap.dedent("""\
+                Specify the external_auth backend to authenticate against and
+                interactively prompt for credentials"""))
+
+    # optgroup.add_option('-T', '--make-token', default=False,
+    #     dest='mktoken', action='store_true',
+    #     help=textwrap.dedent("""\
+    #         Generate and save an authentication token for re-use. The token is
+    #         generated and made available for the period defined in the Salt
+    #         Master."""))
+
+    parser.add_option_group(optgroup)
+
+def get_login_details(opts):
+    '''
+    This parses the config file and environment variables
+    and returns the config values
+    Order of parsing:
+        ~/.pepperrc, environment, defaults
+    '''
+
+    # setting default values
+    results = {
+        'SALTAPI_URL': 'http://localhost:8000/',
+        'SALTAPI_USER': 'saltdev',
+        'SALTAPI_PASS': 'saltdev',
+        'SALTAPI_EAUTH': 'auto',
+    }
+
+    profile = 'main'
+
+    config = ConfigParser.RawConfigParser()
+    config.read(opts.config)
+
+    # read file
+    if config.has_section(profile):
+        for key, value in config.items(profile):
+            key = key.upper()
+            results[key] = config.get(profile, key)
+
+    # get environment values
+    for key, value in results.items():
+        results[key] = os.environ.get(key, results[key])
+
+    # get eauth prompt options
+    if opts.eauth:
+        results['SALTAPI_USER'] = raw_input('Username: ')
+        results['SALTAPI_PASS'] = getpass.getpass(prompt='Password: ')
+
+    return results
+
+def main():
+    '''
+    '''
+    parser = get_parser()
+
+    # add_globalopts(parser)
+    add_tgtopts(parser)
+    add_authopts(parser)
+
+    opts, args = parser.parse_args()
+
+    logger.addHandler(logging.StreamHandler())
+    logger.setLevel(max(logging.ERROR - (opts.verbose * 10), 1))
+
+    if len(args) < 2:
+        parser.error("Command not recognized.")
+
+    tgt, fun = args.pop(0), args.pop(0)
+
+    login_details = get_login_details(opts)
+
+    # Auth values placeholder; grab interactively at CLI or from config file
+    salturl = login_details['SALTAPI_URL']
+    saltuser = login_details['SALTAPI_USER']
+    saltpass = login_details['SALTAPI_PASS']
+    salteauth = login_details['SALTAPI_EAUTH']
+
+    api = pepper.Pepper(salturl, debug_http=opts.debug_http)
+    auth = api.login(saltuser, saltpass, salteauth)
+    ret = api.local(tgt, fun, arg=args, kwarg=None, expr_form=opts.expr_form)
+
+    # TODO: temporary pretty-printing until Salt outputters are in place
+    return json.dumps(ret, sort_keys=True, indent=4)
+
+if __name__ == '__main__':
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        # TODO: mimic CLI and output JID on ctrl-c
+        raise SystemExit(0)
