@@ -1,0 +1,10 @@
+__version__ = "0.3.5.post2.gc0b147d"
+__git_commiter_name__ = "Guy Rozendorn"
+__git_commiter_email__ = "guy@rzn.co.il"
+__git_branch__ = 'develop'
+__git_remote_tracking_branch__ = 'origin/develop'
+__git_remote_url__ = 'git@infinigit.infinidat.com:/host/traceback.git'
+__git_head_hash__ = 'c0b147d40573079f51ebf90b4d80451d2c0d5730'
+__git_head_subject__ = 'TRIVIAL fixing the nose plugin entry point'
+__git_head_message__ = ''
+__git_dirty_diff__ = ''
