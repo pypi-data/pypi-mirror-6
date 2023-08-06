@@ -1,0 +1,162 @@
+{% extends "base_status.html" %}
+
+{% block title %}{{ contact_name }}{% endblock %}
+{% block smallheader %}contact{% endblock %}
+{% block largeheader %}{{ contact_name }} ({{ contact.alias }}){% endblock %}
+
+{% block nav1 %}{{ block.super }}{% endblock %}
+{% block nav2 %}<a href="{% url status.views.contact_list %}">Contacts</a>{% endblock %}
+{% load adagiostags %}
+
+{% block content %}
+
+    <ul class="nav nav-tabs" id="objecttab">
+        <li class="active"><a href="#feed" data-toggle="tab">Comment Feed</a></li>
+        <li><a href="#history" data-toggle="tab">History</a></li>
+        <li><a href="#contactgroups" data-toggle="tab">Groups</a></li>
+        <li><a href="#services" data-toggle="tab">Services</a></li>
+        <li><a href="#gitlog" data-toggle="tab">Audit Log</a></li>
+        <li><a href="#debug" data-toggle="tab">Debug</a></li>
+        <!-- <li><a href="#problems" data-toggle="tab">Comment Feed</a></li> -->
+        <!-- <li><a href="#debug" data-toggle="tab">Debug</a></li> -->
+    </ul>
+    <div class="tab-content">
+
+        <div class="tab-pane active" id="feed">
+            {% if comments %}
+                Comments that mention {{ contact_name }}
+                {% include "snippets/status_commentlist_snippet.html" %}
+            {% else %}
+                {{ contact_name }} is not tagged in any current problems.
+            {% endif %}
+
+        </div>
+
+        <div class="tab-pane" id="history">
+            {% if log %}
+               <table style="font-size: 80%;" class="table well table-condensed">
+                <thead>
+                <th>Time</th>
+                <th>Type</th>
+                <th></th>
+                <th>Message</th>
+                </thead>
+                {% for line in log  %}
+                    {% ifchanged line.time|timestamp|date:"Y-m-d" %}
+                        <!-- <tr><td colspan=4></td></tr> -->
+                    {% endifchanged %}
+                    <tr>
+                        <td style="white-space: nowrap;">{{ line.time|timestamp|date:'Y-m-d H:i' }} </td>
+                        <td class="nowrap">{{ line.type }}</td>
+                        <td>
+                            <a title="{{ line.class_name }} - {{ line.type }} "href="?type={{ line.type }}">
+                                <div class="circle state_{{ line.state }}"></div>
+                            </a>
+
+                        <td>
+                            <div style="white-space: nowrap;">{{ line.options }}</div></td>
+                    </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+                {{ contact_name }} is not mentioned in any recent log entries.
+            {% endif %}
+        </div>
+
+        <div class="tab-pane" id="contactgroups">
+            {% if groups %}
+                {{ contact_name }} belongs to the following groups:
+                <table class="table well">
+                    {% for i in groups %}
+                        <tr>
+                            <td> {{ i.name }} </td>
+                            <td> {{ i.alias }} </td>
+                        </tr>
+                    {% endfor %}
+                </table>
+            {% else %}
+                {{ contact_name }} does not belong to any groups.
+            {% endif %}
+        </div>
+
+        <div class="tab-pane" id="services">
+            {% if services %}
+                {{ contact_name }} is a contact for the following services:
+                {% include "snippets/status_servicelist_snippet.html" %}
+            {% else %}
+                {{ contact_name }} is not a contact for any services.
+            {% endif %}
+            </div>
+
+        <div class="tab-pane" id="gitlog">
+            {% if gitlog %}
+                Git commits made by {{ contact_name }}
+                <table class="table table-condensed well" >
+                    <tr>
+                        <th>Date</th>
+                        <th>Summary</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Actions</th>
+                    </tr>
+                    {% for commit in gitlog %}
+                        <tr id="{{ commit.hash }}">
+                            <td>{{ commit.timestamp|timestamp|date:'Y-m-d H:i'}}</td>
+                            <td>{{ commit.comment }}</td>
+                            <td>{{ commit.author_name }}</td>
+                            <td>{{ commit.author_email }}</td>
+                            <td>
+                                {% if commit_id != commit.hash %}
+                                    <a href="{% url misc.views.gitlog %}?show={{ commit.hash }}#{{ commit.hash }}">diff</a>
+                                {% else %}
+                                    <a href="{% url misc.views.gitlog %}">hide</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% if commit_id == commit.hash %}
+                            <tr>
+                                <td colspan=5>
+                <pre>
+                {{ diff }}
+                </pre>
+                                </td>
+                            </tr>
+                        {% endif %}
+
+                    {% endfor %}
+                </table>
+
+            {% else %}
+                {{ contact_name }} has no commits in git log.
+            {% endif %}
+
+        </div>
+
+    <div class="tab-pane" id="debug">
+            <h4>Information available via livestatus:</h4>
+            <table class="table-condensed table">
+                {% for k,v in contact.items %}
+                    <tr>
+                        <td>                {{ k }}
+                        </td>
+                        <td>
+                            {{ v }}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+    </div>
+    <style>
+        .table tbody tr:hover td, .table tbody tr:hover th {
+            background-color: white;
+        }
+
+    </style>
+{% endblock %}
+
+{% block view_buttons %}{% endblock %}
+{% block action_buttons %}{% endblock %}
+
+{% block footer %} {{ block.super }} {% endblock %}

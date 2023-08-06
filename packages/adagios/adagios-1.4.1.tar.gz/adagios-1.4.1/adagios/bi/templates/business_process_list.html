@@ -1,0 +1,142 @@
+{% extends "base_status.html" %}
+
+{% block title %}Business Process{% endblock %}
+{% block smallheader %}view{% endblock %}
+{% block largeheader %}Business Process{% endblock %}
+
+{% block nav1 %}{{ block.super }}{% endblock %}
+{% block nav2 %}<a href="{% url adagios.bi.views.index %}">Business Process</a>{% endblock %}
+
+{% load adagiostags %}
+
+{% block content %}
+    <ul class="nav nav-tabs" id="objecttab">
+        <li><a href="#bp" class="active" data-toggle="tab">Business Processes</a></li>
+        <li><a href="#thruk" class="" data-toggle="tab">Thruk Processes</a></li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane active" id="bp">
+            <ul id="processes"></ul>
+        </div>
+        <div class="tab-pane " id="thruk">
+            No thruk business processes are configured.
+        </div>
+    </div>
+
+
+    <div id="total_count">You have 0 total business processes</div>
+
+    <!-- This div is used as a template on how to generate markup for a single business process -->
+    <div class="hide" id="business-process-li-element">
+
+        <!-- Start of process -->
+        <li id="__ID__">
+            <div class="hoverable">
+                <a onclick='toggle_businessprocess($(this));' href="#" data-name="__NAME__" data-for="__ID__-subprocesses" data-count="__LENGTH__">&#x25b7;</a>
+
+                <div title="State is __STATE__" class="circle state___STATE__"></div>
+                <a href="{% url adagios.bi.views.view '__PROCESS_TYPE__' '__NAME__'  %}">__NAME__</a>
+
+            <span>__PROCESS_TYPE__ with __LENGTH__ sub processes.</span>
+            <span class="pull-right">
+                                <a href="__LOCATION__/edit/__PROCESS_TYPE__/__NAME__">edit</a>
+
+                <a href="__LOCATION__/delete/__PROCESS_TYPE__/__NAME__">delete</a>
+            </span>
+            </div>
+            <ul id="__ID__-subprocesses"></ul>
+
+        </li>
+        <!-- End of process !-->
+
+    </div>
+
+
+{% endblock %}
+
+
+
+{% block view_buttons %}{% endblock %}
+{% block action_buttons %}
+    <div class="pull-left">
+        <a class="btn" id="open_public_view" href="{% url adagios.bi.views.add %}">
+            <i class="glyph-circle-plus " title="Add new ..."> </i> Create new Business Process
+        </a>
+    </div>
+{% endblock %}
+
+{% block footer %}
+    {{ block.super }}
+    <script type="text/javascript" xmlns="http://www.w3.org/1999/html">
+        $(document).ready(function() {
+            expand_businessprocess("processes");
+        });
+
+
+        function toggle_businessprocess(element) {
+            var expanded_icon = '&#x25bd;';
+            var collapsed_icon = '&#x25b7;';
+            var data = element.data();
+            var process_name = data['name'];
+            var destination_id = data['for'];
+            var destination_element = $("#" + destination_id);
+            var process_id = null;
+            // Do nothing if there are no subprocesses
+            if (data['count'] == "0") {
+                return;
+            }
+
+            console.log(destination_id);
+
+            if (destination_element.html() == "") {
+                element.html(expanded_icon);
+                destination_element.show();
+                expand_businessprocess(destination_id, process_name);
+            }
+            else {
+                // Assume we are closing, so clear the destination element
+                element.html(collapsed_icon);
+                //destination_element.hide();
+                destination_element.html("");
+            }
+        }
+    function expand_businessprocess(destination_id, process_name) {
+        var template_string = $("#business-process-li-element").html(); // This is used to generate html for bi
+        var destination_element = $("#" + destination_id);
+        destination_element.html("Loading...");
+
+        adagios.rest.status.get_business_process({'process_name':process_name})
+        .done( function(data) {
+                    var result = '';
+                    for (var i in data) {
+                        process_id = destination_id + "_" + i;
+                        result += business_process_to_html(template_string, process_id, data[i]);
+                    }
+                    destination_element.html(result);
+
+                    // Special hack, if no process name given, update total count
+                    var total_count = $("#total_count");
+                    total_count.html(total_count.html().replace("0", data.length));
+
+                    // Special hack, if the destination was a table, copy the headers from master table
+                    //$("#thead-" + destination_id).html($("#thead-master").html());
+                });
+    }
+
+    function business_process_to_html(template_string, element_id, process) {
+        var result = template_string; // my_destination will be written with the content of this
+        result = template_string;
+        var url = window.location.toString().split("#")[0].replace(/\/$/,'');
+        result = result.replace(/__NAME__/g, process['name']);
+        result = result.replace(/__STATE__/g, process['state']);
+        result = result.replace(/__ID__/g, element_id);
+        result = result.replace(/__LENGTH__/g, process['subprocess_count']);
+        result = result.replace(/__LOCATION__/g, url);
+
+        result = result.replace(/__PROCESS_TYPE__/g, process['process_type']);
+
+        return result
+    }
+    </script>
+{% endblock %}

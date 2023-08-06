@@ -1,0 +1,176 @@
+{% extends "base_status.html" %}
+
+{% block title %}Performance Data Metrics{% endblock %}
+{% block smallheader %}{% endblock %}
+{% block largeheader %}Performance Data Metrics{% endblock %}
+
+{% block nav1 %}{{ block.super }}{% endblock %}
+{% block nav2 %}<a href="{% url status.views.perfdata %}">Performance Data</a>{% endblock %}
+{% load adagiostags %}
+
+{% block content %}
+
+<table>
+    <tr>
+        <td>Service Description:</td>
+        <td>
+            <select style="width: 490px;" id="services" name="service_description" data-placeholder="Select a service">
+                <option value=""></option>
+            </select>
+        </td>
+        <td><span id="num_services_that_match_filter">0</span> services have this service description.</td>
+    </tr>
+    <tr>
+        <td>Application Metric:</td>
+        <td><input style="width: 490px;" id="metric_names"  data-placeholder="Select a Perfdata Metric"/></td>
+        <td></td>
+    </tr>
+<tr>
+    <td>
+        <button class="btn btn-primary" onclick="reload_page_with_new_querystring();">Update</button>
+    </td>
+    <td></td>
+    <td></td>
+</tr>
+</table>
+
+
+<hr>
+
+{% if services %}
+    <table class="table table-condensed searchtable datatable well" style="font-size:12px;" >
+        <thead>
+            <tr>
+                <th class="small"></th>
+                <th>host</th>
+                <th>service</th>
+                {% for i in metrics %}
+                    <th>{{ i }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for service in services %}
+                {% if service.metrics|length == metrics|length %}
+                    <tr class=mainrow>
+                        <td class="selectable small">
+                            <input type=checkbox class="chkbox" name="graph" value="{{ service.host_name }},{{ service.description }},{{ i.label }}" data-host_name="{{ service.host_name }}" data-service_description="{{ service.description }}" data-object_type="perfdata">
+                        </td>
+
+                        <td class="small nowrap">
+                            <div class="circle state_{{ service.host_state }}"></div>
+                            <a href="{% url adagios.status.views.detail %}?host_name={{ service.host_name }}">{{ service.host_name }}</a>
+                        </td>
+                        <td>
+                            <div class="circle state_{{ service.state }}"></div>
+                            <a href="{% url adagios.status.views.detail %}?host_name={{ service.host_name }}&service_description={{ service.description }}">{{ service.description }}</a>
+                        </td>
+                            {% for i in service.metrics %}
+                                <td class="small nowrap">
+                                    <a href="{% url pnp.views.pnp %}/image?host={{ service.host_name }}&source={{ forloop.counter0 }}&srv={{ service.description }}" class="preview" title="{{ service.description }} {{ i.label }}">
+                                        <span class="status_{{ i.get_status }}">{{ i.value }} {{ i.uom }}</span>
+                                    </a>
+                                </td>
+                            {% endfor %}
+
+                    </tr>
+                {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+<div class="alert alert-info">No services have been selected. Change the filters above and press update button.</div>
+{% endif %}
+{% endblock %}
+
+{% block footer %}
+    {{ block.super }}
+
+    <script>
+        // Perfomance Graph Preview on hover
+        $("a.preview").popover({
+        placement: 'left',
+            trigger: 'hover',
+            template: '<div class="popover"><div class="arrow"></div><div class="popover-inner" style="width: 600px"><h3 class="popover-title"></h3><div class="popover-content" style="min-height: 200px"><p></p></div></div></div>',
+            content: function() {
+                return "<img src='"+ $(this)[0].href +"' alt='Image preview' />";
+            }
+        });
+    </script>
+
+    <script>
+        $(document).ready(function() {
+            // Auto fill services select box
+            var select_services = $("#services");
+            var select_metrics = $("#metric_names");
+
+            adagios.rest.status.autocomplete({'q':null})
+                    .done(function(data) {
+                        var services = data['services'];
+                        var selectbox = $("#services");
+
+                        $.each(services, function(service, value) {
+                             selectbox
+                                 .append($("<option></option>")
+                                 .attr("value", value)
+                                 .text(value));
+                        });
+
+
+                        select_services.val(querystring()['description']).trigger("change");
+                        load_metrics()
+                                .done(function() {
+                                    var metric_names = querystring()['metrics'];
+                                    if (metric_names) {
+                                        select_metrics.val(querystring()['metrics']).trigger("change");
+                                    }
+                                });
+
+                        select_services.on('change', function() {
+                            //window.location.href = "?description=" + this.value;
+                            load_metrics();
+                        });
+
+                    });
+
+
+        });
+
+
+
+        function load_metrics() {
+            var p = {};
+            p['description'] = $("#services").val();
+            return adagios.rest.status.metric_names(p)
+                    .done(function(data) {
+                        var metric_names = data['metric_names'];
+                        var num_services = data["services that match filter"];
+                        $("#num_services_that_match_filter").text(num_services);
+                       $("#metric_names").val(metric_names.join(','));
+                       $("#metric_names").select2({'tags': metric_names});
+                    });
+        }
+
+        function querystring() {
+            var qs = (function(a) {
+                if (a == "") return {};
+                var b = {};
+                for (var i = 0; i < a.length; ++i)
+                {
+                    var p=a[i].split('=');
+                    if (p.length != 2) continue;
+                    b[p[0]] = decodeURIComponent(p[1].replace(/\+/g, " "));
+                }
+                return b;
+            })(window.location.search.substr(1).split('&'));
+            return qs;
+        }
+    function reload_page_with_new_querystring()
+    {
+        window.location.href = "?description=" + $("#services").val() + "&metrics=" + $("#metric_names").val();
+    }
+
+    </script>
+{% endblock %}
+
+{% block toolbar %}{% endblock %}
