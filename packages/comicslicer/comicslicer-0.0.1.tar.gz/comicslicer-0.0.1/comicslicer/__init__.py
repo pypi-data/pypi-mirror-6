@@ -1,0 +1,1 @@
+from comicslicer import ComicSlicer
